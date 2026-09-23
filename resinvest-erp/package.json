@@ -1,0 +1,16 @@
+{
+  "name": "resinvest-erp-demo",
+  "version": "1.4.0-demo",
+  "private": true,
+  "description": "ResInvest ERP — demonstrator nowej logiki operacji (FAZA 1): jeden plik HTML",
+  "license": "SEE LICENSE IN LICENSE",
+  "scripts": {
+    "build": "node tools/build-demo.mjs",
+    "sample-data": "node tools/export-sample-data.mjs",
+    "check": "node --check demo/src/engine.js && node --check demo/src/seed.js && node --check demo/src/intro.js && node --check demo/src/app.js && node --check tools/build-demo.mjs",
+    "test:unit": "node --test tests/engine.test.mjs",
+    "test:e2e": "node tests/e2e.cjs",
+    "test": "npm run check && npm run build && npm run test:unit && npm run test:e2e"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,9 @@
+{
+  "_opis": "Konfiguracja demonstratora ResInvest ERP. Wartości są wstrzykiwane do pliku HTML przez tools/build-demo.mjs. Po zmianie uruchom: npm run build. Dotyczy nowych danych (reset danych przykładowych) — zapisane dokumenty zachowują swoje przeliczniki.",
+  "m3_mp": 4,
+  "mp_t": 0.33,
+  "currency": "zł",
+  "kmRateDefault": 5,
+  "wagonMPDefault": 120,
+  "maxWagons": 60
+}

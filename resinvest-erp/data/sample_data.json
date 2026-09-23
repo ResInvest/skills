@@ -1,0 +1,1440 @@
+{
+ "schema": 1,
+ "version": "1.4.0-demo",
+ "rev": 7,
+ "config": {
+  "m3_mp": 4,
+  "mp_t": 0.33,
+  "currency": "zł",
+  "kmRateDefault": 5,
+  "wagonMPDefault": 120,
+  "maxWagons": 60,
+  "_opis": "Konfiguracja demonstratora ResInvest ERP. Wartości są wstrzykiwane do pliku HTML przez tools/build-demo.mjs. Po zmianie uruchom: npm run build. Dotyczy nowych danych (reset danych przykładowych) — zapisane dokumenty zachowują swoje przeliczniki."
+ },
+ "warehouses": [
+  {
+   "id": "wh_zab",
+   "code": "ZAB",
+   "name": "RiC Zabrze",
+   "address": "ul. Gwarecka 16, 41-800 Zabrze"
+  },
+  {
+   "id": "wh_pys",
+   "code": "PYS",
+   "name": "RiC Pyskowice",
+   "address": "ul. Wyszyńskiego, 44-120 Pyskowice"
+  }
+ ],
+ "users": [
+  {
+   "id": "u_admin",
+   "name": "Mateusz Roesner",
+   "role": "admin",
+   "whId": "wh_zab",
+   "active": true
+  },
+  {
+   "id": "u_kier",
+   "name": "Anna Górska",
+   "role": "kierownik",
+   "whId": "wh_zab",
+   "active": true
+  },
+  {
+   "id": "u_mag",
+   "name": "Adrian Wojciechowski",
+   "role": "magazynier",
+   "whId": "wh_zab",
+   "active": true
+  },
+  {
+   "id": "u_pys",
+   "name": "Paweł Kaczmarek",
+   "role": "magazynier",
+   "whId": "wh_pys",
+   "active": true
+  },
+  {
+   "id": "u_view",
+   "name": "Beata Nowak",
+   "role": "podglad",
+   "whId": "wh_zab",
+   "active": true
+  }
+ ],
+ "products": [
+  {
+   "id": "pr_drewno",
+   "code": "DRW-O",
+   "name": "Drewno opałowe",
+   "cat": "drewno",
+   "unit": "m3",
+   "active": true
+  },
+  {
+   "id": "pr_drewno_inw",
+   "code": "DRW-I",
+   "name": "Drewno z wycinki inwestycyjnej",
+   "cat": "drewno",
+   "unit": "m3",
+   "active": true
+  },
+  {
+   "id": "pr_zr_lesna",
+   "code": "ZR-PL",
+   "name": "Zrębka produkcyjna leśna",
+   "cat": "zrebka",
+   "unit": "MP",
+   "active": true
+  },
+  {
+   "id": "pr_zr_inw",
+   "code": "ZR-PI",
+   "name": "Zrębka produkcyjna inwestycyjna",
+   "cat": "zrebka",
+   "unit": "MP",
+   "active": true
+  },
+  {
+   "id": "pr_zr_tow",
+   "code": "ZR-T",
+   "name": "Zrębka towar",
+   "cat": "zrebka",
+   "unit": "MP",
+   "active": true
+  }
+ ],
+ "partners": [
+  {
+   "id": "pa_lander",
+   "name": "Lander Agro",
+   "role": "supplier",
+   "city": "Gliwice",
+   "active": true
+  },
+  {
+   "id": "pa_ndl_rr",
+   "name": "Nadleśnictwo Rudy Raciborskie",
+   "role": "supplier",
+   "city": "Kuźnia Raciborska",
+   "active": true
+  },
+  {
+   "id": "pa_ndl_ryb",
+   "name": "Nadleśnictwo Rybnik",
+   "role": "supplier",
+   "city": "Rybnik",
+   "active": true
+  },
+  {
+   "id": "pa_drwal",
+   "name": "Usługi Leśne Drwal sp. z o.o.",
+   "role": "supplier",
+   "city": "Gliwice",
+   "active": true
+  },
+  {
+   "id": "pa_ec_zab",
+   "name": "Elektrociepłownia Zabrze S.A.",
+   "role": "buyer",
+   "city": "Zabrze",
+   "active": true
+  },
+  {
+   "id": "pa_ec_kat",
+   "name": "EC Katowice — biomasa",
+   "role": "buyer",
+   "city": "Katowice",
+   "active": true
+  },
+  {
+   "id": "pa_ciep_ryb",
+   "name": "Ciepłownia Rybnik",
+   "role": "buyer",
+   "city": "Rybnik",
+   "active": true
+  },
+  {
+   "id": "pa_tartak",
+   "name": "Tartak Beskid s.c.",
+   "role": "both",
+   "city": "Żywiec",
+   "active": true
+  }
+ ],
+ "fleet": {
+  "drivers": [
+   {
+    "id": "dr_kowalski",
+    "name": "Jan Kowalski",
+    "phone": "600 100 200"
+   },
+   {
+    "id": "dr_nowak",
+    "name": "Piotr Nowak",
+    "phone": "600 300 400"
+   },
+   {
+    "id": "dr_zielinski",
+    "name": "Marek Zieliński",
+    "phone": "600 500 600"
+   },
+   {
+    "id": "dr_wojcik",
+    "name": "Tomasz Wójcik",
+    "phone": "600 700 800"
+   }
+  ],
+  "vehicles": [
+   {
+    "id": "ve_scania",
+    "name": "Scania R450 — ruchoma podłoga",
+    "reg": "SGL 4T821",
+    "type": "ruchoma_podloga",
+    "status": "aktywny",
+    "driverId": "dr_kowalski"
+   },
+   {
+    "id": "ve_volvo",
+    "name": "Volvo FH 500 — ruchoma podłoga",
+    "reg": "SZA 12345",
+    "type": "ruchoma_podloga",
+    "status": "aktywny",
+    "driverId": "dr_nowak"
+   },
+   {
+    "id": "ve_man",
+    "name": "MAN TGX — ciężarowy",
+    "reg": "SK 7788X",
+    "type": "ciezarowy",
+    "status": "serwis",
+    "driverId": "dr_zielinski"
+   }
+  ],
+  "operators": [
+   {
+    "id": "op_lis",
+    "name": "Krzysztof Lis",
+    "phone": "601 111 222"
+   },
+   {
+    "id": "op_mazur",
+    "name": "Adam Mazur",
+    "phone": "601 333 444"
+   }
+  ],
+  "chippers": [
+   {
+    "id": "ch_jenz",
+    "name": "Jenz HEM 583",
+    "status": "aktywny",
+    "operatorId": "op_lis"
+   },
+   {
+    "id": "ch_biber",
+    "name": "Eschlböck Biber 92",
+    "status": "aktywny",
+    "operatorId": "op_mazur"
+   }
+  ]
+ },
+ "carriers": [
+  "ESI Logistics",
+  "DAP Trans",
+  "Transport Kowalski",
+  "PKP Cargo"
+ ],
+ "operations": [
+  {
+   "id": "op_mudow3pma0dun2x",
+   "idemKey": "idem_mudow3pk90um2f2",
+   "no": "PZ/001/08/2026",
+   "date": "2026-08-05",
+   "whId": "wh_zab",
+   "status": "posted",
+   "userId": "u_mag",
+   "userName": "Adrian Wojciechowski",
+   "createdAt": "2026-08-05T08:00:00.000Z",
+   "scope": [
+    "ZAKUP",
+    "PRODUKCJA"
+   ],
+   "purchase": {
+    "supplierId": "pa_lander",
+    "basis": "KZR",
+    "productId": "pr_drewno",
+    "qty": 30,
+    "unit": "m3",
+    "mp": 120,
+    "price": 230,
+    "cost": 6900,
+    "weightMode": "auto",
+    "weightT": 39.6,
+    "autoWeight": 39.6
+   },
+   "production": {
+    "type": "lesna",
+    "typeLabel": "Zrębka produkcyjna leśna",
+    "outProductId": "pr_zr_lesna",
+    "consumeQty": 30,
+    "consumeMP": 120,
+    "outMP": 120,
+    "diffReason": "",
+    "available": {
+     "mp": 360,
+     "qty": 90,
+     "stockMP": 240
+    },
+    "ndl": "Rudy Raciborskie",
+    "lesnictwo": "Stanica",
+    "kwit": "KW 0142/08/2026",
+    "sourceType": "",
+    "investSite": "",
+    "sourceDoc": "",
+    "chipperId": "ch_jenz",
+    "operatorId": "op_lis"
+   },
+   "sale": null,
+   "transport": {
+    "mode": "own",
+    "place": "RiC Zabrze",
+    "cost": 225,
+    "vehicleId": "ve_scania",
+    "vehicleName": "Scania R450 — ruchoma podłoga",
+    "reg": "SGL 4T821",
+    "driverId": "dr_kowalski",
+    "driverName": "Jan Kowalski",
+    "defaultDriverId": "dr_kowalski",
+    "driverOverridden": false,
+    "km": 45,
+    "rate": 5
+   },
+   "place": "RiC Zabrze",
+   "documents": [
+    {
+     "type": "PZ",
+     "kind": "ZAKUP",
+     "productId": "pr_drewno",
+     "qty": 30,
+     "unit": "m3",
+     "mp": 120,
+     "weightT": 39.6,
+     "weightMode": "auto",
+     "value": 6900,
+     "partnerId": "pa_lander",
+     "partner": "Lander Agro",
+     "basis": "KZR",
+     "place": "RiC Zabrze",
+     "stock": "+",
+     "no": "PZ/001/08/2026"
+    },
+    {
+     "type": "RW",
+     "kind": "ZUZYCIE",
+     "productId": "pr_drewno",
+     "qty": 30,
+     "unit": "m3",
+     "mp": 120,
+     "weightT": 39.6,
+     "value": 0,
+     "place": "RiC Zabrze",
+     "stock": "−",
+     "no": "RW/001/08/2026"
+    },
+    {
+     "type": "PW",
+     "kind": "PRODUKCJA",
+     "productId": "pr_zr_lesna",
+     "qty": 120,
+     "unit": "MP",
+     "mp": 120,
+     "weightT": 39.6,
+     "value": 0,
+     "place": "RiC Zabrze",
+     "stock": "+",
+     "meta": {
+      "productionType": "Zrębka produkcyjna leśna",
+      "ndl": "Rudy Raciborskie",
+      "lesnictwo": "Stanica",
+      "kwit": "KW 0142/08/2026"
+     },
+     "no": "PW/001/08/2026"
+    },
+    {
+     "type": "TR",
+     "kind": "TRANSPORT",
+     "productId": null,
+     "qty": null,
+     "unit": null,
+     "mp": 0,
+     "value": 225,
+     "place": "RiC Zabrze",
+     "stock": "brak",
+     "transport": {
+      "mode": "own",
+      "place": "RiC Zabrze",
+      "cost": 225,
+      "vehicleId": "ve_scania",
+      "vehicleName": "Scania R450 — ruchoma podłoga",
+      "reg": "SGL 4T821",
+      "driverId": "dr_kowalski",
+      "driverName": "Jan Kowalski",
+      "defaultDriverId": "dr_kowalski",
+      "driverOverridden": false,
+      "km": 45,
+      "rate": 5
+     },
+     "no": "TR/001/08/2026"
+    }
+   ],
+   "ledgerIds": [
+    "l_mudow3pmbwkm9fd",
+    "l_mudow3pmccbp53t",
+    "l_mudow3pmdp21g50"
+   ],
+   "totals": {
+    "purchaseCost": 6900,
+    "revenue": 0,
+    "transportCost": 225,
+    "result": -7125,
+    "purchaseMP": 120,
+    "consumeMP": 120,
+    "outMP": 120,
+    "saleMP": 0,
+    "weightT": 39.6
+   },
+   "notes": "",
+   "warnings": []
+  },
+  {
+   "id": "op_mudow3pmgmy7un5",
+   "idemKey": "idem_mudow3pmfslznbb",
+   "no": "PZ/002/08/2026",
+   "date": "2026-08-12",
+   "whId": "wh_zab",
+   "status": "posted",
+   "userId": "u_mag",
+   "userName": "Adrian Wojciechowski",
+   "createdAt": "2026-08-12T08:00:00.000Z",
+   "scope": [
+    "ZAKUP"
+   ],
+   "purchase": {
+    "supplierId": "pa_drwal",
+    "basis": "DEKL",
+    "productId": "pr_zr_tow",
+    "qty": 100,
+    "unit": "MP",
+    "mp": 100,
+    "price": 55,
+    "cost": 5500,
+    "weightMode": "auto",
+    "weightT": 33,
+    "autoWeight": 33
+   },
+   "production": null,
+   "sale": null,
+   "transport": {
+    "mode": "external",
+    "place": "RiC Zabrze",
+    "cost": 900,
+    "company": "ESI Logistics",
+    "reg": "ESI 18734",
+    "km": 80,
+    "freight": 900,
+    "includedInPrice": false
+   },
+   "place": "RiC Zabrze",
+   "documents": [
+    {
+     "type": "PZ",
+     "kind": "ZAKUP",
+     "productId": "pr_zr_tow",
+     "qty": 100,
+     "unit": "MP",
+     "mp": 100,
+     "weightT": 33,
+     "weightMode": "auto",
+     "value": 5500,
+     "partnerId": "pa_drwal",
+     "partner": "Usługi Leśne Drwal sp. z o.o.",
+     "basis": "DEKL",
+     "place": "RiC Zabrze",
+     "stock": "+",
+     "no": "PZ/002/08/2026"
+    },
+    {
+     "type": "TR",
+     "kind": "TRANSPORT",
+     "productId": null,
+     "qty": null,
+     "unit": null,
+     "mp": 0,
+     "value": 900,
+     "place": "RiC Zabrze",
+     "stock": "brak",
+     "transport": {
+      "mode": "external",
+      "place": "RiC Zabrze",
+      "cost": 900,
+      "company": "ESI Logistics",
+      "reg": "ESI 18734",
+      "km": 80,
+      "freight": 900,
+      "includedInPrice": false
+     },
+     "no": "TR/002/08/2026"
+    }
+   ],
+   "ledgerIds": [
+    "l_mudow3pnh16nr8d"
+   ],
+   "totals": {
+    "purchaseCost": 5500,
+    "revenue": 0,
+    "transportCost": 900,
+    "result": -6400,
+    "purchaseMP": 100,
+    "consumeMP": 0,
+    "outMP": 0,
+    "saleMP": 0,
+    "weightT": 33
+   },
+   "notes": "",
+   "warnings": []
+  },
+  {
+   "id": "op_mudow3pnkw7mpha",
+   "idemKey": "idem_mudow3pnjipiyig",
+   "no": "PZ/003/08/2026",
+   "date": "2026-08-20",
+   "whId": "wh_zab",
+   "status": "posted",
+   "userId": "u_kier",
+   "userName": "Anna Górska",
+   "createdAt": "2026-08-20T08:00:00.000Z",
+   "scope": [
+    "ZAKUP",
+    "PRODUKCJA",
+    "SPRZEDAZ"
+   ],
+   "purchase": {
+    "supplierId": "pa_tartak",
+    "basis": "KZR",
+    "productId": "pr_drewno_inw",
+    "qty": 25,
+    "unit": "m3",
+    "mp": 100,
+    "price": 180,
+    "cost": 4500,
+    "weightMode": "auto",
+    "weightT": 33,
+    "autoWeight": 33
+   },
+   "production": {
+    "type": "inwestycyjna",
+    "typeLabel": "Zrębka produkcyjna inwestycyjna",
+    "outProductId": "pr_zr_inw",
+    "consumeQty": 25,
+    "consumeMP": 100,
+    "outMP": 100,
+    "diffReason": "",
+    "available": {
+     "mp": 100,
+     "qty": 25,
+     "stockMP": 0
+    },
+    "ndl": "",
+    "lesnictwo": "",
+    "kwit": "",
+    "sourceType": "Wycinka inwestycyjna",
+    "investSite": "Obwodnica Gliwic — odcinek II",
+    "sourceDoc": "Protokół wycinki 17/2026",
+    "chipperId": "ch_biber",
+    "operatorId": "op_mazur"
+   },
+   "sale": {
+    "buyerId": "pa_ec_kat",
+    "qtyMP": 100,
+    "price": 95,
+    "priceUnit": "MP",
+    "revenue": 9500,
+    "weightT": 33
+   },
+   "transport": {
+    "mode": "train",
+    "place": "EC Katowice — bocznica",
+    "cost": 924,
+    "trainNo": "RC 44120",
+    "carrier": "PKP Cargo",
+    "wagonCount": 2,
+    "wagonMP": 120,
+    "sameForAll": true,
+    "wagonT": [
+     16.5,
+     16.5
+    ],
+    "totalT": 33,
+    "totalMP": 100,
+    "price": 28,
+    "priceUnit": "t",
+    "basisQty": 33
+   },
+   "place": "EC Katowice — bocznica",
+   "documents": [
+    {
+     "type": "PZ",
+     "kind": "ZAKUP",
+     "productId": "pr_drewno_inw",
+     "qty": 25,
+     "unit": "m3",
+     "mp": 100,
+     "weightT": 33,
+     "weightMode": "auto",
+     "value": 4500,
+     "partnerId": "pa_tartak",
+     "partner": "Tartak Beskid s.c.",
+     "basis": "KZR",
+     "place": "EC Katowice — bocznica",
+     "stock": "+",
+     "no": "PZ/003/08/2026"
+    },
+    {
+     "type": "RW",
+     "kind": "ZUZYCIE",
+     "productId": "pr_drewno_inw",
+     "qty": 25,
+     "unit": "m3",
+     "mp": 100,
+     "weightT": 33,
+     "value": 0,
+     "place": "EC Katowice — bocznica",
+     "stock": "−",
+     "no": "RW/002/08/2026"
+    },
+    {
+     "type": "PW",
+     "kind": "PRODUKCJA",
+     "productId": "pr_zr_inw",
+     "qty": 100,
+     "unit": "MP",
+     "mp": 100,
+     "weightT": 33,
+     "value": 0,
+     "place": "EC Katowice — bocznica",
+     "stock": "+",
+     "meta": {
+      "productionType": "Zrębka produkcyjna inwestycyjna",
+      "sourceType": "Wycinka inwestycyjna",
+      "investSite": "Obwodnica Gliwic — odcinek II",
+      "sourceDoc": "Protokół wycinki 17/2026"
+     },
+     "no": "PW/002/08/2026"
+    },
+    {
+     "type": "WZ",
+     "kind": "SPRZEDAZ",
+     "productId": "pr_zr_inw",
+     "qty": 100,
+     "unit": "MP",
+     "mp": 100,
+     "weightT": 33,
+     "value": 9500,
+     "price": 95,
+     "priceUnit": "MP",
+     "partnerId": "pa_ec_kat",
+     "partner": "EC Katowice — biomasa",
+     "place": "EC Katowice — bocznica",
+     "stock": "−",
+     "no": "WZ/001/08/2026"
+    },
+    {
+     "type": "TR",
+     "kind": "TRANSPORT",
+     "productId": null,
+     "qty": null,
+     "unit": null,
+     "mp": 0,
+     "value": 924,
+     "place": "EC Katowice — bocznica",
+     "stock": "brak",
+     "transport": {
+      "mode": "train",
+      "place": "EC Katowice — bocznica",
+      "cost": 924,
+      "trainNo": "RC 44120",
+      "carrier": "PKP Cargo",
+      "wagonCount": 2,
+      "wagonMP": 120,
+      "sameForAll": true,
+      "wagonT": [
+       16.5,
+       16.5
+      ],
+      "totalT": 33,
+      "totalMP": 100,
+      "price": 28,
+      "priceUnit": "t",
+      "basisQty": 33
+     },
+     "no": "TR/003/08/2026"
+    }
+   ],
+   "ledgerIds": [
+    "l_mudow3pnlyyb710",
+    "l_mudow3pnmoyxibr",
+    "l_mudow3pnny212gv",
+    "l_mudow3pno9rrlsj"
+   ],
+   "totals": {
+    "purchaseCost": 4500,
+    "revenue": 9500,
+    "transportCost": 924,
+    "result": 4076,
+    "purchaseMP": 100,
+    "consumeMP": 100,
+    "outMP": 100,
+    "saleMP": 100,
+    "weightT": 33
+   },
+   "notes": "",
+   "warnings": []
+  },
+  {
+   "id": "op_mudow3por2x9n6c",
+   "idemKey": "idem_mudow3pnqxuuw7f",
+   "no": "PZ/001/09/2026",
+   "date": "2026-09-03",
+   "whId": "wh_zab",
+   "status": "posted",
+   "userId": "u_mag",
+   "userName": "Adrian Wojciechowski",
+   "createdAt": "2026-09-03T08:00:00.000Z",
+   "scope": [
+    "ZAKUP",
+    "PRODUKCJA",
+    "SPRZEDAZ"
+   ],
+   "purchase": {
+    "supplierId": "pa_lander",
+    "basis": "KZR",
+    "productId": "pr_drewno",
+    "qty": 20,
+    "unit": "m3",
+    "mp": 80,
+    "price": 230,
+    "cost": 4600,
+    "weightMode": "auto",
+    "weightT": 26.4,
+    "autoWeight": 26.4
+   },
+   "production": {
+    "type": "lesna",
+    "typeLabel": "Zrębka produkcyjna leśna",
+    "outProductId": "pr_zr_lesna",
+    "consumeQty": 20,
+    "consumeMP": 80,
+    "outMP": 80,
+    "diffReason": "",
+    "available": {
+     "mp": 320,
+     "qty": 80,
+     "stockMP": 240
+    },
+    "ndl": "Rybnik",
+    "lesnictwo": "Wielopole",
+    "kwit": "KW 0217/09/2026",
+    "sourceType": "",
+    "investSite": "",
+    "sourceDoc": "",
+    "chipperId": "ch_jenz",
+    "operatorId": "op_lis"
+   },
+   "sale": {
+    "buyerId": "pa_ec_zab",
+    "qtyMP": 80,
+    "price": 90,
+    "priceUnit": "MP",
+    "revenue": 7200,
+    "weightT": 26.4
+   },
+   "transport": {
+    "mode": "own",
+    "place": "Elektrociepłownia Zabrze S.A.",
+    "cost": 1310,
+    "vehicleId": "ve_volvo",
+    "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+    "reg": "SZA 12345",
+    "driverId": "dr_nowak",
+    "driverName": "Piotr Nowak",
+    "defaultDriverId": "dr_nowak",
+    "driverOverridden": false,
+    "km": 262,
+    "rate": 5
+   },
+   "place": "Elektrociepłownia Zabrze S.A.",
+   "documents": [
+    {
+     "type": "PZ",
+     "kind": "ZAKUP",
+     "productId": "pr_drewno",
+     "qty": 20,
+     "unit": "m3",
+     "mp": 80,
+     "weightT": 26.4,
+     "weightMode": "auto",
+     "value": 4600,
+     "partnerId": "pa_lander",
+     "partner": "Lander Agro",
+     "basis": "KZR",
+     "place": "Elektrociepłownia Zabrze S.A.",
+     "stock": "+",
+     "no": "PZ/001/09/2026"
+    },
+    {
+     "type": "RW",
+     "kind": "ZUZYCIE",
+     "productId": "pr_drewno",
+     "qty": 20,
+     "unit": "m3",
+     "mp": 80,
+     "weightT": 26.4,
+     "value": 0,
+     "place": "Elektrociepłownia Zabrze S.A.",
+     "stock": "−",
+     "no": "RW/001/09/2026"
+    },
+    {
+     "type": "PW",
+     "kind": "PRODUKCJA",
+     "productId": "pr_zr_lesna",
+     "qty": 80,
+     "unit": "MP",
+     "mp": 80,
+     "weightT": 26.4,
+     "value": 0,
+     "place": "Elektrociepłownia Zabrze S.A.",
+     "stock": "+",
+     "meta": {
+      "productionType": "Zrębka produkcyjna leśna",
+      "ndl": "Rybnik",
+      "lesnictwo": "Wielopole",
+      "kwit": "KW 0217/09/2026"
+     },
+     "no": "PW/001/09/2026"
+    },
+    {
+     "type": "WZ",
+     "kind": "SPRZEDAZ",
+     "productId": "pr_zr_lesna",
+     "qty": 80,
+     "unit": "MP",
+     "mp": 80,
+     "weightT": 26.4,
+     "value": 7200,
+     "price": 90,
+     "priceUnit": "MP",
+     "partnerId": "pa_ec_zab",
+     "partner": "Elektrociepłownia Zabrze S.A.",
+     "place": "Elektrociepłownia Zabrze S.A.",
+     "stock": "−",
+     "no": "WZ/001/09/2026"
+    },
+    {
+     "type": "TR",
+     "kind": "TRANSPORT",
+     "productId": null,
+     "qty": null,
+     "unit": null,
+     "mp": 0,
+     "value": 1310,
+     "place": "Elektrociepłownia Zabrze S.A.",
+     "stock": "brak",
+     "transport": {
+      "mode": "own",
+      "place": "Elektrociepłownia Zabrze S.A.",
+      "cost": 1310,
+      "vehicleId": "ve_volvo",
+      "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+      "reg": "SZA 12345",
+      "driverId": "dr_nowak",
+      "driverName": "Piotr Nowak",
+      "defaultDriverId": "dr_nowak",
+      "driverOverridden": false,
+      "km": 262,
+      "rate": 5
+     },
+     "no": "TR/001/09/2026"
+    }
+   ],
+   "ledgerIds": [
+    "l_mudow3posu2jc0i",
+    "l_mudow3pottk24zb",
+    "l_mudow3pouuzhe3s",
+    "l_mudow3povtzgfud"
+   ],
+   "totals": {
+    "purchaseCost": 4600,
+    "revenue": 7200,
+    "transportCost": 1310,
+    "result": 1290,
+    "purchaseMP": 80,
+    "consumeMP": 80,
+    "outMP": 80,
+    "saleMP": 80,
+    "weightT": 26.4
+   },
+   "notes": "",
+   "warnings": []
+  },
+  {
+   "id": "op_mudow3poygpin5v",
+   "idemKey": "idem_mudow3poxy3it4y",
+   "no": "PZ/002/09/2026",
+   "date": "2026-09-08",
+   "whId": "wh_pys",
+   "status": "posted",
+   "userId": "u_pys",
+   "userName": "Paweł Kaczmarek",
+   "createdAt": "2026-09-08T08:00:00.000Z",
+   "scope": [
+    "ZAKUP"
+   ],
+   "purchase": {
+    "supplierId": "pa_ndl_ryb",
+    "basis": "DEKL",
+    "productId": "pr_drewno",
+    "qty": 15,
+    "unit": "m3",
+    "mp": 60,
+    "price": 210,
+    "cost": 3150,
+    "weightMode": "auto",
+    "weightT": 19.8,
+    "autoWeight": 19.8
+   },
+   "production": null,
+   "sale": null,
+   "transport": {
+    "mode": "external",
+    "place": "RiC Pyskowice",
+    "cost": 0,
+    "company": "Transport Kowalski",
+    "reg": "SPY 92FR",
+    "km": 40,
+    "freight": 0,
+    "includedInPrice": true
+   },
+   "place": "RiC Pyskowice",
+   "documents": [
+    {
+     "type": "PZ",
+     "kind": "ZAKUP",
+     "productId": "pr_drewno",
+     "qty": 15,
+     "unit": "m3",
+     "mp": 60,
+     "weightT": 19.8,
+     "weightMode": "auto",
+     "value": 3150,
+     "partnerId": "pa_ndl_ryb",
+     "partner": "Nadleśnictwo Rybnik",
+     "basis": "DEKL",
+     "place": "RiC Pyskowice",
+     "stock": "+",
+     "no": "PZ/002/09/2026"
+    },
+    {
+     "type": "TR",
+     "kind": "TRANSPORT",
+     "productId": null,
+     "qty": null,
+     "unit": null,
+     "mp": 0,
+     "value": 0,
+     "place": "RiC Pyskowice",
+     "stock": "brak",
+     "transport": {
+      "mode": "external",
+      "place": "RiC Pyskowice",
+      "cost": 0,
+      "company": "Transport Kowalski",
+      "reg": "SPY 92FR",
+      "km": 40,
+      "freight": 0,
+      "includedInPrice": true
+     },
+     "no": "TR/002/09/2026"
+    }
+   ],
+   "ledgerIds": [
+    "l_mudow3pozmyctqm"
+   ],
+   "totals": {
+    "purchaseCost": 3150,
+    "revenue": 0,
+    "transportCost": 0,
+    "result": -3150,
+    "purchaseMP": 60,
+    "consumeMP": 0,
+    "outMP": 0,
+    "saleMP": 0,
+    "weightT": 19.8
+   },
+   "notes": "",
+   "warnings": []
+  }
+ ],
+ "ledger": [
+  {
+   "id": "l_mudow3pk1ljhi11",
+   "seq": 1,
+   "opId": null,
+   "step": 1,
+   "date": "2026-08-01",
+   "whId": "wh_zab",
+   "productId": "pr_drewno",
+   "kind": "BO",
+   "mp": 240,
+   "t": 79.2,
+   "docNo": "BO/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pk2skvnei",
+   "seq": 2,
+   "opId": null,
+   "step": 1,
+   "date": "2026-08-01",
+   "whId": "wh_zab",
+   "productId": "pr_zr_lesna",
+   "kind": "BO",
+   "mp": 400,
+   "t": 132,
+   "docNo": "BO/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pk36vo2au",
+   "seq": 3,
+   "opId": null,
+   "step": 1,
+   "date": "2026-08-01",
+   "whId": "wh_zab",
+   "productId": "pr_zr_inw",
+   "kind": "BO",
+   "mp": 120,
+   "t": 39.6,
+   "docNo": "BO/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pk4rghxyk",
+   "seq": 4,
+   "opId": null,
+   "step": 1,
+   "date": "2026-08-01",
+   "whId": "wh_zab",
+   "productId": "pr_zr_tow",
+   "kind": "BO",
+   "mp": 200,
+   "t": 66,
+   "docNo": "BO/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pk6p7o1xr",
+   "seq": 5,
+   "opId": null,
+   "step": 1,
+   "date": "2026-08-01",
+   "whId": "wh_pys",
+   "productId": "pr_drewno",
+   "kind": "BO",
+   "mp": 120,
+   "t": 39.6,
+   "docNo": "BO/002/08/2026"
+  },
+  {
+   "id": "l_mudow3pk7gc2xhy",
+   "seq": 6,
+   "opId": null,
+   "step": 1,
+   "date": "2026-08-01",
+   "whId": "wh_pys",
+   "productId": "pr_zr_lesna",
+   "kind": "BO",
+   "mp": 250,
+   "t": 82.5,
+   "docNo": "BO/002/08/2026"
+  },
+  {
+   "id": "l_mudow3pmbwkm9fd",
+   "seq": 7,
+   "opId": "op_mudow3pma0dun2x",
+   "step": 1,
+   "date": "2026-08-05",
+   "whId": "wh_zab",
+   "productId": "pr_drewno",
+   "kind": "ZAKUP",
+   "mp": 120,
+   "t": 39.6,
+   "docNo": "PZ/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pmccbp53t",
+   "seq": 8,
+   "opId": "op_mudow3pma0dun2x",
+   "step": 2,
+   "date": "2026-08-05",
+   "whId": "wh_zab",
+   "productId": "pr_drewno",
+   "kind": "ZUZYCIE",
+   "mp": -120,
+   "t": -39.6,
+   "docNo": "RW/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pmdp21g50",
+   "seq": 9,
+   "opId": "op_mudow3pma0dun2x",
+   "step": 3,
+   "date": "2026-08-05",
+   "whId": "wh_zab",
+   "productId": "pr_zr_lesna",
+   "kind": "PRODUKCJA",
+   "mp": 120,
+   "t": 39.6,
+   "docNo": "PW/001/08/2026"
+  },
+  {
+   "id": "l_mudow3pnh16nr8d",
+   "seq": 10,
+   "opId": "op_mudow3pmgmy7un5",
+   "step": 1,
+   "date": "2026-08-12",
+   "whId": "wh_zab",
+   "productId": "pr_zr_tow",
+   "kind": "ZAKUP",
+   "mp": 100,
+   "t": 33,
+   "docNo": "PZ/002/08/2026"
+  },
+  {
+   "id": "l_mudow3pnlyyb710",
+   "seq": 11,
+   "opId": "op_mudow3pnkw7mpha",
+   "step": 1,
+   "date": "2026-08-20",
+   "whId": "wh_zab",
+   "productId": "pr_drewno_inw",
+   "kind": "ZAKUP",
+   "mp": 100,
+   "t": 33,
+   "docNo": "PZ/003/08/2026"
+  },
+  {
+   "id": "l_mudow3pnmoyxibr",
+   "seq": 12,
+   "opId": "op_mudow3pnkw7mpha",
+   "step": 2,
+   "date": "2026-08-20",
+   "whId": "wh_zab",
+   "productId": "pr_drewno_inw",
+   "kind": "ZUZYCIE",
+   "mp": -100,
+   "t": -33,
+   "docNo": "RW/002/08/2026"
+  },
+  {
+   "id": "l_mudow3pnny212gv",
+   "seq": 13,
+   "opId": "op_mudow3pnkw7mpha",
+   "step": 3,
+   "date": "2026-08-20",
+   "whId": "wh_zab",
+   "productId": "pr_zr_inw",
+   "kind": "PRODUKCJA",
+   "mp": 100,
+   "t": 33,
+   "docNo": "PW/002/08/2026"
+  },
+  {
+   "id": "l_mudow3pno9rrlsj",
+   "seq": 14,
+   "opId": "op_mudow3pnkw7mpha",
+   "step": 4,
+   "date": "2026-08-20",
+   "whId": "wh_zab",
+   "productId": "pr_zr_inw",
+   "kind": "SPRZEDAZ",
+   "mp": -100,
+   "t": -33,
+   "docNo": "WZ/001/08/2026"
+  },
+  {
+   "id": "l_mudow3posu2jc0i",
+   "seq": 15,
+   "opId": "op_mudow3por2x9n6c",
+   "step": 1,
+   "date": "2026-09-03",
+   "whId": "wh_zab",
+   "productId": "pr_drewno",
+   "kind": "ZAKUP",
+   "mp": 80,
+   "t": 26.4,
+   "docNo": "PZ/001/09/2026"
+  },
+  {
+   "id": "l_mudow3pottk24zb",
+   "seq": 16,
+   "opId": "op_mudow3por2x9n6c",
+   "step": 2,
+   "date": "2026-09-03",
+   "whId": "wh_zab",
+   "productId": "pr_drewno",
+   "kind": "ZUZYCIE",
+   "mp": -80,
+   "t": -26.4,
+   "docNo": "RW/001/09/2026"
+  },
+  {
+   "id": "l_mudow3pouuzhe3s",
+   "seq": 17,
+   "opId": "op_mudow3por2x9n6c",
+   "step": 3,
+   "date": "2026-09-03",
+   "whId": "wh_zab",
+   "productId": "pr_zr_lesna",
+   "kind": "PRODUKCJA",
+   "mp": 80,
+   "t": 26.4,
+   "docNo": "PW/001/09/2026"
+  },
+  {
+   "id": "l_mudow3povtzgfud",
+   "seq": 18,
+   "opId": "op_mudow3por2x9n6c",
+   "step": 4,
+   "date": "2026-09-03",
+   "whId": "wh_zab",
+   "productId": "pr_zr_lesna",
+   "kind": "SPRZEDAZ",
+   "mp": -80,
+   "t": -26.4,
+   "docNo": "WZ/001/09/2026"
+  },
+  {
+   "id": "l_mudow3pozmyctqm",
+   "seq": 19,
+   "opId": "op_mudow3poygpin5v",
+   "step": 1,
+   "date": "2026-09-08",
+   "whId": "wh_pys",
+   "productId": "pr_drewno",
+   "kind": "ZAKUP",
+   "mp": 60,
+   "t": 19.8,
+   "docNo": "PZ/002/09/2026"
+  }
+ ],
+ "inventory": [],
+ "audit": [
+  {
+   "id": "a_mudow3pk5ofgazt",
+   "ts": "2026-08-01T08:00:00.000Z",
+   "userId": "u_admin",
+   "userName": "Mateusz Roesner",
+   "whId": "wh_zab",
+   "source": "Dane przykładowe",
+   "entity": "ledger",
+   "entityId": "BO/001/08/2026",
+   "opNo": "BO/001/08/2026",
+   "action": "Bilans otwarcia",
+   "before": null,
+   "after": {
+    "magazyn": "wh_zab",
+    "pozycje": 4
+   }
+  },
+  {
+   "id": "a_mudow3pk85ojbri",
+   "ts": "2026-08-01T08:00:00.000Z",
+   "userId": "u_admin",
+   "userName": "Mateusz Roesner",
+   "whId": "wh_zab",
+   "source": "Dane przykładowe",
+   "entity": "ledger",
+   "entityId": "BO/002/08/2026",
+   "opNo": "BO/002/08/2026",
+   "action": "Bilans otwarcia",
+   "before": null,
+   "after": {
+    "magazyn": "wh_pys",
+    "pozycje": 2
+   }
+  },
+  {
+   "id": "a_mudow3pmes1p2j1",
+   "ts": "2026-08-05T08:00:00.000Z",
+   "userId": "u_mag",
+   "userName": "Adrian Wojciechowski",
+   "whId": "wh_zab",
+   "source": "Dane przykładowe",
+   "entity": "operation",
+   "entityId": "op_mudow3pma0dun2x",
+   "opNo": "PZ/001/08/2026",
+   "action": "Utworzenie operacji",
+   "before": {
+    "stanMP": {
+     "pr_drewno": 240,
+     "pr_zr_lesna": 400
+    }
+   },
+   "after": {
+    "stanMP": {
+     "pr_drewno": 240,
+     "pr_zr_lesna": 520
+    },
+    "dokumenty": [
+     "PZ/001/08/2026",
+     "RW/001/08/2026",
+     "PW/001/08/2026",
+     "TR/001/08/2026"
+    ],
+    "koszt_transportu": 225
+   }
+  },
+  {
+   "id": "a_mudow3pnig5st7c",
+   "ts": "2026-08-12T08:00:00.000Z",
+   "userId": "u_mag",
+   "userName": "Adrian Wojciechowski",
+   "whId": "wh_zab",
+   "source": "Dane przykładowe",
+   "entity": "operation",
+   "entityId": "op_mudow3pmgmy7un5",
+   "opNo": "PZ/002/08/2026",
+   "action": "Utworzenie operacji",
+   "before": {
+    "stanMP": {
+     "pr_zr_tow": 200
+    }
+   },
+   "after": {
+    "stanMP": {
+     "pr_zr_tow": 300
+    },
+    "dokumenty": [
+     "PZ/002/08/2026",
+     "TR/002/08/2026"
+    ],
+    "koszt_transportu": 900
+   }
+  },
+  {
+   "id": "a_mudow3pnpdksw2c",
+   "ts": "2026-08-20T08:00:00.000Z",
+   "userId": "u_kier",
+   "userName": "Anna Górska",
+   "whId": "wh_zab",
+   "source": "Dane przykładowe",
+   "entity": "operation",
+   "entityId": "op_mudow3pnkw7mpha",
+   "opNo": "PZ/003/08/2026",
+   "action": "Utworzenie operacji",
+   "before": {
+    "stanMP": {
+     "pr_drewno_inw": 0,
+     "pr_zr_inw": 120
+    }
+   },
+   "after": {
+    "stanMP": {
+     "pr_drewno_inw": 0,
+     "pr_zr_inw": 120
+    },
+    "dokumenty": [
+     "PZ/003/08/2026",
+     "RW/002/08/2026",
+     "PW/002/08/2026",
+     "WZ/001/08/2026",
+     "TR/003/08/2026"
+    ],
+    "koszt_transportu": 924
+   }
+  },
+  {
+   "id": "a_mudow3pow1ub44n",
+   "ts": "2026-09-03T08:00:00.000Z",
+   "userId": "u_mag",
+   "userName": "Adrian Wojciechowski",
+   "whId": "wh_zab",
+   "source": "Dane przykładowe",
+   "entity": "operation",
+   "entityId": "op_mudow3por2x9n6c",
+   "opNo": "PZ/001/09/2026",
+   "action": "Utworzenie operacji",
+   "before": {
+    "stanMP": {
+     "pr_drewno": 240,
+     "pr_zr_lesna": 520
+    }
+   },
+   "after": {
+    "stanMP": {
+     "pr_drewno": 240,
+     "pr_zr_lesna": 520
+    },
+    "dokumenty": [
+     "PZ/001/09/2026",
+     "RW/001/09/2026",
+     "PW/001/09/2026",
+     "WZ/001/09/2026",
+     "TR/001/09/2026"
+    ],
+    "koszt_transportu": 1310
+   }
+  },
+  {
+   "id": "a_mudow3po1095i1yh",
+   "ts": "2026-09-08T08:00:00.000Z",
+   "userId": "u_pys",
+   "userName": "Paweł Kaczmarek",
+   "whId": "wh_pys",
+   "source": "Dane przykładowe",
+   "entity": "operation",
+   "entityId": "op_mudow3poygpin5v",
+   "opNo": "PZ/002/09/2026",
+   "action": "Utworzenie operacji",
+   "before": {
+    "stanMP": {
+     "pr_drewno": 120
+    }
+   },
+   "after": {
+    "stanMP": {
+     "pr_drewno": 180
+    },
+    "dokumenty": [
+     "PZ/002/09/2026",
+     "TR/002/09/2026"
+    ],
+    "koszt_transportu": 0
+   }
+  }
+ ],
+ "seq": {
+  "BO-2026-08": 2,
+  "PZ-2026-08": 3,
+  "RW-2026-08": 2,
+  "PW-2026-08": 2,
+  "TR-2026-08": 3,
+  "WZ-2026-08": 1,
+  "PZ-2026-09": 2,
+  "RW-2026-09": 1,
+  "PW-2026-09": 1,
+  "WZ-2026-09": 1,
+  "TR-2026-09": 2
+ },
+ "meta": {
+  "lastMonthCheck": "2026-09",
+  "createdAt": "2026-09-23T05:55:49.068Z"
+ }
+}
