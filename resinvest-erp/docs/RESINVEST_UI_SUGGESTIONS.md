@@ -1,6 +1,6 @@
-# ResInvest ERP — proponowane usprawnienia UI (poza zakresem FAZY 1)
+# ResInvest ERP — proponowane usprawnienia UI (poza zakresem Demo v2)
 
-Poniższe punkty **nie zostały zaimplementowane**, bo nie są wymagane do działania funkcji z FAZY 1.
+Poniższe punkty **nie zostały zaimplementowane**, bo nie są wymagane do działania funkcji z FAZY 1 i Demo v2.
 Kolejność = szacowany wpływ na szybkość wpisywania i liczbę pomyłek.
 
 ## Wprowadzone w FAZIE 1, bo były konieczne do poprawnego działania
@@ -19,13 +19,16 @@ Kolejność = szacowany wpływ na szybkość wpisywania i liczbę pomyłek.
 
 1. **Klawiatura w formularzu** — `Enter` przechodzi do następnego pola zamiast zapisu; skróty `Alt+1…5` do sekcji. Już działa `Ctrl+S` = zapis.
 2. **Szablony operacji** — „Powtórz ostatnią operację od tego dostawcy” (dostawca, produkt, cena, NDL, pojazd). Najczęstszy przypadek w obrocie drewnem to powtarzalne dostawy.
-3. **Sprzedaż bez produkcji (handel zrębką)** — obecnie sprzedaż jest dostępna wyłącznie jako wynik produkcji (zgodnie z wymaganiem). Handel „kup zrębkę towar → sprzedaj” wymaga osobnej ścieżki z kontrolą stanu.
-4. **Koszt rębania** (zł/MP) i koszt jednostkowy MP zrębki — był w 1.3.0 (`chipRate`); do przeniesienia do sekcji Produkcja wraz z rębakiem z Floty.
+3. ~~Sprzedaż bez produkcji~~ — **zrobione w Demo v2** (Sprzedaż z magazynu, WZ).
+4. ~~Koszt rąbania~~ — **zrobione w Demo v2** (Cena za rąbanie, domyślnie 10 zł/MP). Do rozważenia: koszt jednostkowy 1 MP zrębki (surowiec + rąbanie + transport) w raporcie.
 5. **Słowniki z wyszukiwaniem** — przy >30 kontrahentach `select` zastąpić polem z podpowiedziami (komponent `Autocomplete` z 1.3.0), z dodawaniem nowej pozycji zależnym od uprawnień.
 6. **Skan kwitu wywozowego / kwitu wagowego** — załącznik do PW/PZ (mechanizm `Scans` z 1.3.0).
 7. **Cykl inwentaryzacji z FAZY 2** — statusy W TRAKCIE i GOTOWA DO ZAMKNIĘCIA, drugi podpis (kierownik zatwierdza spis magazyniera).
-8. **Tryb ciemny/jasny** — 1.3.0 ma motywy Perła / Grafit / Azure; demonstrator pokazuje tylko Grafit.
+8. **Przełącznik motywu** — v2 jest jasny (wymaganie); ciemny Grafit z v1 można przywrócić jako opcję dla pracy nocnej.
 9. **Wydruk dokumentów** — wzór WZ/PZ z logo i miejscem na podpis kierowcy (teraz wydruk tabelaryczny).
 10. **Walidacja numeru kwitu** według formatu LP i ostrzeżenie o duplikacie kwitu w historii.
 11. **Mapa miejsca transportu** — podpowiedź odległości (km) dla znanych miejsc dostawy na podstawie historii kursów.
 12. **Powiadomienie o zbliżającym się przełomie miesiąca** z listą pozycji bez spisu.
+13. **Sprzedaż WZ z wielu pozycji** — jeden dokument WZ z kilkoma towarami (np. zrębka + PKS dla jednego odbiorcy).
+14. **Import listy wagonów** — wklejenie tonaży z listu przewozowego / Excela (kolumna liczb) do tabeli wagonów jednym ruchem.
+15. **Masa orientacyjna per produkt** w kartotece produktów (teraz: jedna wartość dla drewna w konfiguracji).

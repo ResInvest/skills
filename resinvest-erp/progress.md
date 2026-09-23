@@ -1,52 +1,41 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-23 · etap: **FAZA 1 — demonstrator HTML — zakończona, czeka na akceptację**
+Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2 (2.0.0) — gotowe do oceny**
 
-## Wykonane
+## Wykonane — Demo v2
 
-- [x] FAZA 0: rozpoznanie repozytorium i `ResInvestERP_1.3.0.html` → `docs/RESINVEST_CHANGE_PLAN.md`
-- [x] Silnik domenowy (`demo/src/engine.js`): parser liczb, jednostki, plan i zapis operacji (atomowo, idempotentnie), storno, inwentaryzacja, flota, raporty, audyt przed/po
-- [x] Dane przykładowe księgowane przez silnik (`seed.js`, `data/sample_data.json`)
-- [x] Intro z muzyką domyślnie włączoną, obsługa blokady autoplay, „Wycisz / Włącz muzykę”, „Pomiń intro”, fallback Web Audio
-- [x] Nowa operacja: jedna ścieżka zakup → zużycie → produkcja → sprzedaż, transport własny / zewnętrzny / pociąg (tonaż per wagon lub wspólny, cena za MP / m³ / t), „Miejsce transportu / dostawy”, samouczek pod polami
-- [x] Usunięte pola magazyn/pryzma źródłowa i docelowa — magazyn z kontekstu użytkownika
-- [x] Plan dokumentów z kolumną „Miejsce transportu”, podgląd, wydruk, korekta, CSV
-- [x] Stany z kartoteką i stanem na dzień
-- [x] Inwentaryzacja miesięczna (OTWARTA → ZAMKNIĘTA, IN, blokada, automatyczne zamknięcie)
-- [x] Flota (pojazdy, kierowcy, rębaki, operatorzy, kursy z kierowcą kursu)
-- [x] Historia zmian: audyt, rejestr operacji, raport miesięczny/roczny, filtry, CSV
-- [x] Dane: kopia JSON, import z kontrolą, reset, preferencje, data demo
-- [x] Konfiguracja `config/demo.config.json` wstrzykiwana przy budowaniu
-- [x] Instalator Windows (Inno Setup) + skrypt PowerShell
-- [x] README, LICENSE, scenariusze, sugestie UI
+- [x] Sprzedaż z magazynu (WZ): towar ze stanu, ilość, jednostka zgodna z towarem, cena, odbiorca, miejsce dostawy, blokada ponad stan, audyt
+- [x] Sprzedaż bezpośrednia po produkcji / prosto z lasu: PW + WZ bez wzrostu stanu, bez wymogu zakupu i pobrania z magazynu
+- [x] Produkcja na magazynie: RW (surowiec ze stanu) + PW (produkt), powiązanie PW ← RW, bez zakupu
+- [x] Księga w jednostce magazynowej produktu (m³ / MP / t); PKS i łupina nerkowca wyłącznie w t
+- [x] Masa orientacyjna: zrębka 0,33 t/MP, drewno 0,952 t/m³ (konfigurowalne)
+- [x] Cena za rąbanie (domyślnie 10,00 zł/MP, edytowalna) w podsumowaniu, na PW i w raportach
+- [x] Pociąg: liczba wagonów, pojemność w t lub MP, tonaż wspólny albo osobno dla każdego wagonu, podsumowanie składu (załadunek, dostawa, przewoźnik, nr dokumentu, koszt)
+- [x] Cztery niezależne scenariusze + zachowany łańcuch zakup → produkcja → sprzedaż z v1
+- [x] Jasny motyw
+- [x] Dane przykładowe zgodne z przykładami z polecenia (8 293 MP, 817 m³, 728 t)
+- [x] Inwentaryzacja, stany, plan dokumentów, historia i raporty w jednostkach produktów
+- [x] Instalator 2.0.0, dokumentacja, scenariusze
 
-## Aktualnie
+## Wykonane — FAZA 1 (1.4.0)
 
-Brak — oczekiwanie na akceptację demonstratora („KONTYNUUJ FAZĘ 2”).
+Silnik z atomowym zapisem i idempotencją, parser liczb, intro z muzyką, flota, inwentaryzacja miesięczna, historia zmian, kopie zapasowe — wszystko zachowane w v2.
 
-## Testy zakończone powodzeniem
+## Testy
 
 | Zestaw | Wynik |
 |---|---|
-| `npm run check` (składnia 5 plików) | OK |
+| `npm run check` | OK |
 | `npm run test:unit` | 33/33 |
-| `npm run test:e2e` (Chromium 1.56, desktop 1440 px + telefon 390 px, 2 karty, 3 profile autoplay) | 85/85, konsola bez błędów |
-
-## Błędy wykryte i poprawione w trakcie
-
-1. Kliknięcie „Zapisz” tuż po wpisaniu wartości ginęło — `focusout` przebudowywał panel z przyciskiem między `mousedown` a `mouseup`. Panel ma teraz stały szkielet, odświeżane są tylko sekcje treści.
-2. Budowanie wykryło `</style>` w kodzie okna wydruku (przerwałoby `<script>`) — zmienione na `<\/style>`, kontrola zostaje w `build-demo.mjs`.
-3. Zduplikowane `id` kart wyboru transportu (dostępność etykiet) — nadane unikalne `id`.
-4. Utrata fokusu przy wpisywaniu kolejnych pozycji spisu — fokus wraca do następnego pola po zapisie.
+| `npm run test:e2e` (Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay) | 83/83, konsola bez błędów |
 
 ## Znane problemy / ograniczenia
 
-- Chromium z Playwrighta nie ma kodeka H.264 — ścieżka filmu testowana przez symulację `HTMLMediaElement`; realne odtwarzanie filmu z dźwiękiem należy potwierdzić ręcznie w Chrome/Edge na Windows.
-- Instalator nie był kompilowany w tej sesji (brak Windows / Inno Setup) — skrypt `.iss` wymaga uruchomienia `build-installer.ps1` na Windows.
-- Wieloużytkowość demonstracyjna (jedna przeglądarka). Prawdziwa współbieżność — FAZA 2 (transakcje bazy danych).
-- Brak statusów inwentaryzacji W TRAKCIE / GOTOWA DO ZAMKNIĘCIA (wymagane dopiero w FAZIE 2).
+- **Zmiana masy drewna względem v1:** v1 liczyło 20 m³ → 80 MP × 0,33 = 26,4 t; v2 używa 0,952 t/m³ z przykładu „817 m³ ≈ 778 t” (20 m³ ≈ 19,04 t). Do potwierdzenia przez firmę — przełącznik `woodTPerM3` w `config/demo.config.json`.
+- Dane v1 nie są migrowane (inny model księgi); v2 startuje na danych przykładowych.
+- Film intro nie jest odtwarzany w testowym Chromium (brak H.264) — w Chrome/Edge do potwierdzenia ręcznie.
+- Instalator nie był kompilowany w tej sesji (brak Windows / Inno Setup).
 
 ## Następny krok
 
-Po akceptacji — **FAZA 2**: dołączyć produkcyjne repozytorium (React / NestJS / PostgreSQL) do sesji
-albo potwierdzić, że FAZA 2 rozwija bazę 1.3.0; plan w `docs/RESINVEST_CHANGE_PLAN.md` §7.
+Akceptacja Demo v2 → „KONTYNUUJ FAZĘ 2” (wymaga dołączenia repozytorium produkcyjnego; model danych v2 opisany w `docs/RESINVEST_CHANGE_PLAN.md`).

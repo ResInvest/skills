@@ -1,11 +1,11 @@
 ﻿; =========================================================================
-;  ResInvest ERP — demonstrator 1.4.0 · instalator Windows (Inno Setup 6)
+;  ResInvest ERP — Demo v2 (2.0.0) · instalator Windows (Inno Setup 6)
 ;
 ;  Budowanie (Windows):
 ;    1. npm run build                      (tworzy ResInvest_ERP_demo.html)
 ;    2. "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\ResInvestERP_Demo.iss
 ;    albo:  powershell -File installer\build-installer.ps1
-;  Wynik: installer\Output\ResInvestERP_Demo_Setup_1.4.0.exe
+;  Wynik: installer\Output\ResInvestERP_Demo_Setup_2.0.0.exe
 ;
 ;  Instalator kopiuje samodzielny plik HTML (bez serwera, bez internetu),
 ;  dokumentację i dane przykładowe; tworzy skróty w menu Start i na pulpicie.
@@ -14,7 +14,7 @@
 ; =========================================================================
 
 #define AppName "ResInvest ERP — demonstrator"
-#define AppVersion "1.4.0"
+#define AppVersion "2.0.0"
 #define AppPublisher "ResInvest Commodities"
 
 [Setup]

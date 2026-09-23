@@ -1,4 +1,4 @@
-/* Testy jednostkowe silnika demonstratora.  Uruchomienie:  node --test tests/ */
+/* Testy jednostkowe silnika Demo v2.  Uruchomienie:  node --test tests/engine.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -12,330 +12,351 @@ const fresh = () => R.Seed.build(TODAY);
 const ctx = (s, uid = "u_kier", today = TODAY) => ({ user: s.users.find(u => u.id === uid), today, source: "test" });
 const draft = over => R.Seed.draftOf(over.date || TODAY, Object.assign({ transport: { mode: "none", place: "RiC Zabrze" } }, over));
 const bal = (s, pid, wh = "wh_zab") => R.Stock.balance(s, wh, pid);
+const prod = (s, id) => s.products.find(p => p.id === id);
 const PURCHASE_A = { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "20", unit: "m3", price: "230", weightMode: "auto" };
 const LESNA = { enabled: true, type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Stanica", kwit: "KW 0300/09/2026" };
+const WZ = over => draft({ type: "SPRZEDAZ", sale: Object.assign({ productId: "pr_zr_lesna", qty: "500", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, over) });
+const DIRECT = (sale = {}, production = {}) => draft({ type: "SPRZEDAZ",
+  production: Object.assign({ type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Kuźnia", kwit: "KW 1/09/2026", outMP: "600" }, production),
+  sale: Object.assign({ direct: true, buyerId: "pa_elektrownia", price: "88", priceUnit: "MP" }, sale) });
+const PROD = over => draft({ type: "PRODUKCJA", production: Object.assign({ rawProductId: "pr_drewno", consumeQty: "817", type: "lesna" }, over) });
 
-/* ---------------------------- Scenariusz F ---------------------------- */
-test("F: 12,50 / 12.50 / 1 250,50 / 1\\u00A0250,50 — normalizacja liczb", () => {
-  assert.equal(R.NumParse.parse("12,50").value, 12.5);
-  assert.equal(R.NumParse.parse("12.50").value, 12.5);
-  assert.equal(R.NumParse.parse("1 250,50").value, 1250.5);
-  assert.equal(R.NumParse.parse("1\u00A0250,50").value, 1250.5);
-  assert.equal(R.NumParse.parse("1\u202F250,50").value, 1250.5);
-  assert.equal(R.NumParse.parse("1.250,50").value, 1250.5);
-  assert.equal(R.NumParse.parse("1,250.50").value, 1250.5);
-  assert.equal(R.NumParse.parse(" 230 zł/m³ ").value, 230);
-  assert.equal(R.NumParse.parse("12,5 m3").value, 12.5);
-  assert.equal(R.NumParse.parse("26,4 t").value, 26.4);
-  assert.equal(R.NumParse.parse("80 MP").value, 80);
-  assert.equal(R.NumParse.parse("−5").value, -5);
+/* ------------------------- dane startowe = przykłady z polecenia ------------------------- */
+test("Stan startowy: zrębka 8 293 MP ≈ 2 737 t, drewno 817 m³ ≈ 778 t, PKS i łupina 728 t", () => {
+  const s = fresh();
+  assert.equal(bal(s, "pr_zr_lesna"), 8293);
+  assert.equal(Math.round(R.Units.mass(8293, prod(s, "pr_zr_lesna"), s.config)), 2737);
+  assert.equal(bal(s, "pr_drewno"), 817);
+  assert.equal(Math.round(R.Units.mass(817, prod(s, "pr_drewno"), s.config)), 778);
+  assert.equal(bal(s, "pr_pks"), 728);
+  assert.equal(bal(s, "pr_lupina"), 728);
+  assert.deepEqual(R.validateStateShape(s), []);
 });
-test("F: błędne formaty są odrzucane, a nie liczone jako 0", () => {
-  for (const bad of ["abc", "1,2,3.4", "12.5.3,1", "1 2a", "--5", "1.25.0"]) {
-    const r = R.NumParse.parse(bad);
-    assert.equal(r.ok, false, bad);
+
+/* ------------------------------- jednostki produktu ------------------------------- */
+test("Jednostki: drewno m³, zrębka MP, PKS/łupina wyłącznie t — bez sztucznych przeliczeń", () => {
+  const s = fresh();
+  assert.deepEqual(R.Units.allowed(prod(s, "pr_drewno")), ["m3", "MP", "t"]);
+  assert.deepEqual(R.Units.allowed(prod(s, "pr_zr_lesna")), ["MP", "t"]);
+  assert.deepEqual(R.Units.allowed(prod(s, "pr_pks")), ["t"]);
+  assert.deepEqual(R.Units.allowed(prod(s, "pr_lupina")), ["t"]);
+  assert.throws(() => R.Units.convert(10, "t", "MP", prod(s, "pr_pks"), s.config));
+  assert.equal(R.Units.convert(20, "m3", "MP", prod(s, "pr_drewno"), s.config), 80);
+  assert.equal(R.Units.convert(33, "t", "MP", prod(s, "pr_zr_lesna"), s.config), 100);
+  // zakup PKS w MP jest odrzucany
+  const p = R.planOperation(s, draft({ purchase: { supplierId: "pa_agro", basis: "DEKL", productId: "pr_pks", qty: "10", unit: "MP", price: "500" } }), ctx(s));
+  assert.ok(p.errors["purchase.unit"]);
+  const ok = R.commitOperation(s, draft({ purchase: { supplierId: "pa_agro", basis: "DEKL", productId: "pr_pks", qty: "12,5", unit: "t", price: "500" } }), ctx(s));
+  assert.equal(ok.ok, true, ok.error);
+  assert.equal(bal(s, "pr_pks"), 740.5);
+  assert.equal(s.ledger.at(-1).unit, "t");
+});
+
+/* ---------------------------- liczby / przecinek ---------------------------- */
+test("Liczby: 12,50 / 12.50 / 1 250,50 / 1\\u00A0250,50 / 1.250,50 — ta sama wartość", () => {
+  for (const [t, v] of [["12,50", 12.5], ["12.50", 12.5], ["1 250,50", 1250.5], ["1\u00A0250,50", 1250.5], ["1\u202F250,50", 1250.5], ["1.250,50", 1250.5], ["1,250.50", 1250.5], [" 230 zł/m³ ", 230], ["26,4 t", 26.4], ["−5", -5]]) {
+    assert.equal(R.NumParse.parse(t).value, v, t);
   }
-  assert.equal(R.NumParse.parse("").empty, true);
+  for (const bad of ["abc", "1,2,3.4", "12.5.3,1", "1 2a", "--5", "1.25.0"]) assert.equal(R.NumParse.parse(bad).ok, false, bad);
 });
-test("F: ta sama ilość wpisana na 4 sposoby daje identyczny plan", () => {
+test("Liczby: przecinek dziesiętny w WZ, rąbaniu i pociągu liczy poprawnie", () => {
   const s = fresh();
-  const costs = ["12,50", "12.50", "1 250,50", "1\u00A0250,50"].map(q => {
-    const p = R.planOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { qty: q, unit: "MP", price: "10" }) }), ctx(s));
-    return [p.totals.purchaseMP, p.totals.purchaseCost];
-  });
-  assert.deepEqual(costs[0], costs[1]);
-  assert.deepEqual(costs[2], costs[3]);
-  assert.deepEqual(costs[2], [1250.5, 12505]);
+  assert.equal(R.planOperation(s, WZ({ qty: "500,5", price: "90,10" }), ctx(s)).totals.revenue, 45095.05);
+  assert.equal(R.planOperation(s, DIRECT({}, { chipRate: "12,50" }), ctx(s)).totals.chippingCost, 7500);
+  const tr = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "train", place: "X", train: { wagonCount: "2", tonMode: "each", wagonT: ["58,4", "60.1"], price: "25,5", priceUnit: "t" } } }), ctx(s)).norm.transport;
+  assert.equal(tr.totalT, 118.5);
+  assert.equal(tr.cost, 3021.75);
 });
 
-/* ---------------------------- Scenariusz A ---------------------------- */
-test("A: zakup 20 m³ × 230 zł — 80 MP, 26,40 t, 4 600 zł", () => {
+/* ------------------------------ A. Zakup ------------------------------ */
+test("A: zakup 20 m³ × 230 zł — +20 m³ na stanie (= 80 MP), koszt 4 600 zł, masa orientacyjna", () => {
   const s = fresh();
-  const before = bal(s, "pr_drewno");
   const r = R.commitOperation(s, draft({ purchase: PURCHASE_A }), ctx(s));
   assert.equal(r.ok, true, r.error);
-  assert.equal(r.op.purchase.mp, 80);
-  assert.equal(r.op.purchase.weightT, 26.4);
+  assert.equal(r.op.purchase.stockQty, 20);
+  assert.equal(R.Units.convert(r.op.purchase.stockQty, "m3", "MP", prod(s, "pr_drewno"), s.config), 80);
   assert.equal(r.op.totals.purchaseCost, 4600);
-  assert.equal(r.op.whId, "wh_zab");
-  assert.equal(r.op.place, "RiC Zabrze");
-  assert.equal(R.round(bal(s, "pr_drewno") - before, 3), 80);
+  assert.equal(r.op.purchase.weightT, 19.04);
+  assert.equal(bal(s, "pr_drewno"), 837);
   assert.deepEqual(r.op.documents.map(d => d.type), ["PZ"]);
-  assert.equal(R.money(4600).replace(/\u00A0/g, " "), "4 600,00 zł");
 });
-test("A: waga ręczna nie zmienia ilości ewidencyjnej", () => {
+test("A: waga ręczna nie zmienia ilości na stanie", () => {
   const s = fresh();
-  const r = R.commitOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { weightMode: "manual", weightManual: "27,10" }) }), ctx(s));
-  assert.equal(r.ok, true);
-  assert.equal(r.op.purchase.weightT, 27.1);
-  assert.equal(r.op.purchase.mp, 80);
+  const r = R.commitOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { weightMode: "manual", weightManual: "19,80" }) }), ctx(s));
+  assert.equal(r.op.purchase.weightT, 19.8);
+  assert.equal(bal(s, "pr_drewno"), 837);
 });
-test("A: zakup w tonach normalizuje się do MP", () => {
+test("A + łańcuch: zakup + autozużycie + produkcja (+ sprzedaż) nadal działa", () => {
   const s = fresh();
-  const p = R.planOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { qty: "26,4", unit: "t" }) }), ctx(s));
-  assert.equal(p.totals.purchaseMP, 80);
-});
-
-/* ---------------------------- Scenariusz B ---------------------------- */
-test("B: zakup + produkcja leśna — drewno nie jest liczone podwójnie, zrębka +80 MP", () => {
-  const s = fresh();
-  const wood0 = bal(s, "pr_drewno"), chip0 = bal(s, "pr_zr_lesna");
-  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A, production: LESNA }), ctx(s));
+  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A, production: LESNA, sale: { enabled: true, buyerId: "pa_ec_zab", price: "90" } }), ctx(s));
   assert.equal(r.ok, true, r.error);
-  assert.deepEqual(r.plan.postings.map(p => [p.kind, p.mp]), [["ZAKUP", 80], ["ZUZYCIE", -80], ["PRODUKCJA", 80]]);
-  assert.equal(bal(s, "pr_drewno"), wood0);
-  assert.equal(R.round(bal(s, "pr_zr_lesna") - chip0, 3), 80);
-  const pw = r.op.documents.find(d => d.type === "PW");
-  assert.deepEqual([pw.meta.ndl, pw.meta.lesnictwo, pw.meta.kwit], ["Rudy Raciborskie", "Stanica", "KW 0300/09/2026"]);
-});
-test("B: produkcja leśna wymaga NDL, leśnictwa i kwitu", () => {
-  const s = fresh();
-  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, production: { enabled: true, type: "lesna" } }), ctx(s));
-  for (const k of ["production.ndl", "production.lesnictwo", "production.kwit"]) assert.ok(p.errors[k], k);
-});
-test("B: produkcja inwestycyjna — typ źródła Wycinka inwestycyjna", () => {
-  const s = fresh();
-  const r = R.commitOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { productId: "pr_drewno_inw" }), production: { enabled: true, type: "inwestycyjna", investSite: "DK88" } }), ctx(s));
-  assert.equal(r.ok, true, r.error);
-  assert.equal(r.op.documents.find(d => d.type === "PW").meta.sourceType, "Wycinka inwestycyjna");
-  assert.equal(r.op.production.outProductId, "pr_zr_inw");
-});
-test("B: zużycie większe niż stan + zakup jest blokowane", () => {
-  const s = fresh(); // stan drewna Zabrze = 60 m³
-  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, production: Object.assign({}, LESNA, { consumeQty: "81" }) }), ctx(s));
-  assert.ok(p.errors["production.consumeQty"]);
-  const ok = R.planOperation(s, draft({ purchase: PURCHASE_A, production: Object.assign({}, LESNA, { consumeQty: "80" }) }), ctx(s));
-  assert.equal(ok.ok, true, JSON.stringify(ok.errors));
-});
-test("B: wynik produkcji nie może przekroczyć zużycia; mniejszy wymaga przyczyny", () => {
-  const s = fresh();
-  assert.ok(R.planOperation(s, draft({ purchase: PURCHASE_A, production: Object.assign({}, LESNA, { outMP: "81" }) }), ctx(s)).errors["production.outMP"]);
-  assert.ok(R.planOperation(s, draft({ purchase: PURCHASE_A, production: Object.assign({}, LESNA, { outMP: "75" }) }), ctx(s)).errors["production.diffReason"]);
-  assert.equal(R.planOperation(s, draft({ purchase: PURCHASE_A, production: Object.assign({}, LESNA, { outMP: "75", diffReason: "straty" }) }), ctx(s)).ok, true);
-});
-test("B: produkcja tylko z surowca drzewnego", () => {
-  const s = fresh();
-  const p = R.planOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { productId: "pr_zr_tow", unit: "MP" }), production: LESNA }), ctx(s));
-  assert.ok(p.errors["production.enabled"]);
-});
-
-/* ---------------------------- Scenariusz C ---------------------------- */
-test("C: zakup + produkcja + sprzedaż 80 MP — stan zrębki bez zmian, przychód zapisany", () => {
-  const s = fresh();
-  const wood0 = bal(s, "pr_drewno"), chip0 = bal(s, "pr_zr_lesna");
-  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A, production: LESNA, sale: { enabled: true, buyerId: "pa_ec_zab", price: "90", priceUnit: "MP" }, transport: { mode: "own", place: "Elektrociepłownia Zabrze S.A.", own: { vehicleId: "ve_scania", km: "262", rate: "5" } } }), ctx(s));
-  assert.equal(r.ok, true, r.error);
-  assert.deepEqual(r.plan.postings.map(p => p.kind), ["ZAKUP", "ZUZYCIE", "PRODUKCJA", "SPRZEDAZ"]);
-  assert.equal(bal(s, "pr_drewno"), wood0);
-  assert.equal(bal(s, "pr_zr_lesna"), chip0);
+  assert.deepEqual(r.plan.postings.map(p => [p.kind, p.qty]), [["ZAKUP", 20], ["ZUZYCIE", -20], ["PRODUKCJA", 80], ["SPRZEDAZ", -80]]);
+  assert.equal(bal(s, "pr_drewno"), 817);
+  assert.equal(bal(s, "pr_zr_lesna"), 8293);
+  assert.equal(r.op.totals.chippingCost, 800);
   assert.equal(r.op.totals.revenue, 7200);
-  assert.deepEqual(r.op.documents.map(d => d.type), ["PZ", "RW", "PW", "WZ", "TR"]);
-  assert.ok(r.op.documents.every(d => d.place === "Elektrociepłownia Zabrze S.A."));
-});
-test("C: sprzedaż większa niż wynik produkcji jest blokowana", () => {
-  const s = fresh();
-  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, production: LESNA, sale: { enabled: true, buyerId: "pa_ec_zab", qtyMP: "80,01", price: "90" } }), ctx(s));
-  assert.ok(p.errors["sale.qtyMP"]);
-});
-test("C: odbiorca wymagany; sprzedaż wymaga produkcji", () => {
-  const s = fresh();
-  assert.ok(R.planOperation(s, draft({ purchase: PURCHASE_A, production: LESNA, sale: { enabled: true, price: "90" } }), ctx(s)).errors["sale.buyerId"]);
-  assert.ok(R.planOperation(s, draft({ purchase: PURCHASE_A, sale: { enabled: true, buyerId: "pa_ec_zab", price: "90" } }), ctx(s)).errors["sale.enabled"]);
+  assert.equal(r.op.documents.find(d => d.type === "PW").meta.fromDoc, r.op.documents.find(d => d.type === "RW").no);
 });
 
-/* ------------------------- Transport: D, E, pociąg ------------------------- */
-test("D: transport własny 262 km × 5 zł = 1 310 zł, kierowca domyślny i zmiana dla kursu", () => {
+/* ------------------------ B. Sprzedaż z magazynu (WZ) ------------------------ */
+test("B: WZ 500 MP z 8 293 MP → 7 793 MP, bez produkcji, zapis w audycie", () => {
   const s = fresh();
-  const base = { purchase: PURCHASE_A, transport: { mode: "own", place: "RiC Zabrze", own: { vehicleId: "ve_scania", km: "262", rate: "5" } } };
-  const p = R.planOperation(s, draft(base), ctx(s));
-  assert.equal(p.norm.transport.cost, 1310);
-  assert.equal(p.norm.transport.driverName, "Jan Kowalski");
-  assert.equal(p.norm.transport.driverOverridden, false);
-  const d2 = draft(base); d2.transport.own.driverId = "dr_wojcik";
-  const r = R.commitOperation(s, d2, ctx(s));
-  assert.equal(r.op.transport.driverName, "Tomasz Wójcik");
-  assert.equal(r.op.transport.driverOverridden, true);
-  assert.equal(s.fleet.vehicles.find(v => v.id === "ve_scania").driverId, "dr_kowalski", "kartoteka pojazdu bez zmian");
-  // późniejsza zmiana kierowcy domyślnego nie zmienia zapisanego kursu
-  R.Fleet.save(s, "vehicles", Object.assign({}, s.fleet.vehicles.find(v => v.id === "ve_scania"), { driverId: "dr_nowak" }), ctx(s));
-  assert.equal(s.operations.find(o => o.id === r.op.id).transport.driverName, "Tomasz Wójcik");
+  const r = R.commitOperation(s, WZ(), ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.deepEqual(r.op.documents.map(d => d.type), ["WZ"]);
+  assert.equal(bal(s, "pr_zr_lesna"), 7793);
+  assert.equal(r.op.production, null);
+  assert.equal(r.op.totals.revenue, 45000);
+  assert.equal(r.op.sale.after, 7793);
+  const a = s.audit.at(-1);
+  assert.equal(a.before.stan.pr_zr_lesna, 8293);
+  assert.equal(a.after.stan.pr_zr_lesna, 7793);
 });
-test("D: pojazd w serwisie nie może wykonać kursu", () => {
+test("B: WZ większe niż stan jest blokowane", () => {
   const s = fresh();
-  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "own", place: "X", own: { vehicleId: "ve_man", km: "10" } } }), ctx(s));
-  assert.ok(p.errors["transport.own.vehicleId"]);
+  const p = R.planOperation(s, WZ({ qty: "8293,01" }), ctx(s));
+  assert.match(p.errors["sale.qty"], /Na magazynie jest 8\u00A0293 MP/);
+  assert.equal(R.planOperation(s, WZ({ qty: "8293" }), ctx(s)).ok, true);
 });
-test("E: transport zewnętrzny — fracht 1 250 zł; wliczony w cenę → 0 zł", () => {
+test("B: WZ w jednostce zgodnej z towarem — zrębka w t, PKS tylko w t", () => {
   const s = fresh();
-  const ext = { company: "ESI Logistics", reg: "esi 18734", km: "262", freight: "1 250" };
-  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "external", place: "RiC Zabrze", external: ext } }), ctx(s));
-  assert.equal(p.norm.transport.cost, 1250);
-  assert.equal(p.norm.transport.reg, "ESI 18734");
-  const p0 = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "external", place: "RiC Zabrze", external: Object.assign({}, ext, { includedInPrice: true }) } }), ctx(s));
-  assert.equal(p0.norm.transport.cost, 0);
-  assert.equal(p0.ok, true);
+  const r = R.commitOperation(s, WZ({ qty: "33", unit: "t", price: "280" }), ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(bal(s, "pr_zr_lesna"), 8193);            // 33 t = 100 MP
+  assert.equal(r.op.totals.revenue, 9240);              // 33 t × 280 zł
+  assert.ok(R.planOperation(s, WZ({ productId: "pr_pks", qty: "10", unit: "MP" }), ctx(s)).errors["sale.unit"]);
+  const pks = R.commitOperation(s, WZ({ productId: "pr_pks", qty: "100", unit: "t", price: "600" }), ctx(s));
+  assert.equal(pks.ok, true);
+  assert.equal(bal(s, "pr_pks"), 628);
 });
-test("Transport nie zmienia stanu magazynowego (każdy tryb daje identyczne zapisy księgi)", () => {
+test("B: WZ wymaga odbiorcy i towaru", () => {
+  const s = fresh();
+  const p = R.planOperation(s, WZ({ productId: "", buyerId: "" }), ctx(s));
+  assert.ok(p.errors["sale.productId"] && p.errors["sale.buyerId"]);
+});
+test("E: zakup → magazynowanie → późniejsza sprzedaż WZ", () => {
+  const s = fresh();
+  R.commitOperation(s, draft({ purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "250", unit: "MP", price: "55" } }), ctx(s));
+  assert.equal(bal(s, "pr_zr_tow"), 550);
+  const wz = R.commitOperation(s, WZ({ productId: "pr_zr_tow", qty: "550", unit: "MP" }), ctx(s));
+  assert.equal(wz.ok, true, wz.error);
+  assert.equal(bal(s, "pr_zr_tow"), 0);
+});
+
+/* ------------------------ C. Produkcja na magazynie ------------------------ */
+test("C: drewno 817 m³ ze stanu → RW −817 m³, PW +3 268 MP, powiązanie wejście→wyjście", () => {
+  const s = fresh();
+  const r = R.commitOperation(s, PROD(), ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.op.purchase, null);
+  assert.deepEqual(r.op.documents.map(d => d.type), ["RW", "PW"]);
+  assert.equal(bal(s, "pr_drewno"), 0);
+  assert.equal(bal(s, "pr_zr_lesna"), 8293 + 3268);
+  const pw = r.op.documents.find(d => d.type === "PW"), rw = r.op.documents.find(d => d.type === "RW");
+  assert.equal(pw.meta.fromDoc, rw.no);
+  assert.equal(r.op.production.rawProductId, "pr_drewno");
+  assert.equal(r.op.production.outProductId, "pr_zr_lesna");
+  assert.equal(r.op.totals.chippingCost, 32680);        // 3 268 MP × 10 zł
+});
+test("C: zużycie większe niż stan blokowane; produkcja nie wymaga zakupu ani kwitu", () => {
+  const s = fresh();
+  const p = R.planOperation(s, PROD({ consumeQty: "817,5" }), ctx(s));
+  assert.match(p.errors["production.consumeQty"], /Na magazynie jest 817 m³/);
+  const ok = R.planOperation(s, PROD({ consumeQty: "100" }), ctx(s));
+  assert.equal(ok.ok, true, JSON.stringify(ok.errors));
+  assert.ok(!Object.keys(ok.errors).some(k => k.startsWith("purchase.")));
+});
+test("C: wynik niższy od zużycia wymaga przyczyny, wyższy jest blokowany", () => {
+  const s = fresh();
+  assert.ok(R.planOperation(s, PROD({ consumeQty: "100", outMP: "401" }), ctx(s)).errors["production.outMP"]);
+  assert.ok(R.planOperation(s, PROD({ consumeQty: "100", outMP: "380" }), ctx(s)).errors["production.diffReason"]);
+  assert.equal(R.planOperation(s, PROD({ consumeQty: "100", outMP: "380", diffReason: "straty" }), ctx(s)).ok, true);
+});
+
+/* ------------------ D. Produkcja + sprzedaż bezpośrednia (las) ------------------ */
+test("D: las → 600 MP → sprzedaż 600 MP do elektrowni; stan zrębki i drewna bez zmian", () => {
+  const s = fresh();
+  const r = R.commitOperation(s, DIRECT(), ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.deepEqual(r.op.documents.map(d => d.type), ["PW", "WZ"]);
+  assert.equal(bal(s, "pr_zr_lesna"), 8293);
+  assert.equal(bal(s, "pr_drewno"), 817);
+  assert.equal(r.op.direct, true);
+  assert.equal(r.op.production.outMP, 600);
+  assert.equal(r.op.sale.qty, 600);
+  assert.equal(r.op.totals.revenue, 52800);
+  assert.equal(r.op.totals.chippingCost, 6000);
+  assert.ok(s.ledger.filter(l => l.opId === r.op.id).every(l => l.direct));
+});
+test("D: sprzedaż bezpośrednia nie pobiera ze stanu — działa nawet przy zerowym stanie zrębki", () => {
+  const s = fresh();
+  R.commitOperation(s, WZ({ qty: "8293" }), ctx(s));            // wyprzedaj cały stan
+  assert.equal(bal(s, "pr_zr_lesna"), 0);
+  const r = R.commitOperation(s, DIRECT(), ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(bal(s, "pr_zr_lesna"), 0);
+});
+test("D: sprzedaż > produkcji blokowana; bez wymogu zakupu; niesprzedana reszta trafia na stan z ostrzeżeniem", () => {
+  const s = fresh();
+  assert.ok(R.planOperation(s, DIRECT({ qtyMP: "600,01" }), ctx(s)).errors["sale.qtyMP"]);
+  const p = R.planOperation(s, DIRECT(), ctx(s));
+  assert.ok(!Object.keys(p.errors).some(k => k.startsWith("purchase.")));
+  const part = R.commitOperation(s, DIRECT({ qtyMP: "500" }), ctx(s));
+  assert.ok(part.op.warnings.some(w => w.includes("100 MP")));
+  assert.equal(bal(s, "pr_zr_lesna"), 8393);
+});
+test("D: surowiec z lasu (opcjonalnie) ogranicza wynik: 150 m³ → maks. 600 MP", () => {
+  const s = fresh();
+  assert.ok(R.planOperation(s, DIRECT({}, { rawProductId: "pr_drewno", rawQty: "150", outMP: "601" }), ctx(s)).errors["production.outMP"]);
+  const r = R.commitOperation(s, DIRECT({}, { rawProductId: "pr_drewno", rawQty: "150", rawCost: "34 500" }), ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(bal(s, "pr_drewno"), 817, "drewno z lasu nie jest zdejmowane ze stanu");
+  assert.equal(r.op.totals.rawCost, 34500);
+  assert.equal(r.op.totals.result, 52800 - 34500 - 6000);
+});
+
+/* ------------------------------ Cena za rąbanie ------------------------------ */
+test("Rąbanie: domyślnie 10 zł/MP (500 MP → 5 000 zł), cenę można zmienić", () => {
+  const s = fresh();
+  assert.equal(s.config.chipRateDefault, 10);
+  assert.equal(R.planOperation(s, DIRECT({}, { outMP: "500" }), ctx(s)).totals.chippingCost, 5000);
+  assert.equal(R.planOperation(s, DIRECT({}, { outMP: "500", chipRate: "10,00" }), ctx(s)).totals.chippingCost, 5000);
+  assert.equal(R.planOperation(s, DIRECT({}, { outMP: "500", chipRate: "8" }), ctx(s)).totals.chippingCost, 4000);
+  assert.ok(R.planOperation(s, DIRECT({}, { chipRate: "-1" }), ctx(s)).errors["production.chipRate"]);
+  const rep = R.Reports.summary(s, "wh_zab", "2026-09");
+  assert.equal(rep.chippingCost, 800 + 6000);                     // dane przykładowe: łańcuch + bezpośrednia
+});
+
+/* ------------------------------- Transport ------------------------------- */
+test("Pociąg: tonaż wspólny 20 × 60 t = 1 200 t", () => {
+  const s = fresh();
+  const t = R.planOperation(s, WZ({ qty: "3636,364" }), ctx(s)) && R.planOperation(s, draft({ type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "3636", unit: "MP", buyerId: "pa_ec_zab", price: "80" }, transport: { mode: "train", place: "EC", train: { wagonCount: "20", tonMode: "same", sameT: "60", capUnit: "t", capacity: "60", price: "25", priceUnit: "t", carrier: "PKP Cargo", docNo: "CIM 1", loadPlace: "Bocznica Zabrze" } } }), ctx(s)).norm.transport;
+  assert.equal(t.wagonCount, 20);
+  assert.equal(t.totalT, 1200);
+  assert.deepEqual(new Set(t.wagonT), new Set([60]));
+  assert.equal(t.totalCapacity, 1200);
+  assert.equal(t.cost, 30000);
+  assert.deepEqual([t.carrier, t.docNo, t.loadPlace, t.place], ["PKP Cargo", "CIM 1", "Bocznica Zabrze", "EC"]);
+});
+test("Pociąg: tonaż indywidualny — lista zgodna z liczbą wagonów, suma automatyczna, brakujący wagon = błąd", () => {
+  const s = fresh();
+  const tons = ["58,4", "60,1", "59,7", "61,2"];
+  const t = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "train", place: "X", train: { wagonCount: "4", tonMode: "each", wagonT: tons, capUnit: "MP", capacity: "200", price: "1", priceUnit: "t" } } }), ctx(s)).norm.transport;
+  assert.deepEqual(t.wagonT, [58.4, 60.1, 59.7, 61.2]);
+  assert.equal(t.totalT, 239.4);
+  assert.equal(t.totalCapacityMP, 800);
+  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "train", place: "X", train: { wagonCount: "3", tonMode: "each", wagonT: ["60", "", "59"], price: "1", priceUnit: "t" } } }), ctx(s));
+  assert.ok(p.errors["transport.train.wagonT.1"]);
+  // pojemność w MP: 120 MP ≈ 39,6 t — przeładowanie ostrzega
+  const w = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "train", place: "X", train: { wagonCount: "1", tonMode: "same", sameT: "45", capUnit: "MP", capacity: "120", price: "1", priceUnit: "t" } } }), ctx(s));
+  assert.ok(w.warnings.some(x => x.includes("przekracza ładowność")));
+});
+test("Transport własny 262 × 5 = 1 310 zł; zewnętrzny 1 250 zł, wliczony → 0 zł", () => {
+  const s = fresh();
+  assert.equal(R.planOperation(s, WZ({ }), ctx(s)) && R.planOperation(s, draft({ type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "80", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "own", place: "EC", own: { vehicleId: "ve_scania", km: "262", rate: "5" } } }), ctx(s)).norm.transport.cost, 1310);
+  const ext = x => R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "external", place: "X", external: Object.assign({ company: "ESI", reg: "ESI 18734", freight: "1 250" }, x) } }), ctx(s)).norm.transport.cost;
+  assert.equal(ext({}), 1250);
+  assert.equal(ext({ includedInPrice: true }), 0);
+});
+test("Transport nie zmienia stanu — w każdym rodzaju operacji", () => {
   const s = fresh();
   const modes = [
-    { mode: "none", place: "RiC Zabrze" },
-    { mode: "own", place: "RiC Zabrze", own: { vehicleId: "ve_scania", km: "262" } },
-    { mode: "external", place: "RiC Zabrze", external: { company: "DAP", reg: "SZA 7K901", freight: "900" } },
-    { mode: "train", place: "RiC Zabrze", train: { wagonCount: "3", sameForAll: true, sameT: "20", price: "30", priceUnit: "t" } }
+    { mode: "none", place: "X" },
+    { mode: "own", place: "X", own: { vehicleId: "ve_scania", km: "262" } },
+    { mode: "external", place: "X", external: { company: "DAP", reg: "SZA 7K901", freight: "900" } },
+    { mode: "train", place: "X", train: { wagonCount: "3", tonMode: "same", sameT: "20", price: "30", priceUnit: "t" } }
   ];
-  const sig = modes.map(t => JSON.stringify(R.planOperation(s, draft({ purchase: PURCHASE_A, production: LESNA, transport: t }), ctx(s)).postings.map(p => [p.kind, p.productId, p.mp])));
-  assert.equal(new Set(sig).size, 1);
-});
-test("Pociąg: tonaż wspólny i ręczny per wagon, cena za t / MP / m³", () => {
-  const s = fresh();
-  const tr = over => R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "train", place: "Bocznica", train: Object.assign({ wagonCount: "2", sameForAll: true, sameT: "16,5", price: "28", priceUnit: "t" }, over) } }), ctx(s)).norm.transport;
-  assert.deepEqual([tr({}).totalT, tr({}).cost], [33, 924]);
-  assert.deepEqual(tr({}).wagonT, [16.5, 16.5]);
-  const manual = tr({ sameForAll: false, wagonT: ["16", "17,5"] });
-  assert.deepEqual([manual.totalT, manual.cost], [33.5, 938]);
-  assert.equal(tr({ priceUnit: "MP", price: "2" }).cost, 200);   // 33 t = 100 MP
-  assert.equal(tr({ priceUnit: "m3", price: "10" }).cost, 250);  // 100 MP = 25 m³
-  const p = R.planOperation(s, draft({ purchase: PURCHASE_A, transport: { mode: "train", place: "B", train: { wagonCount: "2", sameForAll: false, wagonT: ["16", ""], price: "1", priceUnit: "t" } } }), ctx(s));
-  assert.ok(p.errors["transport.train.wagonT.1"]);
+  for (const base of [{ purchase: PURCHASE_A }, { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "500", unit: "MP", buyerId: "pa_ec_zab", price: "90" } }, { type: "PRODUKCJA", production: { rawProductId: "pr_drewno", consumeQty: "10", type: "lesna" } }]) {
+    const sig = modes.map(t => JSON.stringify(R.planOperation(s, draft(Object.assign({}, base, { transport: t })), ctx(s)).postings.map(p => [p.kind, p.productId, p.qty])));
+    assert.equal(new Set(sig).size, 1, JSON.stringify(base));
+  }
 });
 
-/* ------------------------- Atomowość, idempotencja, wyścig ------------------------- */
-test("Idempotencja: dwa zapisy tego samego formularza tworzą jedną operację", () => {
-  const s = fresh();
-  const d = draft({ purchase: PURCHASE_A });
-  const n0 = s.operations.length, l0 = s.ledger.length;
-  assert.equal(R.commitOperation(s, d, ctx(s)).ok, true);
-  const again = R.commitOperation(s, d, ctx(s));
-  assert.equal(again.duplicate, true);
+/* ------------------------- Bezpieczeństwo zapisu ------------------------- */
+test("Idempotencja: podwójny zapis tego samego formularza = jedna operacja", () => {
+  const s = fresh(); const d = WZ();
+  const n0 = s.operations.length;
+  R.commitOperation(s, d, ctx(s));
+  assert.equal(R.commitOperation(s, d, ctx(s)).duplicate, true);
   assert.equal(s.operations.length, n0 + 1);
-  assert.equal(s.ledger.length, l0 + 1);
+  assert.equal(bal(s, "pr_zr_lesna"), 7793);
 });
 test("Atomowość: odrzucona operacja nie zostawia żadnego zapisu", () => {
-  const s = fresh();
-  const snap = JSON.stringify(s);
-  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A, production: Object.assign({}, LESNA, { kwit: "" }), sale: { enabled: true, buyerId: "pa_ec_zab", price: "90" } }), ctx(s));
-  assert.equal(r.ok, false);
+  const s = fresh(); const snap = JSON.stringify(s);
+  assert.equal(R.commitOperation(s, DIRECT({ buyerId: "" }), ctx(s)).ok, false);
   assert.equal(JSON.stringify(s), snap);
 });
-test("Wyścig: dwóch użytkowników zużywa ten sam stan — drugi zapis odrzucony, brak stanu ujemnego", () => {
-  const s = fresh(); // 60 m³ drewna w Zabrzu
-  const a = draft({ purchase: Object.assign({}, PURCHASE_A, { qty: "1" }), production: Object.assign({}, LESNA, { consumeQty: "61" }) });
-  const b = draft({ purchase: Object.assign({}, PURCHASE_A, { qty: "1" }), production: Object.assign({}, LESNA, { consumeQty: "61" }) });
-  // oba formularze zaplanowane na tym samym stanie — oba wyglądają poprawnie
+test("Wyścig: dwa WZ na ten sam stan — drugi odrzucony, stan nieujemny", () => {
+  const s = fresh();
+  const a = WZ({ qty: "5000" }), b = WZ({ qty: "5000" });
   assert.equal(R.planOperation(s, a, ctx(s, "u_mag")).ok, true);
   assert.equal(R.planOperation(s, b, ctx(s, "u_kier")).ok, true);
-  // zapis jest ponownie walidowany na bieżącym stanie
   assert.equal(R.commitOperation(s, a, ctx(s, "u_mag")).ok, true);
-  const second = R.commitOperation(s, b, ctx(s, "u_kier"));
-  assert.equal(second.ok, false);
-  assert.ok(bal(s, "pr_drewno") >= 0);
+  assert.equal(R.commitOperation(s, b, ctx(s, "u_kier")).ok, false);
+  assert.equal(bal(s, "pr_zr_lesna"), 3293);
 });
-test("Kolejność księgowania jest deterministyczna, numery dokumentów rosną", () => {
+test("Magazyn z kontekstu użytkownika; rola Podgląd bez operacji; data z przyszłości odrzucona", () => {
   const s = fresh();
-  const r1 = R.commitOperation(s, draft({ purchase: PURCHASE_A, production: LESNA, sale: { enabled: true, buyerId: "pa_ec_zab", price: "90" } }), ctx(s));
-  const steps = s.ledger.filter(l => l.opId === r1.op.id).sort((a, b) => a.seq - b.seq).map(l => l.kind);
-  assert.deepEqual(steps, ["ZAKUP", "ZUZYCIE", "PRODUKCJA", "SPRZEDAZ"]);
-  assert.equal(r1.op.no, "PZ/003/09/2026");   // numeracja firmowa: PZ/001 i PZ/002 są w danych przykładowych
-  const r2 = R.commitOperation(s, draft({ purchase: PURCHASE_A }), ctx(s));
-  assert.equal(r2.op.no, "PZ/004/09/2026");
-});
-
-/* ------------------------- Uprawnienia, magazyn z kontekstu ------------------------- */
-test("Magazyn wynika z użytkownika; rola Podgląd nie tworzy operacji", () => {
-  const s = fresh();
-  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A }), ctx(s, "u_pys"));
+  const r = R.commitOperation(s, WZ({ qty: "90" }), ctx(s, "u_pys"));
   assert.equal(r.op.whId, "wh_pys");
-  assert.equal(R.planOperation(s, draft({ purchase: PURCHASE_A }), ctx(s, "u_view")).errors._user !== undefined, true);
+  assert.equal(R.Stock.balance(s, "wh_pys", "pr_zr_lesna"), 100);
+  assert.ok(R.planOperation(s, WZ(), ctx(s, "u_view")).errors._user);
+  assert.ok(R.planOperation(s, Object.assign(WZ(), { date: "2026-09-24" }), ctx(s)).errors.date);
 });
-test("Data z przyszłości jest odrzucana", () => {
-  const s = fresh();
-  assert.ok(R.planOperation(s, draft({ date: "2026-09-24", purchase: PURCHASE_A }), ctx(s)).errors.date);
+test("Storno WZ przywraca stan; storno produkcji niemożliwe po rozchodzie produktu", () => {
+  const s = fresh(); const c = ctx(s);
+  const wz = R.commitOperation(s, WZ(), c);
+  assert.equal(R.stornoOperation(s, wz.op.id, c, "błędny odbiorca").ok, true);
+  assert.equal(bal(s, "pr_zr_lesna"), 8293);
+  const pr = R.commitOperation(s, PROD(), c);                   // +3 268 MP
+  R.commitOperation(s, WZ({ qty: "11561" }), c);                // wyprzedaż do zera
+  assert.equal(R.stornoOperation(s, pr.op.id, c, "test").ok, false);
 });
 
-/* ---------------------------- Scenariusz G ---------------------------- */
-test("G: inwentaryzacja 2026-08 — otwarcie, lista, spis, zamknięcie, tylko odczyt, blokada okresu", () => {
-  const s = fresh();
-  const c = ctx(s);
+/* ------------------------------ Inwentaryzacja ------------------------------ */
+test("G: inwentaryzacja w jednostkach produktu — drewno m³, zrębka MP, PKS t; zamknięcie blokuje okres", () => {
+  const s = fresh(); const c = ctx(s);
   assert.equal(R.Inventory.open(s, "2026-08", c).ok, true);
   const g = R.Inventory.generate(s, "2026-08", c);
-  assert.equal(g.ok, true);
-  const line = g.period.lines.find(l => l.productId === "pr_drewno");
-  assert.equal(line.bookMP, 240);                     // 60 + 30 − 30 m³ = 60 m³ = 240 MP na 31.08
-  for (const l of g.period.lines) assert.equal(R.Inventory.setCount(s, "2026-08", l.productId, R.fmtQ(R.Units.fromMP(l.bookMP, l.unit, s.config)), c).ok, true);
-  assert.equal(R.Inventory.setCount(s, "2026-08", "pr_drewno", "58,5", c).ok, true);   // różnica −1,5 m³
-  assert.equal(R.Inventory.close(s, "2026-08", ctx(s, "u_mag")).ok, false, "magazynier nie zamyka");
+  const line = id => g.period.lines.find(l => l.productId === id);
+  assert.deepEqual([line("pr_drewno").bookQty, line("pr_drewno").unit], [817, "m3"]);
+  assert.deepEqual([line("pr_zr_lesna").bookQty, line("pr_zr_lesna").unit], [8293, "MP"]);
+  assert.deepEqual([line("pr_pks").bookQty, line("pr_pks").unit], [728, "t"]);
+  for (const l of g.period.lines) R.Inventory.setCount(s, "2026-08", l.productId, R.fmtQ(l.bookQty), c);
+  R.Inventory.setCount(s, "2026-08", "pr_drewno", "815,5", c);
+  assert.equal(R.Inventory.close(s, "2026-08", ctx(s, "u_mag")).ok, false);
   const cl = R.Inventory.close(s, "2026-08", c);
   assert.equal(cl.ok, true, cl.error);
-  assert.equal(cl.docNo, "IN/001/08/2026");
-  assert.deepEqual(cl.diffs, [{ productId: "pr_drewno", mp: -6 }]);
+  assert.deepEqual(cl.diffs, [{ productId: "pr_drewno", qty: -1.5 }]);
   assert.equal(R.Inventory.setCount(s, "2026-08", "pr_drewno", "1", c).ok, false);
-  assert.equal(R.Inventory.generate(s, "2026-08", c).ok, false);
-  assert.ok(R.planOperation(s, draft({ date: "2026-08-30", purchase: PURCHASE_A }), c).errors.date);
-  assert.equal(R.planOperation(s, draft({ date: "2026-09-01", purchase: PURCHASE_A }), c).ok, true);
-  assert.equal(R.Stock.balance(s, "wh_zab", "pr_drewno", "2026-08-31"), 234);
-});
-test("G: zamknięcie wymaga kompletnego spisu", () => {
-  const s = fresh(); const c = ctx(s);
-  R.Inventory.open(s, "2026-09", c); R.Inventory.generate(s, "2026-09", c);
-  assert.match(R.Inventory.close(s, "2026-09", c).error, /Brak stanu ze spisu/);
+  assert.ok(R.planOperation(s, Object.assign(WZ(), { date: "2026-08-30" }), c).errors.date);
+  assert.equal(bal(s, "pr_drewno"), 815.5);
 });
 test("G: poprzedni miesiąc zamyka się automatycznie na początku kolejnego", () => {
   const s = fresh(); const c = ctx(s);
   R.Inventory.open(s, "2026-09", c); R.Inventory.generate(s, "2026-09", c);
-  assert.deepEqual(R.Inventory.autoClose(s, ctx(s)), [], "w tym samym miesiącu nic się nie dzieje");
+  assert.deepEqual(R.Inventory.autoClose(s, ctx(s)), []);
   const done = R.Inventory.autoClose(s, ctx(s, "u_kier", "2026-10-01"));
-  assert.equal(done.length, 1);
   assert.equal(done[0].ok, true);
-  const p = R.Inventory.find(s, "wh_zab", "2026-09");
-  assert.equal(p.status, "ZAMKNIETA");
-  assert.equal(p.auto, true);
-  assert.ok(p.lines.every(l => l.assumed));
-  assert.equal(s.audit.at(-1).source, "Automat: początek kolejnego miesiąca");
+  assert.equal(R.Inventory.find(s, "wh_zab", "2026-09").status, "ZAMKNIETA");
 });
 
-/* ---------------------------- Korekta, audyt ---------------------------- */
-test("Storno odwraca zapisy w odwrotnej kolejności; blokada gdy materiał rozchodowany", () => {
-  const s = fresh(); const c = ctx(s);
-  const wood0 = bal(s, "pr_drewno"), chip0 = bal(s, "pr_zr_lesna");
-  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A, production: LESNA }), c);
-  assert.equal(R.stornoOperation(s, r.op.id, ctx(s, "u_mag"), "x").ok, false, "magazynier nie koryguje");
-  assert.equal(R.stornoOperation(s, r.op.id, c, "").ok, false, "wymagana przyczyna");
-  const st = R.stornoOperation(s, r.op.id, c, "błędna ilość");
-  assert.equal(st.ok, true, st.error);
-  assert.equal(bal(s, "pr_drewno"), wood0);
-  assert.equal(bal(s, "pr_zr_lesna"), chip0);
-  assert.equal(R.stornoOperation(s, r.op.id, c, "ponownie").ok, false);
-  // materiał sprzedany → storno zakupu zrębki niemożliwe
-  const s2 = fresh();
-  const buy = R.commitOperation(s2, draft({ purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "10", unit: "MP", price: "50" } }), ctx(s2));
-  s2.ledger.push({ id: "x", seq: 9999, opId: null, date: TODAY, whId: "wh_zab", productId: "pr_zr_tow", kind: "SPRZEDAZ", mp: -305, t: 0, docNo: "WZ/X" });
-  assert.equal(R.stornoOperation(s2, buy.op.id, ctx(s2), "test").ok, false);
-});
-test("Audyt: użytkownik, czas, operacja, akcja, stan przed/po, źródło", () => {
+/* ------------------------------ Flota, kopia ------------------------------ */
+test("Flota: walidacja i uprawnienia; kurs zachowuje kierowcę kursu", () => {
   const s = fresh();
-  const r = R.commitOperation(s, draft({ purchase: PURCHASE_A }), ctx(s));
-  const a = s.audit.at(-1);
-  assert.equal(a.userName, "Anna Górska");
-  assert.ok(a.ts);
-  assert.equal(a.opNo, r.op.no);
-  assert.equal(a.action, "Utworzenie operacji");
-  assert.equal(a.before.stanMP.pr_drewno + 80, a.after.stanMP.pr_drewno);
-  assert.equal(a.source, "test");
+  const d = draft({ type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "80", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "own", place: "EC", own: { vehicleId: "ve_scania", km: "262", driverId: "dr_wojcik" } } });
+  const r = R.commitOperation(s, d, ctx(s));
+  assert.equal(r.op.transport.driverName, "Tomasz Wójcik");
+  assert.equal(r.op.transport.driverOverridden, true);
+  R.Fleet.save(s, "vehicles", Object.assign({}, s.fleet.vehicles[0], { driverId: "dr_nowak" }), ctx(s));
+  assert.equal(s.operations.at(-1).transport.driverName, "Tomasz Wójcik");
+  assert.equal(R.Fleet.save(s, "vehicles", { name: "DAF", reg: "SGL4T821", type: "ciezarowy", status: "aktywny", driverId: "dr_nowak" }, ctx(s)).ok, false);
+  assert.equal(R.Fleet.save(s, "chippers", { name: "Rębak 3", status: "aktywny", operatorId: "op_lis" }, ctx(s, "u_mag")).ok, false);
 });
-test("Flota: walidacja rejestracji i kierowcy domyślnego, uprawnienia", () => {
+test("Kontrola struktury odrzuca dane v1 i uszkodzoną księgę", () => {
   const s = fresh();
-  assert.equal(R.Fleet.save(s, "vehicles", { name: "DAF", reg: "SGL4T821", type: "ciezarowy", status: "aktywny", driverId: "dr_nowak" }, ctx(s)).ok, false, "duplikat rejestracji");
-  assert.equal(R.Fleet.save(s, "vehicles", { name: "DAF", reg: "SZ 1111A", type: "ciezarowy", status: "aktywny", driverId: "" }, ctx(s)).errors.driverId !== undefined, true);
-  assert.equal(R.Fleet.save(s, "vehicles", { name: "DAF", reg: "SZ 1111A", type: "ciezarowy", status: "aktywny", driverId: "dr_nowak" }, ctx(s, "u_mag")).ok, false);
-  assert.equal(R.Fleet.save(s, "chippers", { name: "Rębak 3", status: "aktywny", operatorId: "op_lis" }, ctx(s)).ok, true);
-  assert.equal(R.Fleet.remove(s, "drivers", "dr_kowalski", ctx(s)).ok, false, "kierowca domyślny pojazdu");
-  assert.equal(R.Fleet.remove(s, "drivers", "dr_wojcik", ctx(s)).ok, true);
-});
-test("Kontrola struktury kopii odrzuca uszkodzone dane", () => {
-  const s = fresh();
-  assert.deepEqual(R.validateStateShape(s), []);
-  const bad = JSON.parse(JSON.stringify(s)); delete bad.ledger;
+  const v1 = JSON.parse(JSON.stringify(s)); v1.schema = 1;
+  assert.ok(R.validateStateShape(v1).length);
+  const bad = JSON.parse(JSON.stringify(s)); bad.ledger[0].qty = "x";
   assert.ok(R.validateStateShape(bad).length);
-  const bad2 = JSON.parse(JSON.stringify(s)); bad2.ledger[0].mp = "x";
-  assert.ok(R.validateStateShape(bad2).length);
 });

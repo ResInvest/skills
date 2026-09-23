@@ -122,3 +122,31 @@ Przed FAZĄ 2 potrzebne jest jedno z dwóch:
 * decyzja, że FAZA 2 rozwija 1.3.0 (IndexedDB + Supabase) — wtedy silnik
   `engine.js` z demonstratora zastępuje `Validate.batch` / `buildChain`, a zapis
   idzie jedną transakcją IndexedDB `readwrite` na `operations + ledger + audit`.
+
+---
+
+# Demo v2 — zmiany modelu (dodatek do promptu)
+
+## Decyzje
+
+| Wymaganie | Decyzja | Uzasadnienie |
+|---|---|---|
+| Stany w rzeczywistej jednostce; PKS/łupina tylko w t | **Księga prowadzona w jednostce magazynowej produktu** (`qty` + `unit`), nie w MP | Przy księdze w MP PKS musiałby być sztucznie przeliczany na MP — wprost zakazane w wymaganiu 4–5 |
+| Jednostki produktu | `unit` ∈ m³ / MP / t; dozwolone jednostki wejścia: drewno m³·MP·t, zrębka MP·t, produkty tonowe tylko t | Brak przeliczenia = brak możliwości wyboru jednostki (formularz nie pokazuje opcji) |
+| Masa orientacyjna | zrębka × 0,33 t/MP; drewno × **0,952 t/m³** (`config.woodTPerM3`) | Przykład z dodatku: 817 m³ ≈ 778 t → 0,952. **Uwaga:** w v1 masa drewna liczona była przez MP (1 m³ = 4 MP × 0,33 = 1,32 t) — dla 20 m³ dawało 26,4 t, teraz 19,04 t. Przelicznik 1 m³ = 4 MP zrębki pozostaje bez zmian. Jeśli firma chce wrócić do 1,32 t/m³, wystarczy zmienić `woodTPerM3` w `config/demo.config.json` |
+| Niezależne operacje | `draft.type` ∈ ZAKUP / SPRZEDAZ (z magazynu albo `direct`) / PRODUKCJA | Wymaganie 10 i 12: każda ścieżka działa samodzielnie |
+| Sprzedaż bezpośrednia | zapisy PW(+) i WZ(−) z flagą `direct` w tej samej operacji — saldo netto 0 | Pełna identyfikowalność (ile wyprodukowano, ile sprzedano) bez wzrostu stanu; niesprzedana reszta zostaje na stanie z ostrzeżeniem |
+| Surowiec z lasu przy sprzedaży bezpośredniej | opcjonalny, **nie** zdejmowany ze stanu; ogranicza maks. wynik (m³ × 4) | „Nie pokazuj wymagania wcześniejszego zakupu ani pobrania z magazynu” |
+| Powiązanie wejście → wyjście | PW ma `meta.fromDoc` = numer RW, operacja ma `production.rawProductId/outProductId` | Wymaganie 3 |
+| Cena za rąbanie | `production.chipRate`, domyślnie `config.chipRateDefault` = 10 zł/MP; koszt w `totals.chippingCost`, na PW i w raportach | Wymaganie 9 |
+| Pociąg | `capacity` + `capUnit` (t / MP), `tonMode` same / each (wzajemnie wykluczające się), `loadPlace`, `docNo`; podsumowanie składu liczone w silniku | Wymagania 6–8 |
+| Dane v1 | nowy klucz `riw.demo.state.v2`, schemat 2; dane v1 zostają nietknięte pod starym kluczem | Model v1 (MP dla wszystkiego) nie jest kompatybilny |
+| Motyw | jasny (baza: „Perła” z 1.3.0) | Wymaganie 11 |
+
+## Pliki zmienione w v2
+
+`demo/src/engine.js` (przepisany model), `demo/src/seed.js`, `demo/src/app.js` (formularz 3 rodzajów, pociąg, widoki), `demo/src/styles.css` (jasny motyw), `config/demo.config.json` (+`woodTPerM3`, `chipRateDefault`), `tools/build-demo.mjs`, `tests/*`, dokumentacja, instalator 2.0.0.
+
+## Wpływ na FAZĘ 2
+
+Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodnym z `products.stock_unit`) zamiast jednej kolumny `mp`. Operacja = agregat z typem (`purchase | sale | production`) i flagą `direct`.

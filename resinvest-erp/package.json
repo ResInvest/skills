@@ -1,8 +1,8 @@
 {
   "name": "resinvest-erp-demo",
-  "version": "1.4.0-demo",
+  "version": "2.0.0-demo",
   "private": true,
-  "description": "ResInvest ERP — demonstrator nowej logiki operacji (FAZA 1): jeden plik HTML",
+  "description": "ResInvest ERP — Demo v2 — zakup, WZ z magazynu, produkcja na magazynie, sprzedaż bezpośrednia: jeden plik HTML",
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "build": "node tools/build-demo.mjs",

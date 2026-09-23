@@ -26,7 +26,9 @@
       { id: "pr_drewno_inw", code: "DRW-I", name: "Drewno z wycinki inwestycyjnej", cat: "drewno", unit: "m3", active: true },
       { id: "pr_zr_lesna", code: "ZR-PL", name: "Zrębka produkcyjna leśna", cat: "zrebka", unit: "MP", active: true },
       { id: "pr_zr_inw", code: "ZR-PI", name: "Zrębka produkcyjna inwestycyjna", cat: "zrebka", unit: "MP", active: true },
-      { id: "pr_zr_tow", code: "ZR-T", name: "Zrębka towar", cat: "zrebka", unit: "MP", active: true }
+      { id: "pr_zr_tow", code: "ZR-T", name: "Zrębka towar", cat: "zrebka", unit: "MP", active: true },
+      { id: "pr_pks", code: "PKS", name: "PKS (łupina palmowa)", cat: "agro", unit: "t", active: true },
+      { id: "pr_lupina", code: "LUP-N", name: "Łupina nerkowca", cat: "agro", unit: "t", active: true }
     ];
     s.partners = [
       { id: "pa_lander", name: "Lander Agro", role: "supplier", city: "Gliwice", active: true },
@@ -36,7 +38,9 @@
       { id: "pa_ec_zab", name: "Elektrociepłownia Zabrze S.A.", role: "buyer", city: "Zabrze", active: true },
       { id: "pa_ec_kat", name: "EC Katowice — biomasa", role: "buyer", city: "Katowice", active: true },
       { id: "pa_ciep_ryb", name: "Ciepłownia Rybnik", role: "buyer", city: "Rybnik", active: true },
-      { id: "pa_tartak", name: "Tartak Beskid s.c.", role: "both", city: "Żywiec", active: true }
+      { id: "pa_tartak", name: "Tartak Beskid s.c.", role: "both", city: "Żywiec", active: true },
+      { id: "pa_agro", name: "Biomass Trading B.V.", role: "supplier", city: "Rotterdam", active: true },
+      { id: "pa_elektrownia", name: "Elektrownia Łaziska", role: "buyer", city: "Łaziska Górne", active: true }
     ];
     s.carriers = ["ESI Logistics", "DAP Trans", "Transport Kowalski", "PKP Cargo"];
     s.fleet = {
@@ -66,6 +70,7 @@
   function draftOf(date, over) {
     const d = RIW.blankDraft({ today: date });
     d.date = date;
+    d.type = over.type || "ZAKUP";
     for (const k of ["purchase", "production", "sale"]) Object.assign(d[k], over[k] || {});
     if (over.transport) {
       const t = over.transport;
@@ -85,9 +90,11 @@
     const user = id => s.users.find(u => u.id === id);
     const ctx = (uid, date) => ({ user: user(uid), today: date, now: date + "T08:00:00.000Z", source: "Dane przykładowe" });
 
+    // ilości w jednostce magazynowej produktu: drewno m³, zrębka MP, PKS / łupina t
     RIW.openingBalance(s, "wh_zab", "2026-08-01", [
-      { productId: "pr_drewno", qty: 60 }, { productId: "pr_zr_lesna", qty: 400 },
-      { productId: "pr_zr_inw", qty: 120 }, { productId: "pr_zr_tow", qty: 200 }
+      { productId: "pr_drewno", qty: 817 }, { productId: "pr_zr_lesna", qty: 8173 },
+      { productId: "pr_zr_inw", qty: 120 }, { productId: "pr_zr_tow", qty: 200 },
+      { productId: "pr_pks", qty: 728 }, { productId: "pr_lupina", qty: 728 }
     ], ctx("u_admin", "2026-08-01"));
     RIW.openingBalance(s, "wh_pys", "2026-08-01", [
       { productId: "pr_drewno", qty: 30 }, { productId: "pr_zr_lesna", qty: 250 }
@@ -107,7 +114,7 @@
         purchase: { supplierId: "pa_tartak", basis: "KZR", productId: "pr_drewno_inw", qty: "25", unit: "m3", price: "180" },
         production: { enabled: true, type: "inwestycyjna", investSite: "Obwodnica Gliwic — odcinek II", sourceDoc: "Protokół wycinki 17/2026", chipperId: "ch_biber" },
         sale: { enabled: true, buyerId: "pa_ec_kat", qtyMP: "100", price: "95", priceUnit: "MP" },
-        transport: { mode: "train", place: "EC Katowice — bocznica", train: { trainNo: "RC 44120", carrier: "PKP Cargo", wagonCount: "2", wagonMP: "120", sameForAll: true, sameT: "16,5", price: "28", priceUnit: "t" } }
+        transport: { mode: "train", place: "EC Katowice — bocznica", train: { trainNo: "RC 44120", carrier: "PKP Cargo", docNo: "CIM 4412/08", loadPlace: "Bocznica Gliwice Port", wagonCount: "2", capUnit: "MP", capacity: "120", tonMode: "same", sameT: "16,5", price: "28", priceUnit: "t" } }
       }],
       ["u_mag", "2026-09-03", {
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "20", unit: "m3", price: "230" },
@@ -118,6 +125,25 @@
       ["u_pys", "2026-09-08", {
         purchase: { supplierId: "pa_ndl_ryb", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
         transport: { mode: "external", place: "RiC Pyskowice", external: { company: "Transport Kowalski", reg: "SPY 92FR", km: "40", includedInPrice: true } }
+      }],
+      // produkcja na magazynie: drewno ze stanu → zrębka na stan
+      ["u_pys", "2026-09-10", {
+        type: "PRODUKCJA",
+        production: { rawProductId: "pr_drewno", consumeQty: "10", type: "lesna", chipperId: "ch_biber", chipRate: "10" },
+        transport: { mode: "none", place: "RiC Pyskowice" }
+      }],
+      // sprzedaż z magazynu (WZ)
+      ["u_pys", "2026-09-12", {
+        type: "SPRZEDAZ",
+        sale: { productId: "pr_zr_lesna", qty: "100", unit: "MP", buyerId: "pa_ciep_ryb", price: "85" },
+        transport: { mode: "external", place: "Ciepłownia Rybnik", external: { company: "DAP Trans", reg: "SZA 7K901", km: "35", freight: "650" } }
+      }],
+      // produkcja w lesie + sprzedaż bezpośrednia: stan zrębki bez zmian
+      ["u_kier", "2026-09-15", {
+        type: "SPRZEDAZ",
+        production: { type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Kuźnia", kwit: "KW 0233/09/2026", rawProductId: "pr_drewno", rawQty: "150", outMP: "600", chipperId: "ch_jenz", chipRate: "10" },
+        sale: { direct: true, buyerId: "pa_elektrownia", qtyMP: "600", price: "88", priceUnit: "MP" },
+        transport: { mode: "train", place: "Elektrownia Łaziska", train: { trainNo: "RC 50931", carrier: "PKP Cargo", docNo: "CIM 5093/09", loadPlace: "Bocznica Kuźnia Raciborska", wagonCount: "5", capUnit: "t", capacity: "60", tonMode: "each", wagonT: ["39,6", "39,8", "39,4", "39,7", "39,5"], price: "25", priceUnit: "t" } }
       }]
     ];
     for (const [uid, date, over] of ops) {

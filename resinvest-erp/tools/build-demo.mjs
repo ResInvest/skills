@@ -44,7 +44,7 @@ if (!noVideo) {
 // Konfiguracja środowiska — walidacja przed wstrzyknięciem
 const cfgRaw = JSON.parse(readFileSync(join(ROOT, "config", "demo.config.json"), "utf8"));
 const cfg = {};
-for (const k of ["m3_mp", "mp_t", "kmRateDefault", "wagonMPDefault", "maxWagons"]) {
+for (const k of ["m3_mp", "mp_t", "woodTPerM3", "kmRateDefault", "chipRateDefault", "wagonMPDefault", "maxWagons"]) {
   if (!(typeof cfgRaw[k] === "number" && cfgRaw[k] > 0)) throw new Error(`config/demo.config.json: „${k}” musi być liczbą > 0`);
   cfg[k] = cfgRaw[k];
 }
