@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /* Składa demonstrator w jeden plik: ResInvest_ERP_demo.html
+   (style, silnik, dane przykładowe, generator PDF z czcionką, intro, interfejs, konfiguracja)
    Użycie:  node tools/build-demo.mjs            (z katalogu resinvest-erp)
             node tools/build-demo.mjs --no-video (plik bez filmu intro — tylko muzyka syntezowana) */
 import { readFileSync, writeFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { loadPdfFonts } from "./pdf-fonts.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "demo", "src");
@@ -17,8 +19,10 @@ const parts = {
   STYLES: read("styles.css"),
   ENGINE: read("engine.js"),
   SEED: read("seed.js"),
+  PDF: read("pdf.js"),
   INTRO: read("intro.js"),
-  APP: read("app.js")
+  APP: read("app.js"),
+  VIEWS: read("views.js")
 };
 
 // Kod wstawiany do <script>/<style> nie może zawierać znacznika zamykającego.
@@ -44,7 +48,7 @@ if (!noVideo) {
 // Konfiguracja środowiska — walidacja przed wstrzyknięciem
 const cfgRaw = JSON.parse(readFileSync(join(ROOT, "config", "demo.config.json"), "utf8"));
 const cfg = {};
-for (const k of ["m3_mp", "mp_t", "woodTPerM3", "kmRateDefault", "chipRateDefault", "wagonMPDefault", "maxWagons"]) {
+for (const k of ["m3_mp", "mp_t", "woodTPerM3", "t_gj", "kmRateDefault", "chipRateDefault", "wagonMPDefault", "maxWagons"]) {
   if (!(typeof cfgRaw[k] === "number" && cfgRaw[k] > 0)) throw new Error(`config/demo.config.json: „${k}” musi być liczbą > 0`);
   cfg[k] = cfgRaw[k];
 }
@@ -58,8 +62,11 @@ const put = (marker, value) => {
 put("/*@@STYLES@@*/", parts.STYLES);
 put("/*@@ENGINE@@*/", parts.ENGINE);
 put("/*@@SEED@@*/", parts.SEED);
+put("/*@@PDF@@*/", parts.PDF);
 put("/*@@INTRO@@*/", parts.INTRO);
 put("/*@@APP@@*/", parts.APP);
+put("/*@@VIEWS@@*/", parts.VIEWS);
+put("@@FONTS@@", JSON.stringify(loadPdfFonts()));
 put("@@INTRO_MEDIA@@", media);
 put("@@CONFIG@@", JSON.stringify(cfg));
 put("@@VERSION@@", VERSION);

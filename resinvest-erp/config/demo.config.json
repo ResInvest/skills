@@ -1,5 +1,5 @@
 {
-  "_opis": "Konfiguracja Demo v2. Wartości są wstrzykiwane do pliku HTML przez tools/build-demo.mjs (npm run build). woodTPerM3 — orientacyjna masa 1 m³ drewna (z przykładu 817 m³ ≈ 778 t); mp_t — masa 1 MP zrębki; m3_mp — 1 m³ drewna = 4 MP zrębki; chipRateDefault — domyślna cena za rąbanie zł/MP. Zmiana dotyczy nowych danych (reset danych przykładowych).",
+  "_opis": "Konfiguracja Demo v2. Wartości są wstrzykiwane do pliku HTML przez tools/build-demo.mjs (npm run build). woodTPerM3 — orientacyjna masa 1 m³ drewna (z przykładu 817 m³ ≈ 778 t); mp_t — masa 1 MP zrębki; m3_mp — 1 m³ drewna = 4 MP zrębki; chipRateDefault — domyślna cena za rąbanie zł/MP; t_gj — orientacyjna energia 1 t biomasy (GJ). Zmiana dotyczy nowych danych (reset danych przykładowych).",
   "m3_mp": 4,
   "mp_t": 0.33,
   "currency": "zł",
@@ -7,5 +7,6 @@
   "wagonMPDefault": 120,
   "maxWagons": 60,
   "woodTPerM3": 0.952,
+  "t_gj": 8.5,
   "chipRateDefault": 10
 }

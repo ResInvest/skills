@@ -1,4 +1,4 @@
-# ResInvest ERP — proponowane usprawnienia UI (poza zakresem Demo v2)
+# ResInvest ERP — proponowane usprawnienia UI (poza zakresem Demo v2.1)
 
 Poniższe punkty **nie zostały zaimplementowane**, bo nie są wymagane do działania funkcji z FAZY 1 i Demo v2.
 Kolejność = szacowany wpływ na szybkość wpisywania i liczbę pomyłek.
@@ -25,7 +25,7 @@ Kolejność = szacowany wpływ na szybkość wpisywania i liczbę pomyłek.
 6. **Skan kwitu wywozowego / kwitu wagowego** — załącznik do PW/PZ (mechanizm `Scans` z 1.3.0).
 7. **Cykl inwentaryzacji z FAZY 2** — statusy W TRAKCIE i GOTOWA DO ZAMKNIĘCIA, drugi podpis (kierownik zatwierdza spis magazyniera).
 8. **Przełącznik motywu** — v2 jest jasny (wymaganie); ciemny Grafit z v1 można przywrócić jako opcję dla pracy nocnej.
-9. **Wydruk dokumentów** — wzór WZ/PZ z logo i miejscem na podpis kierowcy (teraz wydruk tabelaryczny).
+9. ~~Wydruk dokumentów~~ — **zrobione w Demo v2.1** (druk i PDF z logo, numerem i polami podpisu).
 10. **Walidacja numeru kwitu** według formatu LP i ostrzeżenie o duplikacie kwitu w historii.
 11. **Mapa miejsca transportu** — podpowiedź odległości (km) dla znanych miejsc dostawy na podstawie historii kursów.
 12. **Powiadomienie o zbliżającym się przełomie miesiąca** z listą pozycji bez spisu.

@@ -316,7 +316,7 @@ h2,h3,.card-h h3,.sec-h h3{color:var(--text-head)}
 .scope.one{grid-template-columns:1fr} .scope.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .opt input:checked + .box svg{color:#fff}
 .btn.primary{color:#fff}
-.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}
+.quick{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s3)}
 .qa{display:flex;flex-direction:column;gap:3px;padding:14px var(--s4);border:1px solid var(--border);border-left:4px solid var(--brand);border-radius:var(--r-md);
   background:var(--surface);color:var(--text);text-decoration:none;box-shadow:var(--shadow-1)}
 .qa:hover{border-color:var(--brand-line);background:var(--brand-soft)}
@@ -331,3 +331,66 @@ h2,h3,.card-h h3,.sec-h h3{color:var(--text-head)}
 .kpi .k-v{color:var(--text-head)}
 @media (max-width:1080px){ .quick{grid-template-columns:repeat(2,minmax(0,1fr))} .dash-split,.inv-grid{grid-template-columns:1fr} }
 @media (max-width:720px){ .quick,.scope.two{grid-template-columns:1fr} }
+
+/* =========================================================================
+   Demo v2.1 — statusy dokumentów, szczegóły, korekty, raporty, wykresy
+   ========================================================================= */
+.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.mb4{margin-bottom:var(--s4)}
+.scope.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.opt.dis{opacity:.7}
+.neg{color:var(--err);font-weight:650} .pos{color:var(--ok);font-weight:650}
+.mini-h{font-size:var(--t-sm);font-weight:720;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;margin:var(--s4) 0 var(--s2)}
+.modal.xwide{max-width:1240px}
+.modal-f .spacer{flex:1}
+/* statusy: ROBOCZY / ZATWIERDZONY / ANULOWANY / SKORYGOWANY */
+.badge.st-DRAFT{background:var(--surface-3);color:var(--text-2);border:1px dashed var(--border-strong)}
+.badge.st-POSTED{background:var(--ok-soft);color:var(--ok)}
+.badge.st-CANCELLED{background:var(--err-soft);color:var(--err)}
+.badge.st-CORRECTED{background:var(--warn-soft);color:var(--warn)}
+.badge.ht-KOREKTA{background:var(--warn-soft);color:var(--warn)} .badge.ht-ANULOWANIE{background:var(--err-soft);color:var(--err)}
+.badge.ht-ZAKUP,.badge.ht-PRZYJECIE{background:var(--ok-soft);color:var(--ok)} .badge.ht-WZ,.badge.ht-ZUZYCIE{background:var(--gold-soft);color:var(--gold)}
+.badge.ht-MM,.badge.ht-TRANSPORT{background:var(--info-soft);color:var(--info)} .badge.ht-SPRZEDAZ_BEZP{background:var(--brand-soft);color:var(--brand-2)}
+.tbl tr.sub td{background:var(--surface-2)}
+.tbl.dense td{padding:6px 8px;font-size:var(--t-sm)}
+.tbl tr.b td{font-weight:700}
+.tbl tr.drill,.drill{cursor:pointer}
+.tbl tr.drill:hover td{background:var(--brand-soft)}
+.kpi .k-v.drill:hover,.kpi .drill:hover{color:var(--brand-2);text-decoration:underline;text-underline-offset:3px}
+.rel-list{margin:0;padding-left:18px;font-size:var(--t-sm);line-height:1.7}
+.timeline{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--border);font-size:var(--t-sm);line-height:1.6}
+.timeline li{position:relative;padding:2px 0 6px}
+.timeline li::before{content:"";position:absolute;left:-19px;top:9px;width:8px;height:8px;border-radius:50%;background:var(--brand)}
+.detail-grid,.confirm-grid{align-items:start;gap:var(--s5)}
+.corr-card{border-color:var(--warn);box-shadow:0 0 0 3px var(--warn-soft)}
+.rep-title{font-size:var(--t-xl);font-weight:750;color:var(--text-head)}
+.rep-status{display:flex;gap:6px;flex-wrap:wrap}
+.new-op-btn{margin-right:var(--s2)}
+.doc-print h5{margin:14px 0 6px;font-size:14px;color:var(--brand)}
+.doc-print .tbl th{position:static}
+/* wykresy */
+.chart-tip{position:fixed;z-index:200;pointer-events:none;background:var(--text-head);color:#fff;font-size:var(--t-sm);line-height:1.45;padding:7px 10px;border-radius:8px;box-shadow:var(--shadow);max-width:280px}
+.hbar{display:flex;flex-direction:column;gap:6px}
+.hbar-row{display:grid;grid-template-columns:120px minmax(0,1fr) 120px;gap:var(--s3);align-items:center;padding:4px 6px;border-radius:6px}
+.hbar-row:hover{background:var(--surface-2)}
+.hbar-l{font-size:var(--t-sm);font-weight:650;color:var(--text-2)}
+.hbar-v{font-size:var(--t-sm);font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.hbar-track{display:block;height:12px;background:var(--surface-3);border-radius:4px;overflow:hidden}
+.hbar-fill{display:block;height:100%;background:var(--brand);border-radius:0 4px 4px 0}
+.hbar-row:hover .hbar-fill{background:var(--brand-2)}
+.stock-list{display:flex;flex-direction:column;gap:4px;padding-top:var(--s2)}
+.stock-row{display:grid;grid-template-columns:minmax(150px,1.2fr) minmax(80px,1fr) minmax(130px,auto) 140px;gap:var(--s3);align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.stock-row:last-child{border-bottom:0}
+.sr-name b,.sr-q b{display:block;font-size:var(--t-md)} .sr-name small,.sr-q small{display:block;font-size:var(--t-xs)}
+.sr-q{text-align:right;font-variant-numeric:tabular-nums}
+.spark{display:block;cursor:crosshair}
+.turn-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s2)}
+.turn-card{border:1px solid var(--border);border-radius:var(--r-md);padding:8px 10px;background:var(--surface-2)}
+.turn-card small{display:block;font-size:var(--t-xs);color:var(--text-3)} .turn-card b{display:block;font-size:var(--t-md);margin:2px 0;font-variant-numeric:tabular-nums}
+@media (max-width:1280px){ .g5{grid-template-columns:repeat(3,minmax(0,1fr))} .turn-grid{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:900px){ .scope.four{grid-template-columns:repeat(2,minmax(0,1fr))} .stock-row{grid-template-columns:1fr auto} .sr-bar,.sr-spark{grid-column:span 2} .sr-spark .spark{width:100%} }
+@media (max-width:720px){ .g5,.turn-grid{grid-template-columns:repeat(2,minmax(0,1fr))} .scope.four{grid-template-columns:1fr} .hbar-row{grid-template-columns:90px minmax(0,1fr) 84px} .new-op-btn span{display:none} .modal.xwide,.modal.wide{max-width:100%} }
+@media print{ .chart-tip,.new-op-btn{display:none!important} }
+.dash-two{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}
+@media (max-width:1280px){ .dash-two{grid-template-columns:1fr} .quick{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:1080px){ .quick{grid-template-columns:repeat(2,minmax(0,1fr))} } @media (max-width:720px){ .quick{grid-template-columns:1fr} }

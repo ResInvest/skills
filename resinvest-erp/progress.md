@@ -1,41 +1,36 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2 (2.0.0) — gotowe do oceny**
+Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.1 (2.1.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
 
-## Wykonane — Demo v2
+## Wykonane — Demo v2.1
 
-- [x] Sprzedaż z magazynu (WZ): towar ze stanu, ilość, jednostka zgodna z towarem, cena, odbiorca, miejsce dostawy, blokada ponad stan, audyt
-- [x] Sprzedaż bezpośrednia po produkcji / prosto z lasu: PW + WZ bez wzrostu stanu, bez wymogu zakupu i pobrania z magazynu
-- [x] Produkcja na magazynie: RW (surowiec ze stanu) + PW (produkt), powiązanie PW ← RW, bez zakupu
-- [x] Księga w jednostce magazynowej produktu (m³ / MP / t); PKS i łupina nerkowca wyłącznie w t
-- [x] Masa orientacyjna: zrębka 0,33 t/MP, drewno 0,952 t/m³ (konfigurowalne)
-- [x] Cena za rąbanie (domyślnie 10,00 zł/MP, edytowalna) w podsumowaniu, na PW i w raportach
-- [x] Pociąg: liczba wagonów, pojemność w t lub MP, tonaż wspólny albo osobno dla każdego wagonu, podsumowanie składu (załadunek, dostawa, przewoźnik, nr dokumentu, koszt)
-- [x] Cztery niezależne scenariusze + zachowany łańcuch zakup → produkcja → sprzedaż z v1
-- [x] Jasny motyw
-- [x] Dane przykładowe zgodne z przykładami z polecenia (8 293 MP, 817 m³, 728 t)
-- [x] Inwentaryzacja, stany, plan dokumentów, historia i raporty w jednostkach produktów
-- [x] Instalator 2.0.0, dokumentacja, scenariusze
-
-## Wykonane — FAZA 1 (1.4.0)
-
-Silnik z atomowym zapisem i idempotencją, parser liczb, intro z muzyką, flota, inwentaryzacja miesięczna, historia zmian, kopie zapasowe — wszystko zachowane w v2.
+- [x] Silnik 2.1 (schemat 3): przeliczniki centralne z GJ, precyzja 6 miejsc, produkcja na magazyn „podaj MP → zużycie liczy system”, MM, statusy, wersje robocze
+- [x] Walidacja produkcji §31 (braki, surowiec ≠ produkt, przelicznik, precyzja, atomowość, podwójne kliknięcie, podsumowanie przed zatwierdzeniem)
+- [x] Anulowanie z analizą zależności w czasie i korekty (ilościowe, produkcji, bezpośrednie, wartościowe, opisowe, odwrócenie) — §32
+- [x] Historia: rejestr ruchów ze stanem przed / zmiana / po + dziennik audytu, pełne filtry
+- [x] Raporty dzień / tydzień / miesiąc / rok / zakres; bilans ze spójnością; drill-down; widok biznesowy i audytowy; wycena z „brak wyceny”
+- [x] Druk i prawdziwy PDF (czcionka osadzona, polskie znaki) — raporty, historia, kwit, dokumenty; zapis w audycie
+- [x] Kwit produkcji dnia
+- [x] Pulpit: KPI, stany graficznie z linią 30 dni, OBROTY WEDŁUG TYPU OPERACJI z zakresem
+- [x] Menu §20: Operacje, Przyjęcia, Wydania/WZ, Produkcja, Kwit, MM, Transport, Stany, Dokumenty, Historia, Raporty, Inwentaryzacja, Flota, Produkty, Kontrahenci, Magazyny, Administracja
+- [x] Dane przykładowe z MM, korektą i anulowaniem; instalator 2.1.0; dokumentacja; TASKS.md
 
 ## Testy
 
 | Zestaw | Wynik |
 |---|---|
 | `npm run check` | OK |
-| `npm run test:unit` | 33/33 |
-| `npm run test:e2e` (Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay) | 83/83, konsola bez błędów |
+| `npm run test:unit` (silnik + PDF) | 56/56 |
+| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 104/104, konsola bez błędów |
 
 ## Znane problemy / ograniczenia
 
-- **Zmiana masy drewna względem v1:** v1 liczyło 20 m³ → 80 MP × 0,33 = 26,4 t; v2 używa 0,952 t/m³ z przykładu „817 m³ ≈ 778 t” (20 m³ ≈ 19,04 t). Do potwierdzenia przez firmę — przełącznik `woodTPerM3` w `config/demo.config.json`.
-- Dane v1 nie są migrowane (inny model księgi); v2 startuje na danych przykładowych.
-- Film intro nie jest odtwarzany w testowym Chromium (brak H.264) — w Chrome/Edge do potwierdzenia ręcznie.
+- GJ liczone z masy dokładnej (6 611 GJ dla 817 m³), przykład w poleceniu używa masy zaokrąglonej (6 613 GJ).
+- Masa drewna 0,952 t/m³ (z przykładu 817 m³ ≈ 778 t) — do potwierdzenia przez firmę.
+- Znacznik czasu audytu = czas rzeczywisty, data operacji = data systemowa demo.
+- Film intro nie jest odtwarzany w testowym Chromium (brak H.264) — NIEPOTWIERDZONE w Chrome/Edge.
 - Instalator nie był kompilowany w tej sesji (brak Windows / Inno Setup).
 
 ## Następny krok
 
-Akceptacja Demo v2 → „KONTYNUUJ FAZĘ 2” (wymaga dołączenia repozytorium produkcyjnego; model danych v2 opisany w `docs/RESINVEST_CHANGE_PLAN.md`).
+Akceptacja Demo v2.1 → Production v1 według `docs/RESINVEST_CHANGE_PLAN.md` („Architektura Production v1”).

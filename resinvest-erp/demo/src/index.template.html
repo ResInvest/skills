@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="description" content="ResInvest ERP — demonstrator nowej logiki operacji (FAZA 1): zakup, produkcja z automatycznym zużyciem, sprzedaż, transport, inwentaryzacja, flota.">
+<meta name="description" content="ResInvest ERP — Demo v2: zakup, WZ, produkcja na magazyn, sprzedaż bezpośrednia, MM, korekty i anulowania, historia, raporty okresowe, kwit produkcji dnia, druk i PDF.">
 <meta name="generator" content="ResInvest ERP demo build @@VERSION@@ · @@BUILT@@">
 <title>ResInvest ERP · Demo v2</title>
 <style>
@@ -23,16 +23,26 @@ var INTRO_SRC = "@@INTRO_MEDIA@@";
 var RIW_CONFIG = @@CONFIG@@;
 </script>
 <script>
+/* Czcionki PDF (ResInvestDocSans — podzbiór Liberation Sans, SIL OFL 1.1), osadzone przez tools/build-demo.mjs */
+var RIW_FONTS = @@FONTS@@;
+</script>
+<script>
 /*@@ENGINE@@*/
 </script>
 <script>
 /*@@SEED@@*/
 </script>
 <script>
+/*@@PDF@@*/
+</script>
+<script>
 /*@@INTRO@@*/
 </script>
 <script>
 /*@@APP@@*/
+</script>
+<script>
+/*@@VIEWS@@*/
 </script>
 <script>
 "use strict";

@@ -1,40 +1,33 @@
 /* =========================================================================
-   ResInvest ERP — Demo v2
+   ResInvest ERP — Demo v2 (2.1)
    Warstwa E: silnik domenowy (bez DOM — uruchamiany także w Node do testów)
 
    Zasady:
-   * księga prowadzona jest w JEDNOSTCE MAGAZYNOWEJ PRODUKTU: drewno m³,
-     zrębka MP, produkty tonowe (PKS, łupina nerkowca) t — bez sztucznych przeliczeń,
-   * masa (t) przy m³ i MP jest orientacyjna (informacja pomocnicza); waga
-     rzeczywista wpisana przez użytkownika jej nie zastępuje w ewidencji ilości,
-   * rodzaje operacji są niezależne:
-       ZAKUP                     dostawca → magazyn (opcjonalnie z autozużyciem i sprzedażą)
-       SPRZEDAZ (z magazynu)     magazyn → odbiorca (WZ)
-       SPRZEDAZ (bezpośrednia)   las → produkcja → odbiorca (PW + WZ, bez wzrostu stanu)
-       PRODUKCJA (na magazynie)  surowiec ze stanu → produkcja → produkt na stanie (RW + PW)
-   * każda operacja księgowana atomowo w stałej kolejności, z symulacją sald,
-   * transport nie tworzy zapisów w księdze — tylko koszt i karta TR,
-   * każda zmiana ma wpis audytu ze stanem przed/po.
+   * księga w JEDNOSTCE MAGAZYNOWEJ PRODUKTU (drewno m³, zrębka MP, PKS/łupina t),
+     precyzja wewnętrzna 6 miejsc — zaokrąglenie dopiero przy prezentacji,
+   * masa (t) i energia (GJ) są orientacyjne; waga rzeczywista ich nie zastępuje,
+   * operacje: ZAKUP · SPRZEDAZ (WZ / bezpośrednia) · PRODUKCJA (na magazyn) · MM,
+   * każda operacja: pełna walidacja → symulacja sald → zapis atomowy,
+   * dokument zatwierdzony nigdy nie jest usuwany ani zmieniany po cichu:
+     anulowanie i korekta tworzą nowe zapisy księgi z powiązaniem i audytem,
+   * transport nie tworzy zapisów w księdze — tylko koszt i karta TR.
    ========================================================================= */
 (function (root) {
   "use strict";
 
-  const VERSION = "2.0.0-demo";
-  const SCHEMA = 2;
-  const EPS = 0.0005;
+  const VERSION = "2.1.0-demo";
+  const SCHEMA = 3;
+  const Q = 6;                 // precyzja wewnętrzna ilości
+  const EPS = 1e-6;
 
   /* ------------------------------------------------------------------ */
   /* Liczby                                                              */
   /* ------------------------------------------------------------------ */
   const SPACES = /[\s\u00A0\u2007\u2009\u202F']/g;
-  const UNIT_SUFFIX = /(?:zł|zl|pln|m³|m3|mp|km|kg|t|\/)+$/i;
+  const UNIT_SUFFIX = /(?:zł|zl|pln|m³|m3|mp|km|kg|gj|t|\/)+$/i;
 
   const NumParse = {
-    /**
-     * Zamienia tekst wpisany lub wklejony przez użytkownika na liczbę.
-     * Obsługuje: 12,50 · 12.50 · 1 250,50 · 1\u00A0250,50 · 1.250,50 · 1,250.50
-     * oraz jednostki na końcu (m³, MP, t, zł, zł/m³, km). Zwraca {ok, value, empty, error}.
-     */
+    /** Tekst wpisany / wklejony → liczba. 1000 · 1000,5 · 1 000,5 · 1.000,5 · 12.50 · NBSP · jednostki na końcu. */
     parse(input) {
       if (typeof input === "number") {
         return Number.isFinite(input) ? { ok: true, value: input } : { ok: false, value: NaN, error: "Niepoprawna liczba" };
@@ -44,9 +37,7 @@
       s = s.replace(SPACES, "").replace(/\u2212/g, "-");
       let guard = 0;
       while (UNIT_SUFFIX.test(s) && guard++ < 4) s = s.replace(UNIT_SUFFIX, "");
-      if (!/^[+-]?[\d.,]*\d[\d.,]*$/.test(s) && !/^[+-]?[.,]\d+$/.test(s)) {
-        return { ok: false, value: NaN, error: "To nie jest liczba" };
-      }
+      if (!/^[+-]?[\d.,]*\d[\d.,]*$/.test(s) && !/^[+-]?[.,]\d+$/.test(s)) return { ok: false, value: NaN, error: "To nie jest liczba" };
       let sign = 1;
       if (s[0] === "-" || s[0] === "+") { if (s[0] === "-") sign = -1; s = s.slice(1); }
       const lastC = s.lastIndexOf(","), lastD = s.lastIndexOf(".");
@@ -62,10 +53,9 @@
         if (frac.includes(",") || frac.includes(".")) return { ok: false, value: NaN, error: "Niepoprawny separator" };
       }
       if (thou && intPart.includes(thou)) {
-        const groups = intPart.split(thou);
-        const okGroups = groups[0].length >= 1 && groups[0].length <= 3 && groups.slice(1).every(g => g.length === 3);
-        if (!okGroups) return { ok: false, value: NaN, error: "Niepoprawne grupowanie tysięcy" };
-        intPart = groups.join("");
+        const g = intPart.split(thou);
+        if (!(g[0].length >= 1 && g[0].length <= 3 && g.slice(1).every(x => x.length === 3))) return { ok: false, value: NaN, error: "Niepoprawne grupowanie tysięcy" };
+        intPart = g.join("");
       }
       if (!/^\d*$/.test(intPart) || !/^\d*$/.test(frac)) return { ok: false, value: NaN, error: "To nie jest liczba" };
       const v = sign * Number((intPart || "0") + (frac ? "." + frac : ""));
@@ -82,7 +72,7 @@
     const r = Math.sign(x) * Math.round(Math.abs(x) * f * (1 + Number.EPSILON)) / f;
     return r === 0 ? 0 : r;
   }
-  /** Format polski: grupy tysięcy NBSP, przecinek dziesiętny (także dla 4 cyfr). */
+  const rq = n => round(n, Q);
   function fmt(n, dec = 2) {
     const x = Number(n);
     if (!Number.isFinite(x)) return "—";
@@ -90,11 +80,10 @@
     const [i, f] = Math.abs(r).toFixed(dec).split(".");
     return (r < 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0") + (f ? "," + f : "");
   }
-  /** Ilość bez zbędnych zer: 80 → „80”, 26,4 → „26,4”. */
   function fmtQ(n, maxDec = 3) {
     let s = fmt(round(n, maxDec), maxDec);
     if (s.includes(",")) s = s.replace(/0+$/, "").replace(/,$/, "");
-    return s;
+    return s === "-0" ? "0" : s;
   }
   function money(n, cur = "zł") { return fmt(n, 2) + "\u00A0" + cur; }
 
@@ -105,73 +94,104 @@
     isISO(d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || "")) && !Number.isNaN(Date.parse(d + "T00:00:00Z")); },
     isYM(ym) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(ym || "")); },
     ym(d) { return String(d).slice(0, 7); },
+    monthStart(ym) { return ym + "-01"; },
     monthEnd(ym) {
       const [y, m] = ym.split("-").map(Number);
       return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
     },
+    addDays(d, n) { const t = new Date(d + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); },
+    weekStart(d) { const t = new Date(d + "T00:00:00Z"); const wd = (t.getUTCDay() + 6) % 7; return this.addDays(d, -wd); },
     localToday() {
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
+    pl(d) { return d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : ""; },
     label(ym) {
       const M = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
       const [y, m] = ym.split("-").map(Number);
       return `${M[m - 1]} ${y}`;
+    },
+    /** Zakres raportu: dzień / tydzień (pon–niedz) / miesiąc / rok / zakres własny. */
+    range(spec, today) {
+      const t = today || this.localToday();
+      if (spec.mode === "day") { const d = spec.date || t; return { mode: "day", from: d, to: d, label: `dzień ${this.pl(d)}` }; }
+      if (spec.mode === "week") { const s = this.weekStart(spec.date || t); const e = this.addDays(s, 6); return { mode: "week", from: s, to: e, label: `tydzień ${this.pl(s)} – ${this.pl(e)}` }; }
+      if (spec.mode === "custom") {
+        const from = spec.from || t, to = spec.to || t;
+        return { mode: "custom", from: from <= to ? from : to, to: from <= to ? to : from, label: `${this.pl(from)} – ${this.pl(to)}` };
+      }
+      if (spec.mode === "year") { const y = String(spec.year || t.slice(0, 4)); return { mode: "year", year: y, from: `${y}-01-01`, to: `${y}-12-31`, label: `ROK ${y}` }; }
+      const ym = spec.ym || this.ym(t);
+      return { mode: "month", ym, from: this.monthStart(ym), to: this.monthEnd(ym), label: this.label(ym).toUpperCase() };
     }
   };
 
   /* ------------------------------------------------------------------ */
-  /* Jednostki — zależne od produktu                                     */
+  /* Jednostki, przeliczniki (centralnie)                                */
+  /*   1 m³ = 4 MP · 1 MP = 0,25 m³ · 1 MP = 0,33 t · 1 t = 8,5 GJ       */
   /* ------------------------------------------------------------------ */
   const Units = {
     LIST: ["m3", "MP", "t"],
     label(u) { return u === "m3" ? "m³" : u; },
-    /** Orientacyjna masa jednej jednostki magazynowej (t). */
     massPerUnit(p, cfg) {
       if (!p) return 0;
       if (p.unit === "t") return 1;
       if (p.unit === "MP") return cfg.mp_t;
       return p.tPerUnit || cfg.woodTPerM3;
     },
-    /** Jednostki, w których wolno podać ilość danego produktu. Produkty tonowe — tylko t. */
     allowed(p) {
       if (!p) return [];
       if (p.unit === "t") return ["t"];
       if (p.unit === "MP") return ["MP", "t"];
       return ["m3", "MP", "t"];
     },
-    /** Przeliczenie ilości produktu między jednostkami dozwolonymi dla tego produktu. */
     convert(q, from, to, p, cfg) {
       const x = Number(q);
-      if (from === to) return round(x, 3);
+      if (from === to) return rq(x);
       const ok = this.allowed(p);
       if (!ok.includes(from) || !ok.includes(to)) throw new Error(`Brak przelicznika ${this.label(from)} → ${this.label(to)} dla „${p ? p.name : "?"}”`);
       const m = this.massPerUnit(p, cfg);
-      const toBase = u => {                                   // wartość w jednostce magazynowej produktu
-        if (u === p.unit) return x;
-        if (u === "t") return x / m;
-        if (p.unit === "m3" && u === "MP") return x / cfg.m3_mp;
-        throw new Error("Brak przelicznika");
-      };
+      const toBase = u => { if (u === p.unit) return x; if (u === "t") return x / m; if (p.unit === "m3" && u === "MP") return x / cfg.m3_mp; throw new Error("Brak przelicznika"); };
       const b = toBase(from);
-      let r;
-      if (to === p.unit) r = b;
-      else if (to === "t") r = b * m;
-      else if (p.unit === "m3" && to === "MP") r = b * cfg.m3_mp;
-      else throw new Error("Brak przelicznika");
-      return round(r, 3);
+      if (to === p.unit) return rq(b);
+      if (to === "t") return rq(b * m);
+      if (p.unit === "m3" && to === "MP") return rq(b * cfg.m3_mp);
+      throw new Error("Brak przelicznika");
     },
-    mass(qtyStock, p, cfg) { return round(Number(qtyStock) * this.massPerUnit(p, cfg), 3); }
+    mass(q, p, cfg) { return rq(Number(q) * this.massPerUnit(p, cfg)); },
+    energy(t, cfg) { return rq(Number(t) * cfg.t_gj); },
+    /** Orientacyjna masa i energia; dla produktu tonowego masa = ilość (bez przeliczeń na MP/m³). */
+    orient(q, p, cfg) { const t = this.mass(q, p, cfg); return { t, gj: this.energy(t, cfg) }; },
+    /**
+     * Przelicznik produkcji: ile jednostek produktu powstaje z 1 jednostki surowca.
+     * Obecnie jedyny zdefiniowany: drewno (m³) → zrębka (MP), 1 m³ = 4 MP.
+     */
+    prodFactor(raw, out, cfg) {
+      if (!raw || !out) return { error: "Wybierz surowiec i produkt wyjściowy" };
+      if (raw.id === out.id) return { error: "Surowiec i produkt wyjściowy muszą być różnymi produktami" };
+      if (raw.unit === "m3" && out.unit === "MP") {
+        if (!(Number.isFinite(cfg.m3_mp) && cfg.m3_mp > 0)) return { error: "Nie można zatwierdzić produkcji. Brak prawidłowego przelicznika jednostek (m³ → MP)." };
+        return { factor: cfg.m3_mp, from: "m3", to: "MP" };
+      }
+      return { error: `Brak przelicznika ${this.label(raw.unit)} → ${this.label(out.unit)} dla wybranego produktu (${raw.name} → ${out.name}).` };
+    }
   };
 
   /* ------------------------------------------------------------------ */
-  /* Słowniki stałe                                                      */
+  /* Słowniki, uprawnienia, statusy                                      */
   /* ------------------------------------------------------------------ */
+  const PERMS = {
+    "op.create": "Tworzenie operacji", "documents.cancel": "Anulowanie dokumentów", "documents.correct": "Korekty dokumentów",
+    "inventory.correct": "Korekty stanów / MM", "production.correct": "Korekty produkcji", "sales.correct": "Korekty sprzedaży",
+    "purchases.correct": "Korekty zakupów", "inv.open": "Otwarcie okresu inwentaryzacji", "inv.count": "Spis z natury",
+    "inv.close": "Zamknięcie okresu", "fleet.edit": "Edycja floty", "data.backup": "Kopia zapasowa", "data.import": "Import kopii",
+    "report.view": "Raporty i historia"
+  };
   const ROLES = {
     admin: { label: "Administrator", perms: ["*"] },
-    kierownik: { label: "Kierownik", perms: ["op.create", "op.storno", "inv.open", "inv.count", "inv.close", "fleet.edit", "data.backup", "data.import"] },
-    magazynier: { label: "Magazynier", perms: ["op.create", "inv.open", "inv.count"] },
-    podglad: { label: "Podgląd", perms: [] }
+    kierownik: { label: "Kierownik", perms: ["op.create", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "data.backup", "data.import", "report.view"] },
+    magazynier: { label: "Magazynier", perms: ["op.create", "inv.open", "inv.count", "report.view"] },
+    podglad: { label: "Podgląd", perms: ["report.view"] }
   };
   function can(user, perm) {
     if (!user || user.active === false) return false;
@@ -179,32 +199,31 @@
     return p.includes("*") || p.includes(perm);
   }
   const OP_TYPES = {
-    ZAKUP: { label: "Zakup", flow: "dostawca → magazyn" },
-    SPRZEDAZ: { label: "Sprzedaż", flow: "magazyn → odbiorca (WZ)" },
-    PRODUKCJA: { label: "Produkcja na magazynie", flow: "surowiec ze stanu → produkcja → produkt na stanie" }
+    ZAKUP: { label: "Zakup", flow: "dostawca → magazyn", correctPerm: "purchases.correct" },
+    SPRZEDAZ: { label: "Sprzedaż", flow: "magazyn → odbiorca (WZ)", correctPerm: "sales.correct" },
+    PRODUKCJA: { label: "Produkcja na magazyn", flow: "surowiec ze stanu → produkcja → produkt na stanie", correctPerm: "production.correct" },
+    MM: { label: "Przesunięcie MM", flow: "magazyn → magazyn", correctPerm: "inventory.correct" }
   };
+  const STATUS = { DRAFT: "ROBOCZY", POSTED: "ZATWIERDZONY", CANCELLED: "ANULOWANY", CORRECTED: "SKORYGOWANY" };
   const KINDS = {
-    BO: { doc: "BO", label: "Bilans otwarcia" },
-    ZAKUP: { doc: "PZ", label: "Zakup — przyjęcie" },
-    ZUZYCIE: { doc: "RW", label: "Zużycie produkcyjne" },
-    PRODUKCJA: { doc: "PW", label: "Przyjęcie z produkcji" },
-    SPRZEDAZ: { doc: "WZ", label: "Sprzedaż — wydanie" },
-    KOREKTA: { doc: "KO", label: "Korekta (storno)" },
-    INW: { doc: "IN", label: "Różnica inwentaryzacyjna" }
+    BO: { doc: "BO", label: "Bilans otwarcia" }, ZAKUP: { doc: "PZ", label: "Zakup — przyjęcie" },
+    ZUZYCIE: { doc: "RW", label: "Zużycie produkcyjne" }, PRODUKCJA: { doc: "PW", label: "Przyjęcie z produkcji" },
+    SPRZEDAZ: { doc: "WZ", label: "Sprzedaż — wydanie" }, MM: { doc: "MM", label: "Przesunięcie międzymagazynowe" },
+    INW: { doc: "IN", label: "Różnica inwentaryzacyjna" }, KOREKTA: { doc: "KOR", label: "Korekta" }, ANULOWANIE: { doc: "AN", label: "Anulowanie" }
   };
+  const CATS = { ZAKUP: "Zakup", PRODUKCJA: "Produkcja", ZUZYCIE: "Zużycie", SPRZEDAZ: "Sprzedaż", MM: "MM", INW: "Inwentaryzacja", BO: "Bilans otwarcia" };
   const DOC_LABEL = {
-    PZ: "Przyjęcie zewnętrzne", RW: "Rozchód wewnętrzny (zużycie)", PW: "Przyjęcie wewnętrzne (produkcja)",
-    WZ: "Wydanie zewnętrzne (sprzedaż)", TR: "Karta transportu", KO: "Korekta", IN: "Inwentaryzacja", BO: "Bilans otwarcia"
+    PZ: "Przyjęcie zewnętrzne (zakup)", RW: "Rozchód wewnętrzny (zużycie)", PW: "Przyjęcie wewnętrzne (produkcja)",
+    WZ: "Wydanie zewnętrzne (sprzedaż)", MM: "Przesunięcie międzymagazynowe", TR: "Karta transportu",
+    KOR: "Korekta dokumentu", AN: "Anulowanie dokumentu", IN: "Inwentaryzacja", BO: "Bilans otwarcia"
   };
   const BASIS = { DEKL: "Deklaracja", KZR: "KZR" };
   const PROD_TYPES = {
     lesna: { label: "Zrębka produkcyjna leśna", productId: "pr_zr_lesna" },
     inwestycyjna: { label: "Zrębka produkcyjna inwestycyjna", productId: "pr_zr_inw", sourceType: "Wycinka inwestycyjna" }
   };
-  const DIFF_REASONS = {
-    wilgotnosc: "Wilgotność / osiadanie", jakosc: "Jakość surowca", straty: "Straty przy rębaniu",
-    pomiar: "Różnica pomiaru", inna: "Inna przyczyna"
-  };
+  const DIFF_REASONS = { wilgotnosc: "Wilgotność / osiadanie", jakosc: "Jakość surowca", straty: "Straty przy rębaniu", pomiar: "Różnica pomiaru", inna: "Inna przyczyna" };
+  const CORRECTION_REASONS = ["błędnie wpisana ilość", "błędna cena", "błędna jednostka", "błędny kontrahent", "błędny magazyn", "błędne zużycie surowca", "błędny transport", "pomyłka operatora", "korekta dokumentu zewnętrznego", "inny"];
   const TRANSPORT_MODES = { none: "Brak transportu", own: "Transport własny", external: "Transport zewnętrzny", train: "Pociąg" };
   const VEHICLE_TYPES = { ruchoma_podloga: "Ruchoma podłoga", ciezarowy: "Samochód ciężarowy", wywrotka: "Wywrotka" };
   const ASSET_STATUS = { aktywny: "Aktywny", serwis: "W serwisie", wycofany: "Wycofany" };
@@ -214,62 +233,57 @@
   /* Narzędzia                                                           */
   /* ------------------------------------------------------------------ */
   let uidSeq = 0;
-  function uid(prefix) {
-    uidSeq = (uidSeq + 1) % 1e6;
-    return `${prefix}_${Date.now().toString(36)}${uidSeq.toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  }
+  function uid(prefix) { uidSeq = (uidSeq + 1) % 1e6; return `${prefix}_${Date.now().toString(36)}${uidSeq.toString(36)}${Math.random().toString(36).slice(2, 8)}`; }
   const clone = o => JSON.parse(JSON.stringify(o));
   const byId = (list, id) => (list || []).find(x => x.id === id) || null;
   const str = v => String(v == null ? "" : v).trim();
+  const nowIso = ctx => (ctx && ctx.now) || new Date().toISOString();
 
   function emptyState(config) {
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
-      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60 }, config || {}),
+      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60 }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
-      operations: [], ledger: [], inventory: [], audit: [], seq: {},
+      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {},
       meta: { lastMonthCheck: null, createdAt: null }
     };
   }
-
   function validateStateShape(s) {
     const e = [];
     if (!s || typeof s !== "object") return ["Brak danych"];
     if (s.schema !== SCHEMA) e.push(`Nieobsługiwana wersja schematu: ${s.schema} (oczekiwano ${SCHEMA})`);
-    for (const k of ["warehouses", "users", "products", "partners", "operations", "ledger", "inventory", "audit"]) {
-      if (!Array.isArray(s[k])) e.push(`Brak kolekcji „${k}”`);
-    }
+    for (const k of ["warehouses", "users", "products", "partners", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(`Brak kolekcji „${k}”`);
     if (!s.fleet || !["vehicles", "drivers", "chippers", "operators"].every(k => Array.isArray(s.fleet[k]))) e.push("Brak kartotek floty");
-    if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0)) e.push("Brak przeliczników");
+    if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push("Brak przeliczników");
     if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push("Produkt bez jednostki magazynowej");
-    if (Array.isArray(s.ledger)) {
-      for (const l of s.ledger) {
-        if (!Number.isFinite(l.qty) || !l.productId || !l.whId || !Dates.isISO(l.date)) { e.push("Uszkodzony zapis księgi: " + (l.id || "?")); break; }
-      }
+    if (Array.isArray(s.ledger)) for (const l of s.ledger) {
+      if (!Number.isFinite(l.qty) || !l.productId || !l.whId || !Dates.isISO(l.date) || !l.cat) { e.push("Uszkodzony zapis księgi: " + (l.id || "?")); break; }
     }
     return e;
   }
 
   /* ------------------------------------------------------------------ */
-  /* Stany (z księgi, w jednostce magazynowej produktu)                  */
+  /* Stany                                                               */
   /* ------------------------------------------------------------------ */
   const Stock = {
     balance(state, whId, productId, to) {
       let n = 0;
       for (const l of state.ledger) {
-        if (l.whId !== whId || l.productId !== productId) continue;
+        if ((whId && l.whId !== whId) || l.productId !== productId) continue;
         if (to && l.date > to) continue;
         n += l.qty;
       }
-      return round(n, 3);
+      return rq(n);
     },
-    byProduct(state, whId, to) {
+    /** Mapa productId → ilość; `whId` = null → wszystkie magazyny; `to` włącznie; `before` — ściśle przed datą. */
+    byProduct(state, whId, to, before) {
       const m = new Map();
       for (const l of state.ledger) {
         if (whId && l.whId !== whId) continue;
         if (to && l.date > to) continue;
-        m.set(l.productId, round((m.get(l.productId) || 0) + l.qty, 3));
+        if (before && l.date >= before) continue;
+        m.set(l.productId, rq((m.get(l.productId) || 0) + l.qty));
       }
       return m;
     },
@@ -278,14 +292,23 @@
       for (const l of state.ledger) if (l.whId === whId && l.productId === productId && (!d || l.date > d)) d = l.date;
       return d;
     },
+    sorted(entries) { return entries.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.seq - b.seq); },
     card(state, whId, productId) {
-      const rows = state.ledger.filter(l => l.whId === whId && l.productId === productId)
-        .slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.seq - b.seq);
       let bal = 0;
-      return rows.map(r => { bal = round(bal + r.qty, 3); return Object.assign({}, r, { balance: bal }); });
+      return this.sorted(state.ledger.filter(l => l.whId === whId && l.productId === productId))
+        .map(r => { bal = rq(bal + r.qty); return Object.assign({}, r, { balance: bal }); });
+    },
+    /** Saldo dzienne z ostatnich `days` dni (do wykresów). */
+    series(state, whId, productId, to, days) {
+      const out = [];
+      const start = Dates.addDays(to, -(days - 1));
+      let bal = this.balance(state, whId, productId, Dates.addDays(start, -1));
+      const byDay = new Map();
+      for (const l of state.ledger) if ((!whId || l.whId === whId) && l.productId === productId && l.date >= start && l.date <= to) byDay.set(l.date, (byDay.get(l.date) || 0) + l.qty);
+      for (let i = 0; i < days; i++) { const d = Dates.addDays(start, i); bal = rq(bal + (byDay.get(d) || 0)); out.push({ date: d, qty: bal }); }
+      return out;
     }
   };
-
   function lockedMonth(state, whId) {
     let ym = null;
     for (const p of state.inventory) if (p.whId === whId && p.status === "ZAMKNIETA" && (!ym || p.ym > ym)) ym = p.ym;
@@ -294,32 +317,28 @@
   function isLocked(state, whId, date) { const ym = lockedMonth(state, whId); return !!ym && Dates.ym(date) <= ym; }
 
   /* ------------------------------------------------------------------ */
-  /* Szkic formularza                                                    */
+  /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
   function blankDraft(ctx) {
     return {
-      idemKey: uid("idem"),
-      type: "ZAKUP",
+      idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
       purchase: { supplierId: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
-      production: {
-        enabled: false, type: "lesna", rawProductId: "", consumeQty: "", outMP: "", diffReason: "",
-        rawQty: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "",
-        chipperId: "", operatorId: "", chipRate: ""
-      },
+      production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
+      mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
       transport: {
         mode: "none", place: "", placeTouched: false,
         own: { vehicleId: "", driverId: "", km: "", rate: "" },
         external: { company: "", reg: "", km: "", freight: "", includedInPrice: false },
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
-      notes: ""
+      notes: "", extDoc: ""
     };
   }
 
   /* ------------------------------------------------------------------ */
-  /* Plan operacji — walidacja i skutki (jedno źródło prawdy)            */
+  /* Plan operacji — pełna walidacja i skutki (jedno źródło prawdy)      */
   /* ------------------------------------------------------------------ */
   function planOperation(state, draft, ctx) {
     const cfg = state.config;
@@ -327,59 +346,71 @@
     const err = (k, m) => { if (!errors[k]) errors[k] = m; };
     const user = ctx && ctx.user;
     const today = (ctx && ctx.today) || Dates.localToday();
-    const num = (key, raw, { required = true, min = null, gt = null, integer = false } = {}) => {
+    const num = (key, raw, { required = true, min = null, gt = null, integer = false, label = "" } = {}) => {
       const r = NumParse.parse(raw);
-      if (r.empty) { if (required) err(key, "Pole wymagane"); return null; }
-      if (!r.ok) { err(key, r.error + " — wpisz np. 12,50"); return null; }
+      if (r.empty) { if (required) err(key, label ? `Podaj ${label}` : "Pole wymagane"); return null; }
+      if (!r.ok) { err(key, `${r.error} — wpisz np. 1 000,5`); return null; }
       if (integer && !Number.isInteger(r.value)) { err(key, "Wpisz liczbę całkowitą"); return null; }
-      if (gt !== null && !(r.value > gt)) { err(key, gt === 0 ? "Wartość musi być większa od 0" : `Wartość musi być większa od ${fmtQ(gt)}`); return null; }
-      if (min !== null && r.value < min) { err(key, `Wartość nie może być mniejsza niż ${fmtQ(min)}`); return null; }
+      if (gt !== null && !(r.value > gt)) { err(key, label ? `Podaj ${label} większą od 0` : "Wartość musi być większa od 0"); return null; }
+      if (min !== null && r.value < min) { err(key, `Wartość nie może być ujemna`); return null; }
       return r.value;
     };
     const prodOf = id => byId(state.products, id);
     const partyName = id => (byId(state.partners, id) || {}).name || "";
+    const U = u => Units.label(u);
 
     if (!user) err("_user", "Brak zalogowanego użytkownika");
     else if (!can(user, "op.create")) err("_user", "Twoja rola nie pozwala tworzyć operacji");
     const wh = user ? byId(state.warehouses, user.whId) : null;
-    if (user && !wh) err("_wh", "Użytkownik nie ma przypisanego aktywnego magazynu");
+    if (user && !wh) err("_wh", "Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu");
     const whId = wh ? wh.id : null;
-    const stockOf = pid => (whId && pid ? Stock.balance(state, whId, pid) : 0);
+    const stockAt = (w, pid) => (w && pid ? Stock.balance(state, w, pid) : 0);
+    const stockOf = pid => stockAt(whId, pid);
 
     const type = OP_TYPES[draft.type] ? draft.type : null;
     if (!type) err("type", "Wybierz rodzaj operacji");
-
     const date = str(draft.date);
     if (!Dates.isISO(date)) err("date", "Podaj datę w formacie RRRR-MM-DD");
-    else if (date > today) err("date", "Data operacji nie może być z przyszłości");
-    else if (whId && isLocked(state, whId, date)) err("date", `Okres ${lockedMonth(state, whId)} jest zamknięty inwentaryzacją — wybierz datę po zamknięciu`);
+    else if (!(ctx && ctx.correction)) {
+      if (date > today) err("date", "Data operacji nie może być z przyszłości");
+      else if (whId && isLocked(state, whId, date)) err("date", `Okres ${lockedMonth(state, whId)} jest zamknięty — zmiany tylko przez korektę z bieżącą datą`);
+    }
 
-    const postings = [];          // {kind, productId, qty (jednostka magazynowa), direct?}
-    const documents = [];
-    const norm = { type, purchase: null, production: null, sale: null };
+    const postings = [], documents = [];
+    const norm = { type, purchase: null, production: null, sale: null, mm: null };
     const totals = { purchaseCost: 0, rawCost: 0, chippingCost: 0, revenue: 0, transportCost: 0, result: 0 };
-    const R_ = draft.production || {}, S = draft.sale || {}, P = draft.purchase || {};
+    const R_ = draft.production || {}, S = draft.sale || {}, P = draft.purchase || {}, M = draft.mm || {};
 
-    /* ---------- produkcja (wspólna dla trzech ścieżek) ---------- */
-    /** input: {mode:"chain"|"stock"|"direct", rawProduct, consumeStock (ilość surowca w jedn. magazynowej) | null} */
-    function planProduction(mode, rawProduct, consumeStock) {
+    /* ---------- produkcja (wspólna dla trzech ścieżek) ----------
+       mode "chain":  surowiec z zakupu w tej samej operacji, zużycie podane (domyślnie cały zakup)
+       mode "stock":  surowiec ze stanu, użytkownik podaje ilość PRODUKCJI → zużycie = produkcja ÷ przelicznik
+       mode "direct": surowiec z lasu (nie ze stanu), produkcja podana, zużycie informacyjne              */
+    function planProduction(mode, rawProduct, consumeGiven) {
       const pt = PROD_TYPES[R_.type];
-      if (!pt) err("production.type", "Wybierz rodzaj produkcji");
-      const outProduct = pt ? prodOf(pt.productId) : null;
-      if (pt && !outProduct) err("production.type", "Brak produktu wynikowego w kartotece");
-      let maxMP = null;
-      if (rawProduct && consumeStock !== null) maxMP = Units.convert(consumeStock, rawProduct.unit, "MP", rawProduct, cfg);
-      let outMP = 0;
-      if (str(R_.outMP) === "") {
-        if (maxMP !== null) outMP = maxMP;
-        else err("production.outMP", "Podaj ilość wyprodukowanej zrębki (MP)");
-      } else {
-        const o = num("production.outMP", R_.outMP, { gt: 0 });
-        outMP = o === null ? 0 : round(o, 3);
+      if (mode !== "stock" && !pt) err("production.type", "Wybierz rodzaj produkcji");
+      const outId = R_.outProductId || (pt ? pt.productId : "");
+      const outProduct = prodOf(outId);
+      if (!outId) err("production.outProductId", "Wybierz produkt wyjściowy");
+      else if (!outProduct) err("production.outProductId", "Nieznany produkt wyjściowy");
+      let factor = null;
+      if (rawProduct && outProduct) {
+        const f = Units.prodFactor(rawProduct, outProduct, cfg);
+        if (f.error) err(rawProduct.id === outProduct.id ? "production.outProductId" : "production.factor", f.error); else factor = f.factor;
       }
-      if (maxMP !== null && outMP > maxMP + EPS && maxMP > 0) err("production.outMP", `Wynik produkcji nie może przekroczyć zużytego surowca (${fmtQ(maxMP)} MP)`);
-      if (maxMP !== null && outMP > 0 && outMP < maxMP - EPS && !DIFF_REASONS[R_.diffReason]) err("production.diffReason", `Wynik niższy od zużycia o ${fmtQ(maxMP - outMP)} MP — wskaż przyczynę`);
-      // pochodzenie: wymagane przy produkcji z lasu (zakup + autozużycie, sprzedaż bezpośrednia)
+      let outQty = 0, consume = null, maxOut = null;
+      if (mode === "chain") {
+        consume = consumeGiven;
+        if (factor && consume !== null) maxOut = rq(consume * factor);
+        if (str(R_.outQty) === "") outQty = maxOut || 0;
+        else { const o = num("production.outQty", R_.outQty, { gt: 0, label: "ilość produkcji" }); outQty = o === null ? 0 : rq(o); }
+        if (maxOut !== null && outQty > maxOut + EPS) err("production.outQty", `Wynik produkcji ${fmtQ(outQty)} ${U(outProduct.unit)} przekracza zużyty surowiec (${fmtQ(maxOut)} ${U(outProduct.unit)})`);
+        if (maxOut !== null && outQty > 0 && outQty < maxOut - EPS && !DIFF_REASONS[R_.diffReason]) err("production.diffReason", `Wynik niższy od zużycia o ${fmtQ(maxOut - outQty)} ${U(outProduct.unit)} — wskaż przyczynę`);
+      } else {
+        const o = num("production.outQty", R_.outQty, { gt: 0, label: "ilość produkcji" });
+        outQty = o === null ? 0 : rq(o);
+        if (factor && outQty > 0) consume = rq(outQty / factor);           // pełna precyzja — bez zaokrąglania przed walidacją
+        if (factor && outQty > 0 && !(consume > 0)) err("production.outQty", "Obliczone zużycie surowca musi być większe od 0");
+      }
       if (mode !== "stock") {
         if (R_.type === "lesna") {
           if (!str(R_.ndl)) err("production.ndl", "Podaj nadleśnictwo");
@@ -387,55 +418,57 @@
           if (!str(R_.kwit)) err("production.kwit", "Podaj numer kwitu wywozowego");
         } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", "Podaj miejsce wycinki / inwestycję");
       }
+      const ch = byId(state.fleet.chippers, R_.chipperId);
       if (R_.chipperId) {
-        const ch = byId(state.fleet.chippers, R_.chipperId);
         if (!ch) err("production.chipperId", "Nieznany rębak");
         else if (ch.status !== "aktywny") err("production.chipperId", `Rębak ma status „${ASSET_STATUS[ch.status] || ch.status}”`);
         if (!byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", "Wybierz operatora rębaka");
       }
-      const chipRate = str(R_.chipRate) === "" ? cfg.chipRateDefault : num("production.chipRate", R_.chipRate, { min: 0 });
-      const chippingCost = chipRate !== null ? round(outMP * chipRate, 2) : 0;
+      let chipRate = 0, chippingCost = 0;
+      if (outProduct && outProduct.unit === "MP") {
+        chipRate = str(R_.chipRate) === "" ? cfg.chipRateDefault : num("production.chipRate", R_.chipRate, { min: 0, label: "cenę za rąbanie" });
+        chippingCost = chipRate !== null ? round(outQty * chipRate, 2) : 0;
+      }
       totals.chippingCost = chippingCost;
-      const ch = byId(state.fleet.chippers, R_.chipperId);
+      const op = byId(state.fleet.operators, R_.chipperId ? (R_.operatorId || (ch && ch.operatorId)) : "");
       norm.production = {
-        mode, type: R_.type, typeLabel: pt ? pt.label : "", outProductId: outProduct ? outProduct.id : "",
-        rawProductId: rawProduct ? rawProduct.id : "", consumeQty: consumeStock, consumeUnit: rawProduct ? rawProduct.unit : null,
-        maxMP, outMP, diffReason: R_.diffReason || "", chipRate: chipRate || 0, chippingCost,
+        mode, type: R_.type || "", typeLabel: pt ? pt.label : "", outProductId: outProduct ? outProduct.id : "", outUnit: outProduct ? outProduct.unit : null,
+        rawProductId: rawProduct ? rawProduct.id : "", consumeQty: consume, consumeUnit: rawProduct ? rawProduct.unit : null,
+        factor, maxOut, outQty, diffReason: R_.diffReason || "", chipRate: chipRate || 0, chippingCost,
         ndl: str(R_.ndl), lesnictwo: str(R_.lesnictwo), kwit: str(R_.kwit),
-        sourceType: R_.type === "inwestycyjna" ? PROD_TYPES.inwestycyjna.sourceType : "",
+        sourceType: R_.type === "inwestycyjna" && mode !== "stock" ? PROD_TYPES.inwestycyjna.sourceType : "",
         investSite: str(R_.investSite), sourceDoc: str(R_.sourceDoc),
-        chipperId: R_.chipperId || "", chipperName: ch ? ch.name : "",
-        operatorId: R_.chipperId ? (R_.operatorId || (ch ? ch.operatorId : "")) : ""
+        chipperId: R_.chipperId || "", chipperName: ch ? ch.name : "", operatorId: op ? op.id : "", operatorName: op ? op.name : ""
       };
-      return { outProduct, outMP, chippingCost };
+      return { outProduct, outQty, consume };
     }
     const prodMeta = () => {
       const x = norm.production;
-      const m = { productionType: x.typeLabel, chipRate: x.chipRate, chippingCost: x.chippingCost };
+      const m = { productionType: x.typeLabel || "", chipRate: x.chipRate, chippingCost: x.chippingCost };
       if (x.chipperName) m.chipper = x.chipperName;
+      if (x.operatorName) m.operator = x.operatorName;
       if (x.mode !== "stock" && x.type === "lesna") Object.assign(m, { ndl: x.ndl, lesnictwo: x.lesnictwo, kwit: x.kwit });
       if (x.mode !== "stock" && x.type === "inwestycyjna") Object.assign(m, { sourceType: x.sourceType, investSite: x.investSite, sourceDoc: x.sourceDoc });
       return m;
     };
-
-    /* ---------- sprzedaż wyniku produkcji (łańcuch / bezpośrednia) ---------- */
-    function planSaleOfOutput(outProduct, outMP, direct) {
+    /** Sprzedaż wyniku produkcji (łańcuch zakupu / sprzedaż bezpośrednia). */
+    function planSaleOfOutput(outProduct, outQty, direct) {
       const buyer = byId(state.partners, S.buyerId);
-      if (!S.buyerId) err("sale.buyerId", "Odbiorca jest wymagany przy sprzedaży");
+      if (!S.buyerId) err("sale.buyerId", "Wybierz odbiorcę");
       else if (!buyer || !["buyer", "both"].includes(buyer.role) || buyer.active === false) err("sale.buyerId", "Nieznany lub nieaktywny odbiorca");
-      let saleMP = outMP;
-      if (str(S.qtyMP) !== "") { const q = num("sale.qtyMP", S.qtyMP, { gt: 0 }); saleMP = q === null ? 0 : round(q, 3); }
-      if (saleMP > outMP + EPS) err("sale.qtyMP", `Sprzedaż ${fmtQ(saleMP)} MP przekracza wynik produkcji ${fmtQ(outMP)} MP`);
+      let saleQ = outQty;
+      if (str(S.qtyMP) !== "") { const q = num("sale.qtyMP", S.qtyMP, { gt: 0, label: "ilość sprzedaży" }); saleQ = q === null ? 0 : rq(q); }
+      if (outProduct && saleQ > outQty + EPS) err("sale.qtyMP", `Nie można sprzedać ${fmtQ(saleQ)} ${U(outProduct.unit)} z produkcji ${fmtQ(outQty)} ${U(outProduct.unit)}`);
       if (!["MP", "t"].includes(S.priceUnit)) err("sale.priceUnit", "Wybierz jednostkę ceny");
-      const price = num("sale.price", S.price, { min: 0 });
+      const price = num("sale.price", S.price, { min: 0, label: "cenę sprzedaży" });
       if (price === 0) warnings.push("Cena sprzedaży wynosi 0 zł.");
-      const weightT = outProduct ? Units.mass(saleMP, outProduct, cfg) : 0;
-      const revenue = price !== null ? round((S.priceUnit === "t" ? weightT : saleMP) * price, 2) : 0;
-      totals.revenue = revenue;
-      if (direct && outMP - saleMP > EPS) warnings.push(`Nie cała produkcja jest sprzedana — pozostałe ${fmtQ(outMP - saleMP)} MP zostanie przyjęte na stan magazynu.`);
-      norm.sale = { direct, fromStock: false, buyerId: S.buyerId, productId: outProduct ? outProduct.id : "", qty: saleMP, unit: "MP", stockQty: saleMP, price, priceUnit: S.priceUnit, revenue, weightT };
-      return saleMP;
+      const weightT = outProduct ? Units.mass(saleQ, outProduct, cfg) : 0;
+      totals.revenue = price !== null ? round((S.priceUnit === "t" ? weightT : saleQ) * price, 2) : 0;
+      if (direct && outQty - saleQ > EPS) warnings.push(`Nie cała produkcja jest sprzedana — pozostałe ${fmtQ(outQty - saleQ)} ${outProduct ? U(outProduct.unit) : ""} zostanie przyjęte na stan magazynu.`);
+      norm.sale = { direct, fromStock: false, buyerId: S.buyerId, productId: outProduct ? outProduct.id : "", qty: saleQ, unit: outProduct ? outProduct.unit : "MP", stockQty: saleQ, price, priceUnit: S.priceUnit, revenue: totals.revenue, weightT };
+      return saleQ;
     }
+    const push = (kind, productId, qty, extra) => postings.push(Object.assign({ kind, cat: kind, whId, productId, qty: rq(qty) }, extra || {}));
 
     if (type === "ZAKUP") {
       /* ============================ A. ZAKUP ============================ */
@@ -447,215 +480,222 @@
       if (!P.productId) err("purchase.productId", "Wybierz produkt / surowiec");
       else if (!product || product.active === false) err("purchase.productId", "Nieznany produkt");
       const unitOk = product && Units.allowed(product).includes(P.unit);
-      if (product && !unitOk) err("purchase.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(Units.label).join(", ")}`);
-      const qty = num("purchase.qty", P.qty, { gt: 0 });
-      const price = num("purchase.price", P.price, { min: 0 });
+      if (product && !unitOk) err("purchase.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(U).join(", ")}`);
+      const qty = num("purchase.qty", P.qty, { gt: 0, label: "ilość" });
+      const price = num("purchase.price", P.price, { min: 0, label: "cenę" });
       if (price === 0) warnings.push("Cena zakupu wynosi 0 zł — upewnij się, że to zamierzone.");
       const stockQty = qty !== null && unitOk ? Units.convert(qty, P.unit, product.unit, product, cfg) : 0;
       const autoWeight = product ? Units.mass(stockQty, product, cfg) : 0;
       let weightT = autoWeight;
       if (P.weightMode === "manual") {
-        const w = num("purchase.weightManual", P.weightManual, { gt: 0 });
+        const w = num("purchase.weightManual", P.weightManual, { gt: 0, label: "wagę rzeczywistą" });
         if (w !== null) {
-          weightT = round(w, 3);
-          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) {
-            warnings.push(`Waga rzeczywista ${fmtQ(weightT)} t różni się o ponad 25% od orientacyjnej ${fmtQ(autoWeight)} t — sprawdź kwit wagowy.`);
-          }
+          weightT = rq(w);
+          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(`Waga rzeczywista ${fmtQ(weightT)} t różni się o ponad 25% od orientacyjnej ${fmtQ(autoWeight)} t — sprawdź kwit wagowy.`);
         }
       } else if (P.weightMode !== "auto") err("purchase.weightMode", "Wybierz sposób ustalenia wagi");
       totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
       norm.purchase = { supplierId: P.supplierId, basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
-        postings.push({ kind: "ZAKUP", productId: product.id, qty: stockQty });
+        push("ZAKUP", product.id, stockQty);
         documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: P.supplierId, partner: partyName(P.supplierId), basis: P.basis, stock: "+" });
       }
-      // opcjonalny łańcuch: + produkcja z autozużyciem (+ sprzedaż)
       if (R_.enabled) {
         if (product && product.cat !== "drewno") err("production.enabled", "Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)");
-        let consumeStock = null;
+        let consume = null;
         if (product && product.cat === "drewno") {
           let cq = qty;
-          if (str(R_.consumeQty) !== "") cq = num("production.consumeQty", R_.consumeQty, { gt: 0 });
+          if (str(R_.consumeQty) !== "") cq = num("production.consumeQty", R_.consumeQty, { gt: 0, label: "zużycie" });
           if (cq !== null && unitOk) {
-            consumeStock = Units.convert(cq, P.unit, product.unit, product, cfg);
-            const avail = round(stockOf(product.id) + stockQty, 3);
+            consume = Units.convert(cq, P.unit, product.unit, product, cfg);
+            const avail = rq(stockOf(product.id) + stockQty);
             norm.available = { stock: stockOf(product.id), purchase: stockQty, total: avail, unit: product.unit };
-            if (consumeStock > avail + EPS) err("production.consumeQty", `Zużycie ${fmtQ(consumeStock)} ${Units.label(product.unit)} przekracza dostępny materiał ${fmtQ(avail)} ${Units.label(product.unit)} (stan ${fmtQ(stockOf(product.id))} + zakup ${fmtQ(stockQty)})`);
+            if (consume > avail + EPS) err("production.consumeQty", `Brak wystarczającej ilości surowca. Dostępne: ${fmtQ(avail)} ${U(product.unit)}. Wymagane: ${fmtQ(consume)} ${U(product.unit)}. Brakuje: ${fmtQ(consume - avail)} ${U(product.unit)}.`);
           }
         }
-        const { outProduct, outMP } = planProduction("chain", product && product.cat === "drewno" ? product : null, consumeStock);
-        if (product && consumeStock > 0) {
-          postings.push({ kind: "ZUZYCIE", productId: product.id, qty: -consumeStock });
-          documents.push({ type: "RW", kind: "ZUZYCIE", productId: product.id, qty: consumeStock, unit: product.unit, stockQty: consumeStock, stockUnit: product.unit, weightT: Units.mass(consumeStock, product, cfg), value: 0, stock: "−" });
+        const { outProduct, outQty } = planProduction("chain", product && product.cat === "drewno" ? product : null, consume);
+        if (product && consume > 0) {
+          push("ZUZYCIE", product.id, -consume);
+          documents.push({ type: "RW", kind: "ZUZYCIE", productId: product.id, qty: consume, unit: product.unit, stockQty: consume, stockUnit: product.unit, weightT: Units.mass(consume, product, cfg), value: 0, stock: "−" });
         }
-        if (outProduct && outMP > 0) {
-          postings.push({ kind: "PRODUKCJA", productId: outProduct.id, qty: outMP });
-          documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outMP, unit: "MP", stockQty: outMP, stockUnit: "MP", weightT: Units.mass(outMP, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
+        if (outProduct && outQty > 0) {
+          push("PRODUKCJA", outProduct.id, outQty);
+          documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
         }
         if (S.enabled) {
-          const saleMP = planSaleOfOutput(outProduct, outMP, false);
-          if (outProduct && saleMP > 0) {
-            postings.push({ kind: "SPRZEDAZ", productId: outProduct.id, qty: -saleMP });
-            documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleMP, unit: "MP", stockQty: saleMP, stockUnit: "MP", weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
+          const saleQ = planSaleOfOutput(outProduct, outQty, false);
+          if (outProduct && saleQ > 0) {
+            push("SPRZEDAZ", outProduct.id, -saleQ);
+            documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
           }
         }
       } else if (S.enabled) err("sale.enabled", "W zakupie sprzedaż korzysta z wyniku produkcji — zaznacz produkcję albo użyj operacji „Sprzedaż” (WZ z magazynu)");
     } else if (type === "SPRZEDAZ" && !S.direct) {
       /* ===================== B. SPRZEDAŻ Z MAGAZYNU (WZ) ===================== */
       const product = prodOf(S.productId);
-      if (!S.productId) err("sale.productId", "Wybierz towar z magazynu");
+      if (!S.productId) err("sale.productId", "Wybierz produkt z magazynu");
       else if (!product) err("sale.productId", "Nieznany produkt");
       const unitOk = product && Units.allowed(product).includes(S.unit);
-      if (product && !unitOk) err("sale.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(Units.label).join(", ")}`);
-      const qty = num("sale.qty", S.qty, { gt: 0 });
+      if (product && !unitOk) err("sale.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(U).join(", ")}`);
+      const qty = num("sale.qty", S.qty, { gt: 0, label: "ilość" });
       const stockQty = qty !== null && unitOk ? Units.convert(qty, S.unit, product.unit, product, cfg) : 0;
       const onStock = product ? stockOf(product.id) : 0;
-      if (product && qty !== null && stockQty > onStock + EPS) err("sale.qty", `Na magazynie jest ${fmtQ(onStock)} ${Units.label(product.unit)} — nie można sprzedać ${fmtQ(stockQty)} ${Units.label(product.unit)}`);
+      if (product && qty !== null && stockQty > onStock + EPS) err("sale.qty", `Nie można sprzedać ${fmtQ(stockQty)} ${U(product.unit)}. Dostępny stan: ${fmtQ(onStock)} ${U(product.unit)}.`);
       const buyer = byId(state.partners, S.buyerId);
-      if (!S.buyerId) err("sale.buyerId", "Wybierz kupującego / odbiorcę");
+      if (!S.buyerId) err("sale.buyerId", "Wybierz odbiorcę");
       else if (!buyer || !["buyer", "both"].includes(buyer.role) || buyer.active === false) err("sale.buyerId", "Nieznany lub nieaktywny odbiorca");
-      const price = num("sale.price", S.price, { min: 0 });
+      const price = num("sale.price", S.price, { min: 0, label: "cenę sprzedaży" });
       if (price === 0) warnings.push("Cena sprzedaży wynosi 0 zł.");
       totals.revenue = qty !== null && price !== null ? round(qty * price, 2) : 0;
       const weightT = product ? Units.mass(stockQty, product, cfg) : 0;
-      norm.sale = { direct: false, fromStock: true, buyerId: S.buyerId, productId: S.productId, qty, unit: S.unit, stockQty, stockUnit: product ? product.unit : null, onStock, after: round(onStock - stockQty, 3), price, priceUnit: S.unit, revenue: totals.revenue, weightT };
+      norm.sale = { direct: false, fromStock: true, buyerId: S.buyerId, productId: S.productId, qty, unit: S.unit, stockQty, stockUnit: product ? product.unit : null, onStock, after: rq(onStock - stockQty), price, priceUnit: S.unit, revenue: totals.revenue, weightT };
       if (product && stockQty > 0) {
-        postings.push({ kind: "SPRZEDAZ", productId: product.id, qty: -stockQty });
+        push("SPRZEDAZ", product.id, -stockQty);
         documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: product.id, qty, unit: S.unit, stockQty, stockUnit: product.unit, weightT, value: totals.revenue, price, priceUnit: S.unit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
       }
     } else if (type === "SPRZEDAZ" && S.direct) {
       /* ============ D. PRODUKCJA + SPRZEDAŻ BEZPOŚREDNIA (las → odbiorca) ============ */
       const rawP = prodOf(R_.rawProductId);
-      if (R_.rawProductId && (!rawP || rawP.cat !== "drewno")) err("production.rawProductId", "Surowiec musi być drewnem");
-      let rawQty = null;
-      if (str(R_.rawQty) !== "") rawQty = num("production.rawQty", R_.rawQty, { gt: 0 });
-      if (rawQty !== null && !rawP) err("production.rawProductId", "Wskaż rodzaj surowca dla podanej ilości");
-      // surowiec z lasu NIE jest pobierany ze stanu — ilość służy tylko do wyliczenia wydajności
-      const consume = rawP && rawQty !== null ? rawQty : null;
+      if (!R_.rawProductId) err("production.rawProductId", "Wybierz surowiec wejściowy (np. drewno z lasu)");
+      else if (!rawP) err("production.rawProductId", "Nieznany surowiec");
       const rawCost = str(R_.rawCost) === "" ? 0 : num("production.rawCost", R_.rawCost, { min: 0 });
       totals.rawCost = rawCost || 0;
-      const { outProduct, outMP } = planProduction("direct", rawP, consume);
+      const { outProduct, outQty, consume } = planProduction("direct", rawP, null);
       norm.production.rawQty = consume; norm.production.rawCost = totals.rawCost;
-      const saleMP = planSaleOfOutput(outProduct, outMP, true);
-      if (outProduct && outMP > 0) {
-        postings.push({ kind: "PRODUKCJA", productId: outProduct.id, qty: outMP, direct: true });
-        documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outMP, unit: "MP", stockQty: outMP, stockUnit: "MP", weightT: Units.mass(outMP, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: Object.assign(prodMeta(), { direct: "tak — produkcja w lesie", rawInfo: consume !== null ? `${fmtQ(consume)} ${Units.label(rawP.unit)} ${rawP.name}` : "" }) });
+      const saleQ = planSaleOfOutput(outProduct, outQty, true);
+      if (outProduct && outQty > 0) {
+        push("PRODUKCJA", outProduct.id, outQty, { direct: true });
+        documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: Object.assign(prodMeta(), { direct: "tak — produkcja w lesie", rawInfo: rawP && consume !== null ? `${fmtQ(consume)} ${U(rawP.unit)} ${rawP.name} (nie ze stanu)` : "" }) });
       }
-      if (outProduct && saleMP > 0) {
-        postings.push({ kind: "SPRZEDAZ", productId: outProduct.id, qty: -saleMP, direct: true });
-        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleMP, unit: "MP", stockQty: saleMP, stockUnit: "MP", weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−", meta: { direct: "sprzedaż bezpośrednia po produkcji / prosto z lasu" } });
+      if (outProduct && saleQ > 0) {
+        push("SPRZEDAZ", outProduct.id, -saleQ, { direct: true });
+        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−", meta: { direct: "sprzedaż bezpośrednia po produkcji / prosto z lasu" } });
       }
     } else if (type === "PRODUKCJA") {
-      /* ================= C. PRODUKCJA NA MAGAZYNIE (ze stanu) ================= */
+      /* ================= C. PRODUKCJA NA MAGAZYN (surowiec ze stanu) ================= */
       const rawP = prodOf(R_.rawProductId);
-      if (!R_.rawProductId) err("production.rawProductId", "Wybierz surowiec ze stanu magazynu");
-      else if (!rawP || rawP.cat !== "drewno") err("production.rawProductId", "Produkcja zrębki jest możliwa tylko z drewna");
-      const consume = num("production.consumeQty", R_.consumeQty, { gt: 0 });
+      if (!R_.rawProductId) err("production.rawProductId", "Wybierz surowiec");
+      else if (!rawP) err("production.rawProductId", "Nieznany surowiec");
+      const { outProduct, outQty, consume } = planProduction("stock", rawP, null);
       const onStock = rawP ? stockOf(rawP.id) : 0;
-      if (rawP && consume !== null) {
-        norm.available = { stock: onStock, purchase: 0, total: onStock, unit: rawP.unit };
-        if (consume > onStock + EPS) err("production.consumeQty", `Na magazynie jest ${fmtQ(onStock)} ${Units.label(rawP.unit)} — nie można zużyć ${fmtQ(consume)} ${Units.label(rawP.unit)}`);
+      if (rawP) norm.available = { stock: onStock, purchase: 0, total: onStock, unit: rawP.unit };
+      if (rawP && consume !== null && consume > onStock + EPS) {
+        err("production.outQty", `Brak wystarczającej ilości surowca. Dostępne: ${fmtQ(onStock)} ${U(rawP.unit)}. Wymagane: ${fmtQ(consume)} ${U(rawP.unit)}. Brakuje: ${fmtQ(consume - onStock)} ${U(rawP.unit)}.`);
       }
-      const { outProduct, outMP } = planProduction("stock", rawP && rawP.cat === "drewno" ? rawP : null, consume);
       if (rawP && consume > 0) {
-        postings.push({ kind: "ZUZYCIE", productId: rawP.id, qty: -round(consume, 3) });
+        push("ZUZYCIE", rawP.id, -consume);
         documents.push({ type: "RW", kind: "ZUZYCIE", productId: rawP.id, qty: consume, unit: rawP.unit, stockQty: consume, stockUnit: rawP.unit, weightT: Units.mass(consume, rawP, cfg), value: 0, stock: "−" });
       }
-      if (outProduct && outMP > 0) {
-        postings.push({ kind: "PRODUKCJA", productId: outProduct.id, qty: outMP });
-        documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outMP, unit: "MP", stockQty: outMP, stockUnit: "MP", weightT: Units.mass(outMP, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
+      if (outProduct && outQty > 0 && consume > 0) {
+        push("PRODUKCJA", outProduct.id, outQty);
+        documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
+      }
+    } else if (type === "MM") {
+      /* ================= E. MM — przesunięcie międzymagazynowe ================= */
+      const product = prodOf(M.productId);
+      if (!M.productId) err("mm.productId", "Wybierz produkt");
+      else if (!product) err("mm.productId", "Nieznany produkt");
+      const unitOk = product && Units.allowed(product).includes(M.unit);
+      if (product && !unitOk) err("mm.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(U).join(", ")}`);
+      const toWh = byId(state.warehouses, M.toWhId);
+      if (!M.toWhId) err("mm.toWhId", "Wybierz magazyn docelowy przesunięcia");
+      else if (!toWh) err("mm.toWhId", "Nieznany magazyn");
+      else if (toWh.id === whId) err("mm.toWhId", "Magazyn docelowy musi być inny niż magazyn źródłowy");
+      if (toWh && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", `W magazynie ${toWh.name} okres ${lockedMonth(state, toWh.id)} jest zamknięty`);
+      const qty = num("mm.qty", M.qty, { gt: 0, label: "ilość" });
+      const stockQty = qty !== null && unitOk ? Units.convert(qty, M.unit, product.unit, product, cfg) : 0;
+      const onStock = product ? stockOf(product.id) : 0;
+      if (product && qty !== null && stockQty > onStock + EPS) err("mm.qty", `Nie można przesunąć ${fmtQ(stockQty)} ${U(product.unit)}. Dostępny stan: ${fmtQ(onStock)} ${U(product.unit)}.`);
+      norm.mm = { productId: M.productId, qty, unit: M.unit, stockQty, stockUnit: product ? product.unit : null, toWhId: toWh ? toWh.id : "", toWhName: toWh ? toWh.name : "", fromWhName: wh ? wh.name : "", onStock };
+      if (product && toWh && toWh.id !== whId && stockQty > 0) {
+        push("MM", product.id, -stockQty);
+        push("MM", product.id, stockQty, { whId: toWh.id });
+        documents.push({ type: "MM", kind: "MM", productId: product.id, qty, unit: M.unit, stockQty, stockUnit: product.unit, weightT: Units.mass(stockQty, product, cfg), value: 0, stock: "±", fromWh: wh ? wh.name : "", toWh: toWh.name, toWhId: toWh.id });
       }
     }
 
-    /* ---------- miejsce i transport ---------- */
+    /* ---------- miejsce i transport (nie dotyczy produkcji na magazyn) ---------- */
     const T = draft.transport || {};
-    const place = str(T.place);
-    if (!place) err("transport.place", "Podaj miejsce transportu / dostawy");
-    const mode = T.mode || "none";
-    const transport = { mode, place, cost: 0 };
-    if (!TRANSPORT_MODES[mode]) err("transport.mode", "Nieznany tryb transportu");
-    // masa ładunku, z którą porównujemy tonaż składu
-    const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : 0;
-    if (mode === "own") {
-      const O = T.own || {};
-      const v = byId(state.fleet.vehicles, O.vehicleId);
-      if (!O.vehicleId) err("transport.own.vehicleId", "Wybierz pojazd z floty");
-      else if (!v) err("transport.own.vehicleId", "Nieznany pojazd");
-      else if (v.status !== "aktywny") err("transport.own.vehicleId", `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
-      const driverId = O.driverId || (v && v.driverId) || "";
-      const d = byId(state.fleet.drivers, driverId);
-      if (!driverId) err("transport.own.driverId", "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
-      else if (!d) err("transport.own.driverId", "Nieznany kierowca");
-      const km = num("transport.own.km", O.km, { gt: 0 });
-      const rate = str(O.rate) === "" ? cfg.kmRateDefault : num("transport.own.rate", O.rate, { gt: 0 });
-      Object.assign(transport, {
-        vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "",
-        driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
-        driverOverridden: !!(v && d && v.driverId !== d.id),
-        km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0
-      });
-    } else if (mode === "external") {
-      const X = T.external || {};
-      if (!str(X.company)) err("transport.external.company", "Podaj firmę transportową");
-      if (!str(X.reg)) err("transport.external.reg", "Podaj numer rejestracyjny");
-      const km = str(X.km) === "" ? 0 : num("transport.external.km", X.km, { min: 0 });
-      const included = !!X.includedInPrice;
-      let freight = 0;
-      if (!included) freight = num("transport.external.freight", X.freight, { min: 0 }) || 0;
-      Object.assign(transport, { company: str(X.company), reg: str(X.reg).toUpperCase(), km: km || 0, freight: included ? 0 : freight, includedInPrice: included, cost: included ? 0 : round(freight, 2) });
-    } else if (mode === "train") {
-      const Tr = T.train || {};
-      const n = num("transport.train.wagonCount", Tr.wagonCount, { gt: 0, integer: true });
-      if (n !== null && n > cfg.maxWagons) err("transport.train.wagonCount", `Maksymalnie ${cfg.maxWagons} wagonów w jednym składzie`);
-      const count = n && n <= cfg.maxWagons ? n : 0;
-      const capUnit = Tr.capUnit === "MP" ? "MP" : "t";
-      const capacity = str(Tr.capacity) === "" ? null : num("transport.train.capacity", Tr.capacity, { gt: 0 });
-      const capT = capacity === null ? null : capUnit === "t" ? capacity : round(capacity * cfg.mp_t, 3);
-      const tonMode = Tr.tonMode === "each" ? "each" : "same";
-      const tons = [];
-      if (tonMode === "same") {
-        const t = num("transport.train.sameT", Tr.sameT, { gt: 0 });
-        for (let i = 0; i < count; i++) tons.push(t || 0);
-      } else {
-        for (let i = 0; i < count; i++) tons.push(num(`transport.train.wagonT.${i}`, (Tr.wagonT || [])[i], { gt: 0 }) || 0);
+    let transport = { mode: "none", place: "", cost: 0 };
+    if (type !== "PRODUKCJA") {
+      const place = str(T.place);
+      if (!place) err("transport.place", "Podaj miejsce transportu / dostawy");
+      const mode = T.mode || "none";
+      transport = { mode, place, cost: 0 };
+      if (!TRANSPORT_MODES[mode]) err("transport.mode", "Nieznany tryb transportu");
+      const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
+      if (mode === "own") {
+        const O = T.own || {};
+        const v = byId(state.fleet.vehicles, O.vehicleId);
+        if (!O.vehicleId) err("transport.own.vehicleId", "Wybierz pojazd z floty");
+        else if (!v) err("transport.own.vehicleId", "Nieznany pojazd");
+        else if (v.status !== "aktywny") err("transport.own.vehicleId", `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
+        const driverId = O.driverId || (v && v.driverId) || "";
+        const d = byId(state.fleet.drivers, driverId);
+        if (!driverId) err("transport.own.driverId", "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
+        else if (!d) err("transport.own.driverId", "Nieznany kierowca");
+        const km = num("transport.own.km", O.km, { gt: 0, label: "liczbę km" });
+        const rate = str(O.rate) === "" ? cfg.kmRateDefault : num("transport.own.rate", O.rate, { gt: 0, label: "stawkę za km" });
+        Object.assign(transport, { vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "", driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0 });
+      } else if (mode === "external") {
+        const X = T.external || {};
+        if (!str(X.company)) err("transport.external.company", "Podaj firmę transportową");
+        if (!str(X.reg)) err("transport.external.reg", "Podaj numer rejestracyjny");
+        const km = str(X.km) === "" ? 0 : num("transport.external.km", X.km, { min: 0 });
+        const included = !!X.includedInPrice;
+        const freight = included ? 0 : (num("transport.external.freight", X.freight, { min: 0, label: "kwotę frachtu" }) || 0);
+        Object.assign(transport, { company: str(X.company), reg: str(X.reg).toUpperCase(), km: km || 0, freight, includedInPrice: included, cost: included ? 0 : round(freight, 2) });
+      } else if (mode === "train") {
+        const Tr = T.train || {};
+        const n = num("transport.train.wagonCount", Tr.wagonCount, { gt: 0, integer: true, label: "liczbę wagonów" });
+        if (n !== null && n > cfg.maxWagons) err("transport.train.wagonCount", `Maksymalnie ${cfg.maxWagons} wagonów w jednym składzie`);
+        const count = n && n <= cfg.maxWagons ? n : 0;
+        const capUnit = Tr.capUnit === "MP" ? "MP" : "t";
+        const capacity = str(Tr.capacity) === "" ? null : num("transport.train.capacity", Tr.capacity, { gt: 0 });
+        const capT = capacity === null ? null : capUnit === "t" ? capacity : rq(capacity * cfg.mp_t);
+        const tonMode = Tr.tonMode === "each" ? "each" : "same";
+        const tons = [];
+        if (tonMode === "same") { const t = num("transport.train.sameT", Tr.sameT, { gt: 0, label: "tonaż wagonu" }); for (let i = 0; i < count; i++) tons.push(t || 0); }
+        else for (let i = 0; i < count; i++) tons.push(num(`transport.train.wagonT.${i}`, (Tr.wagonT || [])[i], { gt: 0, label: `tonaż wagonu ${i + 1}` }) || 0);
+        const totalT = rq(tons.reduce((a, b) => a + b, 0));
+        if (capT) tons.forEach((t, i) => { if (t > capT + EPS) warnings.push(`Wagon ${i + 1}: ${fmtQ(t)} t przekracza ładowność ${fmtQ(capacity)} ${capUnit}${capUnit === "MP" ? ` ≈ ${fmtQ(capT)} t` : ""}`); });
+        if (!["MP", "m3", "t"].includes(Tr.priceUnit)) err("transport.train.priceUnit", "Wybierz jednostkę ceny");
+        const tprice = num("transport.train.price", Tr.price, { min: 0, label: "cenę frachtu" });
+        const totalMP = rq(totalT / cfg.mp_t);
+        const basisQty = Tr.priceUnit === "t" ? totalT : Tr.priceUnit === "MP" ? totalMP : rq(totalMP / cfg.m3_mp);
+        Object.assign(transport, {
+          trainNo: str(Tr.trainNo), carrier: str(Tr.carrier), docNo: str(Tr.docNo), loadPlace: str(Tr.loadPlace),
+          wagonCount: count, capUnit, capacity, totalCapacity: capacity !== null ? rq(capacity * count) : null,
+          totalCapacityMP: capacity !== null && capUnit === "MP" ? rq(capacity * count) : null,
+          tonMode, wagonT: tons, totalT, totalMP, price: tprice || 0, priceUnit: Tr.priceUnit, basisQty,
+          cost: tprice !== null ? round(basisQty * tprice, 2) : 0
+        });
+        if (totalT > 0 && shippedT > 0 && Math.abs(totalT - shippedT) / shippedT > 0.05) warnings.push(`Tonaż składu ${fmtQ(totalT)} t różni się od orientacyjnej masy ładunku ${fmtQ(shippedT)} t. Transport nie zmienia stanu magazynowego.`);
       }
-      const totalT = round(tons.reduce((a, b) => a + b, 0), 3);
-      if (capT) tons.forEach((t, i) => { if (t > capT + EPS) warnings.push(`Wagon ${i + 1}: ${fmtQ(t)} t przekracza ładowność ${fmtQ(capacity)} ${capUnit}${capUnit === "MP" ? ` ≈ ${fmtQ(capT)} t` : ""}`); });
-      if (!["MP", "m3", "t"].includes(Tr.priceUnit)) err("transport.train.priceUnit", "Wybierz jednostkę ceny");
-      const tprice = num("transport.train.price", Tr.price, { min: 0 });
-      const totalMP = round(totalT / cfg.mp_t, 3);
-      const basisQty = Tr.priceUnit === "t" ? totalT : Tr.priceUnit === "MP" ? totalMP : round(totalMP / cfg.m3_mp, 3);
-      Object.assign(transport, {
-        trainNo: str(Tr.trainNo), carrier: str(Tr.carrier), docNo: str(Tr.docNo), loadPlace: str(Tr.loadPlace),
-        wagonCount: count, capUnit, capacity, totalCapacity: capacity !== null ? round(capacity * count, 3) : null,
-        totalCapacityMP: capacity !== null && capUnit === "MP" ? round(capacity * count, 3) : null,
-        tonMode, wagonT: tons, totalT, totalMP, price: tprice || 0, priceUnit: Tr.priceUnit, basisQty,
-        cost: tprice !== null ? round(basisQty * tprice, 2) : 0
-      });
-      if (totalT > 0 && shippedT > 0 && Math.abs(totalT - shippedT) / shippedT > 0.05) {
-        warnings.push(`Tonaż składu ${fmtQ(totalT)} t różni się od orientacyjnej masy ładunku ${fmtQ(shippedT)} t. Transport nie zmienia stanu magazynowego.`);
-      }
+      if (mode !== "none") documents.push({ type: "TR", kind: "TRANSPORT", productId: null, qty: null, unit: null, value: transport.cost, stock: "brak", transport: clone(transport) });
+    } else {
+      transport.place = wh ? wh.name : "";
     }
     totals.transportCost = transport.cost;
     norm.transport = transport;
-    if (mode !== "none") documents.push({ type: "TR", kind: "TRANSPORT", productId: null, qty: null, unit: null, value: transport.cost, stock: "brak", transport: clone(transport) });
-    documents.forEach(d => { d.place = place; });
+    documents.forEach(d => { d.place = transport.place; });
 
-    /* ---------- symulacja sald: żaden krok nie może zejść poniżej zera ---------- */
+    /* ---------- symulacja sald krok po kroku (magazyn × produkt) ---------- */
     postings.forEach((p, i) => { p.step = i + 1; p.doc = KINDS[p.kind].doc; });
     const balances = [];
-    if (whId) {
-      const sim = new Map();
-      const get = pid => sim.has(pid) ? sim.get(pid) : stockOf(pid);
-      for (const p of postings) {
-        const before = get(p.productId), after = round(before + p.qty, 3);
-        p.before = before; p.after = after;
-        const pr = prodOf(p.productId);
-        if (after < -EPS) err("_stock", `Krok ${p.step} (${KINDS[p.kind].label}) daje stan ujemny: ${fmtQ(after)} ${Units.label(pr ? pr.unit : "")}`);
-        sim.set(p.productId, after);
-      }
-      for (const [pid, after] of sim) balances.push({ productId: pid, before: stockOf(pid), after });
+    const sim = new Map();
+    const key = p => `${p.whId}|${p.productId}`;
+    for (const p of postings) {
+      if (!p.whId) continue;
+      const k = key(p);
+      const before = sim.has(k) ? sim.get(k) : stockAt(p.whId, p.productId);
+      const after = rq(before + p.qty);
+      p.before = before; p.after = after;
+      const pr = prodOf(p.productId);
+      if (after < -EPS) err("_stock", `Krok ${p.step} (${KINDS[p.kind].label}) daje stan ujemny: ${fmtQ(after)} ${U(pr ? pr.unit : "")} w magazynie ${(byId(state.warehouses, p.whId) || {}).name || p.whId}`);
+      sim.set(k, after);
     }
+    for (const [k, after] of sim) { const [w, pid] = k.split("|"); balances.push({ whId: w, productId: pid, before: stockAt(w, pid), after }); }
     totals.result = round(totals.revenue - totals.purchaseCost - totals.rawCost - totals.chippingCost - totals.transportCost, 2);
 
     const errorList = Object.keys(errors).map(k => ({ field: k, msg: errors[k] }));
@@ -663,118 +703,298 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Numeracja, audyt, zapis                                             */
+  /* Numeracja, audyt                                                    */
   /* ------------------------------------------------------------------ */
   function nextNo(state, type, date) {
-    const ym = Dates.ym(date), key = `${type}-${ym}`;
-    state.seq[key] = (state.seq[key] || 0) + 1;
-    return `${type}/${String(state.seq[key]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+    const ym = Dates.ym(date), k = `${type}-${ym}`;
+    state.seq[k] = (state.seq[k] || 0) + 1;
+    return `${type}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
   }
-  function nextLedgerSeq(state) { return state.ledger.length ? Math.max(...state.ledger.map(l => l.seq)) + 1 : 1; }
+  function nextLedgerSeq(state) { let m = 0; for (const l of state.ledger) if (l.seq > m) m = l.seq; return m + 1; }
   function audit(state, ctx, rec) {
     const user = ctx && ctx.user;
-    state.audit.push(Object.assign({
-      id: uid("a"), ts: (ctx && ctx.now) || new Date().toISOString(),
-      userId: user ? user.id : "system", userName: user ? user.name : "System",
-      whId: user ? user.whId : null, source: (ctx && ctx.source) || "Aplikacja"
-    }, rec));
+    state.audit.push(Object.assign({ id: uid("a"), ts: nowIso(ctx), userId: user ? user.id : "system", userName: user ? user.name : "System", whId: user ? user.whId : null, source: (ctx && ctx.source) || "Aplikacja" }, rec));
   }
-  const snapshot = (state, whId, ids) => { const o = {}; for (const pid of ids) o[pid] = Stock.balance(state, whId, pid); return o; };
+  const snap = (state, keys) => { const o = {}; for (const k of keys) { const [w, p] = k.split("|"); o[k] = Stock.balance(state, w, p); } return o; };
+  const netKey = e => `${e.whId}|${e.productId}|${e.cat}|${e.direct ? 1 : 0}`;
+  function ledgerEntry(state, seq, ctx, e) {
+    const pr = byId(state.products, e.productId);
+    return Object.assign({ id: uid("l"), seq, ts: nowIso(ctx), userName: ctx.user ? ctx.user.name : "System", unit: pr.unit, t: Units.mass(e.qty, pr, state.config), direct: !!e.direct }, e, { qty: rq(e.qty) });
+  }
 
+  /* ------------------------------------------------------------------ */
+  /* Zapis operacji — atomowo                                            */
+  /* ------------------------------------------------------------------ */
   function commitOperation(state, draft, ctx) {
     if (!draft || !draft.idemKey) return { ok: false, error: "Brak klucza idempotencji formularza" };
     const dup = state.operations.find(o => o.idemKey === draft.idemKey);
     if (dup) return { ok: true, duplicate: true, op: dup };
     const plan = planOperation(state, draft, ctx);
     if (!plan.ok) return { ok: false, plan, error: plan.errorList[0].msg };
-
-    const ids = [...new Set(plan.postings.map(p => p.productId))];
-    const before = snapshot(state, plan.whId, ids);
+    const keys = [...new Set(plan.postings.map(p => `${p.whId}|${p.productId}`))];
+    const before = snap(state, keys);
     const opId = uid("op");
     const docs = plan.documents.map(d => Object.assign({}, d, { no: nextNo(state, d.type, plan.date) }));
     const docNo = t => (docs.find(d => d.type === t) || {}).no || null;
-    // powiązanie wejście → wyjście: PW wskazuje RW, z którego powstał produkt
     const pw = docs.find(d => d.type === "PW"), rw = docs.find(d => d.type === "RW");
     if (pw && rw) pw.meta = Object.assign({}, pw.meta, { fromDoc: rw.no });
     let seq = nextLedgerSeq(state);
-    const ledger = plan.postings.map(p => {
-      const pr = byId(state.products, p.productId);
-      return { id: uid("l"), seq: seq++, opId, step: p.step, date: plan.date, whId: plan.whId, productId: p.productId, kind: p.kind, qty: p.qty, unit: pr.unit, t: Units.mass(p.qty, pr, state.config), docNo: docNo(p.doc), direct: !!p.direct };
-    });
-    const main = plan.type === "ZAKUP" ? plan.norm.purchase : plan.type === "SPRZEDAZ" && !plan.norm.sale.direct ? plan.norm.sale : null;
+    const ledger = plan.postings.map(p => ledgerEntry(state, seq++, ctx, { opId, step: p.step, date: plan.date, whId: p.whId, productId: p.productId, kind: p.kind, cat: p.cat, qty: p.qty, direct: !!p.direct, docNo: docNo(p.doc) }));
+    const n = plan.norm;
+    const main = plan.type === "PRODUKCJA" ? docs.find(d => d.type === "PW") : docs[0];
+    const mainNo = main ? main.no : null;
+    const input = clone(draft); delete input.idemKey; delete input.draftId;
     const op = {
-      id: opId, idemKey: draft.idemKey, type: plan.type, no: docs.length ? docs[0].no : null,
-      date: plan.date, whId: plan.whId, status: "posted", userId: ctx.user.id, userName: ctx.user.name,
-      createdAt: (ctx && ctx.now) || new Date().toISOString(),
-      scope: plan.type === "ZAKUP" ? ["ZAKUP"].concat(plan.norm.production ? ["PRODUKCJA"] : []).concat(plan.norm.sale ? ["SPRZEDAZ"] : [])
-        : plan.type === "PRODUKCJA" ? ["PRODUKCJA"] : plan.norm.sale.direct ? ["PRODUKCJA", "SPRZEDAZ"] : ["SPRZEDAZ"],
-      direct: !!(plan.norm.sale && plan.norm.sale.direct),
-      purchase: plan.norm.purchase, production: plan.norm.production, sale: plan.norm.sale,
-      mainProductId: main ? main.productId : plan.norm.production ? (plan.norm.production.rawProductId || plan.norm.production.outProductId) : null,
-      transport: plan.norm.transport, place: plan.norm.transport.place,
-      documents: docs, ledgerIds: ledger.map(l => l.id), totals: plan.totals,
-      notes: str(draft.notes), warnings: plan.warnings
+      id: opId, idemKey: draft.idemKey, type: plan.type, no: mainNo,
+      date: plan.date, whId: plan.whId, toWhId: n.mm ? n.mm.toWhId : null, status: "POSTED",
+      userId: ctx.user.id, userName: ctx.user.name, createdAt: nowIso(ctx),
+      scope: plan.type === "ZAKUP" ? ["ZAKUP"].concat(n.production ? ["PRODUKCJA"] : []).concat(n.sale ? ["SPRZEDAZ"] : [])
+        : plan.type === "PRODUKCJA" ? ["PRODUKCJA"] : plan.type === "MM" ? ["MM"] : n.sale.direct ? ["PRODUKCJA", "SPRZEDAZ"] : ["SPRZEDAZ"],
+      direct: !!(n.sale && n.sale.direct),
+      input, purchase: n.purchase, production: n.production, sale: n.sale, mm: n.mm,
+      transport: n.transport, place: n.transport.place, notes: str(draft.notes), extDoc: str(draft.extDoc),
+      documents: docs, totals: plan.totals, warnings: plan.warnings,
+      original: clone({ purchase: n.purchase, production: n.production, sale: n.sale, mm: n.mm, transport: n.transport, totals: plan.totals }),
+      corrections: [], cancel: null,
+      valueEvents: [Object.assign({ date: plan.date, ts: nowIso(ctx), kind: "create", no: mainNo }, plan.totals)]
     };
     state.operations.push(op);
     state.ledger.push(...ledger);
+    if (draft.draftId) state.drafts = state.drafts.filter(d => d.id !== draft.draftId);
     state.rev += 1;
     audit(state, ctx, {
-      entity: "operation", entityId: op.id, opNo: op.no, action: `Utworzenie operacji: ${OP_TYPES[op.type].label}${op.direct ? " (bezpośrednia)" : ""}`,
-      before: { stan: before },
-      after: { stan: snapshot(state, plan.whId, ids), dokumenty: docs.map(d => d.no), koszty: plan.totals },
+      entity: "operation", entityId: op.id, opNo: op.no, event: "create", action: `Utworzenie i zatwierdzenie: ${OP_TYPES[op.type].label}${op.direct ? " (bezpośrednia)" : ""}`,
+      before: { stan: before }, after: { stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals },
       source: (ctx && ctx.source) || "Formularz „Nowa operacja”"
     });
     return { ok: true, op, plan };
   }
 
-  function stornoOperation(state, opId, ctx, reason) {
-    const user = ctx && ctx.user;
-    if (!can(user, "op.storno")) return { ok: false, error: "Twoja rola nie pozwala wykonać korekty" };
+  /* ------------------------------------------------------------------ */
+  /* Wersje robocze (DRAFT) — bez wpływu na stan i bez numeru            */
+  /* ------------------------------------------------------------------ */
+  function saveDraft(state, draft, ctx) {
+    if (!can(ctx && ctx.user, "op.create")) return { ok: false, error: "Twoja rola nie pozwala tworzyć operacji" };
+    const id = draft.draftId || uid("dr");
+    const rec = { id, status: "DRAFT", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: ctx.user.id, userName: ctx.user.name, whId: ctx.user.whId, savedAt: nowIso(ctx) };
+    const i = state.drafts.findIndex(d => d.id === id);
+    const before = i >= 0 ? { zapisano: state.drafts[i].savedAt } : null;
+    if (i >= 0) state.drafts[i] = rec; else state.drafts.push(rec);
+    state.rev += 1;
+    audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft", action: `${before ? "Aktualizacja" : "Zapis"} wersji roboczej: ${OP_TYPES[draft.type] ? OP_TYPES[draft.type].label : ""}`, before, after: { status: "ROBOCZY" }, source: (ctx && ctx.source) || "Formularz „Nowa operacja”" });
+    return { ok: true, id };
+  }
+  function deleteDraft(state, id, ctx) {
+    const d = byId(state.drafts, id);
+    if (!d) return { ok: false, error: "Nie znaleziono wersji roboczej" };
+    if (d.userId !== (ctx.user && ctx.user.id) && !can(ctx.user, "documents.cancel")) return { ok: false, error: "Wersję roboczą usuwa jej autor lub kierownik" };
+    state.drafts = state.drafts.filter(x => x.id !== id); state.rev += 1;
+    audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft-delete", action: "Usunięcie wersji roboczej (niezatwierdzona — bez wpływu na stan)", before: { status: "ROBOCZY" }, after: null, source: (ctx && ctx.source) || "Rejestr operacji" });
+    return { ok: true };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* ANULOWANIE — odwrócenie skutków z analizą zależności w czasie        */
+  /* ------------------------------------------------------------------ */
+  function planCancel(state, opId, ctx) {
+    const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
     const op = byId(state.operations, opId);
     if (!op) return { ok: false, error: "Nie znaleziono operacji" };
-    if (op.status !== "posted") return { ok: false, error: "Operacja jest już skorygowana" };
-    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: "Korekty wykonuje się w magazynie operacji" };
-    if (!str(reason)) return { ok: false, error: "Podaj przyczynę korekty" };
-    const today = (ctx && ctx.today) || Dates.localToday();
-    if (isLocked(state, op.whId, today)) return { ok: false, error: "Bieżący okres jest zamknięty — korekta niemożliwa" };
-    const src = state.ledger.filter(l => l.opId === op.id).sort((a, b) => b.step - a.step);
-    const sim = new Map();
-    const get = pid => sim.has(pid) ? sim.get(pid) : Stock.balance(state, op.whId, pid);
-    for (const l of src) {
-      const after = round(get(l.productId) - l.qty, 3);
-      if (after < -EPS) {
-        const p = byId(state.products, l.productId);
-        return { ok: false, error: `Korekta niemożliwa: stan „${p ? p.name : l.productId}” spadłby do ${fmtQ(after)} ${Units.label(p ? p.unit : "")} (materiał został już rozchodowany)` };
+    if (op.status === "CANCELLED") return { ok: false, error: `Dokument ${op.no} jest już anulowany` };
+    if (!can(user, "documents.cancel")) return { ok: false, error: "Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator" };
+    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: "Anulowanie wykonuje się w magazynie operacji" };
+    const entries = state.ledger.filter(l => l.opId === op.id);
+    const whs = [...new Set(entries.map(e => e.whId))];
+    for (const w of whs) if (isLocked(state, w, today)) return { ok: false, error: "Bieżący okres jest zamknięty — anulowanie niemożliwe" };
+    const net = new Map();
+    for (const e of entries) { const k = netKey(e); const c = net.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); net.set(k, c); }
+    const reversal = [...net.values()].filter(x => Math.abs(x.qty) > EPS).map(x => Object.assign({}, x, { qty: -x.qty }));
+    // oś czasu bez skutków tej operacji — stan nie może nigdy spaść poniżej zera
+    const firstSeq = entries.length ? Math.min(...entries.map(e => e.seq)) : Infinity;
+    const keys = [...new Set(entries.map(e => `${e.whId}|${e.productId}`))];
+    const problems = [], dependents = new Map();
+    const cancelled = new Set(state.operations.filter(o => o.status === "CANCELLED").map(o => o.id));
+    for (const k of keys) {
+      const [w, pid] = k.split("|");
+      const rows = Stock.sorted(state.ledger.filter(l => l.whId === w && l.productId === pid));
+      const opNet = rq(entries.filter(e => e.whId === w && e.productId === pid).reduce((a, e) => a + e.qty, 0));
+      let bal = 0, min = 0, minAt = null;
+      for (const r of rows) {
+        if (r.opId === op.id) continue;
+        if (r.opId && cancelled.has(r.opId)) continue;            // anulowana operacja: skutki i odwrócenie znoszą się
+        bal = rq(bal + r.qty);
+        if (bal < min - EPS) { min = bal; minAt = r; }
+        if (opNet > EPS && r.seq > firstSeq && r.qty < 0 && r.opId && r.opId !== op.id) {
+          const d = byId(state.operations, r.opId);
+          if (d && d.status !== "CANCELLED") dependents.set(d.id, { id: d.id, no: d.no, date: d.date, type: OP_TYPES[d.type].label, docNo: r.docNo });
+        }
       }
-      sim.set(l.productId, after);
+      if (min < -EPS) {
+        const pr = byId(state.products, pid);
+        problems.push(`${pr.name} (${(byId(state.warehouses, w) || {}).name}): bez tego dokumentu stan spadłby do ${fmtQ(min)} ${Units.label(pr.unit)} (${minAt.docNo || ""} z ${Dates.pl(minAt.date)})`);
+      }
     }
-    const ids = [...new Set(src.map(l => l.productId))];
-    const before = snapshot(state, op.whId, ids);
-    const no = nextNo(state, "KO", today);
+    const deps = [...dependents.values()];
+    if (problems.length) {
+      return { ok: false, blocked: true, dependents: deps, error: `Nie można bezpośrednio anulować dokumentu ${op.no}. Towar z tego dokumentu został wykorzystany w późniejszych operacjach${deps.length ? ` (${deps.map(d => d.no).join(", ")})` : ""}. Najpierw należy wykonać korektę lub anulowanie operacji zależnych. ${problems.join("; ")}` };
+    }
+    const rev = reversal.map(r => { const b = Stock.balance(state, r.whId, r.productId); return Object.assign({}, r, { before: b }); });
+    const sim = new Map();
+    for (const r of rev) { const k = `${r.whId}|${r.productId}`; const b = sim.has(k) ? sim.get(k) : r.before; r.before = b; r.after = rq(b + r.qty); sim.set(k, r.after); }
+    const valueDelta = {}; for (const k of Object.keys(op.totals)) valueDelta[k] = round(-op.totals[k], 2);
+    return { ok: true, op, reversal: rev, dependents: deps, needAck: deps.length > 0, valueDelta };
+  }
+  function cancelOperation(state, opId, ctx, reason, opts = {}) {
+    if (!str(reason)) return { ok: false, error: "Podaj przyczynę anulowania" };
+    const pc = planCancel(state, opId, ctx);
+    if (!pc.ok) return pc;
+    if (pc.needAck && !opts.ack) return { ok: false, needAck: true, dependents: pc.dependents, error: `Po dokumencie wykonano operacje na tym samym towarze (${pc.dependents.map(d => d.no).join(", ")}). Potwierdź, że anulowanie jest zamierzone.` };
+    const op = pc.op, today = (ctx && ctx.today) || Dates.localToday();
+    const keys = [...new Set(pc.reversal.map(r => `${r.whId}|${r.productId}`))];
+    const before = snap(state, keys);
+    const no = nextNo(state, "AN", today);
     let seq = nextLedgerSeq(state);
-    state.ledger.push(...src.map((l, i) => ({ id: uid("l"), seq: seq++, opId: op.id, step: 100 + i, date: today, whId: op.whId, productId: l.productId, kind: "KOREKTA", qty: -l.qty, unit: l.unit, t: -l.t, docNo: no, refDoc: l.docNo })));
-    op.status = "storno";
-    op.storno = { no, date: today, reason: str(reason), userId: user.id, userName: user.name };
+    state.ledger.push(...pc.reversal.map((r, i) => ledgerEntry(state, seq++, ctx, { opId: op.id, step: 200 + i, date: today, whId: r.whId, productId: r.productId, kind: "ANULOWANIE", cat: r.cat, qty: r.qty, direct: r.direct, docNo: no, refDoc: op.no })));
+    const prevStatus = op.status;
+    op.status = "CANCELLED";
+    op.cancel = { no, date: today, ts: nowIso(ctx), reason: str(reason), userId: ctx.user.id, userName: ctx.user.name, ack: !!opts.ack, dependents: pc.dependents, effect: pc.reversal.map(r => ({ whId: r.whId, productId: r.productId, qty: r.qty, before: r.before, after: r.after })) };
+    op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "cancel", no }, pc.valueDelta));
     state.rev += 1;
-    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, action: "Korekta (storno)", before: { status: "posted", stan: before }, after: { status: "storno", dokument: no, przyczyna: str(reason), stan: snapshot(state, op.whId, ids) }, source: (ctx && ctx.source) || "Plan dokumentów — korekta" });
+    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: "cancel", action: "Anulowanie dokumentu", before: { status: STATUS[prevStatus], stan: before }, after: { status: STATUS.CANCELLED, dokument: no, stan: snap(state, keys) }, reason: str(reason), source: (ctx && ctx.source) || "Anulowanie" });
+    return { ok: true, no, op };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* KOREKTA — nowy dokument z różnicą; pełna walidacja jak zwykła operacja */
+  /* ------------------------------------------------------------------ */
+  const CORR_FIELDS = [
+    ["purchase.qty", "Ilość zakupu", o => o.purchase && o.purchase.qty, o => o.purchase && Units.label(o.purchase.unit)],
+    ["purchase.price", "Cena zakupu", o => o.purchase && o.purchase.price, () => "zł"],
+    ["purchase.supplierId", "Dostawca", o => o.purchase && o.purchase.supplierId],
+    ["sale.qty", "Ilość sprzedaży", o => o.sale && o.sale.qty, o => o.sale && Units.label(o.sale.unit)],
+    ["sale.price", "Cena sprzedaży", o => o.sale && o.sale.price, () => "zł"],
+    ["sale.buyerId", "Odbiorca", o => o.sale && o.sale.buyerId],
+    ["production.outQty", "Produkcja", o => o.production && o.production.outQty, o => o.production && Units.label(o.production.outUnit)],
+    ["production.consumeQty", "Zużycie surowca", o => o.production && o.production.consumeQty, o => o.production && Units.label(o.production.consumeUnit)],
+    ["production.chipRate", "Cena za rąbanie", o => o.production && o.production.chipRate, () => "zł/MP"],
+    ["mm.qty", "Ilość MM", o => o.mm && o.mm.qty, o => o.mm && Units.label(o.mm.unit)],
+    ["transport.place", "Miejsce dostawy", o => o.transport && o.transport.place],
+    ["transport.reg", "Nr rejestracyjny", o => o.transport && o.transport.reg],
+    ["transport.driverName", "Kierowca", o => o.transport && o.transport.driverName],
+    ["transport.cost", "Koszt transportu", o => o.transport && o.transport.cost, () => "zł"],
+    ["notes", "Uwagi", o => o.notes],
+    ["extDoc", "Nr dokumentu zewnętrznego", o => o.extDoc]
+  ];
+  function planCorrection(state, opId, newDraft, ctx) {
+    const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
+    const op = byId(state.operations, opId);
+    if (!op) return { ok: false, error: "Nie znaleziono operacji" };
+    if (op.status === "CANCELLED") return { ok: false, error: `Dokument ${op.no} jest anulowany — nie można go korygować. Wprowadź nową operację.` };
+    if (!can(user, "documents.correct")) return { ok: false, error: "Brak uprawnienia „documents.correct”" };
+    if (!can(user, OP_TYPES[op.type].correctPerm)) return { ok: false, error: `Brak uprawnienia „${OP_TYPES[op.type].correctPerm}”` };
+    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: "Korektę wykonuje się w magazynie operacji" };
+    if (newDraft.type !== op.type || !!(newDraft.sale && newDraft.sale.direct) !== !!op.direct) return { ok: false, error: "Korekta nie może zmienić rodzaju operacji — anuluj i wprowadź nową" };
+    const d = Object.assign(clone(newDraft), { date: op.date, idemKey: "corr" });
+    // stan „bez tej operacji” — nowa wersja przechodzi te same zabezpieczenia co zwykła operacja
+    const view = Object.assign({}, state, { ledger: state.ledger.filter(l => l.opId !== op.id) });
+    const p = planOperation(view, d, Object.assign({}, ctx, { user: Object.assign({}, user, { whId: op.whId }), correction: true }));
+    if (!p.ok) return { ok: false, plan: p, error: p.errorList[0].msg };
+    const cur = new Map(), tgt = new Map();
+    for (const e of state.ledger.filter(l => l.opId === op.id)) { const k = netKey(e); const c = cur.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); cur.set(k, c); }
+    for (const e of p.postings) { const k = netKey(e); const c = tgt.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); tgt.set(k, c); }
+    const deltas = [];
+    for (const k of new Set([...cur.keys(), ...tgt.keys()])) {
+      const a = cur.get(k), b = tgt.get(k), base = a || b;
+      const q = rq((b ? b.qty : 0) - (a ? a.qty : 0));
+      if (Math.abs(q) > EPS) deltas.push({ whId: base.whId, productId: base.productId, cat: base.cat, direct: base.direct, qty: q });
+    }
+    for (const w of new Set(deltas.map(x => x.whId))) if (isLocked(state, w, today)) return { ok: false, error: "Bieżący okres jest zamknięty — korekta niemożliwa" };
+    const sim = new Map();
+    for (const x of deltas.slice().sort((a, b) => b.qty - a.qty)) {   // najpierw przychody, potem rozchody
+      const k = `${x.whId}|${x.productId}`;
+      x.before = sim.has(k) ? sim.get(k) : Stock.balance(state, x.whId, x.productId);
+      x.after = rq(x.before + x.qty); sim.set(k, x.after);
+      if (x.after < -EPS) { const pr = byId(state.products, x.productId); return { ok: false, error: `Korekta niemożliwa: stan „${pr.name}” spadłby do ${fmtQ(x.after)} ${Units.label(pr.unit)}. Dostępny stan: ${fmtQ(x.before)} ${Units.label(pr.unit)}.` }; }
+    }
+    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: p.norm.mm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
+    const partner = id => (byId(state.partners, id) || {}).name || id || "";
+    const changes = [];
+    for (const [f, label, get, unit] of CORR_FIELDS) {
+      const a = get(op), b = get(nextOp);
+      if ((a == null || a === "") && (b == null || b === "")) continue;
+      const same = typeof a === "number" && typeof b === "number" ? Math.abs(a - b) <= EPS : String(a == null ? "" : a) === String(b == null ? "" : b);
+      if (same) continue;
+      const u = unit ? (unit(op) || unit(nextOp) || "") : "";
+      const show = v => /Id$/.test(f) ? partner(v) : typeof v === "number" ? fmtQ(v) + (u ? " " + u : "") : String(v == null ? "" : v);
+      changes.push({ field: f, label, before: a, after: b, beforeText: show(a), afterText: show(b), diff: typeof a === "number" && typeof b === "number" ? rq(b - a) : null, unit: u });
+    }
+    const valueDelta = {}; let valueChanged = false;
+    for (const k of Object.keys(p.totals)) { valueDelta[k] = round(p.totals[k] - (op.totals[k] || 0), 2); if (Math.abs(valueDelta[k]) > 0.004) valueChanged = true; }
+    if (!changes.length && !deltas.length && !valueChanged) return { ok: false, error: "Korekta nie zawiera żadnej zmiany" };
+    return { ok: true, op, plan: p, nextOp, deltas, changes, valueDelta, valueChanged, descriptiveOnly: !deltas.length && !valueChanged, totalsBefore: op.totals, totalsAfter: p.totals };
+  }
+  function correctOperation(state, opId, newDraft, reason, ctx, opts = {}) {
+    if (!str(reason)) return { ok: false, error: "Podaj powód korekty — pole nie może być puste" };
+    const op0 = byId(state.operations, opId);
+    if (op0 && opts.corrKey && op0.corrections.some(c => c.corrKey === opts.corrKey)) return { ok: true, duplicate: true, op: op0 };
+    if (op0 && opts.reverses) {
+      const last = op0.corrections[op0.corrections.length - 1];
+      if (!last || last.no !== opts.reverses) return { ok: false, error: `Odwrócić można tylko ostatnią korektę dokumentu (${last ? last.no : "brak korekt"}). Wcześniejsze korekty odwraca się po kolei.` };
+      if (last.reverses) return { ok: false, error: `Korekta ${last.no} sama jest odwróceniem — wprowadź nową korektę.` };
+    }
+    const pc = planCorrection(state, opId, newDraft, ctx);
+    if (!pc.ok) return pc;
+    const op = pc.op, today = (ctx && ctx.today) || Dates.localToday();
+    const keys = [...new Set(pc.deltas.map(x => `${x.whId}|${x.productId}`))];
+    const before = snap(state, keys);
+    const no = nextNo(state, "KOR", today);
+    let seq = nextLedgerSeq(state);
+    state.ledger.push(...pc.deltas.map((x, i) => ledgerEntry(state, seq++, ctx, { opId: op.id, step: 100 + op.corrections.length * 10 + i, date: today, whId: x.whId, productId: x.productId, kind: "KOREKTA", cat: x.cat, qty: x.qty, direct: x.direct, docNo: no, refDoc: op.no })));
+    const rec = { no, date: today, ts: nowIso(ctx), reason: str(reason), userId: ctx.user.id, userName: ctx.user.name, corrKey: opts.corrKey || null, reverses: opts.reverses || null, inputBefore: clone(op.input),
+      changes: pc.changes, deltas: pc.deltas, valueDelta: pc.valueDelta, descriptiveOnly: pc.descriptiveOnly, totalsBefore: pc.totalsBefore, totalsAfter: pc.totalsAfter };
+    op.corrections.push(rec);
+    const prevStatus = op.status;
+    op.input = Object.assign(clone(newDraft), { date: op.date }); delete op.input.idemKey; delete op.input.draftId;
+    Object.assign(op, pc.nextOp, { place: pc.nextOp.transport.place, totals: pc.plan.totals, status: "CORRECTED" });
+    if (pc.valueChanged) op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "correct", no }, pc.valueDelta));
+    state.rev += 1;
+    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: opts.reverses ? "correction-reverse" : "correction", action: opts.reverses ? `Odwrócenie korekty ${opts.reverses}` : (pc.descriptiveOnly ? "Korekta danych opisowych" : "Korekta dokumentu"),
+      before: { status: STATUS[prevStatus], stan: before, wartosci: pc.changes.map(c => `${c.label}: ${c.beforeText}`) },
+      after: { status: STATUS.CORRECTED, dokument: no, stan: snap(state, keys), wartosci: pc.changes.map(c => `${c.label}: ${c.afterText}`) }, reason: str(reason), source: (ctx && ctx.source) || "Korekta" });
+    return { ok: true, no, op, correction: rec };
+  }
+
+  /** Odwrócenie ostatniej korekty = nowa korekta przywracająca dane sprzed niej (korekt się nie usuwa). */
+  function reverseCorrection(state, opId, corrNo, reason, ctx) {
+    const op = byId(state.operations, opId);
+    if (!op) return { ok: false, error: "Nie znaleziono operacji" };
+    const c = op.corrections.find(x => x.no === corrNo);
+    if (!c) return { ok: false, error: "Nie znaleziono korekty" };
+    return correctOperation(state, opId, Object.assign(clone(c.inputBefore), { type: op.type }), reason, ctx, { reverses: corrNo });
+  }
+
+  /** Rejestracja wydruku / PDF: numer dokumentu raportu i ślad w audycie (kto, kiedy, jaki zakres). */
+  function registerPrint(state, ctx, info) {
+    const today = (ctx && ctx.today) || Dates.localToday();
+    const kind = info.kind === "KWIT" ? "KP" : info.kind === "DOC" ? "WYD" : "RAP";
+    const no = nextNo(state, kind, today);
+    state.rev += 1;
+    audit(state, ctx, { entity: "report", entityId: no, opNo: no, event: "print", action: `${info.format === "pdf" ? "Wygenerowanie PDF" : "Wydruk"}: ${info.title}`, before: null, after: { zakres: info.range || "", magazyn: info.wh || "", format: info.format }, source: (ctx && ctx.source) || "Raporty" });
     return { ok: true, no };
   }
 
-  /** Bilans otwarcia (dane przykładowe / migracja). Ilości w jednostce magazynowej produktu. */
+  /** Bilans otwarcia (dane przykładowe / migracja). */
   function openingBalance(state, whId, date, lines, ctx) {
     const no = nextNo(state, "BO", date);
     let seq = nextLedgerSeq(state);
-    for (const ln of lines) {
-      const p = byId(state.products, ln.productId);
-      state.ledger.push({ id: uid("l"), seq: seq++, opId: null, step: 1, date, whId, productId: p.id, kind: "BO", qty: round(ln.qty, 3), unit: p.unit, t: Units.mass(ln.qty, p, state.config), docNo: no });
-    }
+    for (const ln of lines) state.ledger.push(ledgerEntry(state, seq++, ctx, { opId: null, step: 1, date, whId, productId: ln.productId, kind: "BO", cat: "BO", qty: ln.qty, docNo: no }));
     state.rev += 1;
-    audit(state, ctx, { entity: "ledger", entityId: no, opNo: no, action: "Bilans otwarcia", before: null, after: { magazyn: whId, pozycje: lines.length }, source: (ctx && ctx.source) || "Migracja" });
+    audit(state, ctx, { entity: "ledger", entityId: no, opNo: no, event: "create", action: "Bilans otwarcia", before: null, after: { magazyn: whId, pozycje: lines.length }, source: (ctx && ctx.source) || "Migracja" });
     return no;
   }
 
   /* ------------------------------------------------------------------ */
-  /* Inwentaryzacja miesięczna (ilości w jednostce magazynowej)          */
+  /* Inwentaryzacja miesięczna / zamknięcie miesiąca                      */
   /* ------------------------------------------------------------------ */
   const Inventory = {
     find(state, whId, ym) { return state.inventory.find(p => p.whId === whId && p.ym === ym) || null; },
@@ -787,9 +1007,9 @@
       if (this.find(state, user.whId, ym)) return { ok: false, error: `Okres ${ym} już istnieje` };
       const locked = lockedMonth(state, user.whId);
       if (locked && ym <= locked) return { ok: false, error: `Miesiące do ${locked} włącznie są już zamknięte` };
-      const p = { id: uid("inv"), whId: user.whId, ym, status: "OTWARTA", openedAt: (ctx && ctx.now) || new Date().toISOString(), openedBy: user.name, generatedAt: null, closedAt: null, closedBy: null, auto: false, docNo: null, lines: [] };
+      const p = { id: uid("inv"), whId: user.whId, ym, status: "OTWARTA", openedAt: nowIso(ctx), openedBy: user.name, generatedAt: null, closedAt: null, closedBy: null, auto: false, docNo: null, lines: [] };
       state.inventory.push(p); state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, action: "Otwarcie okresu inwentaryzacji", before: null, after: { okres: ym, status: "OTWARTA" }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: "Otwarcie okresu inwentaryzacji", before: null, after: { okres: ym, status: "OTWARTA" }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
       return { ok: true, period: p };
     },
     generate(state, ym, ctx) {
@@ -798,18 +1018,16 @@
       const p = this.find(state, user.whId, ym);
       if (!p) return { ok: false, error: "Najpierw otwórz okres" };
       if (p.status !== "OTWARTA") return { ok: false, error: "Okres jest zamknięty — tylko do odczytu" };
-      const cut = this.cutoff(ym, today);
-      const book = Stock.byProduct(state, user.whId, cut);
-      const prev = new Map(p.lines.map(l => [l.productId, l]));
+      const cut = this.cutoff(ym, today), book = Stock.byProduct(state, user.whId, cut), prev = new Map(p.lines.map(l => [l.productId, l]));
       const lines = [];
       for (const pr of state.products) {
         const q = book.get(pr.id) || 0, old = prev.get(pr.id);
         if (Math.abs(q) < EPS && !old) continue;
-        lines.push({ productId: pr.id, unit: pr.unit, bookQty: round(q, 3), countQty: old ? old.countQty : null, countText: old ? old.countText : "" });
+        lines.push({ productId: pr.id, unit: pr.unit, bookQty: rq(q), countQty: old ? old.countQty : null, countText: old ? old.countText : "" });
       }
       const before = { pozycje: p.lines.length };
-      p.lines = lines; p.generatedAt = (ctx && ctx.now) || new Date().toISOString(); p.cutoff = cut; state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, action: "Wygenerowanie listy spisowej", before, after: { pozycje: lines.length, stan_na: cut }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
+      p.lines = lines; p.generatedAt = nowIso(ctx); p.cutoff = cut; state.rev += 1;
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: "Wygenerowanie listy spisowej", before, after: { pozycje: lines.length, stan_na: cut }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
       return { ok: true, period: p };
     },
     setCount(state, ym, productId, text, ctx) {
@@ -826,10 +1044,10 @@
         const r = NumParse.parse(text);
         if (!r.ok) return { ok: false, error: r.error };
         if (r.value < 0) return { ok: false, error: "Stan ze spisu nie może być ujemny" };
-        line.countQty = round(r.value, 3); line.countText = str(text);
+        line.countQty = rq(r.value); line.countText = str(text);
       }
       state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, action: "Wpis stanu ze spisu", before, after: { produkt: productId, spis: line.countQty, jednostka: line.unit }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: "Wpis stanu ze spisu", before, after: { produkt: productId, spis: line.countQty, jednostka: line.unit }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
       return { ok: true, line };
     },
     close(state, ym, ctx, opts = {}) {
@@ -842,35 +1060,24 @@
       if (!p.lines.length && !opts.auto) return { ok: false, error: "Wygeneruj listę spisową przed zamknięciem" };
       const missing = p.lines.filter(l => l.countQty === null);
       if (missing.length && !opts.auto) return { ok: false, error: `Brak stanu ze spisu dla ${missing.length} pozycji` };
-      const cut = this.cutoff(ym, today);
-      const book = Stock.byProduct(state, whId, cut);
-      const diffs = [];
+      const cut = this.cutoff(ym, today), book = Stock.byProduct(state, whId, cut), diffs = [];
       for (const l of p.lines) {
-        l.bookQty = round(book.get(l.productId) || 0, 3);
+        l.bookQty = rq(book.get(l.productId) || 0);
         if (l.countQty === null) { l.countQty = l.bookQty; l.assumed = true; }
-        l.diff = round(l.countQty - l.bookQty, 3);
+        l.diff = rq(l.countQty - l.bookQty);
         if (Math.abs(l.diff) > EPS) diffs.push({ productId: l.productId, qty: l.diff });
       }
-      for (const d of diffs) {
-        if (Stock.balance(state, whId, d.productId) + d.qty < -EPS) return { ok: false, error: `Różnica dla „${(byId(state.products, d.productId) || {}).name}” dałaby dziś stan ujemny — sprawdź operacje po ${cut}` };
-      }
+      for (const d of diffs) if (Stock.balance(state, whId, d.productId) + d.qty < -EPS) return { ok: false, error: `Różnica dla „${(byId(state.products, d.productId) || {}).name}” dałaby dziś stan ujemny — sprawdź operacje po ${cut}` };
       let docNo = null;
       if (diffs.length) {
         docNo = nextNo(state, "IN", cut);
         let seq = nextLedgerSeq(state);
-        for (const d of diffs) {
-          const pr = byId(state.products, d.productId);
-          state.ledger.push({ id: uid("l"), seq: seq++, opId: null, invId: p.id, step: 1, date: cut, whId, productId: d.productId, kind: "INW", qty: d.qty, unit: pr.unit, t: Units.mass(d.qty, pr, state.config), docNo });
-        }
+        const c = Object.assign({}, ctx, { user: user || { name: "System" } });
+        for (const d of diffs) state.ledger.push(ledgerEntry(state, seq++, c, { opId: null, invId: p.id, step: 1, date: cut, whId, productId: d.productId, kind: "INW", cat: "INW", qty: d.qty, docNo }));
       }
-      p.status = "ZAMKNIETA"; p.closedAt = (ctx && ctx.now) || new Date().toISOString();
-      p.closedBy = opts.auto ? "System (przełom miesiąca)" : user.name; p.auto = !!opts.auto; p.docNo = docNo; p.cutoff = cut;
+      p.status = "ZAMKNIETA"; p.closedAt = nowIso(ctx); p.closedBy = opts.auto ? "System (przełom miesiąca)" : user.name; p.auto = !!opts.auto; p.docNo = docNo; p.cutoff = cut;
       state.rev += 1;
-      audit(state, ctx, {
-        entity: "inventory", entityId: p.id, opNo: ym, action: opts.auto ? "Automatyczne zamknięcie okresu" : "Zamknięcie okresu inwentaryzacji",
-        before: { status: "OTWARTA" }, after: { status: "ZAMKNIĘTA", dokument: docNo, roznice: diffs.length, przyjeto_stan_ksiegowy: missing.length },
-        source: opts.auto ? "Automat: początek kolejnego miesiąca" : ((ctx && ctx.source) || "Moduł Inwentaryzacja")
-      });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: opts.auto ? "Automatyczne zamknięcie okresu" : "Zamknięcie miesiąca / okresu inwentaryzacji", before: { status: "OTWARTA" }, after: { status: "ZAMKNIĘTA", dokument: docNo, roznice: diffs.length, przyjeto_stan_ksiegowy: missing.length }, source: opts.auto ? "Automat: początek kolejnego miesiąca" : ((ctx && ctx.source) || "Moduł Inwentaryzacja") });
       return { ok: true, period: p, docNo, diffs };
     },
     autoClose(state, ctx) {
@@ -919,14 +1126,12 @@
       if (!can(ctx && ctx.user, "fleet.edit")) return { ok: false, error: "Edycja floty wymaga roli Kierownik lub Administrator" };
       const e = this.validate(state, kind, rec);
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
-      const list = state.fleet[kind];
-      const clean = { id: rec.id || uid(kind.slice(0, 2)) };
+      const list = state.fleet[kind], clean = { id: rec.id || uid(kind.slice(0, 2)) };
       for (const f of this.KINDS[kind].fields) clean[f] = f === "reg" ? str(rec.reg).toUpperCase().replace(/\s+/g, " ") : str(rec[f]);
-      const idx = list.findIndex(x => x.id === clean.id);
-      const before = idx >= 0 ? clone(list[idx]) : null;
+      const idx = list.findIndex(x => x.id === clean.id), before = idx >= 0 ? clone(list[idx]) : null;
       if (idx >= 0) list[idx] = Object.assign({}, list[idx], clean); else list.push(clean);
       state.rev += 1;
-      audit(state, ctx, { entity: "fleet", entityId: clean.id, opNo: clean.name, action: `${before ? "Zmiana" : "Dodanie"}: ${this.KINDS[kind].label}`, before, after: clean, source: (ctx && ctx.source) || "Moduł Flota" });
+      audit(state, ctx, { entity: "fleet", entityId: clean.id, opNo: clean.name, event: "fleet", action: `${before ? "Zmiana" : "Dodanie"}: ${this.KINDS[kind].label}`, before, after: clean, source: (ctx && ctx.source) || "Moduł Flota" });
       return { ok: true, rec: clean };
     },
     remove(state, kind, id, ctx) {
@@ -937,43 +1142,228 @@
       if (kind === "operators" && state.fleet.chippers.some(c => c.operatorId === id)) return { ok: false, error: "Operator jest domyślny dla rębaka — najpierw zmień przypisanie" };
       if (kind === "vehicles" || kind === "chippers") return { ok: false, error: "Pojazdów i rębaków nie usuwa się — ustaw status „Wycofany” (historia kursów zostaje)" };
       state.fleet[kind] = list.filter(x => x.id !== id); state.rev += 1;
-      audit(state, ctx, { entity: "fleet", entityId: id, opNo: rec.name, action: `Usunięcie: ${this.KINDS[kind].label}`, before: rec, after: null, source: (ctx && ctx.source) || "Moduł Flota" });
+      audit(state, ctx, { entity: "fleet", entityId: id, opNo: rec.name, event: "fleet", action: `Usunięcie: ${this.KINDS[kind].label}`, before: rec, after: null, source: (ctx && ctx.source) || "Moduł Flota" });
       return { ok: true };
     }
   };
 
   /* ------------------------------------------------------------------ */
-  /* Raporty okresowe                                                    */
+  /* Raporty                                                             */
   /* ------------------------------------------------------------------ */
+  const REPORT_COLS = ["ZAKUP", "PRODUKCJA", "ZUZYCIE", "SPRZEDAZ", "BEZP", "MM", "INNE"];
+  const HISTORY_TYPES = {
+    ZAKUP: "Zakup", PRZYJECIE: "Przyjęcie (PW)", ZUZYCIE: "Zużycie", SPRZEDAZ_BEZP: "Sprzedaż bezpośrednia", WZ: "WZ",
+    MM: "MM", TRANSPORT: "Transport", KOREKTA: "Korekta", ANULOWANIE: "Anulowanie", INW: "Inwentaryzacja", BO: "Bilans otwarcia"
+  };
+  const opPartner = op => op ? (op.purchase ? op.purchase.supplierId : op.sale ? op.sale.buyerId : "") : "";
+  const opPartners = op => op ? [op.purchase && op.purchase.supplierId, op.sale && op.sale.buyerId].filter(Boolean) : [];
+  const opLiveAt = (op, to) => op.status !== "CANCELLED" || (op.cancel && op.cancel.date > to);
+
   const Reports = {
-    summary(state, whId, period) {
-      const inP = d => d.startsWith(period);
-      const ops = state.operations.filter(o => (!whId || o.whId === whId) && inP(o.date));
-      const posted = ops.filter(o => o.status === "posted");
-      const sum = k => round(posted.reduce((a, o) => a + (o.totals[k] || 0), 0), 2);
-      const byProduct = new Map();
-      for (const l of state.ledger) {
-        if ((whId && l.whId !== whId) || !inP(l.date)) continue;
-        const r = byProduct.get(l.productId) || { productId: l.productId, inQty: 0, outQty: 0, net: 0 };
-        if (l.qty > 0) r.inQty = round(r.inQty + l.qty, 3); else r.outQty = round(r.outQty - l.qty, 3);
-        r.net = round(r.net + l.qty, 3);
-        byProduct.set(l.productId, r);
+    /** Rejestr ruchów magazynowych: każdy zapis księgi + transport, ze stanem przed / zmianą / po. */
+    history(state, f = {}) {
+      const wh = id => (byId(state.warehouses, id) || {}).name || id || "";
+      const pr = id => byId(state.products, id);
+      const run = new Map(), rows = [];
+      for (const l of Stock.sorted(state.ledger)) {
+        const k = `${l.whId}|${l.productId}`, before = run.get(k) || 0, after = rq(before + l.qty);
+        run.set(k, after);
+        const op = l.opId ? byId(state.operations, l.opId) : null;
+        let t = l.kind === "ZAKUP" ? "ZAKUP" : l.kind === "PRODUKCJA" ? (l.direct ? "SPRZEDAZ_BEZP" : "PRZYJECIE") : l.kind === "ZUZYCIE" ? "ZUZYCIE"
+          : l.kind === "SPRZEDAZ" ? (l.direct ? "SPRZEDAZ_BEZP" : "WZ") : l.kind;
+        const p = pr(l.productId);
+        const partnerId = !op ? "" : l.cat === "SPRZEDAZ" && op.sale ? op.sale.buyerId : l.cat === "ZAKUP" && op.purchase ? op.purchase.supplierId : opPartner(op);
+        const mmSide = l.cat === "MM" ? (l.qty > 0 ? `z: ${wh(op && op.whId)}` : `do: ${wh(op && op.toWhId)}`) : "";
+        rows.push({
+          id: l.id, seq: l.seq, date: l.date, time: (l.ts || "").slice(11, 16), user: l.userName || (op ? op.userName : "System"),
+          type: t, typeLabel: t === "SPRZEDAZ_BEZP" ? (l.kind === "PRODUKCJA" ? "Sprzedaż bezp. — przyjęcie PW" : "Sprzedaż bezp. — wydanie WZ") : HISTORY_TYPES[t], cat: l.cat, docNo: l.docNo, whId: l.whId, whName: wh(l.whId),
+          productId: l.productId, productName: p ? p.name : l.productId, qty: Math.abs(l.qty), change: l.qty, unit: p ? p.unit : "",
+          before, after, partnerId, partner: partnerId ? ((byId(state.partners, partnerId) || {}).name || "") : mmSide,
+          related: l.refDoc ? `${l.refDoc}` : (op && op.no !== l.docNo ? op.no : ""), opId: l.opId, opNo: op ? op.no : "",
+          partnerIds: opPartners(op), notes: l.kind === "KOREKTA" ? ((op && (op.corrections.find(c => c.no === l.docNo) || {}).reason) || "") : l.kind === "ANULOWANIE" ? ((op && op.cancel && op.cancel.reason) || "") : (op ? op.notes : ""),
+          status: op ? op.status : "POSTED", userId: op ? (l.kind === "KOREKTA" ? ((op.corrections.find(c => c.no === l.docNo) || {}).userId) : l.kind === "ANULOWANIE" ? (op.cancel || {}).userId : op.userId) : null
+        });
       }
-      return {
-        period, count: ops.length, storno: ops.length - posted.length,
-        purchaseCost: sum("purchaseCost"), rawCost: sum("rawCost"), chippingCost: sum("chippingCost"),
-        revenue: sum("revenue"), transportCost: sum("transportCost"), result: sum("result"),
-        byType: Object.keys(OP_TYPES).map(t => ({ type: t, count: posted.filter(o => o.type === t).length })),
-        byProduct: [...byProduct.values()]
+      for (const op of state.operations) {
+        const tr = op.documents.find(d => d.type === "TR");
+        if (!tr) continue;
+        const t = op.transport;
+        rows.push({ id: "tr_" + op.id, seq: 1e12 + state.operations.indexOf(op), date: op.date, time: (op.createdAt || "").slice(11, 16), user: op.userName, type: "TRANSPORT", typeLabel: HISTORY_TYPES.TRANSPORT, cat: "TRANSPORT", docNo: tr.no, whId: op.whId, whName: wh(op.whId), productId: null, productName: TRANSPORT_MODES[t.mode], qty: null, change: null, unit: "", before: null, after: null, partnerId: opPartner(op), partnerIds: opPartners(op), partner: t.company || t.carrier || t.driverName || "", related: op.no, opId: op.id, opNo: op.no, notes: `${fmtQ(t.km || 0)} km · ${money(t.cost)}${t.mode === "train" ? ` · ${t.wagonCount} wag. · ${fmtQ(t.totalT)} t` : ""}`, status: op.status, userId: op.userId });
+      }
+      const q = str(f.q).toLowerCase();
+      return rows.filter(r =>
+        (!f.from || r.date >= f.from) && (!f.to || r.date <= f.to) && (!f.whId || r.whId === f.whId) &&
+        (!f.productId || r.productId === f.productId) && (!f.type || r.type === f.type) && (!f.userId || r.userId === f.userId) &&
+        (!f.partnerId || (r.partnerIds || []).includes(f.partnerId)) && (!f.status || r.status === f.status) &&
+        (!q || [r.docNo, r.related, r.productName, r.partner, r.notes, r.user].join(" ").toLowerCase().includes(q))
+      ).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.seq - b.seq);
+    },
+
+    /** Raport biznesowy okresu — wynik netto po korektach i anulowaniach. */
+    business(state, f) {
+      const cfg = state.config, from = f.from, to = f.to, whId = f.whId || null;
+      const inR = d => d >= from && d <= to;
+      const pr = id => byId(state.products, id);
+      const opOk = op => (!whId || op.whId === whId || op.toWhId === whId) && (!f.partnerId || opPartners(op).includes(f.partnerId)) &&
+        (!f.productId || state.ledger.some(l => l.opId === op.id && l.productId === f.productId) || (op.purchase && op.purchase.productId === f.productId) || (op.sale && op.sale.productId === f.productId));
+      const L = state.ledger.filter(l => (!whId || l.whId === whId) && (!f.productId || l.productId === f.productId) &&
+        (!f.partnerId || (l.opId && opPartners(byId(state.operations, l.opId)).includes(f.partnerId))));
+      const LR = L.filter(l => inR(l.date));
+      const col = l => l.direct ? "BEZP" : (l.cat === "BO" || l.cat === "INW") ? "INNE" : l.cat;
+
+      /* bilans stanów */
+      const recon = [];
+      if (!f.partnerId) {
+        const opening = Stock.byProduct(state, whId, null, from);
+        const actual = Stock.byProduct(state, whId, to);
+        const ids = new Set([...opening.keys(), ...actual.keys(), ...LR.map(l => l.productId)]);
+        for (const p of state.products) {
+          if (!ids.has(p.id) || (f.productId && p.id !== f.productId)) continue;
+          const r = { productId: p.id, name: p.name, unit: p.unit, opening: opening.get(p.id) || 0 };
+          REPORT_COLS.forEach(c => { r[c] = 0; });
+          for (const l of LR) if (l.productId === p.id) r[col(l)] = rq(r[col(l)] + l.qty);
+          r.closing = rq(REPORT_COLS.reduce((a, c) => a + r[c], r.opening));
+          r.actual = actual.get(p.id) || 0;
+          r.consistent = Math.abs(r.closing - r.actual) <= EPS;
+          if (Math.abs(r.opening) < EPS && Math.abs(r.closing) < EPS && REPORT_COLS.every(c => Math.abs(r[c]) < EPS)) continue;
+          const o = Units.orient(r.closing, p, cfg); r.closingT = o.t; r.closingGJ = o.gj;
+          recon.push(r);
+        }
+      }
+      /* zdarzenia wartościowe (utworzenie / korekta / anulowanie) w okresie */
+      const ops = state.operations.filter(opOk);
+      const ev = [];
+      for (const op of ops) for (const e of op.valueEvents) if (inR(e.date)) ev.push(Object.assign({ op }, e));
+      const vsum = (pred, k) => round(ev.filter(e => pred(e.op)).reduce((a, e) => a + (e[k] || 0), 0), 2);
+      const qsum = (pred) => { const m = {}; for (const l of LR) if (pred(l)) { const u = pr(l.productId).unit; m[u] = rq((m[u] || 0) + l.qty); } return m; };
+      const byProd = (pred, sign = 1) => {
+        const m = new Map();
+        for (const l of LR) if (pred(l)) { const c = m.get(l.productId) || { productId: l.productId, name: pr(l.productId).name, unit: pr(l.productId).unit, qty: 0, opIds: new Set() }; c.qty = rq(c.qty + sign * l.qty); if (l.opId) c.opIds.add(l.opId); m.set(l.productId, c); }
+        return [...m.values()].filter(x => Math.abs(x.qty) > EPS || x.opIds.size).map(x => Object.assign(x, { opIds: [...x.opIds] }));
       };
+      /* side: "supplier" (zakupy) albo "buyer" (sprzedaż) — operacja łańcuchowa ma obu kontrahentów */
+      const partnersOf = (pred, qtyPred, sign, side) => {
+        const m = new Map();
+        const pidOf = op => side === "supplier" ? (op.purchase ? op.purchase.supplierId : "") : (op.sale ? op.sale.buyerId : "");
+        const vKey = side === "supplier" ? "purchaseCost" : "revenue";
+        for (const l of LR) if (qtyPred(l) && l.opId) {
+          const op = byId(state.operations, l.opId); const pid = pidOf(op); if (!pid) continue;
+          const c = m.get(pid) || { partnerId: pid, name: (byId(state.partners, pid) || {}).name, byUnit: {}, value: 0, opIds: new Set() };
+          const u = pr(l.productId).unit; c.byUnit[u] = rq((c.byUnit[u] || 0) + sign * l.qty); c.opIds.add(op.id); m.set(pid, c);
+        }
+        for (const e of ev) if (pred(e.op)) { const c = m.get(pidOf(e.op)); if (c) c.value = round(c.value + (e[vKey] || 0), 2); }
+        // kontrahent wyłącznie z dokumentami anulowanymi (netto 0) nie zaśmieca raportu biznesowego
+        return [...m.values()].filter(x => Math.abs(x.value) > 0.004 || Object.values(x.byUnit).some(v => Math.abs(v) > EPS)).map(x => Object.assign(x, { opIds: [...x.opIds] }));
+      };
+      const countLive = pred => ops.filter(op => pred(op) && inR(op.date) && opLiveAt(op, to)).length;
+      const purchases = {
+        count: countLive(op => op.type === "ZAKUP"), byUnit: qsum(l => l.cat === "ZAKUP"), value: vsum(op => op.type === "ZAKUP", "purchaseCost"),
+        products: byProd(l => l.cat === "ZAKUP"), suppliers: partnersOf(op => op.type === "ZAKUP", l => l.cat === "ZAKUP", 1, "supplier")
+      };
+      const production = {
+        count: countLive(op => !!op.production), byUnit: qsum(l => l.cat === "PRODUKCJA" && !l.direct), byUnitDirect: qsum(l => l.cat === "PRODUKCJA" && l.direct),
+        products: byProd(l => l.cat === "PRODUKCJA" && !l.direct), directProducts: byProd(l => l.cat === "PRODUKCJA" && l.direct),
+        consumed: byProd(l => l.cat === "ZUZYCIE", -1), chippingCost: vsum(op => !!op.production, "chippingCost"),
+        chippingMP: rq(LR.filter(l => l.cat === "PRODUKCJA" && pr(l.productId).unit === "MP").reduce((a, l) => a + l.qty, 0))
+      };
+      const sales = {
+        count: countLive(op => !!op.sale), countDirect: countLive(op => op.direct),
+        byUnit: qsum(l => l.cat === "SPRZEDAZ" && !l.direct), byUnitDirect: qsum(l => l.cat === "SPRZEDAZ" && l.direct),
+        value: vsum(op => !!op.sale && !op.direct, "revenue"), valueDirect: vsum(op => op.direct, "revenue"),
+        products: byProd(l => l.cat === "SPRZEDAZ" && !l.direct, -1), directProducts: byProd(l => l.cat === "SPRZEDAZ" && l.direct, -1),
+        buyers: partnersOf(op => !!op.sale, l => l.cat === "SPRZEDAZ", -1, "buyer")
+      };
+      const consumption = (() => {
+        const m = new Map();
+        for (const l of LR) if (l.cat === "ZUZYCIE") { const k = `${l.productId}|${l.whId}`; const c = m.get(k) || { productId: l.productId, name: pr(l.productId).name, unit: pr(l.productId).unit, whName: (byId(state.warehouses, l.whId) || {}).name, qty: 0, opIds: new Set() }; c.qty = rq(c.qty - l.qty); c.opIds.add(l.opId); m.set(k, c); }
+        return [...m.values()].map(x => Object.assign(x, { opIds: [...x.opIds] }));
+      })();
+      const mm = ops.filter(op => op.type === "MM" && LR.some(l => l.opId === op.id)).map(op => {
+        const ins = LR.filter(l => l.opId === op.id && l.cat === "MM");
+        const moved = rq(ins.filter(l => l.whId === op.toWhId).reduce((a, l) => a + l.qty, 0));
+        return { opId: op.id, no: op.no, date: op.date, from: (byId(state.warehouses, op.whId) || {}).name, to: (byId(state.warehouses, op.toWhId) || {}).name, productId: op.mm.productId, name: pr(op.mm.productId).name, unit: pr(op.mm.productId).unit, qty: moved, status: op.status };
+      });
+      const trOps = ops.filter(op => op.transport && op.transport.mode !== "none" && inR(op.date) && opLiveAt(op, to));
+      const transport = {
+        count: trOps.length, cost: vsum(op => op.transport && op.transport.mode !== "none", "transportCost"),
+        km: rq(trOps.reduce((a, op) => a + (op.transport.km || 0), 0)),
+        wagons: trOps.reduce((a, op) => a + (op.transport.wagonCount || 0), 0),
+        trainT: rq(trOps.reduce((a, op) => a + (op.transport.totalT || 0), 0)),
+        carriers: (() => { const m = new Map(); for (const op of trOps) { const t = op.transport; const n = t.mode === "own" ? `Transport własny (${t.reg})` : t.mode === "external" ? t.company : `${t.carrier || "Pociąg"} (kolej)`; const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + t.cost, 2); c.km = rq(c.km + (t.km || 0)); m.set(n, c); } return [...m.values()]; })(),
+        rows: trOps.map(op => ({ opId: op.id, no: (op.documents.find(d => d.type === "TR") || {}).no, date: op.date, mode: TRANSPORT_MODES[op.transport.mode], place: op.transport.place, km: op.transport.km || 0, wagons: op.transport.wagonCount || 0, totalT: op.transport.totalT || 0, cost: op.transport.cost }))
+      };
+      const corrections = [], cancellations = [];
+      for (const op of ops) {
+        for (const c of op.corrections) if (inR(c.date)) corrections.push({ opId: op.id, no: c.no, orig: op.no, date: c.date, reason: c.reason, user: c.userName, changes: c.changes, deltas: c.deltas, valueDelta: c.valueDelta, totalsBefore: c.totalsBefore, totalsAfter: c.totalsAfter, descriptiveOnly: c.descriptiveOnly });
+        if (op.cancel && inR(op.cancel.date)) cancellations.push({ opId: op.id, no: op.cancel.no, orig: op.no, date: op.cancel.date, reason: op.cancel.reason, user: op.cancel.userName, effect: op.cancel.effect });
+      }
+      /* wycena orientacyjna: średnia ważona cena zakupu (efektywna) do końca okresu */
+      const valuation = recon.map(r => {
+        let q = 0, v = 0;
+        for (const op of state.operations) if (op.type === "ZAKUP" && op.status !== "CANCELLED" && op.purchase.productId === r.productId && op.date <= to && (!whId || op.whId === whId)) { q += op.purchase.stockQty; v += op.purchase.cost; }
+        if (!(q > EPS)) return { productId: r.productId, name: r.name, unit: r.unit, priced: false };
+        const avg = v / q;
+        return { productId: r.productId, name: r.name, unit: r.unit, priced: true, avg: round(avg, 4), openingValue: round(r.opening * avg, 2), inValue: round((r.ZAKUP + r.PRODUKCJA + Math.max(0, r.MM)) * avg, 2), outValue: round(-(r.ZUZYCIE + r.SPRZEDAZ + Math.min(0, r.MM)) * avg, 2), closingValue: round(r.closing * avg, 2) };
+      });
+      const ym = f.mode === "month" ? Dates.ym(from) : null;
+      const closed = ym ? state.warehouses.filter(w => !whId || w.id === whId).map(w => ({ whId: w.id, name: w.name, closed: !!(Inventory.find(state, w.id, ym) && Inventory.find(state, w.id, ym).status === "ZAMKNIETA") })) : [];
+      return {
+        filters: f, from, to, recon, consistent: recon.every(r => r.consistent), purchases, production, sales, consumption, mm, transport, corrections, cancellations, valuation, closed,
+        turnover: this.turnover(state, from, to, whId, f)
+      };
+    },
+
+    /** Obroty wg typu operacji (liczba, ilości w rozbiciu na jednostki, wartość). */
+    turnover(state, from, to, whId, f = {}) {
+      const pr = id => byId(state.products, id);
+      const inR = d => d >= from && d <= to;
+      const L = state.ledger.filter(l => inR(l.date) && (!whId || l.whId === whId) && (!f.productId || l.productId === f.productId) && (!f.partnerId || (l.opId && opPartners(byId(state.operations, l.opId)).includes(f.partnerId))));
+      const cats = ["ZAKUP", "PRODUKCJA", "ZUZYCIE", "SPRZEDAZ", "MM"];
+      return cats.map(cat => {
+        const byUnit = {}, opIds = new Set(), liveOps = new Set();
+        for (const l of L) if (l.cat === cat) {
+          const u = pr(l.productId).unit;
+          const v = cat === "MM" ? (whId ? Math.abs(l.qty) * Math.sign(l.qty) : Math.max(0, l.qty)) : cat === "ZAKUP" || cat === "PRODUKCJA" ? l.qty : -l.qty;
+          byUnit[u] = rq((byUnit[u] || 0) + v);
+          if (l.opId) opIds.add(l.opId);
+          if (l.opId && l.kind === cat) { const op = byId(state.operations, l.opId); if (op && opLiveAt(op, to)) liveOps.add(l.opId); }
+        }
+        let value = 0;
+        const key = cat === "ZAKUP" ? "purchaseCost" : cat === "SPRZEDAZ" ? "revenue" : cat === "PRODUKCJA" ? "chippingCost" : null;
+        if (key) for (const id of opIds) for (const e of byId(state.operations, id).valueEvents) if (inR(e.date)) value += e[key] || 0;
+        return { cat, label: CATS[cat], count: liveOps.size, byUnit, value: key ? round(value, 2) : null, valueLabel: key === "purchaseCost" ? "wartość zakupu" : key === "revenue" ? "przychód" : key === "chippingCost" ? "koszt rąbania" : "", opIds: [...opIds] };
+      });
+    },
+
+    /** Kwit produkcji dnia. */
+    productionDay(state, date, whId) {
+      const cfg = state.config, rows = [];
+      for (const op of state.operations) {
+        if (!op.production || op.date !== date || (whId && op.whId !== whId)) continue;
+        const x = op.production, out = byId(state.products, x.outProductId), raw = byId(state.products, x.rawProductId);
+        const o = Units.orient(x.outQty, out, cfg);
+        const pw = op.documents.find(d => d.type === "PW");
+        rows.push({
+          opId: op.id, docNo: pw ? pw.no : op.no, opNo: op.no, date: op.date, whName: (byId(state.warehouses, op.whId) || {}).name,
+          mode: x.mode === "stock" ? "na magazyn" : x.mode === "direct" ? "bezpośrednia (las)" : "z zakupu",
+          operator: x.operatorName || op.userName, chipper: x.chipperName || "",
+          raw: raw ? raw.name : "—", consume: x.mode === "direct" ? x.rawQty : x.consumeQty, consumeUnit: raw ? raw.unit : "", consumeFromStock: x.mode !== "direct",
+          product: out ? out.name : "—", outQty: x.outQty, outUnit: out ? out.unit : "",
+          mp: out && out.unit === "MP" ? x.outQty : null, m3: out && out.unit === "MP" ? rq(x.outQty / cfg.m3_mp) : null, t: o.t, gj: o.gj,
+          chipRate: x.chipRate, chipCost: x.chippingCost, notes: op.notes, status: op.status, corrected: op.corrections.length > 0
+        });
+      }
+      const live = rows.filter(r => r.status !== "CANCELLED");
+      const sum = k => rq(live.reduce((a, r) => a + (r[k] || 0), 0));
+      return { date, whId, rows, totals: { count: live.length, mp: sum("mp"), m3: sum("m3"), t: sum("t"), gj: sum("gj"), chipCost: round(live.reduce((a, r) => a + r.chipCost, 0), 2) } };
     }
   };
 
   const RIW = {
-    VERSION, SCHEMA, EPS, NumParse, round, fmt, fmtQ, money, Dates, Units, ROLES, can, OP_TYPES, KINDS, DOC_LABEL, BASIS,
-    PROD_TYPES, DIFF_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, uid, clone, byId,
-    emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation,
-    stornoOperation, openingBalance, Inventory, Fleet, Reports
+    VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
+    PROD_TYPES, DIFF_REASONS, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
+    planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Reports
   };
   root.RIW = RIW;
   if (typeof module !== "undefined" && module.exports) module.exports = RIW;

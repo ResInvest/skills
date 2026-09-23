@@ -1,119 +1,80 @@
-# ResInvest ERP — Demo v2 — scenariusze walidacyjne
+# ResInvest ERP — Demo v2.1 — scenariusze walidacyjne
 
-Plik: `ResInvest_ERP_demo.html` (dwuklik — bez serwera i internetu).
-
-| Zestaw | Polecenie | Wynik |
-|---|---|---|
-| Testy jednostkowe silnika | `npm run test:unit` | **33/33 OK** |
-| Scenariusze w przeglądarce (Chromium) | `npm run test:e2e` | **83/83 OK**, konsola bez wyjątków |
+Scenariusze do ręcznego sprawdzenia w `ResInvest_ERP_demo.html`. Każdy ma odpowiednik automatyczny:
+`tests/engine.test.mjs` (silnik, numeracja §22 / §31.16 / §32.23 / testy 11–42), `tests/pdf.test.mjs`
+(generator PDF) i `tests/e2e.cjs` (przeglądarka).
 
 ## Przygotowanie
 
-1. Otwórz plik, pomiń intro (`Esc`).
-2. Użytkownik: **Anna Górska — Kierownik**, magazyn **RiC Zabrze**.
-3. Czysty start: *Dane i ustawienia → Przywróć dane przykładowe*.
+1. *Administracja → Data systemowa demo* = **2026-09-23** → *Zastosuj datę*.
+2. *Administracja → Przywróć dane przykładowe*.
+3. Użytkownik: **Anna Górska — Kierownik** (magazyn RiC Zabrze).
+4. *Stany magazynowe*: drewno **817 m³ ≈ 778 t ≈ 6 611 GJ**, zrębka leśna **8 293 MP ≈ 2 737 t ≈ 23 262 GJ**, PKS **728 t ≈ 6 188 GJ**.
 
-Stan startowy RiC Zabrze (Stany):
+## §22 TEST 1 / §31.16 A — produkcja na magazyn
 
-| Produkt | Stan (jednostka magazynowa) | Masa orientacyjna |
+1. *Nowa operacja → Produkcja na magazyn*. Brak sekcji transportu, przewoźnika, odbiorcy i sprzedaży.
+2. Surowiec: Drewno opałowe (stan 817 m³), produkt: Zrębka produkcyjna leśna, **Ilość produkcji 500 MP**.
+3. Oczekiwane: zużycie **125 m³** (auto), stan po **692 m³**, masa ≈ 165 t, ≈ 1 402,5 GJ, cena za rąbanie **10,00 zł/MP**, koszt **5 000,00 zł** (§22 TEST 7).
+4. *Zatwierdź…* → okno podsumowania (stan przed/po, RW + PW) → *Zatwierdź dokument* → szczegóły dokumentu, status ZATWIERDZONY.
+
+## §31.16 B–J — walidacja produkcji
+
+| Test | Kroki | Oczekiwane |
 |---|---|---|
-| Zrębka produkcyjna leśna | **8 293 MP** | ≈ 2 737 t (× 0,33) |
-| Drewno opałowe | **817 m³** | ≈ 778 t (× 0,952) |
-| PKS (łupina palmowa) | **728 t** | — (produkt tonowy) |
-| Łupina nerkowca | **728 t** | — |
+| B | użytkownik Paweł Kaczmarek (Pyskowice, 30 m³), produkcja 500 MP | „Brak wystarczającej ilości surowca. Dostępne: 30 m³. Wymagane: 125 m³. Brakuje: 95 m³.” — zatwierdzenie zablokowane |
+| C | produkt wyjściowy = surowiec | „Surowiec i produkt wyjściowy muszą być różnymi produktami” |
+| D | surowiec PKS (t) → zrębka (MP) | „Brak przelicznika t → MP dla wybranego produktu …” |
+| E | stan 62,5 m³, produkcja 250,0001 MP | zużycie 62,500025 m³ → blokada (brak zaokrąglenia przed walidacją) |
+| F | dwuklik „Zatwierdź dokument” | jedna operacja |
+| G | operacja odrzucona | brak RW/PW, numeru i wpisu audytu |
+| H | okno podsumowania | stan przed/po surowca i produktu, masa, GJ, koszt rąbania |
+| I | sprzedaż bezpośrednia: produkcja 600 MP, sprzedaż 650 MP | „Nie można sprzedać 650 MP z produkcji 600 MP” |
+| J | zapis z pominięciem formularza (test silnika) | ta sama blokada |
 
-Szybki start z Pulpitu: **Zakup · Sprzedaż z magazynu · Produkcja na magazynie · Produkcja + sprzedaż bezpośrednia**.
+## §22 TEST 2 — WZ
 
----
+*Sprzedaż z magazynu*: zrębka leśna 500 MP → „Stan dostępny” / „Stan po WZ”; 8 793,01 MP → „Nie można sprzedać 8 793,01 MP. Dostępny stan: 8 793 MP.”
 
-## 1–2. Sprzedaż z magazynu (WZ)
+## §22 TEST 3 — produkcja + sprzedaż bezpośrednia
 
-Nowa operacja → **Sprzedaż** (bez zaznaczenia „bezpośredniej”).
+Las → 600 MP → Elektrownia Łaziska: surowiec liczony 150 m³ (nie ze stanu), dokumenty PW + WZ, stan zrębki i drewna bez zmian.
 
-| Krok | Oczekiwane |
-|---|---|
-| Towar: *Zrębka produkcyjna leśna* | Stan na magazynie **8 293 MP**; jednostki do wyboru: MP, t |
-| Ilość `8293,01` | błąd „Na magazynie jest 8 293 MP — nie można sprzedać …”, zapis zablokowany |
-| Ilość `500`, cena `90`, odbiorca *Elektrociepłownia Zabrze S.A.* | Stan po WZ **7 793 MP**, wartość **45 000,00 zł**, miejsce dostawy = odbiorca |
-| Przebieg | tylko `WZ` — bez zakupu i produkcji |
-| Zapis | dokument WZ; Stany: **7 793 MP**; Historia: stan przed 8 293 → po 7 793 |
+## §22 TEST 5–6 — pociąg
 
-Wariant: WZ w tonach — `33 t` zrębki = 100 MP ze stanu. PKS: jedyna jednostka **t**; `28 t` → 700 t.
+Tonaż wspólny 20 × 60 t = **1 200 t**; tonaż każdego wagonu 58,4 / 60,1 / 59,7 / 61,2 / 59,8 = **299,2 t**.
 
-## 3–4. Produkcja na magazynie
+## MM
 
-Nowa operacja → **Produkcja na magazynie**.
+*Nowa operacja → Przesunięcie MM*: Zabrze → Pyskowice, zrębka leśna 300 MP → źródło 8 293 → 7 993 MP, cel 220 → 520 MP. Stan firmy bez zmian.
 
-| Krok | Oczekiwane |
-|---|---|
-| Surowiec | *Drewno opałowe*, stan **817 m³**; brak pól zakupu i dostawcy |
-| Zużycie `818` | błąd „Na magazynie jest 817 m³” |
-| Zużycie `817` | Wyprodukowano (auto) **3 268 MP** ≈ 1 078 t |
-| Cena za rąbanie | **10,00 zł/MP** (domyślnie) → koszt rąbania **32 680,00 zł** |
-| Przebieg / zapis | `RW → PW`; drewno **0 m³**, zrębka **+3 268 MP**; PW ma pole „Z dokumentu zużycia: RW/…” |
+## §32.23 — anulowanie i korekty
 
-Wynik ręczny mniejszy niż zużycie (np. 100 m³ → 380 MP) wymaga przyczyny różnicy; większy (401 MP) jest blokowany.
+| Test | Kroki | Oczekiwane |
+|---|---|---|
+| 1 | *Operacje* → WZ → *Anuluj dokument…* bez przyczyny | komunikat; po wyborze przyczyny: dokument AN, status ANULOWANY, stan przywrócony, dokument pozostaje w rejestrze |
+| 2 | zakup 100 m³ w Pyskowicach, produkcja 480 MP (120 m³), anulowanie zakupu | „Nie można bezpośrednio anulować dokumentu … Towar z tego dokumentu został wykorzystany w późniejszych operacjach …” + lista operacji zależnych |
+| 3 | anulowanie zakupu, po którym były rozchody bez utraty pokrycia | wymagane potwierdzenie |
+| 4 | korekta WZ 500 → 450 → 600 MP | dokumenty KOR, status SKORYGOWANY, oryginał zachowany |
+| 5 | korekta produkcji 500 → 400 MP | zużycie 125 → 100 m³ (+25 m³ drewna, −100 MP zrębki) |
+| 6 | korekta sprzedaży bezpośredniej | produkcja = sprzedaż, stan bez zmian |
+| 7 | korekta ceny za rąbanie 10 → 12 zł/MP | bez ruchu w księdze, różnica wartości +1 000 zł |
+| 8 | korekta uwag / nr dokumentu zewnętrznego | korekta opisowa |
+| 9 | *Odwróć* ostatnią korektę | nowa korekta przywracająca dane; korekt się nie usuwa |
+| 10 | Adrian (magazynier) | brak „Anuluj” / „Koryguj”; anulowanego dokumentu nie koryguje się |
 
-## 5–6. Produkcja + sprzedaż bezpośrednia (las → odbiorca)
+## Historia, raporty, kwit, PDF (testy 11–42)
 
-Nowa operacja → **Sprzedaż** → zaznacz **Sprzedaż bezpośrednia po produkcji / prosto z lasu**.
-
-| Krok | Oczekiwane |
-|---|---|
-| Formularz | brak zakupu i wyboru towaru z magazynu; sekcje „Produkcja (w lesie)” i „Odbiorca i cena” |
-| Produkcja leśna: NDL, leśnictwo, kwit; Wyprodukowano `600` | masa ≈ 198 t |
-| Odbiorca *Elektrownia Łaziska*, cena `88` zł/MP | przychód **52 800,00 zł** |
-| Ilość sprzedaży `600,5` | błąd „przekracza wynik produkcji 600 MP” |
-| Cena za rąbanie `12,50` | koszt rąbania **7 500,00 zł** (widoczny w „Koszty i przychód”) |
-| Przebieg | `PW → WZ` (bezpośrednio); tabela „Stan w magazynie”: przed = po |
-| Zapis | stan zrębki i drewna **bez zmian**; zapisane: wyprodukowano 600 MP, sprzedano 600 MP, odbiorca, cena, miejsce dostawy, transport, dokumenty, historia |
-
-Opcjonalnie: surowiec *Drewno opałowe* `150 m³` (nie jest zdejmowany ze stanu) → wynik maks. 600 MP; koszt surowca wlicza się w wynik.
-Sprzedaż mniejsza od produkcji (np. 500 z 600 MP) → ostrzeżenie; reszta 100 MP trafia na stan.
-
-## A / E. Zakup i zakup → magazyn → późniejsza WZ
-
-* **Zakup** *Zrębka towar* 250 MP × 55 zł → tylko `PZ`, stan 300 → 550 MP.
-* Następnie **Sprzedaż (WZ)** 550 MP → stan 0 MP.
-* Zakup *PKS*: jednostka wyłącznie **t**, produkcja niedostępna.
-* Zakup *Drewno opałowe* 20 m³ × 230 zł → +20 m³ (= 80 MP zrębki po przerobie), koszt 4 600 zł, masa ≈ 19,04 t.
-* Zakup z „+ Produkcja” i „+ Sprzedaż wyniku” (łańcuch z v1) działa dalej: `PZ → RW → PW → WZ`.
-
-## 10–12. Pociąg
-
-W sekcji „Miejsce i transport” zaznacz **Pociąg**.
-
-| Krok | Oczekiwane |
-|---|---|
-| Liczba wagonów `20`, pojemność `60` t, **Tonaż taki sam dla wszystkich** `60` | Łączny tonaż **1 200 t** (20 × 60) |
-| Cena `25` zł/t | koszt **30 000,00 zł** |
-| Podsumowanie składu | liczba wagonów, łączna pojemność, tonaż, **łączny tonaż składu**, miejsce załadunku, miejsce dostawy, przewoźnik, nr dokumentu, koszt |
-| **Wpisz tonaż każdego wagonu osobno** | tabela 20 wagonów; wpisy 58,4 / 60,1 / 59,7 / 61,2 / 59,8 … → suma liczona automatycznie (**1 196,8 t**) |
-| Puste pole wagonu | błąd przy tym wagonie |
-| Jednostka pojemności **MP** | „Łączna pojemność (MP): 20 × 60 = 1 200 MP” |
-| Zapis | `WZ + TR`; stan zmienia się tylko o WZ — transport = 0 |
-
-## 13–14. Cena za rąbanie
-
-Pole **Cena za rąbanie [zł/MP]** w każdej produkcji: domyślnie **10,00**. 500 MP × 10 zł = **5 000 zł**. Zmiana na `12,50` przelicza koszt natychmiast.
-Koszt widoczny w podsumowaniu, na dokumencie PW, w *Historia → Rejestr operacji* (kolumna „Rąbanie”) i w *Raporcie miesięcznym/rocznym*.
-
-## 15. Przecinek dziesiętny
-
-WZ zrębki, cena `2`: `12,50` / `12.50` → 25,00 zł; `1 250,50` / `1 250,50` (spacja nierozdzielająca) / `1.250,50` → 2 501,00 zł. `12,5x` → komunikat błędu (nie 0).
-
-## 16. Jasny motyw
-
-Jasne tło, białe karty, grafitowy tekst, ciemniejsze nagłówki, zielony akcent ResInvest. Intro pozostaje ciemne (film).
+1. *Historia*: filtr typu **Korekta**, zakres 15.09–16.09, magazyn, produkt, użytkownik, kontrahent; kolumny stan przed / zmiana / po.
+2. *Raporty*: miesiąc 2026-09, wszystkie magazyny → „Bilans spójny”; sekcje zakupy / produkcja / sprzedaż / zużycie / MM / transport / wycena / korekty / anulowania; kliknięcie wiersza → operacje źródłowe; lipiec 2026 → pusty raport, bilans spójny.
+3. *Generuj PDF* → plik `raport_…_RAP-….pdf` z polskimi znakami, numerem raportu, polami podpisu i „Strona X z Y”. *Drukuj* → okno wydruku z tą samą treścią.
+4. Spójność: zakup miesiąca na Pulpicie = raport (Zabrze) = PDF; stan końcowy w raporcie = Stany = ostatni „stan po” w Historii.
+5. *Kwit produkcji dnia*: 22.09.2026, RiC Pyskowice → 20 MP = 5 m³, 6,60 t, 56,1 GJ, 200,00 zł; PDF.
+6. Zamknięcie sierpnia (*Inwentaryzacja*) → raport sierpnia bez zmian, oznaczenie „okres zamknięty”, zapis z datą sierpniową zablokowany.
 
 ## Kontrole przekrojowe
 
-| Kontrola | Oczekiwane |
-|---|---|
-| Formularze (4 rodzaje) | brak pól magazyn/pryzma źródłowa i docelowa |
-| Plan dokumentów | kolumna „Miejsce transportu”; korekta (storno) WZ przywraca stan |
-| Podwójne kliknięcie „Zapisz” | jedna operacja |
-| Dwie karty, dwie WZ po 5 000 MP z 8 293 MP | pierwsza zapisana, druga odrzucona; stan 3 293 MP |
-| Inwentaryzacja 2026-08 | pozycje w jednostkach produktów (m³ / MP / t); PKS 727,5 → różnica −0,5 t; po zamknięciu tylko odczyt |
-| Telefon 390 px | wszystkie ekrany bez przewijania w poziomie, lista wagonów mieści się |
-| Intro | muzyka domyślnie włączona; przy blokadzie autoplay pierwsze kliknięcie ją włącza |
+* Transport nie zmienia stanu w żadnym rodzaju operacji.
+* Wyścig dwóch kart: druga WZ na ten sam stan odrzucona, stan nieujemny.
+* Telefon 390 px: brak przewijania w poziomie na pulpicie, formularzach, historii, raportach i kwicie.
+* Konsola przeglądarki bez wyjątków.

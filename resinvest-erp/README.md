@@ -1,90 +1,87 @@
-# ResInvest ERP — Demo v2 (2.0.0)
+# ResInvest ERP — Demo v2.1 (2.1.0)
 
-Samodzielny plik **`ResInvest_ERP_demo.html`** pokazujący logikę operacji ResInvest ERP.
-Cztery niezależne scenariusze, każdy działa samodzielnie:
+Samodzielny plik **`ResInvest_ERP_demo.html`** — funkcjonalnie kompletny prototyp logiki ResInvest ERP
+(obrót i magazyn biomasy). Otwiera się dwuklikiem: bez serwera, bez internetu, bez bibliotek z CDN.
 
-| Scenariusz | Przebieg | Dokumenty | Wpływ na stan |
-|---|---|---|---|
-| **Zakup** | dostawca → magazyn (opcjonalnie + produkcja z autozużyciem + sprzedaż wyniku) | PZ (+ RW, PW, WZ) | + towar |
-| **Sprzedaż z magazynu** | magazyn → odbiorca | WZ | − towar (nie więcej niż stan) |
-| **Produkcja na magazynie** | surowiec ze stanu → produkcja → produkt na stanie | RW + PW | − surowiec, + produkt |
-| **Produkcja + sprzedaż bezpośrednia** | las → produkcja → odbiorca | PW + WZ | bez zmian |
+> Demo zapisuje dane w `localStorage` przeglądarki **wyłącznie do celów pokazowych**. To nie jest Production v1 —
+> wdrożenie produkcyjne wymaga bazy danych z transakcjami i serwera (patrz `docs/RESINVEST_CHANGE_PLAN.md`, „Architektura Production v1”).
 
-Do tego: stany w jednostce produktu (drewno m³, zrębka MP, PKS i łupina nerkowca tylko t) z masą orientacyjną,
-cena za rąbanie (domyślnie 10 zł/MP), transport kolejowy z tonażem wspólnym lub per wagon i podsumowaniem składu,
-inwentaryzacja miesięczna, flota, historia zmian i jasny motyw. Otwiera się dwuklikiem — bez serwera, bez internetu, bez bibliotek z CDN.
+## Co umie Demo v2.1
 
-> Demonstrator zapisuje dane w `localStorage` przeglądarki **wyłącznie do celów pokazowych**.
-> Produkcyjne wdrożenie (FAZA 2) wymaga bazy danych z transakcjami — patrz `docs/RESINVEST_CHANGE_PLAN.md` §7.
+| Obszar | Zawartość |
+|---|---|
+| **Operacje** | Zakup (PZ, opcjonalnie łańcuch produkcja + sprzedaż) · Sprzedaż z magazynu (WZ) · Produkcja na magazyn (RW + PW) · Produkcja + sprzedaż bezpośrednia (PW + WZ, stan bez zmian) · Przesunięcie MM |
+| **Produkcja na magazyn** | podajesz ilość produkcji (MP) → system liczy zużycie surowca (MP ÷ 4 = m³); blokada braku surowca („Dostępne / Wymagane / Brakuje”), surowiec ≠ produkt, kontrola przelicznika, pełna precyzja (6 miejsc) przed walidacją, **bez transportu** |
+| **Zatwierdzanie** | podsumowanie przed zatwierdzeniem (stan przed/po, zużycie, masa, GJ, koszty, dokumenty); zapis atomowy; ochrona przed podwójnym kliknięciem i podwójnym zapisem |
+| **Statusy** | ROBOCZY (wersja robocza bez numeru i wpływu na stan) · ZATWIERDZONY · SKORYGOWANY · ANULOWANY — kolumna „Status” w rejestrach |
+| **Anulowanie** | nigdy nie usuwa dokumentu; dokument AN odwraca skutki; przyczyna wymagana; analiza zależności w czasie — blokada, gdy towar został wykorzystany później; potwierdzenie przy operacjach zależnych |
+| **Korekty** | dokument KOR („KOREKTA dokumentu nr …”): ilościowe w obie strony, produkcji (ze zmianą zużycia), sprzedaży bezpośredniej, wartościowe (ceny, cena za rąbanie), opisowe; powód z listy + opis; podgląd oryginał / korekta / różnica / wpływ na stan; odwrócenie korekty nową korektą |
+| **Historia** | rejestr ruchów: data, godzina, użytkownik, typ, dokument, magazyn, produkt, ilość, jednostka, stan przed / zmiana / stan po, kontrahent, powiązana operacja, uwagi, status; filtry: dzień/tydzień/miesiąc/rok/zakres, magazyn, produkt, typ, użytkownik, kontrahent, status; dziennik audytu |
+| **Raporty** | okres: dzień / tydzień / miesiąc / rok / zakres własny; magazyn lub wszystkie; filtr produktu i kontrahenta; widok biznesowy (netto) i audytowy; bilans stan pocz. + przyjęcia + produkcja − zużycie − sprzedaż ± MM = stan końc. z kontrolą spójności; zakupy, produkcja i koszt rąbania, zużycie, sprzedaż, MM, transport, korekty, anulowania, wycena („brak wyceny”), status zamknięcia okresu; drill-down do operacji źródłowych; CSV |
+| **Druk i PDF** | DRUKUJ (okno wydruku) i GENERUJ PDF (prawdziwy PDF: tekst wektorowy, osadzona czcionka z polskimi znakami, logo, numer raportu, magazyn, okres, data, użytkownik, tabele, podsumowania, pola podpisu, „Strona X z Y”) — dla raportów, historii, kwitu i pojedynczych dokumentów; każde wygenerowanie zapisane w audycie |
+| **Kwit produkcji dnia** | data, magazyn, operator, surowiec, zużycie, produkt, MP, m³, t, GJ, cena i koszt rąbania, uwagi, nr dokumentu; druk i PDF |
+| **Pulpit** | KPI (stany z ≈ t i ≈ GJ, wartość stanu, zakup, sprzedaż, produkcja, zużycie, operacje, transport), stany graficznie z linią 30 dni, **OBROTY WEDŁUG TYPU OPERACJI** z zakresem dzień/tydzień/miesiąc/rok/własny; jednostek się nie sumuje |
+| **Pozostałe** | Przyjęcia, Wydania/WZ, MM, Transport, Stany, Dokumenty, Inwentaryzacja i zamknięcie miesiąca, Flota, Produkty, Kontrahenci, Magazyny, Administracja (role, macierz uprawnień, kopie, import) |
+
+## Przeliczniki (centralnie w silniku i `config/demo.config.json`)
+
+| Przelicznik | Wartość |
+|---|---|
+| 1 m³ drewna | 4 MP zrębki (1 MP = 0,25 m³) |
+| 1 MP zrębki | 0,33 t (orientacyjnie) |
+| 1 m³ drewna | 0,952 t (orientacyjnie; 817 m³ ≈ 778 t) |
+| 1 t biomasy | 8,5 GJ (orientacyjnie) |
+| PKS, łupina nerkowca | tylko t |
+
+Masa i energia są orientacyjne i nie zmieniają ilości na stanie. GJ liczone z masy dokładnej: 817 m³ → 777,784 t → 6 611 GJ
+(przykład w poleceniu — 6 613 GJ — liczy z masy zaokrąglonej do 778 t; różnica < 0,02 %).
 
 ## Szybki start
 
 | Sposób | Kroki |
 |---|---|
 | Plik | Otwórz `ResInvest_ERP_demo.html` w Chrome / Edge / Firefox |
-| Instalator Windows | Uruchom `ResInvestERP_Demo_Setup_2.0.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” w menu Start |
+| Instalator Windows | `ResInvestERP_Demo_Setup_2.1.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” |
 
-Intro startuje z muzyką. Jeśli przeglądarka zablokuje dźwięk, film gra wyciszony, a pierwsze
-kliknięcie włącza muzykę. „Pomiń intro” lub `Esc` zamyka ekran powitalny.
-
-Użytkownika (a więc i **magazyn aktywny**) zmienia się w prawym górnym rogu:
+Użytkownika (a więc magazyn aktywny i uprawnienia) zmienia się w prawym górnym rogu:
 
 | Użytkownik | Rola | Magazyn | Może |
 |---|---|---|---|
-| Mateusz Roesner | Administrator | RiC Zabrze | wszystko |
-| Anna Górska *(domyślny)* | Kierownik | RiC Zabrze | operacje, korekty, zamknięcie inwentaryzacji, flota, kopie |
-| Adrian Wojciechowski | Magazynier | RiC Zabrze | operacje, otwarcie okresu i spis |
+| Mateusz Roesner | Administrator | RiC Zabrze | wszystko, także korekty/anulowania w innych magazynach |
+| Anna Górska *(domyślny)* | Kierownik | RiC Zabrze | operacje, `documents.cancel`, `documents.correct`, `*.correct`, zamknięcie okresu, flota, kopie |
+| Adrian Wojciechowski | Magazynier | RiC Zabrze | operacje, wersje robocze, spis — **bez** anulowania i korekt |
 | Paweł Kaczmarek | Magazynier | RiC Pyskowice | jw. w Pyskowicach |
-| Beata Nowak | Podgląd | RiC Zabrze | tylko odczyt |
+| Beata Nowak | Podgląd | RiC Zabrze | tylko odczyt, raporty |
 
-## Moduły
-
-| Moduł | Zawartość |
-|---|---|
-| **Pulpit** | stany drewna (m³ ≈ t), zrębki (MP ≈ t) i produktów tonowych (t), przychód i koszty miesiąca (w tym rąbanie), ostatnie operacje, szybki start 4 scenariuszy |
-| **Nowa operacja** | rodzaj: Zakup / Sprzedaż (z magazynu albo „bezpośrednia po produkcji / prosto z lasu”) / Produkcja na magazynie; cena za rąbanie; miejsce transportu; transport własny / zewnętrzny / pociąg (liczba wagonów, pojemność w t lub MP, tonaż wspólny albo osobno dla każdego wagonu, podsumowanie składu); samouczek pod polami; panel przebiegu, stanów przed/po, kosztów i planu dokumentów |
-| **Stany** | stan w jednostce magazynowej produktu + masa orientacyjna (≈ t), stan na dzień, kartoteka z saldem, CSV |
-| **Plan dokumentów** | PZ, RW, PW, WZ, TR, KO, IN, BO z kolumną **Miejsce transportu** i wpływem na stan; podgląd/wydruk; korekta (storno); CSV |
-| **Inwentaryzacja** | okres `RRRR-MM` na magazyn, OTWARTA → ZAMKNIĘTA, lista ze stanu księgowego, spis, różnice, dokument IN, blokada okresu, automatyczne zamknięcie przy przełomie miesiąca |
-| **Flota** | pojazdy (ruchome podłogi / ciężarowe) z rejestracją, statusem i kierowcą domyślnym; kierowcy; rębaki z operatorem; operatorzy; historia kursów z kierowcą kursu |
-| **Historia zmian** | dziennik audytu (użytkownik, czas, obiekt, akcja, źródło, stan przed/po) z filtrami; rejestr operacji z rodzajem i kosztem rąbania; raport miesięczny i roczny (zakup, rąbanie, transport, przychód, wynik); CSV |
-| **Dane i ustawienia** | kopia zapasowa JSON, import z kontrolą struktury, dane przykładowe, preferencje (samouczek, intro, muzyka), data systemowa demo, kontrola przełomu miesiąca |
-
-## Zasady domenowe
-
-* Księga w **jednostce magazynowej produktu**: drewno m³, zrębka MP, PKS / łupina nerkowca t (tylko t — bez przeliczeń na MP/m³).
-* `1 m³ drewna = 4 MP zrębki`. Masa orientacyjna: zrębka × 0,33 t/MP, drewno × 0,952 t/m³ (817 m³ ≈ 778 t) — informacja pomocnicza; waga rzeczywista **nie zmienia** ilości na stanie.
-* Koszt zakupu = ilość × cena; koszt rąbania = MP × cena za rąbanie (domyślnie 10 zł/MP); transport to osobny koszt.
-* Księgowanie w stałej kolejności, symulowane krok po kroku; ujemny stan na dowolnym kroku = odrzucenie całej operacji.
-* WZ ≤ stan magazynowy; zużycie ≤ stan (+ zakup w łańcuchu); wynik produkcji ≤ zużycie × 4; sprzedaż po produkcji ≤ wynik produkcji.
-* Sprzedaż bezpośrednia zapisuje PW i WZ tej samej operacji — stan końcowy produktu się nie zmienia.
-* **Transport nie tworzy zapisów w księdze** — tylko koszt i karta TR.
-* Magazyn aktywny wynika z użytkownika; formularz nie ma pól magazynu/pryzmy źródłowej i docelowej.
-* Każda zmiana ma wpis audytu ze stanem przed i po. Historii się nie edytuje — korekta tworzy dokument KO.
+Dane przykładowe: bilans otwarcia 01.08.2026 (Zabrze: drewno 817 m³, zrębka leśna 8 173 MP, PKS i łupina po 728 t),
+operacje każdego rodzaju, MM Zabrze → Pyskowice, korekta WZ (100 → 90 MP) i anulowany zakup. Zabrze po danych przykładowych:
+drewno **817 m³**, zrębka leśna **8 293 MP**, PKS **728 t**.
 
 ## Struktura projektu
 
 ```
 resinvest-erp/
-├── ResInvest_ERP_demo.html        ← Demo v2 (wynik budowania, ~2,3 MB z filmem intro)
+├── ResInvest_ERP_demo.html        ← wynik budowania (jeden plik, ~2,5 MB z filmem intro)
 ├── demo/src/
-│   ├── engine.js                  ← silnik domenowy (bez DOM, testowany w Node)
+│   ├── engine.js                  ← silnik domenowy (bez DOM, testowany w Node): walidacja, księga, anulowanie, korekty, raporty
 │   ├── seed.js                    ← dane przykładowe (księgowane przez silnik)
-│   ├── app.js                     ← interfejs (moduły ekranów)
-│   ├── intro.js                   ← intro + muzyka (autoplay, fallback Web Audio)
-│   ├── styles.css                 ← styl ResInvest (jasny motyw, zielony akcent, responsywność)
-│   └── index.template.html
-├── demo/assets/intro.mp4          ← film intro z wersji 1.3.0 (H.264 + AAC)
+│   ├── pdf.js                     ← generator PDF + HTML do druku (jeden model treści)
+│   ├── app.js                     ← rdzeń interfejsu: nawigacja, zapis, formularz operacji / korekty
+│   ├── views.js                   ← ekrany modułów, szczegóły dokumentu, anulowanie, raporty, kwit, wykresy
+│   ├── intro.js · styles.css · index.template.html
+├── demo/assets/intro.mp4
+├── demo/assets/fonts/             ← ResInvestDocSans (podzbiór Liberation Sans, SIL OFL 1.1) + metrics.json + LICENSE-OFL.txt
 ├── config/demo.config.json        ← konfiguracja środowiska (przeliczniki, stawki)
 ├── data/sample_data.json          ← przykładowe dane testowe (kopia do wczytania)
-├── tools/build-demo.mjs           ← składa jeden plik HTML
-├── tools/export-sample-data.mjs
+├── tools/build-demo.mjs · tools/pdf-fonts.mjs · tools/make-pdf-fonts.py · tools/export-sample-data.mjs
 ├── installer/                     ← instalator Windows (Inno Setup 6)
-├── tests/engine.test.mjs          ← testy jednostkowe (node:test)
-├── tests/e2e.cjs                  ← scenariusze v2 w przeglądarce (Playwright)
+├── tests/engine.test.mjs          ← testy silnika (§22, §31.16, §32.23, testy 11–42)
+├── tests/pdf.test.mjs             ← testy generatora PDF
+├── tests/e2e.cjs                  ← scenariusze w przeglądarce (Playwright)
 ├── tests/resinvest_demo_scenarios.md
-├── docs/RESINVEST_CHANGE_PLAN.md  ← rozpoznanie 1.3.0, decyzje, ryzyka, FAZA 2
+├── docs/RESINVEST_CHANGE_PLAN.md  ← rozpoznanie, decyzje, architektura Production v1
 ├── docs/RESINVEST_UI_SUGGESTIONS.md
+├── TASKS.md                       ← wymagania → status → dowód
 └── progress.md
 ```
 
@@ -95,14 +92,15 @@ Wymagany Node.js ≥ 18.
 ```bash
 cd resinvest-erp
 npm run check        # kontrola składni źródeł
-npm run build        # → ResInvest_ERP_demo.html (wstrzykuje config/demo.config.json i film intro)
-npm run test:unit    # 33 testy silnika Demo v2
+npm run build        # → ResInvest_ERP_demo.html (wstrzykuje konfigurację, czcionki PDF i film intro)
+npm run test:unit    # 56 testów: silnik + generator PDF
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e     # 83 kontrole w przeglądarce (16 punktów kontrolnych v2)
+npm run test:e2e     # 104 kontrole w przeglądarce
+# pełna kontrola tekstu PDF (polskie znaki) — Python z pypdf:
+PDF_PYTHON=/ścieżka/do/python npm run test:e2e
 ```
 
-Konfiguracja: zmień `config/demo.config.json` (np. `chipRateDefault`, `woodTPerM3`, `kmRateDefault`) → `npm run build` →
-w programie *Dane i ustawienia → Przywróć dane przykładowe*. Zapisane dokumenty zachowują swoje wartości.
+Czcionek PDF nie trzeba generować — są w repozytorium. Odtworzenie: `pip install fonttools && python3 tools/make-pdf-fonts.py`.
 
 ### Instalator Windows
 
@@ -110,28 +108,20 @@ Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Demo_Setup_2.0.0.exe
+# → installer\Output\ResInvestERP_Demo_Setup_2.1.0.exe
 ```
-
-Instalacja per użytkownik (bez uprawnień administratora), skróty w menu Start i na pulpicie,
-dokumentacja i `data/sample_data.json` w katalogu programu.
 
 ## Kopie zapasowe i dane
 
-* *Dane i ustawienia → Pobierz kopię (JSON)* — pełny stan (operacje, księga, dokumenty, inwentaryzacja, flota, audyt).
-* *Wczytaj kopię* — kontrola struktury przed zastąpieniem danych; import jest zapisywany w audycie.
-* Uszkodzone dane w przeglądarce są zachowywane pod kluczem `riw.demo.state.v2.uszkodzone.<czas>`, a program startuje na danych przykładowych.
-* Tryb prywatny / zablokowany `localStorage`: program działa w pamięci i ostrzega, że zmiany znikną.
+* *Administracja → Pobierz kopię (JSON)* — pełny stan (operacje, dokumenty, korekty, anulowania, księga, inwentaryzacja, flota, audyt).
+* *Wczytaj kopię* — kontrola struktury (schemat 3) przed zastąpieniem danych; import zapisywany w audycie.
+* Uszkodzone dane są zachowywane pod kluczem `riw.demo.state.v3.uszkodzone.<czas>`, a program startuje na danych przykładowych.
+* Dane z wersji 2.0 (`riw.demo.state.v2`) i 1.x pozostają nienaruszone pod starymi kluczami; 2.1 startuje na danych przykładowych.
 
 ## Ograniczenia demonstratora
 
-* Dane żyją w jednej przeglądarce jednego komputera. Wieloużytkowość jest symulowana przełącznikiem użytkownika; blokada zapisu (Web Locks) działa między kartami tej samej przeglądarki.
-* Brak logowania hasłem (w 1.3.0 istnieje — zostaje w FAZIE 2).
-* Przeglądarki bez kodeka H.264/AAC (np. część dystrybucji Chromium/Firefox na Linuksie) pokazują planszę firmową z muzyką syntezowaną zamiast filmu.
-* Użytkownicy z ustawieniem „ogranicz ruch” (`prefers-reduced-motion`) nie widzą intro — jak w 1.3.0.
-
-## Dane z Demo v1
-
-Demo v2 zmienia model księgi (jednostka produktu zamiast MP dla wszystkiego), dlatego zapisuje dane pod nowym kluczem
-`riw.demo.state.v2`. Dane z v1 w tej samej przeglądarce pozostają nienaruszone pod `riw.demo.state.v1`; kopii JSON z v1
-nie da się wczytać do v2 (kontrola struktury ją odrzuci).
+* Dane żyją w jednej przeglądarce; wieloużytkowość jest symulowana przełącznikiem użytkownika, blokada zapisu (Web Locks) działa między kartami tej samej przeglądarki.
+* Brak logowania hasłem i serwerowej kontroli uprawnień — uprawnienia sprawdza silnik w przeglądarce.
+* Wycena orientacyjna (średnia cena zakupu); pełna wycena magazynowa — etap produkcyjny.
+* Znacznik czasu audytu to czas rzeczywisty komputera, a data operacji — data systemowa demo (ustawiana w Administracji).
+* Przeglądarki bez kodeka H.264/AAC pokazują planszę firmową z muzyką syntezowaną zamiast filmu intro.

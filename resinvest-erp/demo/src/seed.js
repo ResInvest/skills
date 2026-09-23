@@ -71,7 +71,7 @@
     const d = RIW.blankDraft({ today: date });
     d.date = date;
     d.type = over.type || "ZAKUP";
-    for (const k of ["purchase", "production", "sale"]) Object.assign(d[k], over[k] || {});
+    for (const k of ["purchase", "production", "sale", "mm"]) Object.assign(d[k], over[k] || {});
     if (over.transport) {
       const t = over.transport;
       d.transport.mode = t.mode || "none";
@@ -81,6 +81,7 @@
       Object.assign(d.transport.train, t.train || {});
     }
     d.notes = over.notes || "";
+    d.extDoc = over.extDoc || "";
     return d;
   }
 
@@ -129,8 +130,8 @@
       // produkcja na magazynie: drewno ze stanu → zrębka na stan
       ["u_pys", "2026-09-10", {
         type: "PRODUKCJA",
-        production: { rawProductId: "pr_drewno", consumeQty: "10", type: "lesna", chipperId: "ch_biber", chipRate: "10" },
-        transport: { mode: "none", place: "RiC Pyskowice" }
+        production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "40", chipperId: "ch_biber", chipRate: "10" },
+        notes: "Rębanie na placu — pryzma P2", extDoc: "KP 12/09/2026"
       }],
       // sprzedaż z magazynu (WZ)
       ["u_pys", "2026-09-12", {
@@ -141,15 +142,42 @@
       // produkcja w lesie + sprzedaż bezpośrednia: stan zrębki bez zmian
       ["u_kier", "2026-09-15", {
         type: "SPRZEDAZ",
-        production: { type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Kuźnia", kwit: "KW 0233/09/2026", rawProductId: "pr_drewno", rawQty: "150", outMP: "600", chipperId: "ch_jenz", chipRate: "10" },
+        production: { type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Kuźnia", kwit: "KW 0233/09/2026", rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "600", chipperId: "ch_jenz", chipRate: "10" },
         sale: { direct: true, buyerId: "pa_elektrownia", qtyMP: "600", price: "88", priceUnit: "MP" },
         transport: { mode: "train", place: "Elektrownia Łaziska", train: { trainNo: "RC 50931", carrier: "PKP Cargo", docNo: "CIM 5093/09", loadPlace: "Bocznica Kuźnia Raciborska", wagonCount: "5", capUnit: "t", capacity: "60", tonMode: "each", wagonT: ["39,6", "39,8", "39,4", "39,7", "39,5"], price: "25", priceUnit: "t" } }
       }]
     ];
+    ops.push(
+      // przesunięcie międzymagazynowe (MM): Zabrze → Pyskowice
+      ["u_kier", "2026-09-16", {
+        type: "MM", mm: { productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_pys" },
+        transport: { mode: "own", place: "RiC Pyskowice", own: { vehicleId: "ve_scania", km: "28", rate: "5" } }
+      }],
+      // zakup wprowadzony omyłkowo — w danych przykładowych jest później anulowany
+      ["u_pys", "2026-09-17", {
+        purchase: { supplierId: "pa_agro", basis: "DEKL", productId: "pr_lupina", qty: "5", unit: "t", price: "610" },
+        transport: { mode: "none", place: "RiC Pyskowice" }, notes: "Pomyłka — dostawa nie dotarła"
+      }],
+      // produkcja na magazyn z wczoraj (kwit produkcji dnia)
+      ["u_pys", "2026-09-22", {
+        type: "PRODUKCJA",
+        production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "20", chipperId: "ch_biber", chipRate: "10" },
+        notes: "Pryzma P3"
+      }]
+    );
+    const byNo = {};
     for (const [uid, date, over] of ops) {
       const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
+      byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
     }
+    // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
+    const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);
+    cd.sale.qty = "90";
+    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_pys" }) }));
+    if (!r.ok) throw new Error("Dane przykładowe (korekta): " + r.error);
+    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_pys" }) }), "pomyłka operatora — dostawa nie dotarła");
+    if (!r.ok) throw new Error("Dane przykładowe (anulowanie): " + r.error);
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(today);
     return s;

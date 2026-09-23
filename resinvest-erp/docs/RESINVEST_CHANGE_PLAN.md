@@ -150,3 +150,46 @@ Przed FAZĄ 2 potrzebne jest jedno z dwóch:
 ## Wpływ na FAZĘ 2
 
 Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodnym z `products.stock_unit`) zamiast jednej kolumny `mp`. Operacja = agregat z typem (`purchase | sale | production`) i flagą `direct`.
+
+---
+
+# Demo v2.1 — domknięcie prototypu (master prompt: §0–32, testy 11–42)
+
+## Decyzje
+
+| Wymaganie | Decyzja | Uzasadnienie |
+|---|---|---|
+| Produkcja na magazyn (§3, §6) | użytkownik podaje **ilość produkcji**; zużycie = produkcja ÷ przelicznik (`Units.prodFactor`, dziś tylko m³ → MP = 4) | w 2.0 było odwrotnie (podawane zużycie) — sprzeczne z §6 |
+| Brak transportu w produkcji (§5) | sekcja transportu nie jest renderowana; silnik pomija walidację transportu dla `PRODUKCJA`, miejsce = magazyn | transport jest kosztem przewozu, a produkcja na placu nie ma przewozu |
+| Precyzja (§31.6) | wewnętrznie 6 miejsc (`rq`), zaokrąglenie wyłącznie przy prezentacji | 250,0001 MP → 62,500025 m³ musi być zablokowane przy stanie 62,5 m³ |
+| Statusy (§32.1) | `DRAFT` w osobnej kolekcji `drafts` (bez numeru i księgi); operacja: `POSTED` → `CORRECTED` / `CANCELLED` | szkic nie może zużywać numeracji ani wpływać na stan |
+| Anulowanie (§32.2–32.4) | nowe zapisy księgi `ANULOWANIE` (dok. AN) z bieżącą datą, odwracające skutki netto (również wcześniejszych korekt); analiza osi czasu bez skutków dokumentu — jeśli saldo kiedykolwiek < 0 → blokada z listą operacji zależnych; przy późniejszych rozchodach bez utraty pokrycia → wymagane potwierdzenie | historia i zamknięte okresy się nie zmieniają; brak cichego „przepisania” przeszłości |
+| Korekta (§32.5–32.17) | nowy dokument KOR z bieżącą datą = różnica między stanem docelowym a bieżącym skutkiem dokumentu; nowa wersja przechodzi **tę samą** walidację (`planOperation` na księdze bez korygowanego dokumentu); rodzaju operacji, daty i magazynu nie zmienia się korektą | jeden silnik walidacji; brak ścieżek „na skróty” |
+| Odwrócenie korekty | nowa korekta przywracająca `inputBefore` ostatniej korekty; tylko ostatnia, nie odwrócenie odwrócenia | korekt się nie usuwa (§32.16) |
+| Raport (§11, testy 11–42) | bilans z księgi (kategoria zapisu `cat` zachowuje źródło także dla KOR/AN); wartości z `valueEvents` (utworzenie / korekta / anulowanie) w dacie zdarzenia | zamknięty miesiąc pozostaje niezmienny; korekta z października jest w październiku |
+| PDF (§12) | własny generator (`pdf.js`): PDF 1.7, czcionka TrueType osadzona (CIDFontType2, Identity-H), mapa ToUnicode (kopiowanie i wyszukiwanie tekstu), numeracja stron, podpisy; czcionka = podzbiór Liberation Sans przemianowany na ResInvestDocSans (OFL) | wymóg „prawdziwy dokument, nie zrzut ekranu”, polskie znaki, bez CDN |
+| Jeden model treści | ekran raportu, wydruk (HTML) i PDF budowane z tego samego modelu | spójność Pulpit = Raport = PDF (test 33–35) |
+| Uprawnienia (§32.22) | `documents.cancel`, `documents.correct`, `inventory.correct`, `production.correct`, `sales.correct`, `purchases.correct`, `report.view` | kierownik ma wszystkie, magazynier żadnego z nich |
+| Dane | klucz `riw.demo.state.v3`, schemat 3; dane 2.0 nienaruszone | nowy model operacji (statusy, korekty) |
+
+## Architektura Production v1 (propozycja — nie wdrożona)
+
+| Warstwa | Propozycja |
+|---|---|
+| Baza | PostgreSQL 16. Tabele: `warehouses`, `products(stock_unit CHECK IN ('m3','MP','t'))`, `partners`, `users`, `roles`, `role_permissions`, `operations(id, type, status, wh_id, to_wh_id, date, no, idempotency_key UNIQUE, created_by, version)`, `operation_versions` (pełny snapshot każdej wersji — oryginał i korekty), `documents(no UNIQUE, type, op_id, status)`, `stock_ledger(id, op_id, doc_no, kind, cat, wh_id, product_id, qty numeric(18,6), unit, direct, date, created_at)` **append-only** (REVOKE UPDATE/DELETE, trigger blokujący), `corrections`, `cancellations`, `value_events`, `inventory_periods`, `audit_log` (append-only, hash łańcuchowy), `drafts`, `number_series` |
+| Spójność | jedna transakcja na operację: `SELECT … FOR UPDATE` na wierszach `stock_balance(wh_id, product_id)` (lub `SERIALIZABLE` + ponowienie), kontrola salda < 0 w bazie (CHECK na `stock_balance`), numeracja z `number_series` w tej samej transakcji, `idempotency_key` UNIQUE; zamknięte okresy — CHECK / trigger na dacie zapisu |
+| Serwer | NestJS (TypeScript): moduły `operations`, `corrections`, `cancellations`, `ledger`, `reports`, `inventory`, `fleet`, `auth`; silnik domenowy z `engine.js` przeniesiony do czystego modułu TS (te same testy jako kontrakt); walidacja wyłącznie po stronie serwera, klient dostaje `plan` do podglądu |
+| Uprawnienia | JWT + role; uprawnienia sprawdzane w guardach i ponownie w usłudze domenowej; przypisanie użytkownik ↔ magazyny (wiele magazynów na użytkownika) |
+| Raporty i PDF | zapytania agregujące po `stock_ledger` i `value_events` (widoki materializowane na miesiąc zamknięty); PDF generowany na serwerze z tego samego modelu treści (np. pdfkit / obecny generator), numer raportu z serii `RAP`, archiwum wygenerowanych PDF z sumą kontrolną |
+| Wycena | średnia ważona ruchoma lub FIFO per magazyn × produkt, z kosztem rąbania i transportu doliczanym do PW/PZ — decyzja biznesowa do potwierdzenia |
+| Kopie i odtwarzanie | pg_dump dzienny + WAL (PITR), test odtworzenia co miesiąc; eksport CSV/JSON z UI |
+| Migracja | import 1.3.0 (IndexedDB/Supabase) → bilans otwarcia per magazyn × produkt na dzień startu + archiwum dokumentów tylko do odczytu |
+| Klient | React (lub rozwinięcie obecnego UI jako SPA) z tymi samymi ekranami; tryb offline — poza zakresem v1 |
+
+## Ryzyka / pytania do firmy przed Production v1
+
+1. Masa drewna 0,952 t/m³ (z przykładu 817 m³ ≈ 778 t) vs 1,32 t/m³ z v1 — do potwierdzenia.
+2. Przykłady GJ w poleceniu liczone z masy zaokrąglonej (778 × 8,5 = 6 613) — system liczy z masy dokładnej (6 611). Do potwierdzenia, który wynik ma być na dokumentach.
+3. Sprzedaż bezpośrednia z niesprzedaną resztą — reszta trafia na stan (z ostrzeżeniem). Alternatywa: blokada. Do decyzji.
+4. Korekta daty dokumentu i zmiana magazynu — obecnie tylko przez anulowanie i nowy dokument.
+5. Metoda wyceny magazynu (średnia / FIFO) i czy koszt rąbania/transportu wchodzi do wartości zapasu.
