@@ -409,6 +409,32 @@ async function fillForestDirect(page) {
     const xop = await page.evaluate(() => RIW_DEBUG.store.state.operations.at(-1).transport);
     check("2.4 Zapisane: przewoźnik, 4 kursy, 400 MP, 132 t, 975 zł", xop.company === "ESI Logistics" && xop.runs.length === 4 && xop.totalQty === 400 && xop.totalWeightT === 132 && xop.cost === 975);
 
+    /* ------------- 2.5: transport własny + zewnętrzny w jednej produkcji ------------- */
+    await preset(page, "zakup");
+    await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "100"); await page.fill("#f-purchase-price", "230");
+    await tick(page, "f-production-enabled"); await page.waitForSelector("#f-production-kwit");
+    await page.fill("#f-production-ndl", "Rudy Raciborskie"); await page.fill("#f-production-lesnictwo", "Stanica"); await page.fill("#f-production-kwit", "KW 0950/09/2026");
+    await tick(page, "f-mode-own"); await page.waitForSelector("#own-runs");
+    await tick(page, "f-mode-external"); await page.waitForSelector("#ext-runs");
+    check("2.5 Własny i zewnętrzny zaznaczone razem — obie sekcje kursów widoczne", (await page.isChecked("#f-mode-own")) && (await page.isChecked("#f-mode-external")) && !!(await page.$("#own-runs")) && (await page.evaluate(() => RIW_DEBUG.plan.norm.transport.mode)) === "mixed");
+    await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-transport-own-runs-0-km", "45"); await fillTab(page, "#f-transport-own-runCount", "3");
+    for (let i = 0; i < 3; i++) { await fillTab(page, `#f-transport-own-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
+    await fillTab(page, "#f-transport-external-company", "ESI Logistics"); await fillTab(page, "#f-transport-external-runs-0-km", "45"); await fillTab(page, "#f-transport-external-runCount", "2");
+    for (let i = 0; i < 2; i++) { await fillTab(page, `#f-transport-external-runs-${i}-reg`, `ESI 2000${i}`); await fillTab(page, `#f-transport-external-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-external-runs-${i}-weightT`, "33"); }
+    const kinds = await page.$$eval("#runs-summary tbody tr", r => r.map(x => x.dataset.runKind).join(","));
+    check("2.5 Wspólne podsumowanie: 3 kursy własne + 2 zewnętrzne, 400 MP, 165 t, 1 125,00 zł", kinds === "own,own,own,external,external" && nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("165 t") && nb(await page.textContent("[data-runs-cost]")) === "1 125,00 zł",
+      [kinds, nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-cost]"))]);
+    check("2.5 Podział kosztu: flota własna / firma zewnętrzna", nb(await page.textContent("[data-runs-split]")).includes("3 × flota własna: 240 MP, 675,00 zł") && nb(await page.textContent("[data-runs-split]")).includes("2 × ESI Logistics: 160 MP, 450,00 zł"), nb(await page.textContent("[data-runs-split]")));
+    check("2.5 Zatwierdzenie produkcji z transportem mieszanym", (await approve(page)) === 1);
+    const mop = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { id: o.id, mode: o.transport.mode, n: o.transport.runs.length, cost: o.transport.cost }; });
+    check("2.5 Zapisane: tryb mieszany, 5 kursów, 1 125 zł", mop.mode === "mixed" && mop.n === 5 && mop.cost === 1125, mop);
+    await openOp(page, mop.id);
+    await page.click("#op-docs tr:has-text('TR/') [data-doc]"); await page.waitForSelector("#doc-preview");
+    const trTxt = nb(await page.textContent("#doc-preview"));
+    check("2.5 Karta TR: kursy floty własnej i firmy zewnętrznej osobno", trTxt.includes("Kursy floty własnej") && trTxt.includes("Kursy firmy zewnętrznej — ESI Logistics"));
+    await closeModals(page);
+
     await go(page, "flota");
     check("2.2 Flota: kursy liczone pojedynczo", nb(await page.textContent("#runs-table")).includes("kurs 4"));
 

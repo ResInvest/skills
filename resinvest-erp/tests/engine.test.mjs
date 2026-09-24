@@ -676,3 +676,35 @@ test("2.4 Zewnętrzny: dane z wersji ≤ 2.3 (reg, km, freight bez listy kursów
   const t = R.planOperation(s, d, ctx(s)).norm.transport;
   assert.deepEqual([t.runCount, t.cost, t.reg, t.km], [1, 650, "SZA 7K901", 35]);
 });
+
+/* ============================ 2.5: transport własny + zewnętrzny w jednej operacji ============================ */
+test("2.5 Mieszany: 3 kursy flotą własną + 2 kursy firmą zewnętrzną do jednej produkcji — suma kursów, ilości, ton i kosztu", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0900/09/2026" });
+  d.transport = { mode: "mixed", place: "RiC Zabrze", own: RUNS(3, { qty: "80" }).own, external: XRUNS(2, { qty: "80" }).external };
+  const p = R.planOperation(s, d, ctx(s));
+  assert.equal(p.ok, true, JSON.stringify(p.errors));
+  const t = p.norm.transport;
+  assert.deepEqual([t.mode, t.runCount, t.own.runs.length, t.external.runs.length], ["mixed", 5, 3, 2]);
+  assert.deepEqual([t.totalQty, t.totalWeightT, t.km, t.cost], [400, 165, 225, 3 * 225 + 2 * 225]);
+  assert.deepEqual(t.runs.map(r => [r.no, r.kind]), [[1, "own"], [2, "own"], [3, "own"], [4, "external"], [5, "external"]]);
+  assert.ok(!p.warnings.some(w => w.includes("Suma kursów")), "5 × 80 = 400 MP = produkcja");
+  const op = commit(s, d);
+  assert.equal(op.documents.filter(x => x.type === "TR").length, 1);
+  const rep = R.Reports.business(s, { mode: "month", from: "2026-09-01", to: "2026-09-30", whId: "wh_zab" });
+  assert.ok(rep.transport.carriers.some(c => c.name === "ESI Logistics" && c.count >= 2));
+});
+test("2.5 Mieszany: błędy w obu częściach raportowane osobno; suma różna od ilości = ostrzeżenie", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0901/09/2026" });
+  d.transport = { mode: "mixed", place: "RiC Zabrze", own: RUNS(3, { qty: "" }).own, external: XRUNS(2, { reg: "" }).external };
+  const e = R.planOperation(s, d, ctx(s)).errors;
+  assert.ok(e["transport.own.runs.0.qty"] && e["transport.external.runs.1.reg"]);
+  d.transport = { mode: "mixed", place: "RiC Zabrze", own: RUNS(3).own, external: XRUNS(2).external };
+  assert.ok(R.planOperation(s, d, ctx(s)).warnings.some(w => w.includes("Suma kursów 500 MP różni się od ilości operacji 400 MP")));
+});
+test("2.5 Dane przykładowe: zakup 03.09 — 3 kursy własne + 2 zewnętrzne (5 × 16 MP = 80 MP)", () => {
+  const s = fresh();
+  const op = s.operations.find(o => o.transport.mode === "mixed");
+  assert.deepEqual([op.transport.own.runs.length, op.transport.external.runs.length, op.transport.totalQty], [3, 2, 80]);
+});

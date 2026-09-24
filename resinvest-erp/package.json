@@ -1,6 +1,6 @@
 {
   "name": "resinvest-erp-demo",
-  "version": "2.4.0-demo",
+  "version": "2.5.0-demo",
   "private": true,
   "description": "ResInvest ERP — Demo v2.1 — operacje, MM, korekty i anulowania, historia, raporty okresowe, kwit produkcji dnia, druk i PDF: jeden plik HTML",
   "license": "SEE LICENSE IN LICENSE",

@@ -1,6 +1,10 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.4 (2.4.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.5 (2.5.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+
+## Wykonane — Demo v2.5
+
+- [x] Transport własny i zewnętrzny razem w jednej operacji (np. 3 kursy własne + 2 zewnętrzne), wspólne podsumowanie i podział kosztu
 
 ## Wykonane — Demo v2.4
 
@@ -34,8 +38,8 @@ Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.4 (2.4.0) — prototyp funk
 | Zestaw | Wynik |
 |---|---|
 | `npm run check` | OK |
-| `npm run test:unit` (silnik + PDF) | 66/66 |
-| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 133/133, konsola bez błędów |
+| `npm run test:unit` (silnik + PDF) | 69/69 |
+| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 139/139, konsola bez błędów |
 
 ## Znane problemy / ograniczenia
 

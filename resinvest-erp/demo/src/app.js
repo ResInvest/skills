@@ -709,10 +709,10 @@
 
     transportHtml(n) {
       const S = Store.state, T = this.draft.transport, mode = T.mode;
-      const veh = R.byId(S.fleet.vehicles, T.own.vehicleId);
       const tr = T.train;
+      const useOwn = mode === "own" || mode === "mixed", useExt = mode === "external" || mode === "mixed";
       let modeHtml = "";
-      if (mode === "own") {
+      if (useOwn) {
         const O = this.ownRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
         const u = Units.label(this.shippedUnit());
@@ -731,13 +731,14 @@
               ${field({ key: k("weightT"), label: "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: "z kwitu wagowego" }) })}
             </div></div>`);
         }
-        modeHtml = `<div class="fgrid four mt4">
+        modeHtml += `${mode === "mixed" ? `<h4 class="mini-h mt4">Kursy floty własnej</h4>` : ""}<div class="fgrid four mt4">
           ${field({ key: "transport.own.runCount", label: "Liczba kursów", req: true, control: numIn("transport.own.runCount", O.runCount, { suffix: "szt.", placeholder: "np. 4" }) })}
           <div class="field span3"><span class="lbl">&nbsp;</span><div class="help">Każdy kurs: pojazd z floty własnej, kierowca (domyślny z pojazdu, można zmienić dla kursu), km, stawka, ilość i waga z wagi rzeczywistej. Koszt = km × stawka, sumowany dla wszystkich kursów.</div></div>
         </div>
         <div class="runs" id="own-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
-        <div class="field mt3"><span class="lbl">Podsumowanie kursów</span><div data-out="runs.summary"></div></div>`;
-      } else if (mode === "external") {
+`;
+      }
+      if (useExt) {
         const X = this.extRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(X.runCount, 0)) || 0));
         const u = Units.label(this.shippedUnit()), inc = !!X.includedInPrice;
@@ -756,7 +757,7 @@
               ${inc ? "" : field({ key: k("freight"), label: "Fracht kursu (zł) — opcjonalnie", span: "span2", help: false, control: numIn(k("freight"), r.freight, { suffix: "zł", placeholder: "z faktury; puste = km × stawka" }) })}
             </div></div>`);
         }
-        modeHtml = `<div class="fgrid four mt4">
+        modeHtml += `${mode === "mixed" ? `<h4 class="mini-h mt4">Kursy firmy zewnętrznej</h4>` : ""}<div class="fgrid four mt4">
           ${field({ key: "transport.external.company", label: "Firma transportowa", req: true, span: "span2", control: textIn("transport.external.company", X.company, { placeholder: "np. ESI Logistics", list: "dl-carriers" }) + `<datalist id="dl-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
           ${field({ key: "transport.external.runCount", label: "Liczba kursów", req: true, control: numIn("transport.external.runCount", X.runCount, { suffix: "szt.", placeholder: "np. 4" }) })}
           <div></div>
@@ -764,8 +765,10 @@
             ${optCard("transport.external.includedInPrice", { checked: inc, title: "Transport wliczony w cenę", text: "Koszt transportu tej operacji = 0 zł (kursy i ilości nadal są ewidencjonowane)." })}</div>
         </div>
         <div class="runs" id="ext-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
-        <div class="field mt3"><span class="lbl">Podsumowanie kursów</span><div data-out="runs.summary"></div></div>`;
-      } else if (mode === "train") {
+`;
+      }
+      if (useOwn || useExt) modeHtml += `<div class="field mt3"><span class="lbl">Podsumowanie kursów${mode === "mixed" ? " (flota własna + firma zewnętrzna)" : ""}</span><div data-out="runs.summary"></div></div>`;
+      if (mode === "train") {
         const count = Math.max(0, Math.min(S.config.maxWagons, Math.floor(NumParse.value(tr.wagonCount, 0)) || 0));
         const each = tr.tonMode === "each";
         const rows = [];
@@ -797,10 +800,10 @@
       const buyers = S.partners.filter(p => ["buyer", "both"].includes(p.role));
       return section(n, "tr", "Miejsce i transport", "Transport nie zmienia stanu magazynowego — to osobny koszt operacji.", `
         <div class="fgrid">${field({ key: "transport.place", label: "Miejsce transportu / dostawy", req: true, span: "span-all", control: textIn("transport.place", T.place, { placeholder: "np. RiC Zabrze", list: "dl-places" }) + `<datalist id="dl-places">${S.warehouses.map(w => `<option value="${esc(w.name)}">`).concat(buyers.map(b => `<option value="${esc(b.name)}">`)).join("")}</datalist>` })}</div>
-        <div class="field mt4" data-field="transport.mode"><span class="lbl">Rodzaj transportu (zaznacz jeden albo żaden)</span>
+        <div class="field mt4" data-field="transport.mode"><span class="lbl">Rodzaj transportu — własny i zewnętrzny można zaznaczyć razem (np. 3 kursy flotą własną + 2 kursy firmą zewnętrzną); pociąg osobno</span>
           <div class="scope" role="group" aria-label="Rodzaj transportu">
-            ${optCard("", { checked: mode === "own", struct: false, radio: true, id: "f-mode-own", title: "Transport własny", text: "Pojazd i kierowca z Floty, koszt = km × stawka.", attrs: 'data-mode="own"' })}
-            ${optCard("", { checked: mode === "external", struct: false, radio: true, id: "f-mode-external", title: "Transport zewnętrzny", text: "Firma przewozowa, fracht z faktury.", attrs: 'data-mode="external"' })}
+            ${optCard("", { checked: useOwn, struct: false, id: "f-mode-own", title: "Transport własny", text: "Kursy pojazdami z Floty, koszt = km × stawka.", attrs: 'data-mode="own"' })}
+            ${optCard("", { checked: useExt, struct: false, id: "f-mode-external", title: "Transport zewnętrzny", text: "Kursy firmy przewozowej, km × stawka albo fracht.", attrs: 'data-mode="external"' })}
             ${optCard("", { checked: mode === "train", struct: false, radio: true, id: "f-mode-train", title: "Pociąg", text: "Wagony, tonaż, podsumowanie składu.", attrs: 'data-mode="train"' })}
           </div>
           <div class="help tut">${HELP["transport.mode"]}</div></div>
@@ -912,7 +915,14 @@
           this.persist(); this.rerender(); return;
         }
         if (el.dataset.mode !== undefined) {
-          d.transport.mode = el.checked ? el.dataset.mode : "none";
+          // własny i zewnętrzny łączą się (tryb „mixed”); pociąg wyklucza pozostałe
+          const m = d.transport.mode, want = el.dataset.mode;
+          let own = m === "own" || m === "mixed", ext = m === "external" || m === "mixed";
+          if (want === "train") { own = ext = false; d.transport.mode = el.checked ? "train" : "none"; }
+          else {
+            if (want === "own") own = el.checked; else ext = el.checked;
+            d.transport.mode = own && ext ? "mixed" : own ? "own" : ext ? "external" : "none";
+          }
           this.touched.add("transport.mode"); this.persist(); this.rerender(); return;
         }
         if (el.dataset.ton !== undefined) {
@@ -1082,18 +1092,18 @@
         if (p && M.qty !== null && M.unit !== p.unit) add("mm.qty", `= ${esc(qn(M.stockQty, p.id))}`);
       }
       const T = n.transport;
-      if (T.mode === "own") {
-        const U = Units.label(T.qtyUnit || "");
-        (T.runs || []).forEach((r, i) => {
+      const ownP = T.mode === "own" ? T : T.mode === "mixed" ? T.own : null;
+      const extP = T.mode === "external" ? T : T.mode === "mixed" ? T.external : null;
+      if (ownP || extP) out("runs.summary", runsSummary(T));
+      if (ownP) {
+        (ownP.runs || []).forEach((r, i) => {
           out(`run.${i}.cost`, `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`);
           if (r.driverOverridden) add(`transport.own.runs.${i}.driverId`, `<span style="color:var(--warn)">kierowca zmieniony tylko dla tego kursu</span>`);
           if (r.reg) add(`transport.own.runs.${i}.vehicleId`, `rej. <b>${esc(r.reg)}</b>`);
         });
-        out("runs.summary", runsSummary(T));
-      } else if (T.mode === "external") {
-        (T.runs || []).forEach((r, i) => out(`xrun.${i}.cost`, T.includedInPrice ? "wliczony w cenę · <b>0,00 zł</b>" : r.freight !== null ? `fracht = <b>${money(r.cost)}</b>` : `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`));
-        out("runs.summary", runsSummary(T));
-      } else if (T.mode === "train") {
+      }
+      if (extP) (extP.runs || []).forEach((r, i) => out(`xrun.${i}.cost`, extP.includedInPrice ? "wliczony w cenę · <b>0,00 zł</b>" : r.freight !== null ? `fracht = <b>${money(r.cost)}</b>` : `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`));
+      if (T.mode === "train") {
         out("train.sumT", `<b>${fmtQ(T.totalT)} t</b>`);
         const row = (k, v) => `<dt>${esc(k)}</dt><dd>${v}</dd>`;
         out("train.summary", `<dl class="money-list" id="train-summary">
@@ -1307,12 +1317,18 @@
   /** Podsumowanie kursów (transport własny i zewnętrzny): ilość, tony, km, koszt. */
   function runsSummary(T) {
     if (!T.runs || !T.runs.length) return "—";
-    const U = Units.label(T.qtyUnit || ""), own = T.mode === "own";
-    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th><th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">${own ? "Stawka" : "Rozliczenie"}</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
-      ${T.runs.map(r => `<tr><td>${r.no}</td><td>${esc(r.reg || "—")}</td><td>${esc((own ? r.driverName : r.driver) || "—")}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : esc(r.costBasis)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td colspan="3">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}${own ? "" : ` · ${esc(T.company || "")}`}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}${T.includedInPrice ? " <small class=\"dim\">(wliczony w cenę)</small>" : ""}</td></tr></tfoot></table></div>`;
+    const U = Units.label(T.qtyUnit || ""), mixed = T.mode === "mixed";
+    const who = r => (r.kind || T.mode) === "own" ? "Flota własna" : (r.company || T.company || "Firma zewnętrzna");
+    const drv = r => ((r.kind || T.mode) === "own" ? r.driverName : r.driver) || "—";
+    const basis = r => (r.kind || T.mode) === "own" || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : esc(r.costBasis);
+    const part = P => P ? `${P.runs.length} × ${P.kind === "own" ? "flota własna" : esc(P.company || "firma zewnętrzna")}: ${fmtQ(P.totalQty)} ${U}, ${money(P.cost)}` : "";
+    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th>${mixed ? "<th>Przewoźnik</th>" : ""}<th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">Rozliczenie</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
+      ${T.runs.map(r => `<tr data-run-kind="${esc(r.kind || T.mode)}"><td>${r.no}</td>${mixed ? `<td>${esc(who(r))}</td>` : ""}<td>${esc(r.reg || "—")}</td><td>${esc(drv(r))}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${basis(r)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="${mixed ? 4 : 3}">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}${T.mode === "external" ? ` · ${esc(T.company || "")}` : ""}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}${T.includedInPrice && !mixed ? " <small class=\"dim\">(wliczony w cenę)</small>" : ""}</td></tr></tfoot></table></div>
+      ${mixed ? `<p class="help mt2" data-runs-split>${part(T.own)} · ${part(T.external)}${T.external.includedInPrice ? " (wliczony w cenę)" : ""}</p>` : ""}`;
   }
   function transportText(t) {
+    if (t.mode === "mixed") return `własny ${t.own.runs.length} × · ${t.external.company || "zewnętrzny"} ${t.external.runs.length} × · ${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`;
     if (t.mode === "own") { const n = (t.runs || [t]).length; return (n > 1 ? `${n} kursy · ` : "") + ([t.reg, t.driverName].filter(Boolean).join(" · ") || "uzupełnij pojazd"); }
     if (t.mode === "external") { const n = (t.runs || [t]).length; return [t.company, n > 1 ? `${n} kursy` : "", t.reg].filter(Boolean).join(" · ") || "uzupełnij przewoźnika"; }
     if (t.mode === "train") return [t.trainNo, `${t.wagonCount} wag.`, `${fmtQ(t.totalT)} t`].filter(Boolean).join(" · ");

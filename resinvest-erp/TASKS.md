@@ -79,6 +79,12 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 |---|---|---|---|
 | 26 | Transport zewnętrzny: liczba kursów, rubryka na kurs (pojazd przewoźnika, kierowca, km, stawka domyślna, ilość MP, waga rzeczywista), podsumowanie MP / t / koszt | DONE | U: „2.4 Zewnętrzny…” (3 testy); E: „2.4 …” (5 kontroli) |
 
+### Demo v2.5
+
+| # | Wymaganie | Status | Dowód |
+|---|---|---|---|
+| 27 | Jedna produkcja: kursy flotą własną i firmą zewnętrzną razem (np. 3 + 2), wspólne podsumowanie | DONE | U: „2.5 Mieszany…” (3 testy); E: „2.5 …” (6 kontroli) |
+
 ## 2. Znalezione problemy
 
 | Problem | Status |

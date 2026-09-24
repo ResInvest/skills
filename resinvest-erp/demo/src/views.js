@@ -114,25 +114,7 @@
     const META = { productionType: "Rodzaj produkcji", ndl: "Nadleśnictwo", lesnictwo: "Leśnictwo", kwit: "Nr kwitu wywozowego", sourceType: "Typ źródła", investSite: "Miejsce wycinki", sourceDoc: "Dokument źródłowy", chipRate: "Cena za rąbanie [zł/MP]", chippingCost: "Koszt rąbania [zł]", chipper: "Rębak", operator: "Operator", fromDoc: "Z dokumentu zużycia", direct: "Sprzedaż / produkcja bezpośrednia", rawInfo: "Surowiec z lasu (informacyjnie)" };
     if (d.meta) for (const [k, v] of Object.entries(d.meta)) if (v !== "" && v != null) add(META[k] || k, typeof v === "number" ? fmt(v, 2) : v);
     const blocks = [{ type: "kv", rows: kv, cols: 1 }];
-    if (d.transport) {
-      const t = d.transport, tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
-      if (t.mode === "own") tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Pojazdy", t.reg], ["Kierowcy", t.driverName + (t.driverOverridden ? " (zmiana dla kursu)" : "")], ["Kilometry łącznie", `${fmtQ(t.km)} km`]);
-      if (t.mode === "external") tk.push(["Przewoźnik", t.company], ["Liczba kursów", String((t.runs || [t]).length)], ["Pojazdy", t.reg], ["Kilometry łącznie", `${fmtQ(t.km)} km`], ["Rozliczenie", t.includedInPrice ? "wliczony w cenę" : "fracht / km × stawka"]);
-      if (t.mode === "train") {
-        tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);
-        if (t.capacity !== null) tk.push(["Łączna ładowność", `${fmtQ(t.totalCapacity)} ${t.capUnit}`]);
-        tk.push(["Łączny tonaż składu", `${fmtQ(t.totalT)} t`], ["Stawka", `${fmtQ(t.basisQty)} ${Units.label(t.priceUnit)} × ${fmt(t.price)} zł`]);
-      }
-      tk.push(["Koszt transportu", money(t.cost)], ["Wpływ na stan", "brak — transport nie zmienia stanu magazynowego"]);
-      blocks.push({ type: "h", text: "Transport" }, { type: "kv", rows: tk, cols: 1 });
-      if (t.mode === "external" && t.runs && t.runs.length) blocks.push({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
-        rows: t.runs.map(r => [String(r.no), r.reg, r.driver || "—", fmtQ(r.km), r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${Units.label(t.qtyUnit || "")}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
-        foot: ["Razem", "", "", fmtQ(t.km), "", `${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`, t.totalWeightT !== null && t.totalWeightT !== undefined ? fmtQ(t.totalWeightT) : "—", money(t.cost)] });
-      if (t.mode === "own" && t.runs && t.runs.length) blocks.push({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Stawka", w: 1, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
-        rows: t.runs.map(r => [String(r.no), r.reg, r.driverName + (r.driverOverridden ? " *" : ""), fmtQ(r.km), `${fmt(r.rate)} zł/km`, `${fmtQ(r.qty)} ${Units.label(t.qtyUnit || "")}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
-        foot: ["Razem", "", "", fmtQ(t.km), "", `${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`, t.totalWeightT !== null && t.totalWeightT !== undefined ? fmtQ(t.totalWeightT) : "—", money(t.cost)], note: t.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
-      if (t.mode === "train" && t.wagonT.length) blocks.push({ type: "table", columns: [{ label: "Wagon", w: 1 }, { label: "Tonaż [t]", w: 2, align: "right" }], rows: t.wagonT.map((x, i) => [String(i + 1), fmtQ(x)]), foot: ["Razem", fmtQ(t.totalT)] });
-    }
+    if (d.transport) transportBlocks(d.transport, blocks);
     if (d.type === "KOR" && d.corr) {
       const c = d.corr;
       blocks.push({ type: "h", text: `KOREKTA dokumentu nr ${d.opNo}` }, { type: "p", text: `Powód: ${c.reason} · wprowadził: ${c.userName}${c.reverses ? ` · odwraca korektę ${c.reverses}` : ""}` });
@@ -146,6 +128,28 @@
     if (op) blocks.push({ type: "p", muted: true, text: `Operacja ${op.no} · ${opTypeLabel(op)} · wystawił: ${op.userName}${op.extDoc ? ` · dokument zewnętrzny: ${op.extDoc}` : ""}${op.notes ? ` · uwagi: ${op.notes}` : ""}` });
     blocks.push({ type: "signatures", labels: d.type === "WZ" || d.type === "PZ" ? ["Wydał / przyjął (magazyn)", "Kierowca / odbiorca"] : ["Sporządził", "Zatwierdził"] });
     return { title: `${R.DOC_LABEL[d.type]} ${d.no}`, number: d.no, headerRight: App.whName(d.whId), rangeText: Dates.pl(d.date), whText: App.whName(d.whId), blocks };
+  }
+
+  /** Transport na dokumencie TR: dane ogólne + tabela kursów (własny, zewnętrzny albo oba). */
+  function transportBlocks(t, blocks) {
+    const U = Units.label(t.qtyUnit || "");
+    const tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
+    const runTable = (P, own) => ({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
+      rows: P.runs.map(r => [String(r.no), r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—", fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
+      foot: ["Razem", "", "", fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)], note: own && P.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
+    const ownP = t.mode === "own" ? t : t.mode === "mixed" ? t.own : null, extP = t.mode === "external" ? t : t.mode === "mixed" ? t.external : null;
+    if (ownP || extP) tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Kilometry łącznie", `${fmtQ(t.km)} km`], ["Ilość przewieziona", `${fmtQ(t.totalQty || 0)} ${U}`], ["Waga rzeczywista łącznie", t.totalWeightT !== null && t.totalWeightT !== undefined ? `${fmtQ(t.totalWeightT)} t` : "—"]);
+    if (extP) tk.push(["Przewoźnik zewnętrzny", extP.company + (extP.includedInPrice ? " (wliczony w cenę)" : "")]);
+    if (t.mode === "train") {
+      tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);
+      if (t.capacity !== null) tk.push(["Łączna ładowność", `${fmtQ(t.totalCapacity)} ${t.capUnit}`]);
+      tk.push(["Łączny tonaż składu", `${fmtQ(t.totalT)} t`], ["Stawka", `${fmtQ(t.basisQty)} ${Units.label(t.priceUnit)} × ${fmt(t.price)} zł`]);
+    }
+    tk.push(["Koszt transportu", money(t.cost)], ["Wpływ na stan", "brak — transport nie zmienia stanu magazynowego"]);
+    blocks.push({ type: "h", text: "Transport" }, { type: "kv", rows: tk, cols: 1 });
+    if (ownP && ownP.runs && ownP.runs.length) { if (t.mode === "mixed") blocks.push({ type: "p", bold: true, text: "Kursy floty własnej" }); blocks.push(runTable(ownP, true)); }
+    if (extP && extP.runs && extP.runs.length) { if (t.mode === "mixed") blocks.push({ type: "p", bold: true, text: `Kursy firmy zewnętrznej — ${extP.company}` }); blocks.push(runTable(extP, false)); }
+    if (t.mode === "train" && t.wagonT.length) blocks.push({ type: "table", columns: [{ label: "Wagon", w: 1 }, { label: "Tonaż [t]", w: 2, align: "right" }], rows: t.wagonT.map((x, i) => [String(i + 1), fmtQ(x)]), foot: ["Razem", fmtQ(t.totalT)] });
   }
 
   /* ------------------------------------------------------------------ */
@@ -229,7 +233,7 @@
       const model = docModel(d);
       const html = `<div class="doc-print" id="doc-print"><h4>${esc(model.title)}</h4>${model.blocks.filter(b => b.type === "kv" || b.type === "p" || b.type === "h" || b.type === "table").map(b =>
         b.type === "kv" ? `<table>${b.rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table>`
-          : b.type === "h" ? `<h5>${esc(b.text)}</h5>` : b.type === "p" ? `<p class="${b.muted ? "muted" : ""}">${esc(b.text)}</p>`
+          : b.type === "h" ? `<h5>${esc(b.text)}</h5>` : b.type === "p" ? (b.bold ? `<h5>${esc(b.text)}</h5>` : `<p class="${b.muted ? "muted" : ""}">${esc(b.text)}</p>`)
           : `<table class="tbl"><thead><tr>${b.columns.map(c => `<th class="${c.align === "right" ? "r" : ""}">${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map((v, i) => `<td class="${b.columns[i].align === "right" ? "r" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}</div>`;
       const m = Modal.open({ title: `${d.type} ${d.no}`, sub: esc(R.DOC_LABEL[d.type]), wide: true, id: "doc-preview", body: html,
         footer: `${d.opId ? `<button class="btn ghost" type="button" data-opd>Operacja ${esc(d.opNo)}</button>` : ""}<span class="spacer"></span>${printButtons("doc")}<button class="btn primary" type="button" data-ok>Zamknij</button>` });
@@ -1073,7 +1077,7 @@
       const drv = id => (R.byId(S.fleet.drivers, id) || {}).name || "—";
       const opr = id => (R.byId(S.fleet.operators, id) || {}).name || "—";
       const runs = [];      // pojedyncze kursy (operacja może mieć kilka kursów)
-      for (const o of S.operations) if (o.transport && o.transport.mode === "own" && o.status !== "CANCELLED") for (const r of (o.transport.runs || [o.transport])) runs.push({ op: o, r });
+      for (const o of S.operations) if (o.transport && (o.transport.mode === "own" || o.transport.mode === "mixed") && o.status !== "CANCELLED") for (const r of (o.transport.mode === "mixed" ? o.transport.own.runs : (o.transport.runs || [o.transport]))) runs.push({ op: o, r });
       const prods = S.operations.filter(o => o.production && o.production.chipperId && o.status !== "CANCELLED");
       const st = s => `<span class="badge ${s === "aktywny" ? "ok" : s === "serwis" ? "warn" : ""}">${esc(R.ASSET_STATUS[s] || s)}</span>`;
       const edit = App.can("fleet.edit");

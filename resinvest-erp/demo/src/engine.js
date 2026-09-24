@@ -15,7 +15,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "2.4.0-demo";
+  const VERSION = "2.5.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -232,7 +232,7 @@
   };
   const DIFF_REASONS = { wilgotnosc: "Wilgotność / osiadanie", jakosc: "Jakość surowca", straty: "Straty przy rębaniu", pomiar: "Różnica pomiaru", inna: "Inna przyczyna" };
   const CORRECTION_REASONS = ["błędnie wpisana ilość", "błędna cena", "błędna jednostka", "błędny kontrahent", "błędny magazyn", "błędne zużycie surowca", "błędny transport", "pomyłka operatora", "korekta dokumentu zewnętrznego", "inny"];
-  const TRANSPORT_MODES = { none: "Brak transportu", own: "Transport własny", external: "Transport zewnętrzny", train: "Pociąg" };
+  const TRANSPORT_MODES = { none: "Brak transportu", own: "Transport własny", external: "Transport zewnętrzny", mixed: "Transport własny + zewnętrzny", train: "Pociąg" };
   const VEHICLE_TYPES = { ruchoma_podloga: "Ruchoma podłoga", ciezarowy: "Samochód ciężarowy", wywrotka: "Wywrotka" };
   const ASSET_STATUS = { aktywny: "Aktywny", serwis: "W serwisie", wycofany: "Wycofany" };
   const INV_STATUS = { OTWARTA: "OTWARTA", ZAMKNIETA: "ZAMKNIĘTA" };
@@ -657,7 +657,9 @@
         return { productId: null, qty: 0, unit: null };
       };
       const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
-      if (mode === "own") {
+      /* Kursy transportu własnego / zewnętrznego — liczone osobno, łączone w trybie „mixed”. */
+      const ownPart = () => {
+        const part = { kind: "own" };
         /* Transport własny: liczba kursów → osobne kursy (pojazd, kierowca, km, stawka, ilość, waga rzeczywista).
            Dane z wersji ≤ 2.1 (jeden kurs bez tablicy runs) są traktowane jako jeden kurs. */
         const O = T.own || {};
@@ -696,16 +698,19 @@
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
         const f = runs[0] || {};
-        Object.assign(transport, {
+        Object.assign(part, {
           runs, runCount: runs.length, qtyUnit: sp.unit, totalQty, totalWeightT: weighed.length ? rq(weighed.reduce((a, r) => a + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
           km: rq(runs.reduce((a, r) => a + r.km, 0)), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2),
           vehicleId: f.vehicleId || "", vehicleName: f.vehicleName || "", reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "),
           driverId: f.driverId || "", driverName: [...new Set(runs.map(r => r.driverName).filter(Boolean))].join(", "), defaultDriverId: f.defaultDriverId || "",
           driverOverridden: runs.some(r => r.driverOverridden), rate: f.rate || 0
         });
-        if (runs.length > 1 && sp.qty > 0 && Math.abs(totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
         if (runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
-      } else if (mode === "external") {
+        part.runs.forEach(r => { r.kind = "own"; });
+        return part;
+      };
+      const extPart = () => {
+        const part = { kind: "external" };
         /* Transport zewnętrzny: firma przewozowa + liczba kursów; każdy kurs: nr rej. auta przewoźnika, kierowca,
            km, stawka (domyślna), opcjonalnie fracht kursu z faktury, ilość, waga rzeczywista.
            Koszt kursu = fracht kursu (jeśli podany) albo km × stawka; „wliczony w cenę” → 0 zł.
@@ -742,15 +747,35 @@
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
-        Object.assign(transport, {
+        Object.assign(part, {
           company: str(X.company), includedInPrice: included, runs, runCount: runs.length, qtyUnit: sp.unit, totalQty,
           totalWeightT: weighed.length ? rq(weighed.reduce((a, r) => a + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
           reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "), driverName: [...new Set(runs.map(r => r.driver).filter(Boolean))].join(", "),
           km: rq(runs.reduce((a, r) => a + r.km, 0)), freight: round(runs.reduce((a, r) => a + (r.freight || 0), 0), 2), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2)
         });
-        if (runs.length > 1 && sp.qty > 0 && Math.abs(totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
         if (!legacy && runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
-      } else if (mode === "train") {
+        part.runs.forEach(r => { r.kind = "external"; r.company = part.company; });
+        return part;
+      };
+      if (mode === "own") Object.assign(transport, ownPart());
+      else if (mode === "external") Object.assign(transport, extPart());
+      else if (mode === "mixed") {
+        // jedna operacja (np. produkcja w lesie → magazyn): część kursów flotą własną, część firmą zewnętrzną
+        const a = ownPart(), b = extPart();
+        const runs = a.runs.concat(b.runs).map((r, i) => Object.assign(r, { no: i + 1 }));
+        const weighed = runs.filter(r => r.weightT !== null);
+        Object.assign(transport, {
+          own: a, external: b, runs, runCount: runs.length, qtyUnit: a.qtyUnit || b.qtyUnit, totalQty: rq(a.totalQty + b.totalQty),
+          totalWeightT: weighed.length ? rq(weighed.reduce((s, r) => s + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
+          km: rq(a.km + b.km), cost: round(a.cost + b.cost, 2), company: b.company, includedInPrice: b.includedInPrice,
+          reg: [a.reg, b.reg].filter(Boolean).join(", "), driverName: [a.driverName, b.driverName].filter(Boolean).join(", "), driverOverridden: a.driverOverridden
+        });
+      }
+      if (["own", "external", "mixed"].includes(mode)) {
+        const sp = shipped();
+        if (transport.runs.length > 1 && sp.qty > 0 && Math.abs(transport.totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(transport.totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
+      }
+      if (mode === "train") {
         const Tr = T.train || {};
         const n = num("transport.train.wagonCount", Tr.wagonCount, { gt: 0, integer: true, label: "liczbę wagonów" });
         if (n !== null && n > cfg.maxWagons) err("transport.train.wagonCount", `Maksymalnie ${cfg.maxWagons} wagonów w jednym składzie`);
@@ -1410,8 +1435,7 @@
           const addC = (n, cost, km) => { const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + cost, 2); c.km = rq(c.km + (km || 0)); m.set(n, c); };
           for (const op of trOps) {
             const t = op.transport;
-            if (t.mode === "own") for (const r of (t.runs || [t])) addC(`Transport własny (${r.reg})`, r.cost, r.km);
-            else if (t.mode === "external") for (const r of (t.runs || [t])) addC(t.company, r.cost, r.km);
+            if (t.mode === "own" || t.mode === "external" || t.mode === "mixed") for (const r of (t.runs || [t])) addC((r.kind || t.mode) === "own" ? `Transport własny (${r.reg})` : (r.company || t.company), r.cost, r.km);
             else addC(`${t.carrier || "Pociąg"} (kolej)`, t.cost, t.km);
           }
           return [...m.values()];

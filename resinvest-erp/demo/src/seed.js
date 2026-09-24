@@ -140,7 +140,15 @@
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "20", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rybnik", lesnictwo: "Wielopole", kwit: "KW 0217/09/2026", chipperId: "ch_jenz" },
         sale: { enabled: true, buyerId: "pa_ec_zab", price: "90", priceUnit: "MP" },
-        transport: { mode: "own", place: "Elektrociepłownia Zabrze S.A.", own: { vehicleId: "ve_volvo", km: "262", rate: "5" } }
+        // jedna produkcja, dwa rodzaje transportu: 3 kursy flotą własną + 2 kursy firmą zewnętrzną (5 × 16 MP = 80 MP)
+        transport: { mode: "mixed", place: "Elektrociepłownia Zabrze S.A.",
+          own: { runCount: "3", runs: [
+            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,4" },
+            { vehicleId: "ve_scania", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,2" },
+            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,3" }] },
+          external: { company: "DAP Trans", includedInPrice: false, runCount: "2", runs: [
+            { reg: "SZA 7K901", driver: "Marek Pawlik", km: "26", rate: "6", freight: "", qty: "16", weightT: "5,5" },
+            { reg: "SZA 7K902", driver: "Leszek Mróz", km: "26", rate: "6", freight: "", qty: "16", weightT: "5,1" }] } }
       }],
       ["u_pys", "2026-09-08", {
         purchase: { supplierKind: "nadlesnictwo", supplierId: "pa_ndl_ryb", lesnictwo: "Wielopole", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
