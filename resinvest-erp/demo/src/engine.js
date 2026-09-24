@@ -15,7 +15,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "2.2.0-demo";
+  const VERSION = "2.3.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -332,7 +332,7 @@
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
-      purchase: { supplierKind: "firma", supplierId: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
+      purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
       mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
@@ -481,14 +481,24 @@
 
     if (type === "ZAKUP") {
       /* ============================ A. ZAKUP ============================ */
-      const supplier = byId(state.partners, P.supplierId);
-      if (!P.supplierId) err("purchase.supplierId", "Wybierz dostawcę");
-      else if (!supplier || !["supplier", "both"].includes(supplier.role) || supplier.active === false) err("purchase.supplierId", "Nieznany lub nieaktywny dostawca");
-      const sKind = partnerKind(supplier);
-      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierId", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
+      /* Dostawca: wybór z kartoteki albo nazwa wpisana ręcznie. Nazwa zgodna z kartoteką (bez względu na wielkość liter)
+         wskazuje istniejącego kontrahenta; nowa nazwa = nowy dostawca, dopisywany do kartoteki przy zatwierdzeniu. */
+      const typed = str(P.supplierName).replace(/\s+/g, " ");
+      let supplier = byId(state.partners, P.supplierId), newSupplier = null;
+      if (!supplier && typed) {
+        supplier = state.partners.find(p => str(p.name).toLowerCase() === typed.toLowerCase()) || null;
+        if (!supplier) newSupplier = { name: typed, kind: SUPPLIER_KINDS[P.supplierKind] ? P.supplierKind : "firma" };
+      }
+      if (!supplier && !newSupplier) err("purchase.supplierName", "Wpisz nazwę dostawcy albo wybierz z listy");
+      else if (newSupplier && typed.length < 3) err("purchase.supplierName", "Nazwa dostawcy musi mieć co najmniej 3 znaki");
+      else if (supplier && !["supplier", "both"].includes(supplier.role)) err("purchase.supplierName", `„${supplier.name}” jest w kartotece jako odbiorca, nie dostawca`);
+      else if (supplier && supplier.active === false) err("purchase.supplierName", `Dostawca „${supplier.name}” jest nieaktywny`);
+      const sObj = supplier || newSupplier;
+      const sKind = supplier ? partnerKind(supplier) : newSupplier ? newSupplier.kind : null;
+      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierName", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
       if (sKind === "nadlesnictwo" && !str(P.lesnictwo)) err("purchase.lesnictwo", "Podaj leśnictwo (wpisz nowe albo wybierz z listy)");
       // drewno z nadleśnictwa: pochodzenie produkcji uzupełnia się z zakupu
-      if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(supplier); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
+      if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(sObj); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
       if (!BASIS[P.basis]) err("purchase.basis", "Wybierz podstawę: Deklaracja albo KZR");
       const product = prodOf(P.productId);
       if (!P.productId) err("purchase.productId", "Wybierz produkt / surowiec");
@@ -509,10 +519,10 @@
         }
       } else if (P.weightMode !== "auto") err("purchase.weightMode", "Wybierz sposób ustalenia wagi");
       totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
-      norm.purchase = { supplierId: P.supplierId, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
+      norm.purchase = { supplierId: supplier ? supplier.id : "", supplierName: sObj ? sObj.name : "", newSupplier, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
         push("ZAKUP", product.id, stockQty);
-        documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: P.supplierId, partner: partyName(P.supplierId), basis: P.basis, stock: "+" });
+        documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: supplier ? supplier.id : "", partner: sObj ? sObj.name : "", basis: P.basis, stock: "+" });
       }
       if (R_.enabled) {
         if (product && product.cat !== "drewno") err("production.enabled", "Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)");
@@ -801,6 +811,16 @@
     const main = plan.type === "PRODUKCJA" ? docs.find(d => d.type === "PW") : docs[0];
     const mainNo = main ? main.no : null;
     const input = clone(draft); delete input.idemKey; delete input.draftId;
+    // nowy dostawca wpisany ręcznie → kartoteka kontrahentów (w tej samej, atomowej zmianie)
+    if (n.purchase && n.purchase.newSupplier) {
+      const ns = { id: uid("pa"), name: n.purchase.newSupplier.name, role: "supplier", kind: n.purchase.newSupplier.kind, city: "", active: true, createdAt: nowIso(ctx), createdBy: ctx.user.name };
+      if (ns.kind === "nadlesnictwo") ns.lesnictwa = [];
+      state.partners.push(ns);
+      n.purchase.supplierId = ns.id; n.purchase.newSupplier = null;
+      docs.forEach(d => { if (d.type === "PZ") d.partnerId = ns.id; });
+      input.purchase.supplierId = ns.id; input.purchase.supplierName = ns.name;
+      audit(state, ctx, { entity: "partner", entityId: ns.id, opNo: ns.name, event: "partner", action: `Nowy dostawca (${SUPPLIER_KINDS[ns.kind].label}) — dodany przy zakupie`, before: null, after: { nazwa: ns.name, grupa: SUPPLIER_KINDS[ns.kind].label }, source: (ctx && ctx.source) || "Formularz „Nowa operacja”" });
+    }
     const op = {
       id: opId, idemKey: draft.idemKey, type: plan.type, no: mainNo,
       date: plan.date, whId: plan.whId, toWhId: n.mm ? n.mm.toWhId : null, status: "POSTED",

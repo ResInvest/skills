@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="description" content="ResInvest ERP — Demo v2: zakup, WZ, produkcja na magazyn, sprzedaż bezpośrednia, MM, korekty i anulowania, historia, raporty okresowe, kwit produkcji dnia, druk i PDF.">
-<meta name="generator" content="ResInvest ERP demo build 2.2.0-demo · 2026-09-24">
+<meta name="generator" content="ResInvest ERP demo build 2.3.0-demo · 2026-09-24">
 <title>ResInvest ERP · Demo v2</title>
 <style>
 /* =========================================================================
@@ -447,7 +447,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 (function (root) {
   "use strict";
 
-  const VERSION = "2.2.0-demo";
+  const VERSION = "2.3.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -764,7 +764,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
-      purchase: { supplierKind: "firma", supplierId: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
+      purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
       mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
@@ -913,14 +913,24 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
     if (type === "ZAKUP") {
       /* ============================ A. ZAKUP ============================ */
-      const supplier = byId(state.partners, P.supplierId);
-      if (!P.supplierId) err("purchase.supplierId", "Wybierz dostawcę");
-      else if (!supplier || !["supplier", "both"].includes(supplier.role) || supplier.active === false) err("purchase.supplierId", "Nieznany lub nieaktywny dostawca");
-      const sKind = partnerKind(supplier);
-      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierId", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
+      /* Dostawca: wybór z kartoteki albo nazwa wpisana ręcznie. Nazwa zgodna z kartoteką (bez względu na wielkość liter)
+         wskazuje istniejącego kontrahenta; nowa nazwa = nowy dostawca, dopisywany do kartoteki przy zatwierdzeniu. */
+      const typed = str(P.supplierName).replace(/\s+/g, " ");
+      let supplier = byId(state.partners, P.supplierId), newSupplier = null;
+      if (!supplier && typed) {
+        supplier = state.partners.find(p => str(p.name).toLowerCase() === typed.toLowerCase()) || null;
+        if (!supplier) newSupplier = { name: typed, kind: SUPPLIER_KINDS[P.supplierKind] ? P.supplierKind : "firma" };
+      }
+      if (!supplier && !newSupplier) err("purchase.supplierName", "Wpisz nazwę dostawcy albo wybierz z listy");
+      else if (newSupplier && typed.length < 3) err("purchase.supplierName", "Nazwa dostawcy musi mieć co najmniej 3 znaki");
+      else if (supplier && !["supplier", "both"].includes(supplier.role)) err("purchase.supplierName", `„${supplier.name}” jest w kartotece jako odbiorca, nie dostawca`);
+      else if (supplier && supplier.active === false) err("purchase.supplierName", `Dostawca „${supplier.name}” jest nieaktywny`);
+      const sObj = supplier || newSupplier;
+      const sKind = supplier ? partnerKind(supplier) : newSupplier ? newSupplier.kind : null;
+      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierName", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
       if (sKind === "nadlesnictwo" && !str(P.lesnictwo)) err("purchase.lesnictwo", "Podaj leśnictwo (wpisz nowe albo wybierz z listy)");
       // drewno z nadleśnictwa: pochodzenie produkcji uzupełnia się z zakupu
-      if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(supplier); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
+      if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(sObj); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
       if (!BASIS[P.basis]) err("purchase.basis", "Wybierz podstawę: Deklaracja albo KZR");
       const product = prodOf(P.productId);
       if (!P.productId) err("purchase.productId", "Wybierz produkt / surowiec");
@@ -941,10 +951,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         }
       } else if (P.weightMode !== "auto") err("purchase.weightMode", "Wybierz sposób ustalenia wagi");
       totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
-      norm.purchase = { supplierId: P.supplierId, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
+      norm.purchase = { supplierId: supplier ? supplier.id : "", supplierName: sObj ? sObj.name : "", newSupplier, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
         push("ZAKUP", product.id, stockQty);
-        documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: P.supplierId, partner: partyName(P.supplierId), basis: P.basis, stock: "+" });
+        documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: supplier ? supplier.id : "", partner: sObj ? sObj.name : "", basis: P.basis, stock: "+" });
       }
       if (R_.enabled) {
         if (product && product.cat !== "drewno") err("production.enabled", "Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)");
@@ -1233,6 +1243,16 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const main = plan.type === "PRODUKCJA" ? docs.find(d => d.type === "PW") : docs[0];
     const mainNo = main ? main.no : null;
     const input = clone(draft); delete input.idemKey; delete input.draftId;
+    // nowy dostawca wpisany ręcznie → kartoteka kontrahentów (w tej samej, atomowej zmianie)
+    if (n.purchase && n.purchase.newSupplier) {
+      const ns = { id: uid("pa"), name: n.purchase.newSupplier.name, role: "supplier", kind: n.purchase.newSupplier.kind, city: "", active: true, createdAt: nowIso(ctx), createdBy: ctx.user.name };
+      if (ns.kind === "nadlesnictwo") ns.lesnictwa = [];
+      state.partners.push(ns);
+      n.purchase.supplierId = ns.id; n.purchase.newSupplier = null;
+      docs.forEach(d => { if (d.type === "PZ") d.partnerId = ns.id; });
+      input.purchase.supplierId = ns.id; input.purchase.supplierName = ns.name;
+      audit(state, ctx, { entity: "partner", entityId: ns.id, opNo: ns.name, event: "partner", action: `Nowy dostawca (${SUPPLIER_KINDS[ns.kind].label}) — dodany przy zakupie`, before: null, after: { nazwa: ns.name, grupa: SUPPLIER_KINDS[ns.kind].label }, source: (ctx && ctx.source) || "Formularz „Nowa operacja”" });
+    }
     const op = {
       id: opId, idemKey: draft.idemKey, type: plan.type, no: mainNo,
       date: plan.date, whId: plan.whId, toWhId: n.mm ? n.mm.toWhId : null, status: "POSTED",
@@ -3024,7 +3044,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ------------------------------------------------------------------ */
   const HELP = {
     "date": "<b>Co:</b> dzień operacji. <b>Po co:</b> decyduje o miesiącu księgowania i numeracji dokumentów. Nie może być z przyszłości ani z okresu zamkniętego. <b>Przykład:</b> 2026-09-23.",
-    "purchase.supplierId": "<b>Co:</b> dostawca z wybranej grupy (firma albo nadleśnictwo). <b>Po co:</b> trafia na dokument PZ i do rozliczeń; ustawia podstawę (KZR / Deklaracja).",
+    "purchase.supplierName": "<b>Co:</b> nazwa dostawcy — <b>wpisz ręcznie</b> albo wybierz z podpowiedzi. Nowa nazwa zostanie dopisana do kartoteki Kontrahenci przy zatwierdzeniu operacji. <b>Po co:</b> trafia na dokument PZ; ustawia podstawę (KZR / Deklaracja).",
     "purchase.supplierKind": "<b>Co:</b> grupa dostawcy. <b>Firma branży drzewnej / przedsiębiorstwo drzewne</b> → podstawa domyślnie <b>KZR</b>. <b>Nadleśnictwo</b> → podstawa domyślnie <b>Deklaracja</b> i dodatkowe pole <b>Leśnictwo</b>.",
     "purchase.lesnictwo": "<b>Co:</b> leśnictwo w wybranym nadleśnictwie. Wybierz zapisane z listy albo wpisz nowe — po zatwierdzeniu pojawi się na liście. <b>Przykład:</b> Wielopole.",
     "transport.own.runCount": "<b>Co:</b> ile kursów wykonała flota własna. Po wpisaniu np. <b>4</b> pojawią się 4 osobne rubryki: pojazd, kierowca, km, stawka, ilość i waga rzeczywista. <b>Przykład:</b> 4 kursy × 100 MP = 400 MP.",
@@ -3177,6 +3197,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     },
     whId() { return this.mode === "correct" && this.op ? this.op.whId : App.user().whId; },
     /** Grupa dostawcy: wybór użytkownika, a przy starszych szkicach — z kartoteki wybranego dostawcy. */
+    /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
+    supplierText() {
+      const P = this.draft.purchase;
+      if (!P.supplierName && P.supplierId) P.supplierName = (App.partner(P.supplierId) || {}).name || "";
+      return P.supplierName || "";
+    },
     supplierKind() {
       const P = this.draft.purchase;
       if (R.SUPPLIER_KINDS[P.supplierKind]) return P.supplierKind;
@@ -3304,7 +3330,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
             <div class="field span-all" data-field="purchase.supplierKind"><span class="lbl">Dostawca — wybierz grupę <span class="req" aria-hidden="true">*</span></span>
               <div class="scope two" role="group" aria-label="Grupa dostawcy">${kindCard("firma", "Tartaki, zakłady i firmy leśne. Podstawa domyślnie: KZR.")}${kindCard("nadlesnictwo", "Lasy Państwowe. Podstawa domyślnie: Deklaracja. Dodatkowo: leśnictwo.")}</div>
               <div class="help tut">${HELP["purchase.supplierKind"]}</div></div>
-            ${field({ key: "purchase.supplierId", label: sKind === "nadlesnictwo" ? "Nadleśnictwo" : "Dostawca (firma)", req: true, span: "span2", control: selIn("purchase.supplierId", [{ v: "", l: sKind === "nadlesnictwo" ? "— wybierz nadleśnictwo —" : "— wybierz dostawcę —" }].concat(suppliers.map(p => ({ v: p.id, l: p.name }))), d.purchase.supplierId, { struct: true }) })}
+            ${field({ key: "purchase.supplierName", label: sKind === "nadlesnictwo" ? "Nadleśnictwo" : "Dostawca (firma)", req: true, span: "span2", control: textIn("purchase.supplierName", this.supplierText(), { placeholder: sKind === "nadlesnictwo" ? "wpisz lub wybierz, np. Nadleśnictwo Rybnik" : "wpisz lub wybierz, np. Lander Agro", list: "dl-suppliers" }) + `<datalist id="dl-suppliers">${suppliers.map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>` })}
             ${sKind === "nadlesnictwo" ? field({ key: "purchase.lesnictwo", label: "Leśnictwo", req: true, control: textIn("purchase.lesnictwo", d.purchase.lesnictwo, { placeholder: "wybierz lub wpisz nowe", list: "dl-lesn" }) + `<datalist id="dl-lesn">${this.lesnictwa(d.purchase.supplierId).map(x => `<option value="${esc(x)}">`).join("")}</datalist>` }) : ""}
             ${field({ key: "purchase.basis", label: "Podstawa", req: true, span: sKind === "nadlesnictwo" ? "" : "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: "Deklaracja" }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
             ${field({ key: "purchase.productId", label: "Produkt / surowiec", req: true, span: "span2", control: selIn("purchase.productId", [{ v: "", l: "— wybierz produkt —" }].concat(S.products.filter(p => p.active !== false).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
@@ -3557,7 +3583,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           const k = el.dataset.skind, P = d.purchase;
           P.supplierKind = k; P.basis = R.SUPPLIER_KINDS[k].basis;
           const s = App.partner(P.supplierId);
-          if (s && R.partnerKind(s) !== k) { P.supplierId = ""; P.lesnictwo = ""; }
+          if (s && R.partnerKind(s) !== k) { P.supplierId = ""; P.supplierName = ""; P.lesnictwo = ""; }
           this.persist(); this.rerender(); return;
         }
         if (el.dataset.mode !== undefined) {
@@ -3578,7 +3604,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       this.touched.add(key);
       this.sideEffects(key, v);
       this.persist();
-      if (el.hasAttribute("data-struct") || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
+      const supChanged = this._supplierChanged; this._supplierChanged = false;
+      if (el.hasAttribute("data-struct") || supChanged || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
       else this.refresh();
     },
 
@@ -3603,14 +3630,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankRun(), { vehicleId: prev.vehicleId, driverId: prev.driverId, km: prev.km, rate: prev.rate }) : R.blankRun()); }
         O.runs = arr;
       }
-      if (key === "purchase.supplierId") {
-        const s = App.partner(v);
-        if (s) {
-          const k = R.partnerKind(s);
-          d.purchase.supplierKind = k; d.purchase.basis = R.SUPPLIER_KINDS[k].basis;
-          if (k === "nadlesnictwo") { d.production.type = "lesna"; if (!d.production.ndl) d.production.ndl = R.ndlName(s); }
-        }
-        d.purchase.lesnictwo = "";
+      if (key === "purchase.supplierName") {
+        // nazwa zgodna z kartoteką → istniejący dostawca; inna → nowy (dopisany przy zatwierdzeniu)
+        const name = String(v).trim().replace(/\s+/g, " ").toLowerCase();
+        const s = name ? S.partners.find(p => ["supplier", "both"].includes(p.role) && p.name.trim().toLowerCase() === name) : null;
+        const prevId = d.purchase.supplierId;
+        d.purchase.supplierId = s ? s.id : "";
+        if (s) { const k = R.partnerKind(s); if (k !== d.purchase.supplierKind || s.id !== prevId) { d.purchase.supplierKind = k; d.purchase.basis = R.SUPPLIER_KINDS[k].basis; } }
+        if (this.supplierKind() === "nadlesnictwo") { d.production.type = "lesna"; d.production.ndl = R.ndlName({ name: String(v).trim() }); }
+        if (s ? s.id !== prevId : !!prevId) { d.purchase.lesnictwo = ""; this._supplierChanged = true; }
       }
       if (key === "purchase.lesnictwo" && this.supplierKind() === "nadlesnictwo") d.production.lesnictwo = v;
       if (key === "transport.place") d.transport.placeTouched = true;
@@ -3676,6 +3704,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (n.purchase) {
         const P = n.purchase, p = App.product(P.productId);
         if (P.qty !== null && p && P.unit !== p.unit) add("purchase.qty", `= <b>${esc(qn(P.stockQty, p.id))}</b> na stanie`);
+        if (P.newSupplier) add("purchase.supplierName", `<span class="badge info">nowy dostawca</span> zostanie dopisany do kartoteki (${esc(R.SUPPLIER_KINDS[P.newSupplier.kind].label)}) przy zatwierdzeniu`);
+        else if (P.supplierId) add("purchase.supplierName", `z kartoteki ✓`);
         if (P.qty !== null && P.price !== null) add("purchase.price", `${fmtQ(P.qty)} ${Units.label(P.unit)} × ${fmt(P.price)} zł`);
         out("purchase.cost", P.qty !== null && P.price !== null ? money(P.cost) : "—");
         out("purchase.weightAuto", P.qty !== null && p ? orient(P.stockQty, p.id) : "—");
@@ -3894,7 +3924,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         add("Magazyn", esc(App.whName(plan.whId)));
         add("Data", esc(Dates.pl(plan.date)));
         add("Użytkownik", esc(plan.user.name));
-        if (n.purchase) { add("Dostawca", esc((App.partner(n.purchase.supplierId) || {}).name)); add("Zakup", `${esc(fmtQ(n.purchase.qty))} ${Units.label(n.purchase.unit)} ${esc(name(n.purchase.productId))} × ${fmt(n.purchase.price)} zł = <b>${money(n.purchase.cost)}</b>`); }
+        if (n.purchase) { add("Dostawca", esc(n.purchase.supplierName) + (n.purchase.newSupplier ? ` <span class="badge info">nowy — zostanie dodany do kartoteki</span>` : "")); add("Zakup", `${esc(fmtQ(n.purchase.qty))} ${Units.label(n.purchase.unit)} ${esc(name(n.purchase.productId))} × ${fmt(n.purchase.price)} zł = <b>${money(n.purchase.cost)}</b>`); }
         if (X) {
           const raw = App.product(X.rawProductId), outP = App.product(X.outProductId);
           if (raw) add(X.mode === "direct" ? "Surowiec (z lasu, nie ze stanu)" : "Surowiec", esc(raw.name));
@@ -4936,7 +4966,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       return `<div class="page-head"><div class="titles"><h2>Kontrahenci</h2><p>Dostawcy i odbiorcy z obrotem (bez dokumentów anulowanych). Kliknij kontrahenta — raport okresowy z filtrem kontrahenta.</p></div></div>
         <div class="card"><div class="toolbar"><div class="field"><label for="pa-role">Rola</label><select class="ctrl" id="pa-role"><option value="">Wszyscy</option><option value="supplier" ${f.role === "supplier" ? "selected" : ""}>Dostawcy</option><option value="buyer" ${f.role === "buyer" ? "selected" : ""}>Odbiorcy</option></select></div></div>
           <div class="tbl-wrap"><table class="tbl" id="partners-table"><thead><tr><th>Nazwa</th><th>Rola</th><th>Grupa dostawcy</th><th>Miejscowość</th><th class="r">Operacje</th><th class="r">Zakupy</th><th class="r">Sprzedaż</th><th>Ostatnia operacja</th><th></th></tr></thead><tbody>
-            ${rows.map(p => { const s = stats.get(p.id) || { n: 0, buy: 0, sell: 0, last: "" }; return `<tr><td><b>${esc(p.name)}</b></td><td>${ROLE[p.role]}</td><td>${p.role === "buyer" ? "—" : esc(R.SUPPLIER_KINDS[R.partnerKind(p)].label)}${p.lesnictwa ? `<br><small class="dim">leśnictwa: ${esc(p.lesnictwa.join(", "))}</small>` : ""}</td><td>${esc(p.city || "")}</td><td class="r">${s.n}</td><td class="r">${esc(money(s.buy))}</td><td class="r">${esc(money(s.sell))}</td><td>${esc(Dates.pl(s.last) || "—")}</td><td class="r"><button class="btn sm" type="button" data-prep="${esc(p.id)}">Raport</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
+            ${rows.map(p => { const s = stats.get(p.id) || { n: 0, buy: 0, sell: 0, last: "" }; return `<tr><td><b>${esc(p.name)}</b></td><td>${ROLE[p.role]}</td><td>${p.role === "buyer" ? "—" : esc(R.SUPPLIER_KINDS[R.partnerKind(p)].label)}${p.lesnictwa && p.lesnictwa.length ? `<br><small class="dim">leśnictwa: ${esc(p.lesnictwa.join(", "))}</small>` : ""}${p.createdBy ? `<br><small class="dim">dodany przy zakupie: ${esc(p.createdBy)}</small>` : ""}</td><td>${esc(p.city || "")}</td><td class="r">${s.n}</td><td class="r">${esc(money(s.buy))}</td><td class="r">${esc(money(s.sell))}</td><td>${esc(Dates.pl(s.last) || "—")}</td><td class="r"><button class="btn sm" type="button" data-prep="${esc(p.id)}">Raport</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
     },
     bind(page) {
       $("#pa-role", page).onchange = e => { App.tabs.partners.role = e.target.value; App.render(); };

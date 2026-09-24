@@ -67,6 +67,12 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 | 23 | Transport własny: liczba kursów, rubryka na kurs (pojazd, kierowca domyślny, km, stawka, ilość MP, waga rzeczywista), podsumowanie MP / t / koszt | DONE | U: „2.2 Kursy…” (3 testy); E: „2.2 Liczba kursów 4…”, „2.2 Podsumowanie kursów: 400 MP, 132 t…”, „2.2 Zapisane…” |
 | 24 | Błąd: opisy wyliczeń powielały się („0 km × 5,00 zł/km · 0 km × …”) | DONE | E: „Poprawka: opis wyliczenia nie powiela się…” |
 
+### Demo v2.3
+
+| # | Wymaganie | Status | Dowód |
+|---|---|---|---|
+| 25 | Dostawca (firma) i nadleśnictwo — możliwość wpisania ręcznie; nowy kontrahent dopisywany do kartoteki | DONE | U: „2.3 Dostawca wpisany ręcznie…” (2 testy); E: „2.3 …” (9 kontroli) |
+
 ## 2. Znalezione problemy
 
 | Problem | Status |

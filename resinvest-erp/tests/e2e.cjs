@@ -199,7 +199,7 @@ async function fillForestDirect(page) {
 
     /* ------------- wersja robocza ------------- */
     await preset(page, "zakup");
-    await page.selectOption("#f-purchase-supplierId", "pa_lander"); await fillTab(page, "#f-purchase-qty", "12");
+    await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "12");
     const nD = await opsN(page);
     await page.click("#summary [data-draft]"); await page.waitForTimeout(300);
     await go(page, "operacje");
@@ -336,9 +336,9 @@ async function fillForestDirect(page) {
     await preset(page, "zakup");
     check("2.2 Dostawca: dwie grupy (firma / nadleśnictwo), domyślnie firma → KZR", !!(await page.$("#f-skind-firma")) && !!(await page.$("#f-skind-nadlesnictwo")) && (await page.inputValue("#f-purchase-basis")) === "KZR" && !(await page.$("#f-purchase-lesnictwo")));
     await tick(page, "f-skind-nadlesnictwo"); await page.waitForTimeout(100);
-    const ndlOpts = await page.$$eval("#f-purchase-supplierId option", o => o.map(x => x.textContent).filter(x => !x.startsWith("—")));
+    const ndlOpts = await page.$$eval("#dl-suppliers option", o => o.map(x => x.value));
     check("2.2 Nadleśnictwo: lista tylko nadleśnictw, podstawa Deklaracja, pole Leśnictwo", ndlOpts.length === 2 && ndlOpts.every(x => x.startsWith("Nadleśnictwo")) && (await page.inputValue("#f-purchase-basis")) === "DEKL" && !!(await page.$("#f-purchase-lesnictwo")), ndlOpts);
-    await page.selectOption("#f-purchase-supplierId", "pa_ndl_rr"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-purchase-supplierName", "Nadleśnictwo Rudy Raciborskie"); await page.waitForTimeout(100);
     const lesn = await page.$$eval("#dl-lesn option", o => o.map(x => x.value));
     check("2.2 Leśnictwo: lista zapisanych leśnictw nadleśnictwa", ["Stanica", "Kuźnia"].every(x => lesn.includes(x)), lesn);
     await page.selectOption("#f-purchase-basis", "KZR");
@@ -365,8 +365,31 @@ async function fillForestDirect(page) {
     check("2.2 Zatwierdzenie zakupu z 4 kursami", (await approve(page)) === 1);
     const kop = await page.evaluate(() => RIW_DEBUG.store.state.operations.at(-1).transport);
     check("2.2 Zapisane: 4 kursy, 2 pojazdy, 400 MP, koszt 900 zł", kop.runs.length === 4 && kop.reg === "SGL 4T821, SZA 12345" && kop.totalQty === 400 && kop.cost === 900, kop.reg);
-    await preset(page, "zakup"); await tick(page, "f-skind-nadlesnictwo"); await page.selectOption("#f-purchase-supplierId", "pa_ndl_rr"); await page.waitForTimeout(100);
+    await preset(page, "zakup"); await tick(page, "f-skind-nadlesnictwo"); await fillTab(page, "#f-purchase-supplierName", "Nadleśnictwo Rudy Raciborskie"); await page.waitForTimeout(100);
     check("2.2 Nowe leśnictwo zapisane na liście", (await page.$$eval("#dl-lesn option", o => o.map(x => x.value))).includes("Leśnictwo Testowe"));
+    /* ------------- 2.3: dostawca i nadleśnictwo wpisywane ręcznie ------------- */
+    await preset(page, "zakup");
+    check("2.3 Pole dostawcy: tekst do wpisania + podpowiedzi z kartoteki", (await page.getAttribute("#f-purchase-supplierName", "list")) === "dl-suppliers" && (await page.$$("#dl-suppliers option")).length >= 3);
+    await fillTab(page, "#f-purchase-supplierName", "Tartak Nowy Las");
+    check("2.3 Nowa firma: komunikat „nowy dostawca”, podstawa KZR", nb(await page.textContent('[data-calc="purchase.supplierName"]')).includes("nowy dostawca") && (await page.inputValue("#f-purchase-basis")) === "KZR");
+    await fillTab(page, "#f-purchase-qty", "10"); await page.fill("#f-purchase-price", "200");
+    const np0 = await page.evaluate(() => RIW_DEBUG.store.state.partners.length);
+    await page.click("#summary [data-save]"); await page.waitForSelector("#confirm-op");
+    check("2.3 Podsumowanie: dostawca oznaczony jako nowy", nb(await page.textContent("#confirm-op")).includes("Tartak Nowy Las") && nb(await page.textContent("#confirm-op")).includes("nowy — zostanie dodany do kartoteki"));
+    await page.click("#confirm-yes"); await page.waitForSelector("#op-detail"); await closeModals(page);
+    check("2.3 Nowa firma dopisana do kartoteki (grupa firma)", await page.evaluate(n => { const s = RIW_DEBUG.store.state; const p = s.partners.find(x => x.name === "Tartak Nowy Las"); return s.partners.length === n + 1 && p && p.kind === "firma" && s.operations.at(-1).purchase.supplierId === p.id; }, np0));
+    await preset(page, "zakup"); await tick(page, "f-skind-nadlesnictwo"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-purchase-supplierName", "Nadleśnictwo Kędzierzyn");
+    await fillTab(page, "#f-purchase-lesnictwo", "Sławięcice");
+    check("2.3 Nowe nadleśnictwo wpisane ręcznie: Deklaracja, leśnictwo wpisane", (await page.inputValue("#f-purchase-basis")) === "DEKL" && nb(await page.textContent('[data-calc="purchase.supplierName"]')).includes("nowy dostawca"));
+    await fillTab(page, "#f-purchase-qty", "20"); await page.fill("#f-purchase-price", "205");
+    check("2.3 Zatwierdzenie zakupu z nowego nadleśnictwa", (await approve(page)) === 1);
+    check("2.3 Nowe nadleśnictwo w kartotece z leśnictwem na liście", await page.evaluate(() => { const s = RIW_DEBUG.store.state; const p = s.partners.find(x => x.name === "Nadleśnictwo Kędzierzyn"); return !!p && p.kind === "nadlesnictwo" && s.operations.at(-1).purchase.lesnictwo === "Sławięcice"; }));
+    await preset(page, "zakup"); await fillTab(page, "#f-purchase-supplierName", "nadleśnictwo kędzierzyn"); await page.waitForTimeout(100);
+    check("2.3 Ponowne wpisanie (inna wielkość liter) → istniejący, grupa i leśnictwa z kartoteki", (await page.isChecked("#f-skind-nadlesnictwo")) && nb(await page.textContent('[data-calc="purchase.supplierName"]')).includes("z kartoteki") && (await page.$$eval("#dl-lesn option", o => o.map(x => x.value))).includes("Sławięcice"));
+    await go(page, "kontrahenci");
+    check("2.3 Kontrahenci: nowi dostawcy widoczni", nb(await page.textContent("#partners-table")).includes("Tartak Nowy Las") && nb(await page.textContent("#partners-table")).includes("Nadleśnictwo Kędzierzyn"));
+
     await go(page, "flota");
     check("2.2 Flota: kursy liczone pojedynczo", nb(await page.textContent("#runs-table")).includes("kurs 4"));
 

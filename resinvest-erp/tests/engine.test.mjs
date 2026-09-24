@@ -570,7 +570,7 @@ test("2.2 Dostawca: nadleśnictwo wymaga leśnictwa; grupa musi zgadzać się z 
   assert.equal(R.partnerKind(s.partners.find(p => p.id === "pa_lander")), "firma");
   assert.deepEqual([R.SUPPLIER_KINDS.firma.basis, R.SUPPLIER_KINDS.nadlesnictwo.basis], ["KZR", "DEKL"]);
   assert.match(R.planOperation(s, NDL({ lesnictwo: "" }), ctx(s)).errors["purchase.lesnictwo"], /leśnictwo/);
-  assert.match(R.planOperation(s, NDL({ supplierKind: "firma" }), ctx(s)).errors["purchase.supplierId"], /nie należy do grupy/);
+  assert.match(R.planOperation(s, NDL({ supplierKind: "firma" }), ctx(s)).errors["purchase.supplierName"], /nie należy do grupy/);
   const op = commit(s, NDL());
   assert.deepEqual([op.purchase.supplierKind, op.purchase.lesnictwo, op.purchase.basis], ["nadlesnictwo", "Stanica", "DEKL"]);
   // podstawę można zmienić ręcznie
@@ -614,4 +614,34 @@ test("2.2 Kursy: dane z wersji 2.1 (jeden kurs bez listy) nadal liczą się popr
   const d = WZ(); d.transport = { mode: "own", place: "EC", own: { vehicleId: "ve_scania", km: "262", rate: "5", driverId: "" } };
   const t = R.planOperation(s, d, ctx(s)).norm.transport;
   assert.deepEqual([t.runCount, t.cost, t.reg, t.totalQty], [1, 1310, "SGL 4T821", 500]);
+});
+
+/* ============================ 2.3: dostawca wpisywany ręcznie ============================ */
+test("2.3 Dostawca wpisany ręcznie: nowa firma i nowe nadleśnictwo dopisują się do kartoteki przy zatwierdzeniu", () => {
+  const s = fresh(), n0 = s.partners.length;
+  const f = draft({ purchase: { supplierKind: "firma", supplierId: "", supplierName: "  Tartak   Nowy Las sp. z o.o. ", basis: "KZR", productId: "pr_drewno", qty: "10", unit: "m3", price: "200" } });
+  const p = R.planOperation(s, f, ctx(s));
+  assert.equal(p.ok, true, JSON.stringify(p.errors));
+  assert.equal(s.partners.length, n0, "planowanie nie zmienia kartoteki");
+  const op = commit(s, f);
+  const np = s.partners.find(x => x.id === op.purchase.supplierId);
+  assert.deepEqual([np.name, np.kind, np.role], ["Tartak Nowy Las sp. z o.o.", "firma", "supplier"]);
+  assert.equal(op.documents.find(d => d.type === "PZ").partnerId, np.id);
+  assert.equal(op.input.purchase.supplierId, np.id);
+  assert.ok(s.audit.some(a => a.entity === "partner" && a.entityId === np.id));
+  const d = NDL({ supplierId: "", supplierName: "Nadleśnictwo Kędzierzyn", lesnictwo: "Sławięcice" }); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 1/2026" });
+  const op2 = commit(s, d);
+  const nn = s.partners.find(x => x.id === op2.purchase.supplierId);
+  assert.deepEqual([nn.kind, op2.production.ndl, op2.production.lesnictwo, op2.purchase.basis], ["nadlesnictwo", "Kędzierzyn", "Sławięcice", "DEKL"]);
+});
+test("2.3 Dostawca wpisany ręcznie: nazwa z kartoteki (inna wielkość liter) = istniejący; odbiorca odrzucony; pusta nazwa odrzucona", () => {
+  const s = fresh(), n0 = s.partners.length;
+  const op = commit(s, draft({ purchase: Object.assign({}, PURCHASE_A, { supplierKind: "firma", supplierId: "", supplierName: "lander agro" }) }));
+  assert.equal(op.purchase.supplierId, "pa_lander");
+  assert.equal(s.partners.length, n0);
+  const e = x => R.planOperation(s, draft({ purchase: Object.assign({}, PURCHASE_A, { supplierKind: "firma", supplierId: "", supplierName: x }) }), ctx(s)).errors["purchase.supplierName"];
+  assert.match(e("Elektrownia Łaziska"), /jako odbiorca/);
+  assert.match(e(""), /Wpisz nazwę dostawcy/);
+  assert.match(e("AB"), /co najmniej 3 znaki/);
+  assert.match(e("Nadleśnictwo Rybnik"), /nie należy do grupy/);
 });

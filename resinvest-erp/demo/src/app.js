@@ -346,7 +346,7 @@
   /* ------------------------------------------------------------------ */
   const HELP = {
     "date": "<b>Co:</b> dzień operacji. <b>Po co:</b> decyduje o miesiącu księgowania i numeracji dokumentów. Nie może być z przyszłości ani z okresu zamkniętego. <b>Przykład:</b> 2026-09-23.",
-    "purchase.supplierId": "<b>Co:</b> dostawca z wybranej grupy (firma albo nadleśnictwo). <b>Po co:</b> trafia na dokument PZ i do rozliczeń; ustawia podstawę (KZR / Deklaracja).",
+    "purchase.supplierName": "<b>Co:</b> nazwa dostawcy — <b>wpisz ręcznie</b> albo wybierz z podpowiedzi. Nowa nazwa zostanie dopisana do kartoteki Kontrahenci przy zatwierdzeniu operacji. <b>Po co:</b> trafia na dokument PZ; ustawia podstawę (KZR / Deklaracja).",
     "purchase.supplierKind": "<b>Co:</b> grupa dostawcy. <b>Firma branży drzewnej / przedsiębiorstwo drzewne</b> → podstawa domyślnie <b>KZR</b>. <b>Nadleśnictwo</b> → podstawa domyślnie <b>Deklaracja</b> i dodatkowe pole <b>Leśnictwo</b>.",
     "purchase.lesnictwo": "<b>Co:</b> leśnictwo w wybranym nadleśnictwie. Wybierz zapisane z listy albo wpisz nowe — po zatwierdzeniu pojawi się na liście. <b>Przykład:</b> Wielopole.",
     "transport.own.runCount": "<b>Co:</b> ile kursów wykonała flota własna. Po wpisaniu np. <b>4</b> pojawią się 4 osobne rubryki: pojazd, kierowca, km, stawka, ilość i waga rzeczywista. <b>Przykład:</b> 4 kursy × 100 MP = 400 MP.",
@@ -499,6 +499,12 @@
     },
     whId() { return this.mode === "correct" && this.op ? this.op.whId : App.user().whId; },
     /** Grupa dostawcy: wybór użytkownika, a przy starszych szkicach — z kartoteki wybranego dostawcy. */
+    /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
+    supplierText() {
+      const P = this.draft.purchase;
+      if (!P.supplierName && P.supplierId) P.supplierName = (App.partner(P.supplierId) || {}).name || "";
+      return P.supplierName || "";
+    },
     supplierKind() {
       const P = this.draft.purchase;
       if (R.SUPPLIER_KINDS[P.supplierKind]) return P.supplierKind;
@@ -626,7 +632,7 @@
             <div class="field span-all" data-field="purchase.supplierKind"><span class="lbl">Dostawca — wybierz grupę <span class="req" aria-hidden="true">*</span></span>
               <div class="scope two" role="group" aria-label="Grupa dostawcy">${kindCard("firma", "Tartaki, zakłady i firmy leśne. Podstawa domyślnie: KZR.")}${kindCard("nadlesnictwo", "Lasy Państwowe. Podstawa domyślnie: Deklaracja. Dodatkowo: leśnictwo.")}</div>
               <div class="help tut">${HELP["purchase.supplierKind"]}</div></div>
-            ${field({ key: "purchase.supplierId", label: sKind === "nadlesnictwo" ? "Nadleśnictwo" : "Dostawca (firma)", req: true, span: "span2", control: selIn("purchase.supplierId", [{ v: "", l: sKind === "nadlesnictwo" ? "— wybierz nadleśnictwo —" : "— wybierz dostawcę —" }].concat(suppliers.map(p => ({ v: p.id, l: p.name }))), d.purchase.supplierId, { struct: true }) })}
+            ${field({ key: "purchase.supplierName", label: sKind === "nadlesnictwo" ? "Nadleśnictwo" : "Dostawca (firma)", req: true, span: "span2", control: textIn("purchase.supplierName", this.supplierText(), { placeholder: sKind === "nadlesnictwo" ? "wpisz lub wybierz, np. Nadleśnictwo Rybnik" : "wpisz lub wybierz, np. Lander Agro", list: "dl-suppliers" }) + `<datalist id="dl-suppliers">${suppliers.map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>` })}
             ${sKind === "nadlesnictwo" ? field({ key: "purchase.lesnictwo", label: "Leśnictwo", req: true, control: textIn("purchase.lesnictwo", d.purchase.lesnictwo, { placeholder: "wybierz lub wpisz nowe", list: "dl-lesn" }) + `<datalist id="dl-lesn">${this.lesnictwa(d.purchase.supplierId).map(x => `<option value="${esc(x)}">`).join("")}</datalist>` }) : ""}
             ${field({ key: "purchase.basis", label: "Podstawa", req: true, span: sKind === "nadlesnictwo" ? "" : "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: "Deklaracja" }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
             ${field({ key: "purchase.productId", label: "Produkt / surowiec", req: true, span: "span2", control: selIn("purchase.productId", [{ v: "", l: "— wybierz produkt —" }].concat(S.products.filter(p => p.active !== false).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
@@ -879,7 +885,7 @@
           const k = el.dataset.skind, P = d.purchase;
           P.supplierKind = k; P.basis = R.SUPPLIER_KINDS[k].basis;
           const s = App.partner(P.supplierId);
-          if (s && R.partnerKind(s) !== k) { P.supplierId = ""; P.lesnictwo = ""; }
+          if (s && R.partnerKind(s) !== k) { P.supplierId = ""; P.supplierName = ""; P.lesnictwo = ""; }
           this.persist(); this.rerender(); return;
         }
         if (el.dataset.mode !== undefined) {
@@ -900,7 +906,8 @@
       this.touched.add(key);
       this.sideEffects(key, v);
       this.persist();
-      if (el.hasAttribute("data-struct") || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
+      const supChanged = this._supplierChanged; this._supplierChanged = false;
+      if (el.hasAttribute("data-struct") || supChanged || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
       else this.refresh();
     },
 
@@ -925,14 +932,15 @@
         while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankRun(), { vehicleId: prev.vehicleId, driverId: prev.driverId, km: prev.km, rate: prev.rate }) : R.blankRun()); }
         O.runs = arr;
       }
-      if (key === "purchase.supplierId") {
-        const s = App.partner(v);
-        if (s) {
-          const k = R.partnerKind(s);
-          d.purchase.supplierKind = k; d.purchase.basis = R.SUPPLIER_KINDS[k].basis;
-          if (k === "nadlesnictwo") { d.production.type = "lesna"; if (!d.production.ndl) d.production.ndl = R.ndlName(s); }
-        }
-        d.purchase.lesnictwo = "";
+      if (key === "purchase.supplierName") {
+        // nazwa zgodna z kartoteką → istniejący dostawca; inna → nowy (dopisany przy zatwierdzeniu)
+        const name = String(v).trim().replace(/\s+/g, " ").toLowerCase();
+        const s = name ? S.partners.find(p => ["supplier", "both"].includes(p.role) && p.name.trim().toLowerCase() === name) : null;
+        const prevId = d.purchase.supplierId;
+        d.purchase.supplierId = s ? s.id : "";
+        if (s) { const k = R.partnerKind(s); if (k !== d.purchase.supplierKind || s.id !== prevId) { d.purchase.supplierKind = k; d.purchase.basis = R.SUPPLIER_KINDS[k].basis; } }
+        if (this.supplierKind() === "nadlesnictwo") { d.production.type = "lesna"; d.production.ndl = R.ndlName({ name: String(v).trim() }); }
+        if (s ? s.id !== prevId : !!prevId) { d.purchase.lesnictwo = ""; this._supplierChanged = true; }
       }
       if (key === "purchase.lesnictwo" && this.supplierKind() === "nadlesnictwo") d.production.lesnictwo = v;
       if (key === "transport.place") d.transport.placeTouched = true;
@@ -998,6 +1006,8 @@
       if (n.purchase) {
         const P = n.purchase, p = App.product(P.productId);
         if (P.qty !== null && p && P.unit !== p.unit) add("purchase.qty", `= <b>${esc(qn(P.stockQty, p.id))}</b> na stanie`);
+        if (P.newSupplier) add("purchase.supplierName", `<span class="badge info">nowy dostawca</span> zostanie dopisany do kartoteki (${esc(R.SUPPLIER_KINDS[P.newSupplier.kind].label)}) przy zatwierdzeniu`);
+        else if (P.supplierId) add("purchase.supplierName", `z kartoteki ✓`);
         if (P.qty !== null && P.price !== null) add("purchase.price", `${fmtQ(P.qty)} ${Units.label(P.unit)} × ${fmt(P.price)} zł`);
         out("purchase.cost", P.qty !== null && P.price !== null ? money(P.cost) : "—");
         out("purchase.weightAuto", P.qty !== null && p ? orient(P.stockQty, p.id) : "—");
@@ -1216,7 +1226,7 @@
         add("Magazyn", esc(App.whName(plan.whId)));
         add("Data", esc(Dates.pl(plan.date)));
         add("Użytkownik", esc(plan.user.name));
-        if (n.purchase) { add("Dostawca", esc((App.partner(n.purchase.supplierId) || {}).name)); add("Zakup", `${esc(fmtQ(n.purchase.qty))} ${Units.label(n.purchase.unit)} ${esc(name(n.purchase.productId))} × ${fmt(n.purchase.price)} zł = <b>${money(n.purchase.cost)}</b>`); }
+        if (n.purchase) { add("Dostawca", esc(n.purchase.supplierName) + (n.purchase.newSupplier ? ` <span class="badge info">nowy — zostanie dodany do kartoteki</span>` : "")); add("Zakup", `${esc(fmtQ(n.purchase.qty))} ${Units.label(n.purchase.unit)} ${esc(name(n.purchase.productId))} × ${fmt(n.purchase.price)} zł = <b>${money(n.purchase.cost)}</b>`); }
         if (X) {
           const raw = App.product(X.rawProductId), outP = App.product(X.outProductId);
           if (raw) add(X.mode === "direct" ? "Surowiec (z lasu, nie ze stanu)" : "Surowiec", esc(raw.name));
