@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="description" content="ResInvest ERP — Demo v2: zakup, WZ, produkcja na magazyn, sprzedaż bezpośrednia, MM, korekty i anulowania, historia, raporty okresowe, kwit produkcji dnia, druk i PDF.">
-<meta name="generator" content="ResInvest ERP demo build 2.1.0-demo · 2026-09-23">
+<meta name="generator" content="ResInvest ERP demo build 2.2.0-demo · 2026-09-24">
 <title>ResInvest ERP · Demo v2</title>
 <style>
 /* =========================================================================
@@ -404,6 +404,13 @@ h2,h3,.card-h h3,.sec-h h3{color:var(--text-head)}
 .dash-two{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}
 @media (max-width:1280px){ .dash-two{grid-template-columns:1fr} .quick{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media (max-width:1080px){ .quick{grid-template-columns:repeat(2,minmax(0,1fr))} } @media (max-width:720px){ .quick{grid-template-columns:1fr} }
+/* v2.2 — kursy transportu własnego */
+.span3{grid-column:span 3}
+.runs{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s3)}
+.run-card{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-2);padding:var(--s3) var(--s4)}
+.run-h{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2)}
+.run-h b{font-size:var(--t-md)} .run-cost{font-size:var(--t-sm);color:var(--text-2);font-variant-numeric:tabular-nums}
+@media (max-width:720px){ .span3{grid-column:auto} .run-card{padding:var(--s3)} }
 
 </style>
 </head>
@@ -440,7 +447,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 (function (root) {
   "use strict";
 
-  const VERSION = "2.1.0-demo";
+  const VERSION = "2.2.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -643,6 +650,14 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     KOR: "Korekta dokumentu", AN: "Anulowanie dokumentu", IN: "Inwentaryzacja", BO: "Bilans otwarcia"
   };
   const BASIS = { DEKL: "Deklaracja", KZR: "KZR" };
+  /** Grupy dostawców: firma branży drzewnej → domyślnie KZR; nadleśnictwo → domyślnie Deklaracja + leśnictwo. */
+  const SUPPLIER_KINDS = {
+    firma: { label: "Firma branży drzewnej / przedsiębiorstwo drzewne", basis: "KZR" },
+    nadlesnictwo: { label: "Nadleśnictwo", basis: "DEKL" }
+  };
+  const partnerKind = p => !p ? null : SUPPLIER_KINDS[p.kind] ? p.kind : /^nadle[sś]nictwo/i.test(p.name || "") ? "nadlesnictwo" : "firma";
+  const ndlName = p => String((p && p.name) || "").replace(/^nadle[sś]nictwo\s+/i, "").trim();
+  const MAX_RUNS = 50;
   const PROD_TYPES = {
     lesna: { label: "Zrębka produkcyjna leśna", productId: "pr_zr_lesna" },
     inwestycyjna: { label: "Zrębka produkcyjna inwestycyjna", productId: "pr_zr_inw", sourceType: "Wycinka inwestycyjna" }
@@ -744,17 +759,18 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ------------------------------------------------------------------ */
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
+  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
-      purchase: { supplierId: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
+      purchase: { supplierKind: "firma", supplierId: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
       mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
       transport: {
         mode: "none", place: "", placeTouched: false,
-        own: { vehicleId: "", driverId: "", km: "", rate: "" },
+        own: { runCount: "1", runs: [blankRun()] },
         external: { company: "", reg: "", km: "", freight: "", includedInPrice: false },
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
@@ -804,7 +820,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const postings = [], documents = [];
     const norm = { type, purchase: null, production: null, sale: null, mm: null };
     const totals = { purchaseCost: 0, rawCost: 0, chippingCost: 0, revenue: 0, transportCost: 0, result: 0 };
-    const R_ = draft.production || {}, S = draft.sale || {}, P = draft.purchase || {}, M = draft.mm || {};
+    const R_ = Object.assign({}, draft.production || {}), S = draft.sale || {}, P = draft.purchase || {}, M = draft.mm || {};
 
     /* ---------- produkcja (wspólna dla trzech ścieżek) ----------
        mode "chain":  surowiec z zakupu w tej samej operacji, zużycie podane (domyślnie cały zakup)
@@ -900,6 +916,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const supplier = byId(state.partners, P.supplierId);
       if (!P.supplierId) err("purchase.supplierId", "Wybierz dostawcę");
       else if (!supplier || !["supplier", "both"].includes(supplier.role) || supplier.active === false) err("purchase.supplierId", "Nieznany lub nieaktywny dostawca");
+      const sKind = partnerKind(supplier);
+      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierId", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
+      if (sKind === "nadlesnictwo" && !str(P.lesnictwo)) err("purchase.lesnictwo", "Podaj leśnictwo (wpisz nowe albo wybierz z listy)");
+      // drewno z nadleśnictwa: pochodzenie produkcji uzupełnia się z zakupu
+      if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(supplier); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
       if (!BASIS[P.basis]) err("purchase.basis", "Wybierz podstawę: Deklaracja albo KZR");
       const product = prodOf(P.productId);
       if (!P.productId) err("purchase.productId", "Wybierz produkt / surowiec");
@@ -920,7 +941,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         }
       } else if (P.weightMode !== "auto") err("purchase.weightMode", "Wybierz sposób ustalenia wagi");
       totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
-      norm.purchase = { supplierId: P.supplierId, basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
+      norm.purchase = { supplierId: P.supplierId, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
         push("ZAKUP", product.id, stockQty);
         documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: P.supplierId, partner: partyName(P.supplierId), basis: P.basis, stock: "+" });
@@ -1048,20 +1069,63 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const mode = T.mode || "none";
       transport = { mode, place, cost: 0 };
       if (!TRANSPORT_MODES[mode]) err("transport.mode", "Nieznany tryb transportu");
+      /** Towar przewożony w operacji (jednostka magazynowa produktu). */
+      const shipped = () => {
+        if (norm.sale && norm.sale.productId) return { productId: norm.sale.productId, qty: norm.sale.stockQty || 0, unit: (prodOf(norm.sale.productId) || {}).unit };
+        if (norm.production && norm.production.outProductId && norm.production.outQty) return { productId: norm.production.outProductId, qty: norm.production.outQty, unit: norm.production.outUnit };
+        if (norm.purchase && norm.purchase.productId) return { productId: norm.purchase.productId, qty: norm.purchase.stockQty || 0, unit: norm.purchase.stockUnit };
+        if (norm.mm && norm.mm.productId) return { productId: norm.mm.productId, qty: norm.mm.stockQty || 0, unit: norm.mm.stockUnit };
+        return { productId: null, qty: 0, unit: null };
+      };
       const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
       if (mode === "own") {
+        /* Transport własny: liczba kursów → osobne kursy (pojazd, kierowca, km, stawka, ilość, waga rzeczywista).
+           Dane z wersji ≤ 2.1 (jeden kurs bez tablicy runs) są traktowane jako jeden kurs. */
         const O = T.own || {};
-        const v = byId(state.fleet.vehicles, O.vehicleId);
-        if (!O.vehicleId) err("transport.own.vehicleId", "Wybierz pojazd z floty");
-        else if (!v) err("transport.own.vehicleId", "Nieznany pojazd");
-        else if (v.status !== "aktywny") err("transport.own.vehicleId", `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
-        const driverId = O.driverId || (v && v.driverId) || "";
-        const d = byId(state.fleet.drivers, driverId);
-        if (!driverId) err("transport.own.driverId", "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
-        else if (!d) err("transport.own.driverId", "Nieznany kierowca");
-        const km = num("transport.own.km", O.km, { gt: 0, label: "liczbę km" });
-        const rate = str(O.rate) === "" ? cfg.kmRateDefault : num("transport.own.rate", O.rate, { gt: 0, label: "stawkę za km" });
-        Object.assign(transport, { vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "", driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0 });
+        const legacy = !Array.isArray(O.runs);
+        const K = (i, f) => legacy ? `transport.own.${f}` : `transport.own.runs.${i}.${f}`;
+        let count = 1;
+        if (!legacy) {
+          const n = num("transport.own.runCount", O.runCount, { gt: 0, integer: true, label: "liczbę kursów" });
+          if (n !== null && n > MAX_RUNS) err("transport.own.runCount", `Maksymalnie ${MAX_RUNS} kursów w jednej operacji`);
+          count = n && n <= MAX_RUNS ? n : 0;
+        }
+        const src = legacy ? [O] : O.runs;
+        const sp = shipped();
+        const runs = [];
+        for (let i = 0; i < count; i++) {
+          const r = src[i] || {};
+          const v = byId(state.fleet.vehicles, r.vehicleId);
+          if (!r.vehicleId) err(K(i, "vehicleId"), "Wybierz pojazd z floty");
+          else if (!v) err(K(i, "vehicleId"), "Nieznany pojazd");
+          else if (v.status !== "aktywny") err(K(i, "vehicleId"), `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
+          const driverId = r.driverId || (v && v.driverId) || "";
+          const d = byId(state.fleet.drivers, driverId);
+          if (!driverId) err(K(i, "driverId"), "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
+          else if (!d) err(K(i, "driverId"), "Nieznany kierowca");
+          const km = num(K(i, "km"), r.km, { gt: 0, label: "liczbę km" });
+          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          // ilość w kursie: przy jednym kursie domyślnie cała ilość operacji, przy wielu — wymagana
+          let q = null;
+          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
+          else q = sp.qty || null;
+          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
+          runs.push({ no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
+            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w });
+        }
+        const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
+        const weighed = runs.filter(r => r.weightT !== null);
+        const f = runs[0] || {};
+        Object.assign(transport, {
+          runs, runCount: runs.length, qtyUnit: sp.unit, totalQty, totalWeightT: weighed.length ? rq(weighed.reduce((a, r) => a + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
+          km: rq(runs.reduce((a, r) => a + r.km, 0)), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2),
+          vehicleId: f.vehicleId || "", vehicleName: f.vehicleName || "", reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "),
+          driverId: f.driverId || "", driverName: [...new Set(runs.map(r => r.driverName).filter(Boolean))].join(", "), defaultDriverId: f.defaultDriverId || "",
+          driverOverridden: runs.some(r => r.driverOverridden), rate: f.rate || 0
+        });
+        if (runs.length > 1 && sp.qty > 0 && Math.abs(totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
+        if (runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
       } else if (mode === "external") {
         const X = T.external || {};
         if (!str(X.company)) err("transport.external.company", "Podaj firmę transportową");
@@ -1714,7 +1778,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         km: rq(trOps.reduce((a, op) => a + (op.transport.km || 0), 0)),
         wagons: trOps.reduce((a, op) => a + (op.transport.wagonCount || 0), 0),
         trainT: rq(trOps.reduce((a, op) => a + (op.transport.totalT || 0), 0)),
-        carriers: (() => { const m = new Map(); for (const op of trOps) { const t = op.transport; const n = t.mode === "own" ? `Transport własny (${t.reg})` : t.mode === "external" ? t.company : `${t.carrier || "Pociąg"} (kolej)`; const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + t.cost, 2); c.km = rq(c.km + (t.km || 0)); m.set(n, c); } return [...m.values()]; })(),
+        trips: trOps.reduce((a, op) => a + (op.transport.mode === "own" ? (op.transport.runs || [1]).length : 1), 0),
+        carriers: (() => {
+          const m = new Map();
+          const addC = (n, cost, km) => { const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + cost, 2); c.km = rq(c.km + (km || 0)); m.set(n, c); };
+          for (const op of trOps) {
+            const t = op.transport;
+            if (t.mode === "own") for (const r of (t.runs || [t])) addC(`Transport własny (${r.reg})`, r.cost, r.km);
+            else addC(t.mode === "external" ? t.company : `${t.carrier || "Pociąg"} (kolej)`, t.cost, t.km);
+          }
+          return [...m.values()];
+        })(),
         rows: trOps.map(op => ({ opId: op.id, no: (op.documents.find(d => d.type === "TR") || {}).no, date: op.date, mode: TRANSPORT_MODES[op.transport.mode], place: op.transport.place, km: op.transport.km || 0, wagons: op.transport.wagonCount || 0, totalT: op.transport.totalT || 0, cost: op.transport.cost }))
       };
       const corrections = [], cancellations = [];
@@ -1786,7 +1860,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
-    PROD_TYPES, DIFF_REASONS, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Reports
   };
@@ -1829,15 +1903,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       { id: "pr_lupina", code: "LUP-N", name: "Łupina nerkowca", cat: "agro", unit: "t", active: true }
     ];
     s.partners = [
-      { id: "pa_lander", name: "Lander Agro", role: "supplier", city: "Gliwice", active: true },
-      { id: "pa_ndl_rr", name: "Nadleśnictwo Rudy Raciborskie", role: "supplier", city: "Kuźnia Raciborska", active: true },
-      { id: "pa_ndl_ryb", name: "Nadleśnictwo Rybnik", role: "supplier", city: "Rybnik", active: true },
-      { id: "pa_drwal", name: "Usługi Leśne Drwal sp. z o.o.", role: "supplier", city: "Gliwice", active: true },
+      { id: "pa_lander", name: "Lander Agro", role: "supplier", kind: "firma", city: "Gliwice", active: true },
+      { id: "pa_ndl_rr", name: "Nadleśnictwo Rudy Raciborskie", role: "supplier", kind: "nadlesnictwo", lesnictwa: ["Stanica", "Kuźnia", "Jankowice", "Rudy"], city: "Kuźnia Raciborska", active: true },
+      { id: "pa_ndl_ryb", name: "Nadleśnictwo Rybnik", role: "supplier", kind: "nadlesnictwo", lesnictwa: ["Wielopole", "Paruszowiec", "Golejów"], city: "Rybnik", active: true },
+      { id: "pa_drwal", name: "Usługi Leśne Drwal sp. z o.o.", role: "supplier", kind: "firma", city: "Gliwice", active: true },
       { id: "pa_ec_zab", name: "Elektrociepłownia Zabrze S.A.", role: "buyer", city: "Zabrze", active: true },
       { id: "pa_ec_kat", name: "EC Katowice — biomasa", role: "buyer", city: "Katowice", active: true },
       { id: "pa_ciep_ryb", name: "Ciepłownia Rybnik", role: "buyer", city: "Rybnik", active: true },
-      { id: "pa_tartak", name: "Tartak Beskid s.c.", role: "both", city: "Żywiec", active: true },
-      { id: "pa_agro", name: "Biomass Trading B.V.", role: "supplier", city: "Rotterdam", active: true },
+      { id: "pa_tartak", name: "Tartak Beskid s.c.", role: "both", kind: "firma", city: "Żywiec", active: true },
+      { id: "pa_agro", name: "Biomass Trading B.V.", role: "supplier", kind: "firma", city: "Rotterdam", active: true },
       { id: "pa_elektrownia", name: "Elektrownia Łaziska", role: "buyer", city: "Łaziska Górne", active: true }
     ];
     s.carriers = ["ESI Logistics", "DAP Trans", "Transport Kowalski", "PKP Cargo"];
@@ -1870,11 +1944,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     d.date = date;
     d.type = over.type || "ZAKUP";
     for (const k of ["purchase", "production", "sale", "mm"]) Object.assign(d[k], over[k] || {});
+    // grupa dostawcy wynika z kartoteki kontrahenta, jeśli nie podano jej wprost
+    if (over.purchase && !over.purchase.supplierKind) d.purchase.supplierKind = "";
     if (over.transport) {
       const t = over.transport;
       d.transport.mode = t.mode || "none";
       d.transport.place = t.place || "";
-      Object.assign(d.transport.own, t.own || {});
+      if (t.own) {
+        // zapis skrócony { vehicleId, km, … } = jeden kurs
+        if (Array.isArray(t.own.runs)) Object.assign(d.transport.own, t.own);
+        else d.transport.own = { runCount: "1", runs: [Object.assign(RIW.blankRun(), t.own)] };
+      }
       Object.assign(d.transport.external, t.external || {});
       Object.assign(d.transport.train, t.train || {});
     }
@@ -1903,7 +1983,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       ["u_mag", "2026-08-05", {
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "30", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Stanica", kwit: "KW 0142/08/2026", chipperId: "ch_jenz" },
-        transport: { mode: "own", place: "RiC Zabrze", own: { vehicleId: "ve_scania", km: "45", rate: "5" } }
+        // trzy kursy własne z rębakiem w lesie → magazyn Zabrze (3 × 40 MP = 120 MP)
+        transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "3", runs: [
+          { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", qty: "40", weightT: "13,4" },
+          { vehicleId: "ve_volvo", driverId: "", km: "45", rate: "5", qty: "40", weightT: "12,9" },
+          { vehicleId: "ve_scania", driverId: "dr_wojcik", km: "45", rate: "5", qty: "40", weightT: "13,1" }] } }
       }],
       ["u_mag", "2026-08-12", {
         purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "100", unit: "MP", price: "55" },
@@ -1922,7 +2006,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         transport: { mode: "own", place: "Elektrociepłownia Zabrze S.A.", own: { vehicleId: "ve_volvo", km: "262", rate: "5" } }
       }],
       ["u_pys", "2026-09-08", {
-        purchase: { supplierId: "pa_ndl_ryb", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
+        purchase: { supplierKind: "nadlesnictwo", supplierId: "pa_ndl_ryb", lesnictwo: "Wielopole", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
         transport: { mode: "external", place: "RiC Pyskowice", external: { company: "Transport Kowalski", reg: "SPY 92FR", km: "40", includedInPrice: true } }
       }],
       // produkcja na magazynie: drewno ze stanu → zrębka na stan
@@ -2940,8 +3024,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ------------------------------------------------------------------ */
   const HELP = {
     "date": "<b>Co:</b> dzień operacji. <b>Po co:</b> decyduje o miesiącu księgowania i numeracji dokumentów. Nie może być z przyszłości ani z okresu zamkniętego. <b>Przykład:</b> 2026-09-23.",
-    "purchase.supplierId": "<b>Co:</b> firma, od której kupujesz. <b>Po co:</b> trafia na dokument PZ i do rozliczeń z dostawcą. <b>Przykład:</b> Lander Agro.",
-    "purchase.basis": "<b>Co:</b> podstawa pochodzenia biomasy. <b>Deklaracja</b> — oświadczenie dostawcy, <b>KZR</b> — dostawa rozliczana w systemie certyfikacji KZR.",
+    "purchase.supplierId": "<b>Co:</b> dostawca z wybranej grupy (firma albo nadleśnictwo). <b>Po co:</b> trafia na dokument PZ i do rozliczeń; ustawia podstawę (KZR / Deklaracja).",
+    "purchase.supplierKind": "<b>Co:</b> grupa dostawcy. <b>Firma branży drzewnej / przedsiębiorstwo drzewne</b> → podstawa domyślnie <b>KZR</b>. <b>Nadleśnictwo</b> → podstawa domyślnie <b>Deklaracja</b> i dodatkowe pole <b>Leśnictwo</b>.",
+    "purchase.lesnictwo": "<b>Co:</b> leśnictwo w wybranym nadleśnictwie. Wybierz zapisane z listy albo wpisz nowe — po zatwierdzeniu pojawi się na liście. <b>Przykład:</b> Wielopole.",
+    "transport.own.runCount": "<b>Co:</b> ile kursów wykonała flota własna. Po wpisaniu np. <b>4</b> pojawią się 4 osobne rubryki: pojazd, kierowca, km, stawka, ilość i waga rzeczywista. <b>Przykład:</b> 4 kursy × 100 MP = 400 MP.",
+    "purchase.basis": "<b>Co:</b> podstawa pochodzenia biomasy. Ustawia się automatycznie według grupy dostawcy (firma → KZR, nadleśnictwo → Deklaracja) — możesz ją zmienić. <b>Deklaracja</b> — oświadczenie dostawcy, <b>KZR</b> — dostawa rozliczana w systemie certyfikacji KZR.",
     "purchase.productId": "<b>Co:</b> kupowany towar. <b>Po co:</b> ustala jednostkę magazynową (drewno m³, zrębka MP, PKS i łupina t).",
     "purchase.qty": "<b>Co:</b> ilość z dokumentu dostawcy, w jednostce wybranej obok. Możesz wpisać <b>12,50</b> albo <b>12.50</b> lub wkleić <b>1 250,50</b>.",
     "purchase.unit": "<b>Co:</b> jednostka ilości i ceny — tylko te, które mają sens dla towaru. <b>1 m³ drewna = 4 MP</b>. PKS i łupina — wyłącznie t.",
@@ -3089,6 +3176,36 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       return App.wh() ? App.wh().name : "";
     },
     whId() { return this.mode === "correct" && this.op ? this.op.whId : App.user().whId; },
+    /** Grupa dostawcy: wybór użytkownika, a przy starszych szkicach — z kartoteki wybranego dostawcy. */
+    supplierKind() {
+      const P = this.draft.purchase;
+      if (R.SUPPLIER_KINDS[P.supplierKind]) return P.supplierKind;
+      const s = App.partner(P.supplierId);
+      return s ? R.partnerKind(s) : "firma";
+    },
+    /** Zapisane leśnictwa nadleśnictwa: z kartoteki + z wcześniejszych operacji (nowe dopisują się same). */
+    lesnictwa(supplierId) {
+      const S = Store.state, set = new Set(((App.partner(supplierId) || {}).lesnictwa) || []);
+      for (const o of S.operations) {
+        if (o.purchase && o.purchase.supplierId === supplierId && o.purchase.lesnictwo) set.add(o.purchase.lesnictwo);
+        if (o.purchase && o.purchase.supplierId === supplierId && o.production && o.production.lesnictwo) set.add(o.production.lesnictwo);
+      }
+      return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b, "pl"));
+    },
+    /** Jednostka towaru przewożonego (ilość w kursie). */
+    shippedUnit() {
+      const d = this.draft, p = id => App.product(id);
+      if (d.type === "SPRZEDAZ" && !d.sale.direct && p(d.sale.productId)) return p(d.sale.productId).unit;
+      if (d.type === "SPRZEDAZ" && d.sale.direct) return "MP";
+      if (d.type === "MM" && p(d.mm.productId)) return p(d.mm.productId).unit;
+      if (d.type === "ZAKUP" && d.production.enabled) return "MP";
+      return p(d.purchase.productId) ? p(d.purchase.productId).unit : "MP";
+    },
+    ownRuns() {
+      const O = this.draft.transport.own;
+      if (!Array.isArray(O.runs)) { this.draft.transport.own = O.vehicleId !== undefined ? { runCount: "1", runs: [Object.assign(R.blankRun(), { vehicleId: O.vehicleId || "", driverId: O.driverId || "", km: O.km || "", rate: O.rate || "" })] } : { runCount: "1", runs: [R.blankRun()] }; }
+      return this.draft.transport.own;
+    },
 
     /* ---------- pola produkcji (trzy ścieżki) ---------- */
     productionFields(mode) {
@@ -3173,7 +3290,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (type === "ZAKUP") {
         const prod = App.product(d.purchase.productId);
         const isWood = prod && prod.cat === "drewno";
-        const suppliers = S.partners.filter(p => (p.active !== false || p.id === d.purchase.supplierId) && ["supplier", "both"].includes(p.role));
+        const sKind = this.supplierKind();
+        const suppliers = S.partners.filter(p => (p.active !== false || p.id === d.purchase.supplierId) && ["supplier", "both"].includes(p.role) && R.partnerKind(p) === sKind);
+        const kindCard = (k, text) => optCard("", { checked: sKind === k, struct: false, radio: true, id: `f-skind-${k}`, title: R.SUPPLIER_KINDS[k].label, text, attrs: `data-skind="${k}"` });
         const units = prod ? Units.allowed(prod) : Units.LIST;
         const u = Units.label(d.purchase.unit);
         html += section(n++, "purchase", "Zakup", "Co kupujemy, od kogo, w jakiej jednostce i za ile.", `
@@ -3182,8 +3301,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
             ${optCard("sale.enabled", { checked: d.sale.enabled, disabled: !d.production.enabled || corr, title: "+ Sprzedaż wyniku produkcji", text: d.production.enabled ? "Wydanie zrębki z tej produkcji do odbiorcy (WZ)." : "Wymaga produkcji. Sprzedaż ze stanu → rodzaj „Sprzedaż”." })}
           </div>
           <div class="fgrid four">
-            ${field({ key: "purchase.supplierId", label: "Dostawca", req: true, span: "span2", control: selIn("purchase.supplierId", [{ v: "", l: "— wybierz dostawcę —" }].concat(suppliers.map(p => ({ v: p.id, l: p.name }))), d.purchase.supplierId) })}
-            ${field({ key: "purchase.basis", label: "Podstawa", req: true, span: "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: "Deklaracja" }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
+            <div class="field span-all" data-field="purchase.supplierKind"><span class="lbl">Dostawca — wybierz grupę <span class="req" aria-hidden="true">*</span></span>
+              <div class="scope two" role="group" aria-label="Grupa dostawcy">${kindCard("firma", "Tartaki, zakłady i firmy leśne. Podstawa domyślnie: KZR.")}${kindCard("nadlesnictwo", "Lasy Państwowe. Podstawa domyślnie: Deklaracja. Dodatkowo: leśnictwo.")}</div>
+              <div class="help tut">${HELP["purchase.supplierKind"]}</div></div>
+            ${field({ key: "purchase.supplierId", label: sKind === "nadlesnictwo" ? "Nadleśnictwo" : "Dostawca (firma)", req: true, span: "span2", control: selIn("purchase.supplierId", [{ v: "", l: sKind === "nadlesnictwo" ? "— wybierz nadleśnictwo —" : "— wybierz dostawcę —" }].concat(suppliers.map(p => ({ v: p.id, l: p.name }))), d.purchase.supplierId, { struct: true }) })}
+            ${sKind === "nadlesnictwo" ? field({ key: "purchase.lesnictwo", label: "Leśnictwo", req: true, control: textIn("purchase.lesnictwo", d.purchase.lesnictwo, { placeholder: "wybierz lub wpisz nowe", list: "dl-lesn" }) + `<datalist id="dl-lesn">${this.lesnictwa(d.purchase.supplierId).map(x => `<option value="${esc(x)}">`).join("")}</datalist>` }) : ""}
+            ${field({ key: "purchase.basis", label: "Podstawa", req: true, span: sKind === "nadlesnictwo" ? "" : "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: "Deklaracja" }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
             ${field({ key: "purchase.productId", label: "Produkt / surowiec", req: true, span: "span2", control: selIn("purchase.productId", [{ v: "", l: "— wybierz produkt —" }].concat(S.products.filter(p => p.active !== false).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
             ${field({ key: "purchase.qty", label: "Ilość", req: true, control: numIn("purchase.qty", d.purchase.qty, { suffix: u, placeholder: "np. 20" }) })}
             ${field({ key: "purchase.unit", label: "Jednostka zakupu", req: true, control: selIn("purchase.unit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.unit, { struct: true }) })}
@@ -3256,15 +3379,30 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const tr = T.train;
       let modeHtml = "";
       if (mode === "own") {
+        const O = this.ownRuns();
+        const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
+        const u = Units.label(this.shippedUnit());
+        const vehOpts = S.fleet.vehicles.map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + R.ASSET_STATUS[v.status] : ""}`, disabled: v.status !== "aktywny" }));
+        const runs = [];
+        for (let i = 0; i < count; i++) {
+          const r = O.runs[i] || R.blankRun(), veh = R.byId(S.fleet.vehicles, r.vehicleId), k = f => `transport.own.runs.${i}.${f}`;
+          runs.push(`<div class="run-card" data-run="${i}">
+            <div class="run-h"><b>Kurs ${i + 1}</b><span class="spacer"></span><span class="run-cost" data-out="run.${i}.cost">—</span></div>
+            <div class="fgrid four">
+              ${field({ key: k("vehicleId"), label: "Pojazd z floty własnej", req: true, span: "span2", help: false, control: selIn(k("vehicleId"), [{ v: "", l: "— wybierz pojazd —" }].concat(vehOpts), r.vehicleId, { struct: true }) })}
+              ${field({ key: k("driverId"), label: "Kierowca", req: true, span: "span2", help: false, control: selIn(k("driverId"), [{ v: "", l: "— wybierz kierowcę —" }].concat(S.fleet.drivers.map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " (domyślny)" : "") }))), r.driverId || (veh ? veh.driverId : "")) })}
+              ${field({ key: k("km"), label: "Kilometry", req: true, help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: "np. 45" }) })}
+              ${field({ key: k("rate"), label: "Stawka (zł/km)", help: false, control: numIn(k("rate"), r.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
+              ${field({ key: k("qty"), label: `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: count > 1 ? "np. 100" : "cała ilość" }) })}
+              ${field({ key: k("weightT"), label: "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: "z kwitu wagowego" }) })}
+            </div></div>`);
+        }
         modeHtml = `<div class="fgrid four mt4">
-          ${field({ key: "transport.own.vehicleId", label: "Pojazd z floty", req: true, span: "span2", control: selIn("transport.own.vehicleId", [{ v: "", l: "— wybierz pojazd —" }].concat(S.fleet.vehicles.map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + R.ASSET_STATUS[v.status] : ""}`, disabled: v.status !== "aktywny" }))), T.own.vehicleId, { struct: true }) })}
-          ${field({ key: "transport.own.reg", label: "Numer rejestracyjny", control: outBox("transport.own.reg", esc(veh ? veh.reg : "—")), help: false })}
-          ${field({ key: "transport.own.defaultDriver", label: "Kierowca domyślny", control: outBox("transport.own.defaultDriver", esc(veh ? ((R.byId(S.fleet.drivers, veh.driverId) || {}).name || "—") : "—")), help: false })}
-          ${field({ key: "transport.own.driverId", label: "Kierowca tego kursu", req: true, span: "span2", control: selIn("transport.own.driverId", [{ v: "", l: "— wybierz kierowcę —" }].concat(S.fleet.drivers.map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " (domyślny)" : "") }))), T.own.driverId || (veh ? veh.driverId : "")) })}
-          ${field({ key: "transport.own.km", label: "Kilometry", req: true, control: numIn("transport.own.km", T.own.km, { suffix: "km", placeholder: "np. 262" }) })}
-          ${field({ key: "transport.own.rate", label: "Stawka (zł/km)", control: numIn("transport.own.rate", T.own.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
-          ${field({ key: "transport.cost", label: "Koszt transportu (auto)", span: "span-all", control: outBox("transport.cost", "—"), help: false })}
-        </div>`;
+          ${field({ key: "transport.own.runCount", label: "Liczba kursów", req: true, control: numIn("transport.own.runCount", O.runCount, { suffix: "szt.", placeholder: "np. 4" }) })}
+          <div class="field span3"><span class="lbl">&nbsp;</span><div class="help">Każdy kurs: pojazd z floty własnej, kierowca (domyślny z pojazdu, można zmienić dla kursu), km, stawka, ilość i waga z wagi rzeczywistej. Koszt = km × stawka, sumowany dla wszystkich kursów.</div></div>
+        </div>
+        <div class="runs" id="own-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
+        <div class="field mt3"><span class="lbl">Podsumowanie kursów</span><div data-out="runs.summary"></div></div>`;
       } else if (mode === "external") {
         modeHtml = `<div class="fgrid four mt4">
           ${field({ key: "transport.external.company", label: "Firma transportowa", req: true, span: "span2", control: textIn("transport.external.company", T.external.company, { placeholder: "np. ESI Logistics", list: "dl-carriers" }) + `<datalist id="dl-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
@@ -3414,6 +3552,14 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           this.touched = new Set(); this.showAll = false;
           this.persist(); this.rerender(); return;
         }
+        if (el.dataset.skind !== undefined) {
+          if (!el.checked) { el.checked = true; return; }
+          const k = el.dataset.skind, P = d.purchase;
+          P.supplierKind = k; P.basis = R.SUPPLIER_KINDS[k].basis;
+          const s = App.partner(P.supplierId);
+          if (s && R.partnerKind(s) !== k) { P.supplierId = ""; P.lesnictwo = ""; }
+          this.persist(); this.rerender(); return;
+        }
         if (el.dataset.mode !== undefined) {
           d.transport.mode = el.checked ? el.dataset.mode : "none";
           this.touched.add("transport.mode"); this.persist(); this.rerender(); return;
@@ -3432,7 +3578,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       this.touched.add(key);
       this.sideEffects(key, v);
       this.persist();
-      if (el.hasAttribute("data-struct") || key === "transport.train.wagonCount") this.rerender();
+      if (el.hasAttribute("data-struct") || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
       else this.refresh();
     },
 
@@ -3448,7 +3594,25 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (key === "production.type" && R.PROD_TYPES[v] && d.type !== "PRODUKCJA") d.production.outProductId = R.PROD_TYPES[v].productId;
       if (key === "production.enabled" && !v) d.sale.enabled = false;
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
-      if (key === "transport.own.vehicleId") { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.driverId = veh ? veh.driverId : ""; }
+      const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
+      if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
+      if (key === "transport.own.runCount") {
+        const O = this.ownRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
+        const arr = O.runs.slice(0, n);
+        // nowy kurs przejmuje pojazd, kierowcę, km i stawkę z poprzedniego — zwykle kursy są powtarzalne
+        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankRun(), { vehicleId: prev.vehicleId, driverId: prev.driverId, km: prev.km, rate: prev.rate }) : R.blankRun()); }
+        O.runs = arr;
+      }
+      if (key === "purchase.supplierId") {
+        const s = App.partner(v);
+        if (s) {
+          const k = R.partnerKind(s);
+          d.purchase.supplierKind = k; d.purchase.basis = R.SUPPLIER_KINDS[k].basis;
+          if (k === "nadlesnictwo") { d.production.type = "lesna"; if (!d.production.ndl) d.production.ndl = R.ndlName(s); }
+        }
+        d.purchase.lesnictwo = "";
+      }
+      if (key === "purchase.lesnictwo" && this.supplierKind() === "nadlesnictwo") d.production.lesnictwo = v;
       if (key === "transport.place") d.transport.placeTouched = true;
       if ((key === "sale.buyerId" || key === "sale.enabled" || key === "sale.direct" || key === "mm.toWhId") && !d.transport.placeTouched) d.transport.place = this.defaultPlace();
       if (key === "sale.direct" && v) { if (!d.production.rawProductId) d.production.rawProductId = "pr_drewno"; if (!d.production.outProductId) d.production.outProductId = "pr_zr_lesna"; }
@@ -3499,6 +3663,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       DBG.plan = plan; DBG.corrPlan = this.corrPlan;
       const n = plan.norm;
       const out = (key, html) => { const el = form.querySelector(`[data-out="${key}"]`); if (el) el.innerHTML = html; };
+      $$("[data-calc]", form).forEach(c => { c.innerHTML = ""; });      // bez tego opisy wyliczeń dopisywały się przy każdym przeliczeniu
       $$("[data-num]", form).forEach(el => {
         const c = form.querySelector(`[data-calc="${el.dataset.bind}"]`);
         const r = NumParse.parse(el.value);
@@ -3557,8 +3722,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }
       const T = n.transport;
       if (T.mode === "own") {
-        out("transport.cost", money(T.cost));
-        add("transport.cost", `${fmtQ(T.km)} km × ${fmt(T.rate)} zł/km${T.driverOverridden ? ` · <span style="color:var(--warn)">kierowca zmieniony tylko dla tego kursu</span>` : ""}`);
+        const U = Units.label(T.qtyUnit || "");
+        (T.runs || []).forEach((r, i) => {
+          out(`run.${i}.cost`, `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`);
+          if (r.driverOverridden) add(`transport.own.runs.${i}.driverId`, `<span style="color:var(--warn)">kierowca zmieniony tylko dla tego kursu</span>`);
+          if (r.reg) add(`transport.own.runs.${i}.vehicleId`, `rej. <b>${esc(r.reg)}</b>`);
+        });
+        out("runs.summary", T.runs && T.runs.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th><th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">Stawka</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
+          ${T.runs.map(r => `<tr><td>${r.no}</td><td>${esc(r.reg || "—")}</td><td>${esc(r.driverName || "—")}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${fmt(r.rate)} zł</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
+          <tfoot><tr><td colspan="3">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}</td></tr></tfoot></table></div>` : "—");
       } else if (T.mode === "external") {
         out("transport.cost", money(T.cost));
         add("transport.cost", T.includedInPrice ? "transport wliczony w cenę towaru" : "kwota frachtu");
@@ -3774,7 +3946,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   };
 
   function transportText(t) {
-    if (t.mode === "own") return [t.reg, t.driverName].filter(Boolean).join(" · ") || "uzupełnij pojazd";
+    if (t.mode === "own") { const n = (t.runs || [t]).length; return (n > 1 ? `${n} kursy · ` : "") + ([t.reg, t.driverName].filter(Boolean).join(" · ") || "uzupełnij pojazd"); }
     if (t.mode === "external") return [t.company, t.reg].filter(Boolean).join(" · ") || "uzupełnij przewoźnika";
     if (t.mode === "train") return [t.trainNo, `${t.wagonCount} wag.`, `${fmtQ(t.totalT)} t`].filter(Boolean).join(" · ");
     return "";
@@ -3920,7 +4092,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const blocks = [{ type: "kv", rows: kv, cols: 1 }];
     if (d.transport) {
       const t = d.transport, tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
-      if (t.mode === "own") tk.push(["Pojazd", `${t.vehicleName} · ${t.reg}`], ["Kierowca kursu", t.driverName + (t.driverOverridden ? " (zmieniony dla kursu)" : "")], ["Trasa", `${fmtQ(t.km)} km × ${fmt(t.rate)} zł/km`]);
+      if (t.mode === "own") tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Pojazdy", t.reg], ["Kierowcy", t.driverName + (t.driverOverridden ? " (zmiana dla kursu)" : "")], ["Kilometry łącznie", `${fmtQ(t.km)} km`]);
       if (t.mode === "external") tk.push(["Przewoźnik", `${t.company} · ${t.reg}`], ["Odległość", `${fmtQ(t.km)} km`], ["Fracht", t.includedInPrice ? "wliczony w cenę" : money(t.freight)]);
       if (t.mode === "train") {
         tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);
@@ -3929,6 +4101,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }
       tk.push(["Koszt transportu", money(t.cost)], ["Wpływ na stan", "brak — transport nie zmienia stanu magazynowego"]);
       blocks.push({ type: "h", text: "Transport" }, { type: "kv", rows: tk, cols: 1 });
+      if (t.mode === "own" && t.runs && t.runs.length) blocks.push({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Stawka", w: 1, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
+        rows: t.runs.map(r => [String(r.no), r.reg, r.driverName + (r.driverOverridden ? " *" : ""), fmtQ(r.km), `${fmt(r.rate)} zł/km`, `${fmtQ(r.qty)} ${Units.label(t.qtyUnit || "")}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
+        foot: ["Razem", "", "", fmtQ(t.km), "", `${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`, t.totalWeightT !== null && t.totalWeightT !== undefined ? fmtQ(t.totalWeightT) : "—", money(t.cost)], note: t.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
       if (t.mode === "train" && t.wagonT.length) blocks.push({ type: "table", columns: [{ label: "Wagon", w: 1 }, { label: "Tonaż [t]", w: 2, align: "right" }], rows: t.wagonT.map((x, i) => [String(i + 1), fmtQ(x)]), foot: ["Razem", fmtQ(t.totalT)] });
     }
     if (d.type === "KOR" && d.corr) {
@@ -4456,7 +4631,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const byMode = Object.keys(R.TRANSPORT_MODES).filter(k => k !== "none").map(k => { const x = live.filter(o => o.transport.mode === k); return { label: R.TRANSPORT_MODES[k], value: x.length, cost: x.reduce((a, o) => a + o.transport.cost, 0), km: x.reduce((a, o) => a + (o.transport.km || 0), 0), drill: x.map(o => o.id).join(",") }; });
       return `<div class="page-head"><div class="titles"><h2>Transport</h2><p>Kursy własne, zewnętrzne i kolejowe. Transport nie zmienia stanu — to koszt operacji i karta TR.</p></div></div>
         <div class="grid g4 mb4">
-          <div class="kpi"><div class="k-t">Kursy</div><div class="k-v">${live.length}</div></div>
+          <div class="kpi"><div class="k-t">Kursy</div><div class="k-v">${live.reduce((a, o) => a + (o.transport.mode === "own" ? (o.transport.runs || [1]).length : 1), 0)}</div><div class="k-s">${live.length} operacji</div></div>
           <div class="kpi"><div class="k-t">Koszt</div><div class="k-v">${fmt(live.reduce((a, o) => a + o.transport.cost, 0), 0)}<u>zł</u></div></div>
           <div class="kpi"><div class="k-t">Kilometry</div><div class="k-v">${fmtQ(live.reduce((a, o) => a + (o.transport.km || 0), 0), 0)}<u>km</u></div></div>
           <div class="kpi"><div class="k-t">Pociągi</div><div class="k-v">${live.filter(o => o.transport.mode === "train").reduce((a, o) => a + o.transport.wagonCount, 0)}<u>wag.</u></div><div class="k-s">${fmtQ(live.filter(o => o.transport.mode === "train").reduce((a, o) => a + o.transport.totalT, 0))} t</div></div></div>
@@ -4760,8 +4935,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const ROLE = { supplier: "Dostawca", buyer: "Odbiorca", both: "Dostawca i odbiorca" };
       return `<div class="page-head"><div class="titles"><h2>Kontrahenci</h2><p>Dostawcy i odbiorcy z obrotem (bez dokumentów anulowanych). Kliknij kontrahenta — raport okresowy z filtrem kontrahenta.</p></div></div>
         <div class="card"><div class="toolbar"><div class="field"><label for="pa-role">Rola</label><select class="ctrl" id="pa-role"><option value="">Wszyscy</option><option value="supplier" ${f.role === "supplier" ? "selected" : ""}>Dostawcy</option><option value="buyer" ${f.role === "buyer" ? "selected" : ""}>Odbiorcy</option></select></div></div>
-          <div class="tbl-wrap"><table class="tbl" id="partners-table"><thead><tr><th>Nazwa</th><th>Rola</th><th>Miejscowość</th><th class="r">Operacje</th><th class="r">Zakupy</th><th class="r">Sprzedaż</th><th>Ostatnia operacja</th><th></th></tr></thead><tbody>
-            ${rows.map(p => { const s = stats.get(p.id) || { n: 0, buy: 0, sell: 0, last: "" }; return `<tr><td><b>${esc(p.name)}</b></td><td>${ROLE[p.role]}</td><td>${esc(p.city || "")}</td><td class="r">${s.n}</td><td class="r">${esc(money(s.buy))}</td><td class="r">${esc(money(s.sell))}</td><td>${esc(Dates.pl(s.last) || "—")}</td><td class="r"><button class="btn sm" type="button" data-prep="${esc(p.id)}">Raport</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
+          <div class="tbl-wrap"><table class="tbl" id="partners-table"><thead><tr><th>Nazwa</th><th>Rola</th><th>Grupa dostawcy</th><th>Miejscowość</th><th class="r">Operacje</th><th class="r">Zakupy</th><th class="r">Sprzedaż</th><th>Ostatnia operacja</th><th></th></tr></thead><tbody>
+            ${rows.map(p => { const s = stats.get(p.id) || { n: 0, buy: 0, sell: 0, last: "" }; return `<tr><td><b>${esc(p.name)}</b></td><td>${ROLE[p.role]}</td><td>${p.role === "buyer" ? "—" : esc(R.SUPPLIER_KINDS[R.partnerKind(p)].label)}${p.lesnictwa ? `<br><small class="dim">leśnictwa: ${esc(p.lesnictwa.join(", "))}</small>` : ""}</td><td>${esc(p.city || "")}</td><td class="r">${s.n}</td><td class="r">${esc(money(s.buy))}</td><td class="r">${esc(money(s.sell))}</td><td>${esc(Dates.pl(s.last) || "—")}</td><td class="r"><button class="btn sm" type="button" data-prep="${esc(p.id)}">Raport</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
     },
     bind(page) {
       $("#pa-role", page).onchange = e => { App.tabs.partners.role = e.target.value; App.render(); };
@@ -4870,21 +5045,22 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const tab = App.tabs.fleet || "vehicles";
       const drv = id => (R.byId(S.fleet.drivers, id) || {}).name || "—";
       const opr = id => (R.byId(S.fleet.operators, id) || {}).name || "—";
-      const runs = S.operations.filter(o => o.transport && o.transport.mode === "own" && o.status !== "CANCELLED");
+      const runs = [];      // pojedyncze kursy (operacja może mieć kilka kursów)
+      for (const o of S.operations) if (o.transport && o.transport.mode === "own" && o.status !== "CANCELLED") for (const r of (o.transport.runs || [o.transport])) runs.push({ op: o, r });
       const prods = S.operations.filter(o => o.production && o.production.chipperId && o.status !== "CANCELLED");
       const st = s => `<span class="badge ${s === "aktywny" ? "ok" : s === "serwis" ? "warn" : ""}">${esc(R.ASSET_STATUS[s] || s)}</span>`;
       const edit = App.can("fleet.edit");
       const btn = (kind, id) => edit ? `<button class="btn sm" type="button" data-edit="${kind}|${esc(id)}">${ic("edit", 13)} Edytuj</button>${kind === "drivers" || kind === "operators" ? ` <button class="btn sm danger" type="button" data-del="${kind}|${esc(id)}">${ic("trash", 13)}</button>` : ""}` : "";
       let body = "";
       if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Nazwa</th><th>Rejestracja</th><th>Typ</th><th>Status</th><th>Kierowca domyślny</th><th class="r">Kursy</th><th></th></tr></thead><tbody>
-        ${S.fleet.vehicles.map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(R.VEHICLE_TYPES[v.type])}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td><td class="r">${runs.filter(o => o.transport.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
+        ${S.fleet.vehicles.map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(R.VEHICLE_TYPES[v.type])}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td><td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Imię i nazwisko</th><th>Telefon</th><th>Domyślny w pojazdach</th><th class="r">Kursy</th><th></th></tr></thead><tbody>
-        ${S.fleet.drivers.map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td><td class="r">${runs.filter(o => o.transport.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
+        ${S.fleet.drivers.map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td><td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Rębak</th><th>Status</th><th>Operator domyślny</th><th class="r">Produkcje</th><th></th></tr></thead><tbody>
         ${S.fleet.chippers.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${st(c.status)}</td><td>${esc(opr(c.operatorId))}</td><td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "operators") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Operator</th><th>Telefon</th><th>Domyślny przy rębakach</th><th></th></tr></thead><tbody>
         ${S.fleet.operators.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.phone || "")}</td><td>${esc(S.fleet.chippers.filter(c => c.operatorId === o.id).map(c => c.name).join(", ") || "—")}</td><td class="r">${btn("operators", o.id)}</td></tr>`).join("")}</tbody></table>`;
-      const lastRuns = runs.slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 10);
+      const lastRuns = runs.slice().sort((a, b) => a.op.date < b.op.date ? 1 : -1).slice(0, 12);
       const labels = { vehicles: "Samochody / ruchome podłogi", drivers: "Kierowcy", chippers: "Rębaki", operators: "Operatorzy rębaków" };
       return `<div class="page-head"><div class="titles"><h2>Flota</h2><p>Transport własny w „Nowej operacji” korzysta z tej listy. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.</p></div>
           <div class="actions">${edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} Dodaj: ${esc(R.Fleet.KINDS[tab].label.toLowerCase())}</button>` : `<span class="badge">tylko podgląd — edycja: Kierownik / Administrator</span>`}</div></div>
@@ -4892,7 +5068,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <div class="card"><div class="tbl-wrap">${body}</div></div>
         <div class="card mt4"><div class="card-h"><h3>Ostatnie kursy transportu własnego</h3><span class="sub">kierowca zapisany w chwili kursu</span></div>
           ${lastRuns.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-table"><thead><tr><th>Data</th><th>Dokument</th><th>Pojazd</th><th>Kierowca kursu</th><th class="r">km</th><th class="r">Koszt</th><th>Miejsce transportu</th></tr></thead><tbody>
-            ${lastRuns.map(o => { const t = o.transport; const tr = o.documents.find(x => x.type === "TR"); return `<tr class="clickable" data-opid="${esc(o.id)}"><td>${esc(Dates.pl(o.date))}</td><td class="mono">${esc(tr ? tr.no : "")}</td><td>${esc(t.vehicleName)} · <span class="mono">${esc(t.reg)}</span></td><td>${esc(t.driverName)}${t.driverOverridden ? ' <span class="badge warn">zmieniony dla kursu</span>' : ""}</td><td class="r">${fmtQ(t.km)}</td><td class="r">${esc(money(t.cost))}</td><td>${esc(o.place)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Brak kursów.</div>`}</div>`;
+            ${lastRuns.map(({ op: o, r }) => { const tr = o.documents.find(x => x.type === "TR"); return `<tr class="clickable" data-opid="${esc(o.id)}"><td>${esc(Dates.pl(o.date))}</td><td class="mono">${esc(tr ? tr.no : "")}${(o.transport.runs || []).length > 1 ? ` <small class="dim">kurs ${r.no}</small>` : ""}</td><td>${esc(r.vehicleName)} · <span class="mono">${esc(r.reg)}</span></td><td>${esc(r.driverName)}${r.driverOverridden ? ' <span class="badge warn">zmieniony dla kursu</span>' : ""}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${esc(money(r.cost))}</td><td>${esc(o.place)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Brak kursów.</div>`}</div>`;
     },
     bind(page) {
       $$("[data-tab]", page).forEach(b => b.onclick = () => { App.tabs.fleet = b.dataset.tab; App.render(); });

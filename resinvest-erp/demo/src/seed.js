@@ -31,15 +31,15 @@
       { id: "pr_lupina", code: "LUP-N", name: "Łupina nerkowca", cat: "agro", unit: "t", active: true }
     ];
     s.partners = [
-      { id: "pa_lander", name: "Lander Agro", role: "supplier", city: "Gliwice", active: true },
-      { id: "pa_ndl_rr", name: "Nadleśnictwo Rudy Raciborskie", role: "supplier", city: "Kuźnia Raciborska", active: true },
-      { id: "pa_ndl_ryb", name: "Nadleśnictwo Rybnik", role: "supplier", city: "Rybnik", active: true },
-      { id: "pa_drwal", name: "Usługi Leśne Drwal sp. z o.o.", role: "supplier", city: "Gliwice", active: true },
+      { id: "pa_lander", name: "Lander Agro", role: "supplier", kind: "firma", city: "Gliwice", active: true },
+      { id: "pa_ndl_rr", name: "Nadleśnictwo Rudy Raciborskie", role: "supplier", kind: "nadlesnictwo", lesnictwa: ["Stanica", "Kuźnia", "Jankowice", "Rudy"], city: "Kuźnia Raciborska", active: true },
+      { id: "pa_ndl_ryb", name: "Nadleśnictwo Rybnik", role: "supplier", kind: "nadlesnictwo", lesnictwa: ["Wielopole", "Paruszowiec", "Golejów"], city: "Rybnik", active: true },
+      { id: "pa_drwal", name: "Usługi Leśne Drwal sp. z o.o.", role: "supplier", kind: "firma", city: "Gliwice", active: true },
       { id: "pa_ec_zab", name: "Elektrociepłownia Zabrze S.A.", role: "buyer", city: "Zabrze", active: true },
       { id: "pa_ec_kat", name: "EC Katowice — biomasa", role: "buyer", city: "Katowice", active: true },
       { id: "pa_ciep_ryb", name: "Ciepłownia Rybnik", role: "buyer", city: "Rybnik", active: true },
-      { id: "pa_tartak", name: "Tartak Beskid s.c.", role: "both", city: "Żywiec", active: true },
-      { id: "pa_agro", name: "Biomass Trading B.V.", role: "supplier", city: "Rotterdam", active: true },
+      { id: "pa_tartak", name: "Tartak Beskid s.c.", role: "both", kind: "firma", city: "Żywiec", active: true },
+      { id: "pa_agro", name: "Biomass Trading B.V.", role: "supplier", kind: "firma", city: "Rotterdam", active: true },
       { id: "pa_elektrownia", name: "Elektrownia Łaziska", role: "buyer", city: "Łaziska Górne", active: true }
     ];
     s.carriers = ["ESI Logistics", "DAP Trans", "Transport Kowalski", "PKP Cargo"];
@@ -72,11 +72,17 @@
     d.date = date;
     d.type = over.type || "ZAKUP";
     for (const k of ["purchase", "production", "sale", "mm"]) Object.assign(d[k], over[k] || {});
+    // grupa dostawcy wynika z kartoteki kontrahenta, jeśli nie podano jej wprost
+    if (over.purchase && !over.purchase.supplierKind) d.purchase.supplierKind = "";
     if (over.transport) {
       const t = over.transport;
       d.transport.mode = t.mode || "none";
       d.transport.place = t.place || "";
-      Object.assign(d.transport.own, t.own || {});
+      if (t.own) {
+        // zapis skrócony { vehicleId, km, … } = jeden kurs
+        if (Array.isArray(t.own.runs)) Object.assign(d.transport.own, t.own);
+        else d.transport.own = { runCount: "1", runs: [Object.assign(RIW.blankRun(), t.own)] };
+      }
       Object.assign(d.transport.external, t.external || {});
       Object.assign(d.transport.train, t.train || {});
     }
@@ -105,7 +111,11 @@
       ["u_mag", "2026-08-05", {
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "30", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Stanica", kwit: "KW 0142/08/2026", chipperId: "ch_jenz" },
-        transport: { mode: "own", place: "RiC Zabrze", own: { vehicleId: "ve_scania", km: "45", rate: "5" } }
+        // trzy kursy własne z rębakiem w lesie → magazyn Zabrze (3 × 40 MP = 120 MP)
+        transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "3", runs: [
+          { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", qty: "40", weightT: "13,4" },
+          { vehicleId: "ve_volvo", driverId: "", km: "45", rate: "5", qty: "40", weightT: "12,9" },
+          { vehicleId: "ve_scania", driverId: "dr_wojcik", km: "45", rate: "5", qty: "40", weightT: "13,1" }] } }
       }],
       ["u_mag", "2026-08-12", {
         purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "100", unit: "MP", price: "55" },
@@ -124,7 +134,7 @@
         transport: { mode: "own", place: "Elektrociepłownia Zabrze S.A.", own: { vehicleId: "ve_volvo", km: "262", rate: "5" } }
       }],
       ["u_pys", "2026-09-08", {
-        purchase: { supplierId: "pa_ndl_ryb", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
+        purchase: { supplierKind: "nadlesnictwo", supplierId: "pa_ndl_ryb", lesnictwo: "Wielopole", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
         transport: { mode: "external", place: "RiC Pyskowice", external: { company: "Transport Kowalski", reg: "SPY 92FR", km: "40", includedInPrice: true } }
       }],
       // produkcja na magazynie: drewno ze stanu → zrębka na stan

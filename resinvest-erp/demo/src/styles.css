@@ -394,3 +394,10 @@ h2,h3,.card-h h3,.sec-h h3{color:var(--text-head)}
 .dash-two{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}
 @media (max-width:1280px){ .dash-two{grid-template-columns:1fr} .quick{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media (max-width:1080px){ .quick{grid-template-columns:repeat(2,minmax(0,1fr))} } @media (max-width:720px){ .quick{grid-template-columns:1fr} }
+/* v2.2 — kursy transportu własnego */
+.span3{grid-column:span 3}
+.runs{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s3)}
+.run-card{border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface-2);padding:var(--s3) var(--s4)}
+.run-h{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s2)}
+.run-h b{font-size:var(--t-md)} .run-cost{font-size:var(--t-sm);color:var(--text-2);font-variant-numeric:tabular-nums}
+@media (max-width:720px){ .span3{grid-column:auto} .run-card{padding:var(--s3)} }

@@ -332,6 +332,44 @@ async function fillForestDirect(page) {
       check(`Moduł „${r}” działa`, !!(await page.$(sel)));
     }
     check("Administracja: uprawnienia documents.cancel / documents.correct w macierzy", nb(await page.textContent("#perm-table")).includes("documents.cancel") && nb(await page.textContent("#perm-table")).includes("production.correct"));
+    /* ------------- 2.2: grupa dostawcy, leśnictwo, kursy transportu własnego ------------- */
+    await preset(page, "zakup");
+    check("2.2 Dostawca: dwie grupy (firma / nadleśnictwo), domyślnie firma → KZR", !!(await page.$("#f-skind-firma")) && !!(await page.$("#f-skind-nadlesnictwo")) && (await page.inputValue("#f-purchase-basis")) === "KZR" && !(await page.$("#f-purchase-lesnictwo")));
+    await tick(page, "f-skind-nadlesnictwo"); await page.waitForTimeout(100);
+    const ndlOpts = await page.$$eval("#f-purchase-supplierId option", o => o.map(x => x.textContent).filter(x => !x.startsWith("—")));
+    check("2.2 Nadleśnictwo: lista tylko nadleśnictw, podstawa Deklaracja, pole Leśnictwo", ndlOpts.length === 2 && ndlOpts.every(x => x.startsWith("Nadleśnictwo")) && (await page.inputValue("#f-purchase-basis")) === "DEKL" && !!(await page.$("#f-purchase-lesnictwo")), ndlOpts);
+    await page.selectOption("#f-purchase-supplierId", "pa_ndl_rr"); await page.waitForTimeout(100);
+    const lesn = await page.$$eval("#dl-lesn option", o => o.map(x => x.value));
+    check("2.2 Leśnictwo: lista zapisanych leśnictw nadleśnictwa", ["Stanica", "Kuźnia"].every(x => lesn.includes(x)), lesn);
+    await page.selectOption("#f-purchase-basis", "KZR");
+    check("2.2 Podstawa: ręczna zmiana możliwa", (await page.inputValue("#f-purchase-basis")) === "KZR");
+    await page.selectOption("#f-purchase-basis", "DEKL");
+    await fillTab(page, "#f-purchase-lesnictwo", "Leśnictwo Testowe");
+    await fillTab(page, "#f-purchase-qty", "100"); await page.fill("#f-purchase-price", "210");
+    await tick(page, "f-production-enabled"); await page.waitForSelector("#f-production-kwit");
+    check("2.2 Produkcja z nadleśnictwa: nadleśnictwo i leśnictwo uzupełnione z zakupu", (await page.inputValue("#f-production-ndl")) === "Rudy Raciborskie" && (await page.inputValue("#f-production-lesnictwo")) === "Leśnictwo Testowe");
+    await page.fill("#f-production-kwit", "KW 0600/09/2026");
+    await tick(page, "f-mode-own"); await page.waitForSelector("#f-transport-own-runCount");
+    await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-transport-own-runs-0-km", "45");
+    await fillTab(page, "#f-transport-own-runCount", "4");
+    check("2.2 Liczba kursów 4 → 4 osobne rubryki (pojazd i km przejęte z poprzedniego)", (await page.$$(".run-card")).length === 4 && (await page.inputValue("#f-transport-own-runs-3-vehicleId")) === "ve_scania" && (await page.inputValue("#f-transport-own-runs-3-km")) === "45");
+    check("2.2 Kurs: kierowca domyślny z pojazdu", (await page.inputValue("#f-transport-own-runs-2-driverId")) === "dr_kowalski");
+    await page.selectOption("#f-transport-own-runs-1-vehicleId", "ve_volvo"); await page.waitForTimeout(100);
+    check("2.2 Zmiana pojazdu w kursie → jego kierowca domyślny", (await page.inputValue("#f-transport-own-runs-1-driverId")) === "dr_nowak");
+    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-own-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
+    check("2.2 Podsumowanie kursów: 400 MP, 132 t, 4 × 45 km × 5 zł = 900,00 zł", nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("132 t") && nb(await page.textContent("[data-runs-cost]")) === "900,00 zł",
+      [nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-t]")), nb(await page.textContent("[data-runs-cost]"))]);
+    const calcTxt = nb(await page.textContent('[data-calc="production.chipCost"]'));
+    check("Poprawka: opis wyliczenia nie powiela się przy kolejnych przeliczeniach", (calcTxt.match(/zł\/MP/g) || []).length === 1, calcTxt);
+    check("2.2 Zatwierdzenie zakupu z 4 kursami", (await approve(page)) === 1);
+    const kop = await page.evaluate(() => RIW_DEBUG.store.state.operations.at(-1).transport);
+    check("2.2 Zapisane: 4 kursy, 2 pojazdy, 400 MP, koszt 900 zł", kop.runs.length === 4 && kop.reg === "SGL 4T821, SZA 12345" && kop.totalQty === 400 && kop.cost === 900, kop.reg);
+    await preset(page, "zakup"); await tick(page, "f-skind-nadlesnictwo"); await page.selectOption("#f-purchase-supplierId", "pa_ndl_rr"); await page.waitForTimeout(100);
+    check("2.2 Nowe leśnictwo zapisane na liście", (await page.$$eval("#dl-lesn option", o => o.map(x => x.value))).includes("Leśnictwo Testowe"));
+    await go(page, "flota");
+    check("2.2 Flota: kursy liczone pojedynczo", nb(await page.textContent("#runs-table")).includes("kurs 4"));
+
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "e2e_desktop.png"), fullPage: true });
     await ctx.close();
   }
@@ -361,7 +399,7 @@ async function fillForestDirect(page) {
   {
     const ctx = await newCtx(browser, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const page = await ctx.newPage(); watch(page, "mobile"); await boot(page);
-    for (const r of ["pulpit", "operacje", "nowa?preset=produkcja", "nowa?preset=bezposrednia", "nowa?preset=mm", "stany", "historia", "raporty", "kwit", "dokumenty", "administracja"]) {
+    for (const r of ["pulpit", "operacje", "nowa?preset=zakup", "nowa?preset=produkcja", "nowa?preset=bezposrednia", "nowa?preset=mm", "stany", "historia", "raporty", "kwit", "dokumenty", "administracja"]) {
       await go(page, r);
       const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       check(`Telefon 390 px: ${r} bez przewijania w poziomie`, over <= 1, over);

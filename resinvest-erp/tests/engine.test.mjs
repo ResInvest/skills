@@ -561,3 +561,57 @@ test("Wydruk / PDF raportu: numer RAP i ślad w audycie", () => {
   assert.equal(s.audit.at(-1).event, "print");
   assert.equal(R.registerPrint(s, ctx(s), { kind: "KWIT", title: "Kwit", format: "print" }).no, "KP/001/09/2026");
 });
+
+/* ============================ 2.2: grupy dostawców, kursy transportu ============================ */
+const NDL = over => draft({ purchase: Object.assign({ supplierKind: "nadlesnictwo", supplierId: "pa_ndl_rr", lesnictwo: "Stanica", basis: "DEKL", productId: "pr_drewno", qty: "100", unit: "m3", price: "210" }, over) });
+test("2.2 Dostawca: nadleśnictwo wymaga leśnictwa; grupa musi zgadzać się z kartoteką", () => {
+  const s = fresh();
+  assert.equal(R.partnerKind(s.partners.find(p => p.id === "pa_ndl_rr")), "nadlesnictwo");
+  assert.equal(R.partnerKind(s.partners.find(p => p.id === "pa_lander")), "firma");
+  assert.deepEqual([R.SUPPLIER_KINDS.firma.basis, R.SUPPLIER_KINDS.nadlesnictwo.basis], ["KZR", "DEKL"]);
+  assert.match(R.planOperation(s, NDL({ lesnictwo: "" }), ctx(s)).errors["purchase.lesnictwo"], /leśnictwo/);
+  assert.match(R.planOperation(s, NDL({ supplierKind: "firma" }), ctx(s)).errors["purchase.supplierId"], /nie należy do grupy/);
+  const op = commit(s, NDL());
+  assert.deepEqual([op.purchase.supplierKind, op.purchase.lesnictwo, op.purchase.basis], ["nadlesnictwo", "Stanica", "DEKL"]);
+  // podstawę można zmienić ręcznie
+  assert.equal(R.planOperation(s, NDL({ basis: "KZR" }), ctx(s)).ok, true);
+});
+test("2.2 Zakup z nadleśnictwa + produkcja: pochodzenie (nadleśnictwo, leśnictwo) uzupełnia się z zakupu", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0500/09/2026" });
+  const op = commit(s, d);
+  assert.deepEqual([op.production.ndl, op.production.lesnictwo], ["Rudy Raciborskie", "Stanica"]);
+  assert.equal(op.production.outQty, 400);
+});
+const RUNS = (n, over = {}) => ({ mode: "own", place: "RiC Zabrze", own: { runCount: String(n), runs: Array.from({ length: n }, () => Object.assign({ vehicleId: "ve_scania", driverId: "", km: "45", rate: "", qty: "100", weightT: "33" }, over)) } });
+test("2.2 Kursy: 4 kursy × 100 MP = 400 MP z produkcji do Zabrza — suma ilości, ton i kosztu; stan bez zmian od transportu", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0500/09/2026" }); d.transport = RUNS(4);
+  const p = R.planOperation(s, d, ctx(s));
+  assert.equal(p.ok, true, JSON.stringify(p.errors));
+  const t = p.norm.transport;
+  assert.deepEqual([t.runCount, t.totalQty, t.qtyUnit, t.totalWeightT, t.km, t.cost], [4, 400, "MP", 132, 180, 900]);
+  assert.equal(t.runs[0].driverName, "Jan Kowalski");
+  assert.ok(!p.warnings.some(w => w.includes("Suma kursów")));
+  const bez = R.planOperation(s, Object.assign(NDL(), { production: Object.assign(R.clone(d.production)) }), ctx(s));
+  assert.deepEqual(p.postings.map(x => [x.kind, x.qty]), bez.postings.map(x => [x.kind, x.qty]));
+});
+test("2.2 Kursy: przy wielu kursach ilość w kursie wymagana; różnica sumy = ostrzeżenie; brak wagi = ostrzeżenie", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0500/09/2026" }); d.transport = RUNS(2, { qty: "" });
+  assert.ok(R.planOperation(s, d, ctx(s)).errors["transport.own.runs.1.qty"]);
+  d.transport = RUNS(3, { weightT: "" });
+  const p = R.planOperation(s, d, ctx(s));
+  assert.ok(p.warnings.some(w => w.includes("Suma kursów 300 MP różni się od ilości operacji 400 MP")));
+  assert.ok(p.warnings.some(w => w.includes("Brak wagi rzeczywistej dla 3 z 3")));
+  d.transport = RUNS(1, { qty: "" });
+  assert.equal(R.planOperation(s, d, ctx(s)).norm.transport.totalQty, 400, "jeden kurs = cała ilość");
+  d.transport = RUNS(2, { vehicleId: "ve_man" });
+  assert.match(R.planOperation(s, d, ctx(s)).errors["transport.own.runs.0.vehicleId"], /W serwisie/);
+});
+test("2.2 Kursy: dane z wersji 2.1 (jeden kurs bez listy) nadal liczą się poprawnie", () => {
+  const s = fresh();
+  const d = WZ(); d.transport = { mode: "own", place: "EC", own: { vehicleId: "ve_scania", km: "262", rate: "5", driverId: "" } };
+  const t = R.planOperation(s, d, ctx(s)).norm.transport;
+  assert.deepEqual([t.runCount, t.cost, t.reg, t.totalQty], [1, 1310, "SGL 4T821", 500]);
+});

@@ -116,7 +116,7 @@
     const blocks = [{ type: "kv", rows: kv, cols: 1 }];
     if (d.transport) {
       const t = d.transport, tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
-      if (t.mode === "own") tk.push(["Pojazd", `${t.vehicleName} · ${t.reg}`], ["Kierowca kursu", t.driverName + (t.driverOverridden ? " (zmieniony dla kursu)" : "")], ["Trasa", `${fmtQ(t.km)} km × ${fmt(t.rate)} zł/km`]);
+      if (t.mode === "own") tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Pojazdy", t.reg], ["Kierowcy", t.driverName + (t.driverOverridden ? " (zmiana dla kursu)" : "")], ["Kilometry łącznie", `${fmtQ(t.km)} km`]);
       if (t.mode === "external") tk.push(["Przewoźnik", `${t.company} · ${t.reg}`], ["Odległość", `${fmtQ(t.km)} km`], ["Fracht", t.includedInPrice ? "wliczony w cenę" : money(t.freight)]);
       if (t.mode === "train") {
         tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);
@@ -125,6 +125,9 @@
       }
       tk.push(["Koszt transportu", money(t.cost)], ["Wpływ na stan", "brak — transport nie zmienia stanu magazynowego"]);
       blocks.push({ type: "h", text: "Transport" }, { type: "kv", rows: tk, cols: 1 });
+      if (t.mode === "own" && t.runs && t.runs.length) blocks.push({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Stawka", w: 1, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
+        rows: t.runs.map(r => [String(r.no), r.reg, r.driverName + (r.driverOverridden ? " *" : ""), fmtQ(r.km), `${fmt(r.rate)} zł/km`, `${fmtQ(r.qty)} ${Units.label(t.qtyUnit || "")}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
+        foot: ["Razem", "", "", fmtQ(t.km), "", `${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`, t.totalWeightT !== null && t.totalWeightT !== undefined ? fmtQ(t.totalWeightT) : "—", money(t.cost)], note: t.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
       if (t.mode === "train" && t.wagonT.length) blocks.push({ type: "table", columns: [{ label: "Wagon", w: 1 }, { label: "Tonaż [t]", w: 2, align: "right" }], rows: t.wagonT.map((x, i) => [String(i + 1), fmtQ(x)]), foot: ["Razem", fmtQ(t.totalT)] });
     }
     if (d.type === "KOR" && d.corr) {
@@ -652,7 +655,7 @@
       const byMode = Object.keys(R.TRANSPORT_MODES).filter(k => k !== "none").map(k => { const x = live.filter(o => o.transport.mode === k); return { label: R.TRANSPORT_MODES[k], value: x.length, cost: x.reduce((a, o) => a + o.transport.cost, 0), km: x.reduce((a, o) => a + (o.transport.km || 0), 0), drill: x.map(o => o.id).join(",") }; });
       return `<div class="page-head"><div class="titles"><h2>Transport</h2><p>Kursy własne, zewnętrzne i kolejowe. Transport nie zmienia stanu — to koszt operacji i karta TR.</p></div></div>
         <div class="grid g4 mb4">
-          <div class="kpi"><div class="k-t">Kursy</div><div class="k-v">${live.length}</div></div>
+          <div class="kpi"><div class="k-t">Kursy</div><div class="k-v">${live.reduce((a, o) => a + (o.transport.mode === "own" ? (o.transport.runs || [1]).length : 1), 0)}</div><div class="k-s">${live.length} operacji</div></div>
           <div class="kpi"><div class="k-t">Koszt</div><div class="k-v">${fmt(live.reduce((a, o) => a + o.transport.cost, 0), 0)}<u>zł</u></div></div>
           <div class="kpi"><div class="k-t">Kilometry</div><div class="k-v">${fmtQ(live.reduce((a, o) => a + (o.transport.km || 0), 0), 0)}<u>km</u></div></div>
           <div class="kpi"><div class="k-t">Pociągi</div><div class="k-v">${live.filter(o => o.transport.mode === "train").reduce((a, o) => a + o.transport.wagonCount, 0)}<u>wag.</u></div><div class="k-s">${fmtQ(live.filter(o => o.transport.mode === "train").reduce((a, o) => a + o.transport.totalT, 0))} t</div></div></div>
@@ -956,8 +959,8 @@
       const ROLE = { supplier: "Dostawca", buyer: "Odbiorca", both: "Dostawca i odbiorca" };
       return `<div class="page-head"><div class="titles"><h2>Kontrahenci</h2><p>Dostawcy i odbiorcy z obrotem (bez dokumentów anulowanych). Kliknij kontrahenta — raport okresowy z filtrem kontrahenta.</p></div></div>
         <div class="card"><div class="toolbar"><div class="field"><label for="pa-role">Rola</label><select class="ctrl" id="pa-role"><option value="">Wszyscy</option><option value="supplier" ${f.role === "supplier" ? "selected" : ""}>Dostawcy</option><option value="buyer" ${f.role === "buyer" ? "selected" : ""}>Odbiorcy</option></select></div></div>
-          <div class="tbl-wrap"><table class="tbl" id="partners-table"><thead><tr><th>Nazwa</th><th>Rola</th><th>Miejscowość</th><th class="r">Operacje</th><th class="r">Zakupy</th><th class="r">Sprzedaż</th><th>Ostatnia operacja</th><th></th></tr></thead><tbody>
-            ${rows.map(p => { const s = stats.get(p.id) || { n: 0, buy: 0, sell: 0, last: "" }; return `<tr><td><b>${esc(p.name)}</b></td><td>${ROLE[p.role]}</td><td>${esc(p.city || "")}</td><td class="r">${s.n}</td><td class="r">${esc(money(s.buy))}</td><td class="r">${esc(money(s.sell))}</td><td>${esc(Dates.pl(s.last) || "—")}</td><td class="r"><button class="btn sm" type="button" data-prep="${esc(p.id)}">Raport</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
+          <div class="tbl-wrap"><table class="tbl" id="partners-table"><thead><tr><th>Nazwa</th><th>Rola</th><th>Grupa dostawcy</th><th>Miejscowość</th><th class="r">Operacje</th><th class="r">Zakupy</th><th class="r">Sprzedaż</th><th>Ostatnia operacja</th><th></th></tr></thead><tbody>
+            ${rows.map(p => { const s = stats.get(p.id) || { n: 0, buy: 0, sell: 0, last: "" }; return `<tr><td><b>${esc(p.name)}</b></td><td>${ROLE[p.role]}</td><td>${p.role === "buyer" ? "—" : esc(R.SUPPLIER_KINDS[R.partnerKind(p)].label)}${p.lesnictwa ? `<br><small class="dim">leśnictwa: ${esc(p.lesnictwa.join(", "))}</small>` : ""}</td><td>${esc(p.city || "")}</td><td class="r">${s.n}</td><td class="r">${esc(money(s.buy))}</td><td class="r">${esc(money(s.sell))}</td><td>${esc(Dates.pl(s.last) || "—")}</td><td class="r"><button class="btn sm" type="button" data-prep="${esc(p.id)}">Raport</button></td></tr>`; }).join("")}</tbody></table></div></div>`;
     },
     bind(page) {
       $("#pa-role", page).onchange = e => { App.tabs.partners.role = e.target.value; App.render(); };
@@ -1066,21 +1069,22 @@
       const tab = App.tabs.fleet || "vehicles";
       const drv = id => (R.byId(S.fleet.drivers, id) || {}).name || "—";
       const opr = id => (R.byId(S.fleet.operators, id) || {}).name || "—";
-      const runs = S.operations.filter(o => o.transport && o.transport.mode === "own" && o.status !== "CANCELLED");
+      const runs = [];      // pojedyncze kursy (operacja może mieć kilka kursów)
+      for (const o of S.operations) if (o.transport && o.transport.mode === "own" && o.status !== "CANCELLED") for (const r of (o.transport.runs || [o.transport])) runs.push({ op: o, r });
       const prods = S.operations.filter(o => o.production && o.production.chipperId && o.status !== "CANCELLED");
       const st = s => `<span class="badge ${s === "aktywny" ? "ok" : s === "serwis" ? "warn" : ""}">${esc(R.ASSET_STATUS[s] || s)}</span>`;
       const edit = App.can("fleet.edit");
       const btn = (kind, id) => edit ? `<button class="btn sm" type="button" data-edit="${kind}|${esc(id)}">${ic("edit", 13)} Edytuj</button>${kind === "drivers" || kind === "operators" ? ` <button class="btn sm danger" type="button" data-del="${kind}|${esc(id)}">${ic("trash", 13)}</button>` : ""}` : "";
       let body = "";
       if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Nazwa</th><th>Rejestracja</th><th>Typ</th><th>Status</th><th>Kierowca domyślny</th><th class="r">Kursy</th><th></th></tr></thead><tbody>
-        ${S.fleet.vehicles.map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(R.VEHICLE_TYPES[v.type])}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td><td class="r">${runs.filter(o => o.transport.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
+        ${S.fleet.vehicles.map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(R.VEHICLE_TYPES[v.type])}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td><td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Imię i nazwisko</th><th>Telefon</th><th>Domyślny w pojazdach</th><th class="r">Kursy</th><th></th></tr></thead><tbody>
-        ${S.fleet.drivers.map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td><td class="r">${runs.filter(o => o.transport.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
+        ${S.fleet.drivers.map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td><td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Rębak</th><th>Status</th><th>Operator domyślny</th><th class="r">Produkcje</th><th></th></tr></thead><tbody>
         ${S.fleet.chippers.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${st(c.status)}</td><td>${esc(opr(c.operatorId))}</td><td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "operators") body = `<table class="tbl" id="fleet-table"><thead><tr><th>Operator</th><th>Telefon</th><th>Domyślny przy rębakach</th><th></th></tr></thead><tbody>
         ${S.fleet.operators.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.phone || "")}</td><td>${esc(S.fleet.chippers.filter(c => c.operatorId === o.id).map(c => c.name).join(", ") || "—")}</td><td class="r">${btn("operators", o.id)}</td></tr>`).join("")}</tbody></table>`;
-      const lastRuns = runs.slice().sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 10);
+      const lastRuns = runs.slice().sort((a, b) => a.op.date < b.op.date ? 1 : -1).slice(0, 12);
       const labels = { vehicles: "Samochody / ruchome podłogi", drivers: "Kierowcy", chippers: "Rębaki", operators: "Operatorzy rębaków" };
       return `<div class="page-head"><div class="titles"><h2>Flota</h2><p>Transport własny w „Nowej operacji” korzysta z tej listy. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.</p></div>
           <div class="actions">${edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} Dodaj: ${esc(R.Fleet.KINDS[tab].label.toLowerCase())}</button>` : `<span class="badge">tylko podgląd — edycja: Kierownik / Administrator</span>`}</div></div>
@@ -1088,7 +1092,7 @@
         <div class="card"><div class="tbl-wrap">${body}</div></div>
         <div class="card mt4"><div class="card-h"><h3>Ostatnie kursy transportu własnego</h3><span class="sub">kierowca zapisany w chwili kursu</span></div>
           ${lastRuns.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-table"><thead><tr><th>Data</th><th>Dokument</th><th>Pojazd</th><th>Kierowca kursu</th><th class="r">km</th><th class="r">Koszt</th><th>Miejsce transportu</th></tr></thead><tbody>
-            ${lastRuns.map(o => { const t = o.transport; const tr = o.documents.find(x => x.type === "TR"); return `<tr class="clickable" data-opid="${esc(o.id)}"><td>${esc(Dates.pl(o.date))}</td><td class="mono">${esc(tr ? tr.no : "")}</td><td>${esc(t.vehicleName)} · <span class="mono">${esc(t.reg)}</span></td><td>${esc(t.driverName)}${t.driverOverridden ? ' <span class="badge warn">zmieniony dla kursu</span>' : ""}</td><td class="r">${fmtQ(t.km)}</td><td class="r">${esc(money(t.cost))}</td><td>${esc(o.place)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Brak kursów.</div>`}</div>`;
+            ${lastRuns.map(({ op: o, r }) => { const tr = o.documents.find(x => x.type === "TR"); return `<tr class="clickable" data-opid="${esc(o.id)}"><td>${esc(Dates.pl(o.date))}</td><td class="mono">${esc(tr ? tr.no : "")}${(o.transport.runs || []).length > 1 ? ` <small class="dim">kurs ${r.no}</small>` : ""}</td><td>${esc(r.vehicleName)} · <span class="mono">${esc(r.reg)}</span></td><td>${esc(r.driverName)}${r.driverOverridden ? ' <span class="badge warn">zmieniony dla kursu</span>' : ""}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${esc(money(r.cost))}</td><td>${esc(o.place)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">Brak kursów.</div>`}</div>`;
     },
     bind(page) {
       $$("[data-tab]", page).forEach(b => b.onclick = () => { App.tabs.fleet = b.dataset.tab; App.render(); });

@@ -346,8 +346,11 @@
   /* ------------------------------------------------------------------ */
   const HELP = {
     "date": "<b>Co:</b> dzień operacji. <b>Po co:</b> decyduje o miesiącu księgowania i numeracji dokumentów. Nie może być z przyszłości ani z okresu zamkniętego. <b>Przykład:</b> 2026-09-23.",
-    "purchase.supplierId": "<b>Co:</b> firma, od której kupujesz. <b>Po co:</b> trafia na dokument PZ i do rozliczeń z dostawcą. <b>Przykład:</b> Lander Agro.",
-    "purchase.basis": "<b>Co:</b> podstawa pochodzenia biomasy. <b>Deklaracja</b> — oświadczenie dostawcy, <b>KZR</b> — dostawa rozliczana w systemie certyfikacji KZR.",
+    "purchase.supplierId": "<b>Co:</b> dostawca z wybranej grupy (firma albo nadleśnictwo). <b>Po co:</b> trafia na dokument PZ i do rozliczeń; ustawia podstawę (KZR / Deklaracja).",
+    "purchase.supplierKind": "<b>Co:</b> grupa dostawcy. <b>Firma branży drzewnej / przedsiębiorstwo drzewne</b> → podstawa domyślnie <b>KZR</b>. <b>Nadleśnictwo</b> → podstawa domyślnie <b>Deklaracja</b> i dodatkowe pole <b>Leśnictwo</b>.",
+    "purchase.lesnictwo": "<b>Co:</b> leśnictwo w wybranym nadleśnictwie. Wybierz zapisane z listy albo wpisz nowe — po zatwierdzeniu pojawi się na liście. <b>Przykład:</b> Wielopole.",
+    "transport.own.runCount": "<b>Co:</b> ile kursów wykonała flota własna. Po wpisaniu np. <b>4</b> pojawią się 4 osobne rubryki: pojazd, kierowca, km, stawka, ilość i waga rzeczywista. <b>Przykład:</b> 4 kursy × 100 MP = 400 MP.",
+    "purchase.basis": "<b>Co:</b> podstawa pochodzenia biomasy. Ustawia się automatycznie według grupy dostawcy (firma → KZR, nadleśnictwo → Deklaracja) — możesz ją zmienić. <b>Deklaracja</b> — oświadczenie dostawcy, <b>KZR</b> — dostawa rozliczana w systemie certyfikacji KZR.",
     "purchase.productId": "<b>Co:</b> kupowany towar. <b>Po co:</b> ustala jednostkę magazynową (drewno m³, zrębka MP, PKS i łupina t).",
     "purchase.qty": "<b>Co:</b> ilość z dokumentu dostawcy, w jednostce wybranej obok. Możesz wpisać <b>12,50</b> albo <b>12.50</b> lub wkleić <b>1 250,50</b>.",
     "purchase.unit": "<b>Co:</b> jednostka ilości i ceny — tylko te, które mają sens dla towaru. <b>1 m³ drewna = 4 MP</b>. PKS i łupina — wyłącznie t.",
@@ -495,6 +498,36 @@
       return App.wh() ? App.wh().name : "";
     },
     whId() { return this.mode === "correct" && this.op ? this.op.whId : App.user().whId; },
+    /** Grupa dostawcy: wybór użytkownika, a przy starszych szkicach — z kartoteki wybranego dostawcy. */
+    supplierKind() {
+      const P = this.draft.purchase;
+      if (R.SUPPLIER_KINDS[P.supplierKind]) return P.supplierKind;
+      const s = App.partner(P.supplierId);
+      return s ? R.partnerKind(s) : "firma";
+    },
+    /** Zapisane leśnictwa nadleśnictwa: z kartoteki + z wcześniejszych operacji (nowe dopisują się same). */
+    lesnictwa(supplierId) {
+      const S = Store.state, set = new Set(((App.partner(supplierId) || {}).lesnictwa) || []);
+      for (const o of S.operations) {
+        if (o.purchase && o.purchase.supplierId === supplierId && o.purchase.lesnictwo) set.add(o.purchase.lesnictwo);
+        if (o.purchase && o.purchase.supplierId === supplierId && o.production && o.production.lesnictwo) set.add(o.production.lesnictwo);
+      }
+      return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b, "pl"));
+    },
+    /** Jednostka towaru przewożonego (ilość w kursie). */
+    shippedUnit() {
+      const d = this.draft, p = id => App.product(id);
+      if (d.type === "SPRZEDAZ" && !d.sale.direct && p(d.sale.productId)) return p(d.sale.productId).unit;
+      if (d.type === "SPRZEDAZ" && d.sale.direct) return "MP";
+      if (d.type === "MM" && p(d.mm.productId)) return p(d.mm.productId).unit;
+      if (d.type === "ZAKUP" && d.production.enabled) return "MP";
+      return p(d.purchase.productId) ? p(d.purchase.productId).unit : "MP";
+    },
+    ownRuns() {
+      const O = this.draft.transport.own;
+      if (!Array.isArray(O.runs)) { this.draft.transport.own = O.vehicleId !== undefined ? { runCount: "1", runs: [Object.assign(R.blankRun(), { vehicleId: O.vehicleId || "", driverId: O.driverId || "", km: O.km || "", rate: O.rate || "" })] } : { runCount: "1", runs: [R.blankRun()] }; }
+      return this.draft.transport.own;
+    },
 
     /* ---------- pola produkcji (trzy ścieżki) ---------- */
     productionFields(mode) {
@@ -579,7 +612,9 @@
       if (type === "ZAKUP") {
         const prod = App.product(d.purchase.productId);
         const isWood = prod && prod.cat === "drewno";
-        const suppliers = S.partners.filter(p => (p.active !== false || p.id === d.purchase.supplierId) && ["supplier", "both"].includes(p.role));
+        const sKind = this.supplierKind();
+        const suppliers = S.partners.filter(p => (p.active !== false || p.id === d.purchase.supplierId) && ["supplier", "both"].includes(p.role) && R.partnerKind(p) === sKind);
+        const kindCard = (k, text) => optCard("", { checked: sKind === k, struct: false, radio: true, id: `f-skind-${k}`, title: R.SUPPLIER_KINDS[k].label, text, attrs: `data-skind="${k}"` });
         const units = prod ? Units.allowed(prod) : Units.LIST;
         const u = Units.label(d.purchase.unit);
         html += section(n++, "purchase", "Zakup", "Co kupujemy, od kogo, w jakiej jednostce i za ile.", `
@@ -588,8 +623,12 @@
             ${optCard("sale.enabled", { checked: d.sale.enabled, disabled: !d.production.enabled || corr, title: "+ Sprzedaż wyniku produkcji", text: d.production.enabled ? "Wydanie zrębki z tej produkcji do odbiorcy (WZ)." : "Wymaga produkcji. Sprzedaż ze stanu → rodzaj „Sprzedaż”." })}
           </div>
           <div class="fgrid four">
-            ${field({ key: "purchase.supplierId", label: "Dostawca", req: true, span: "span2", control: selIn("purchase.supplierId", [{ v: "", l: "— wybierz dostawcę —" }].concat(suppliers.map(p => ({ v: p.id, l: p.name }))), d.purchase.supplierId) })}
-            ${field({ key: "purchase.basis", label: "Podstawa", req: true, span: "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: "Deklaracja" }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
+            <div class="field span-all" data-field="purchase.supplierKind"><span class="lbl">Dostawca — wybierz grupę <span class="req" aria-hidden="true">*</span></span>
+              <div class="scope two" role="group" aria-label="Grupa dostawcy">${kindCard("firma", "Tartaki, zakłady i firmy leśne. Podstawa domyślnie: KZR.")}${kindCard("nadlesnictwo", "Lasy Państwowe. Podstawa domyślnie: Deklaracja. Dodatkowo: leśnictwo.")}</div>
+              <div class="help tut">${HELP["purchase.supplierKind"]}</div></div>
+            ${field({ key: "purchase.supplierId", label: sKind === "nadlesnictwo" ? "Nadleśnictwo" : "Dostawca (firma)", req: true, span: "span2", control: selIn("purchase.supplierId", [{ v: "", l: sKind === "nadlesnictwo" ? "— wybierz nadleśnictwo —" : "— wybierz dostawcę —" }].concat(suppliers.map(p => ({ v: p.id, l: p.name }))), d.purchase.supplierId, { struct: true }) })}
+            ${sKind === "nadlesnictwo" ? field({ key: "purchase.lesnictwo", label: "Leśnictwo", req: true, control: textIn("purchase.lesnictwo", d.purchase.lesnictwo, { placeholder: "wybierz lub wpisz nowe", list: "dl-lesn" }) + `<datalist id="dl-lesn">${this.lesnictwa(d.purchase.supplierId).map(x => `<option value="${esc(x)}">`).join("")}</datalist>` }) : ""}
+            ${field({ key: "purchase.basis", label: "Podstawa", req: true, span: sKind === "nadlesnictwo" ? "" : "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: "Deklaracja" }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
             ${field({ key: "purchase.productId", label: "Produkt / surowiec", req: true, span: "span2", control: selIn("purchase.productId", [{ v: "", l: "— wybierz produkt —" }].concat(S.products.filter(p => p.active !== false).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
             ${field({ key: "purchase.qty", label: "Ilość", req: true, control: numIn("purchase.qty", d.purchase.qty, { suffix: u, placeholder: "np. 20" }) })}
             ${field({ key: "purchase.unit", label: "Jednostka zakupu", req: true, control: selIn("purchase.unit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.unit, { struct: true }) })}
@@ -662,15 +701,30 @@
       const tr = T.train;
       let modeHtml = "";
       if (mode === "own") {
+        const O = this.ownRuns();
+        const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
+        const u = Units.label(this.shippedUnit());
+        const vehOpts = S.fleet.vehicles.map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + R.ASSET_STATUS[v.status] : ""}`, disabled: v.status !== "aktywny" }));
+        const runs = [];
+        for (let i = 0; i < count; i++) {
+          const r = O.runs[i] || R.blankRun(), veh = R.byId(S.fleet.vehicles, r.vehicleId), k = f => `transport.own.runs.${i}.${f}`;
+          runs.push(`<div class="run-card" data-run="${i}">
+            <div class="run-h"><b>Kurs ${i + 1}</b><span class="spacer"></span><span class="run-cost" data-out="run.${i}.cost">—</span></div>
+            <div class="fgrid four">
+              ${field({ key: k("vehicleId"), label: "Pojazd z floty własnej", req: true, span: "span2", help: false, control: selIn(k("vehicleId"), [{ v: "", l: "— wybierz pojazd —" }].concat(vehOpts), r.vehicleId, { struct: true }) })}
+              ${field({ key: k("driverId"), label: "Kierowca", req: true, span: "span2", help: false, control: selIn(k("driverId"), [{ v: "", l: "— wybierz kierowcę —" }].concat(S.fleet.drivers.map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " (domyślny)" : "") }))), r.driverId || (veh ? veh.driverId : "")) })}
+              ${field({ key: k("km"), label: "Kilometry", req: true, help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: "np. 45" }) })}
+              ${field({ key: k("rate"), label: "Stawka (zł/km)", help: false, control: numIn(k("rate"), r.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
+              ${field({ key: k("qty"), label: `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: count > 1 ? "np. 100" : "cała ilość" }) })}
+              ${field({ key: k("weightT"), label: "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: "z kwitu wagowego" }) })}
+            </div></div>`);
+        }
         modeHtml = `<div class="fgrid four mt4">
-          ${field({ key: "transport.own.vehicleId", label: "Pojazd z floty", req: true, span: "span2", control: selIn("transport.own.vehicleId", [{ v: "", l: "— wybierz pojazd —" }].concat(S.fleet.vehicles.map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + R.ASSET_STATUS[v.status] : ""}`, disabled: v.status !== "aktywny" }))), T.own.vehicleId, { struct: true }) })}
-          ${field({ key: "transport.own.reg", label: "Numer rejestracyjny", control: outBox("transport.own.reg", esc(veh ? veh.reg : "—")), help: false })}
-          ${field({ key: "transport.own.defaultDriver", label: "Kierowca domyślny", control: outBox("transport.own.defaultDriver", esc(veh ? ((R.byId(S.fleet.drivers, veh.driverId) || {}).name || "—") : "—")), help: false })}
-          ${field({ key: "transport.own.driverId", label: "Kierowca tego kursu", req: true, span: "span2", control: selIn("transport.own.driverId", [{ v: "", l: "— wybierz kierowcę —" }].concat(S.fleet.drivers.map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " (domyślny)" : "") }))), T.own.driverId || (veh ? veh.driverId : "")) })}
-          ${field({ key: "transport.own.km", label: "Kilometry", req: true, control: numIn("transport.own.km", T.own.km, { suffix: "km", placeholder: "np. 262" }) })}
-          ${field({ key: "transport.own.rate", label: "Stawka (zł/km)", control: numIn("transport.own.rate", T.own.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
-          ${field({ key: "transport.cost", label: "Koszt transportu (auto)", span: "span-all", control: outBox("transport.cost", "—"), help: false })}
-        </div>`;
+          ${field({ key: "transport.own.runCount", label: "Liczba kursów", req: true, control: numIn("transport.own.runCount", O.runCount, { suffix: "szt.", placeholder: "np. 4" }) })}
+          <div class="field span3"><span class="lbl">&nbsp;</span><div class="help">Każdy kurs: pojazd z floty własnej, kierowca (domyślny z pojazdu, można zmienić dla kursu), km, stawka, ilość i waga z wagi rzeczywistej. Koszt = km × stawka, sumowany dla wszystkich kursów.</div></div>
+        </div>
+        <div class="runs" id="own-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
+        <div class="field mt3"><span class="lbl">Podsumowanie kursów</span><div data-out="runs.summary"></div></div>`;
       } else if (mode === "external") {
         modeHtml = `<div class="fgrid four mt4">
           ${field({ key: "transport.external.company", label: "Firma transportowa", req: true, span: "span2", control: textIn("transport.external.company", T.external.company, { placeholder: "np. ESI Logistics", list: "dl-carriers" }) + `<datalist id="dl-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
@@ -820,6 +874,14 @@
           this.touched = new Set(); this.showAll = false;
           this.persist(); this.rerender(); return;
         }
+        if (el.dataset.skind !== undefined) {
+          if (!el.checked) { el.checked = true; return; }
+          const k = el.dataset.skind, P = d.purchase;
+          P.supplierKind = k; P.basis = R.SUPPLIER_KINDS[k].basis;
+          const s = App.partner(P.supplierId);
+          if (s && R.partnerKind(s) !== k) { P.supplierId = ""; P.lesnictwo = ""; }
+          this.persist(); this.rerender(); return;
+        }
         if (el.dataset.mode !== undefined) {
           d.transport.mode = el.checked ? el.dataset.mode : "none";
           this.touched.add("transport.mode"); this.persist(); this.rerender(); return;
@@ -838,7 +900,7 @@
       this.touched.add(key);
       this.sideEffects(key, v);
       this.persist();
-      if (el.hasAttribute("data-struct") || key === "transport.train.wagonCount") this.rerender();
+      if (el.hasAttribute("data-struct") || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
       else this.refresh();
     },
 
@@ -854,7 +916,25 @@
       if (key === "production.type" && R.PROD_TYPES[v] && d.type !== "PRODUKCJA") d.production.outProductId = R.PROD_TYPES[v].productId;
       if (key === "production.enabled" && !v) d.sale.enabled = false;
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
-      if (key === "transport.own.vehicleId") { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.driverId = veh ? veh.driverId : ""; }
+      const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
+      if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
+      if (key === "transport.own.runCount") {
+        const O = this.ownRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
+        const arr = O.runs.slice(0, n);
+        // nowy kurs przejmuje pojazd, kierowcę, km i stawkę z poprzedniego — zwykle kursy są powtarzalne
+        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankRun(), { vehicleId: prev.vehicleId, driverId: prev.driverId, km: prev.km, rate: prev.rate }) : R.blankRun()); }
+        O.runs = arr;
+      }
+      if (key === "purchase.supplierId") {
+        const s = App.partner(v);
+        if (s) {
+          const k = R.partnerKind(s);
+          d.purchase.supplierKind = k; d.purchase.basis = R.SUPPLIER_KINDS[k].basis;
+          if (k === "nadlesnictwo") { d.production.type = "lesna"; if (!d.production.ndl) d.production.ndl = R.ndlName(s); }
+        }
+        d.purchase.lesnictwo = "";
+      }
+      if (key === "purchase.lesnictwo" && this.supplierKind() === "nadlesnictwo") d.production.lesnictwo = v;
       if (key === "transport.place") d.transport.placeTouched = true;
       if ((key === "sale.buyerId" || key === "sale.enabled" || key === "sale.direct" || key === "mm.toWhId") && !d.transport.placeTouched) d.transport.place = this.defaultPlace();
       if (key === "sale.direct" && v) { if (!d.production.rawProductId) d.production.rawProductId = "pr_drewno"; if (!d.production.outProductId) d.production.outProductId = "pr_zr_lesna"; }
@@ -905,6 +985,7 @@
       DBG.plan = plan; DBG.corrPlan = this.corrPlan;
       const n = plan.norm;
       const out = (key, html) => { const el = form.querySelector(`[data-out="${key}"]`); if (el) el.innerHTML = html; };
+      $$("[data-calc]", form).forEach(c => { c.innerHTML = ""; });      // bez tego opisy wyliczeń dopisywały się przy każdym przeliczeniu
       $$("[data-num]", form).forEach(el => {
         const c = form.querySelector(`[data-calc="${el.dataset.bind}"]`);
         const r = NumParse.parse(el.value);
@@ -963,8 +1044,15 @@
       }
       const T = n.transport;
       if (T.mode === "own") {
-        out("transport.cost", money(T.cost));
-        add("transport.cost", `${fmtQ(T.km)} km × ${fmt(T.rate)} zł/km${T.driverOverridden ? ` · <span style="color:var(--warn)">kierowca zmieniony tylko dla tego kursu</span>` : ""}`);
+        const U = Units.label(T.qtyUnit || "");
+        (T.runs || []).forEach((r, i) => {
+          out(`run.${i}.cost`, `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`);
+          if (r.driverOverridden) add(`transport.own.runs.${i}.driverId`, `<span style="color:var(--warn)">kierowca zmieniony tylko dla tego kursu</span>`);
+          if (r.reg) add(`transport.own.runs.${i}.vehicleId`, `rej. <b>${esc(r.reg)}</b>`);
+        });
+        out("runs.summary", T.runs && T.runs.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th><th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">Stawka</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
+          ${T.runs.map(r => `<tr><td>${r.no}</td><td>${esc(r.reg || "—")}</td><td>${esc(r.driverName || "—")}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${fmt(r.rate)} zł</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
+          <tfoot><tr><td colspan="3">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}</td></tr></tfoot></table></div>` : "—");
       } else if (T.mode === "external") {
         out("transport.cost", money(T.cost));
         add("transport.cost", T.includedInPrice ? "transport wliczony w cenę towaru" : "kwota frachtu");
@@ -1180,7 +1268,7 @@
   };
 
   function transportText(t) {
-    if (t.mode === "own") return [t.reg, t.driverName].filter(Boolean).join(" · ") || "uzupełnij pojazd";
+    if (t.mode === "own") { const n = (t.runs || [t]).length; return (n > 1 ? `${n} kursy · ` : "") + ([t.reg, t.driverName].filter(Boolean).join(" · ") || "uzupełnij pojazd"); }
     if (t.mode === "external") return [t.company, t.reg].filter(Boolean).join(" · ") || "uzupełnij przewoźnika";
     if (t.mode === "train") return [t.trainNo, `${t.wagonCount} wag.`, `${fmtQ(t.totalT)} t`].filter(Boolean).join(" · ");
     return "";

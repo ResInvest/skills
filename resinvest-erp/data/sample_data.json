@@ -1,6 +1,6 @@
 {
  "schema": 3,
- "version": "2.1.0-demo",
+ "version": "2.2.0-demo",
  "rev": 15,
  "config": {
   "m3_mp": 4,
@@ -128,6 +128,7 @@
    "id": "pa_lander",
    "name": "Lander Agro",
    "role": "supplier",
+   "kind": "firma",
    "city": "Gliwice",
    "active": true
   },
@@ -135,6 +136,13 @@
    "id": "pa_ndl_rr",
    "name": "Nadleśnictwo Rudy Raciborskie",
    "role": "supplier",
+   "kind": "nadlesnictwo",
+   "lesnictwa": [
+    "Stanica",
+    "Kuźnia",
+    "Jankowice",
+    "Rudy"
+   ],
    "city": "Kuźnia Raciborska",
    "active": true
   },
@@ -142,6 +150,12 @@
    "id": "pa_ndl_ryb",
    "name": "Nadleśnictwo Rybnik",
    "role": "supplier",
+   "kind": "nadlesnictwo",
+   "lesnictwa": [
+    "Wielopole",
+    "Paruszowiec",
+    "Golejów"
+   ],
    "city": "Rybnik",
    "active": true
   },
@@ -149,6 +163,7 @@
    "id": "pa_drwal",
    "name": "Usługi Leśne Drwal sp. z o.o.",
    "role": "supplier",
+   "kind": "firma",
    "city": "Gliwice",
    "active": true
   },
@@ -177,6 +192,7 @@
    "id": "pa_tartak",
    "name": "Tartak Beskid s.c.",
    "role": "both",
+   "kind": "firma",
    "city": "Żywiec",
    "active": true
   },
@@ -184,6 +200,7 @@
    "id": "pa_agro",
    "name": "Biomass Trading B.V.",
    "role": "supplier",
+   "kind": "firma",
    "city": "Rotterdam",
    "active": true
   },
@@ -279,8 +296,8 @@
  },
  "operations": [
   {
-   "id": "op_mueb302cc9o1qyu",
-   "idemKey": "idem_mueb3029b0fr4g5",
+   "id": "op_mufdkr5rcd3te2e",
+   "idemKey": "idem_mufdkr5nbsbrssp",
    "type": "ZAKUP",
    "no": "PZ/001/08/2026",
    "date": "2026-08-05",
@@ -299,7 +316,9 @@
     "type": "ZAKUP",
     "date": "2026-08-05",
     "purchase": {
+     "supplierKind": "",
      "supplierId": "pa_lander",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "pr_drewno",
      "qty": "30",
@@ -348,10 +367,33 @@
      "place": "RiC Zabrze",
      "placeTouched": false,
      "own": {
-      "vehicleId": "ve_scania",
-      "driverId": "",
-      "km": "45",
-      "rate": "5"
+      "runCount": "3",
+      "runs": [
+       {
+        "vehicleId": "ve_scania",
+        "driverId": "",
+        "km": "45",
+        "rate": "5",
+        "qty": "40",
+        "weightT": "13,4"
+       },
+       {
+        "vehicleId": "ve_volvo",
+        "driverId": "",
+        "km": "45",
+        "rate": "5",
+        "qty": "40",
+        "weightT": "12,9"
+       },
+       {
+        "vehicleId": "ve_scania",
+        "driverId": "dr_wojcik",
+        "km": "45",
+        "rate": "5",
+        "qty": "40",
+        "weightT": "13,1"
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -380,6 +422,8 @@
    },
    "purchase": {
     "supplierId": "pa_lander",
+    "supplierKind": "firma",
+    "lesnictwo": "",
     "basis": "KZR",
     "productId": "pr_drewno",
     "qty": 30,
@@ -423,15 +467,67 @@
    "transport": {
     "mode": "own",
     "place": "RiC Zabrze",
-    "cost": 225,
+    "cost": 675,
+    "runs": [
+     {
+      "no": 1,
+      "vehicleId": "ve_scania",
+      "vehicleName": "Scania R450 — ruchoma podłoga",
+      "reg": "SGL 4T821",
+      "driverId": "dr_kowalski",
+      "driverName": "Jan Kowalski",
+      "defaultDriverId": "dr_kowalski",
+      "driverOverridden": false,
+      "km": 45,
+      "rate": 5,
+      "cost": 225,
+      "qty": 40,
+      "weightT": 13.4
+     },
+     {
+      "no": 2,
+      "vehicleId": "ve_volvo",
+      "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+      "reg": "SZA 12345",
+      "driverId": "dr_nowak",
+      "driverName": "Piotr Nowak",
+      "defaultDriverId": "dr_nowak",
+      "driverOverridden": false,
+      "km": 45,
+      "rate": 5,
+      "cost": 225,
+      "qty": 40,
+      "weightT": 12.9
+     },
+     {
+      "no": 3,
+      "vehicleId": "ve_scania",
+      "vehicleName": "Scania R450 — ruchoma podłoga",
+      "reg": "SGL 4T821",
+      "driverId": "dr_wojcik",
+      "driverName": "Tomasz Wójcik",
+      "defaultDriverId": "dr_kowalski",
+      "driverOverridden": true,
+      "km": 45,
+      "rate": 5,
+      "cost": 225,
+      "qty": 40,
+      "weightT": 13.1
+     }
+    ],
+    "runCount": 3,
+    "qtyUnit": "MP",
+    "totalQty": 120,
+    "totalWeightT": 39.4,
+    "weightMissing": 0,
+    "km": 135,
     "vehicleId": "ve_scania",
     "vehicleName": "Scania R450 — ruchoma podłoga",
-    "reg": "SGL 4T821",
+    "reg": "SGL 4T821, SZA 12345",
     "driverId": "dr_kowalski",
-    "driverName": "Jan Kowalski",
+    "driverName": "Jan Kowalski, Piotr Nowak, Tomasz Wójcik",
     "defaultDriverId": "dr_kowalski",
-    "driverOverridden": false,
-    "km": 45,
+    "driverOverridden": true,
     "rate": 5
    },
    "place": "RiC Zabrze",
@@ -501,20 +597,72 @@
      "productId": null,
      "qty": null,
      "unit": null,
-     "value": 225,
+     "value": 675,
      "stock": "brak",
      "transport": {
       "mode": "own",
       "place": "RiC Zabrze",
-      "cost": 225,
+      "cost": 675,
+      "runs": [
+       {
+        "no": 1,
+        "vehicleId": "ve_scania",
+        "vehicleName": "Scania R450 — ruchoma podłoga",
+        "reg": "SGL 4T821",
+        "driverId": "dr_kowalski",
+        "driverName": "Jan Kowalski",
+        "defaultDriverId": "dr_kowalski",
+        "driverOverridden": false,
+        "km": 45,
+        "rate": 5,
+        "cost": 225,
+        "qty": 40,
+        "weightT": 13.4
+       },
+       {
+        "no": 2,
+        "vehicleId": "ve_volvo",
+        "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+        "reg": "SZA 12345",
+        "driverId": "dr_nowak",
+        "driverName": "Piotr Nowak",
+        "defaultDriverId": "dr_nowak",
+        "driverOverridden": false,
+        "km": 45,
+        "rate": 5,
+        "cost": 225,
+        "qty": 40,
+        "weightT": 12.9
+       },
+       {
+        "no": 3,
+        "vehicleId": "ve_scania",
+        "vehicleName": "Scania R450 — ruchoma podłoga",
+        "reg": "SGL 4T821",
+        "driverId": "dr_wojcik",
+        "driverName": "Tomasz Wójcik",
+        "defaultDriverId": "dr_kowalski",
+        "driverOverridden": true,
+        "km": 45,
+        "rate": 5,
+        "cost": 225,
+        "qty": 40,
+        "weightT": 13.1
+       }
+      ],
+      "runCount": 3,
+      "qtyUnit": "MP",
+      "totalQty": 120,
+      "totalWeightT": 39.4,
+      "weightMissing": 0,
+      "km": 135,
       "vehicleId": "ve_scania",
       "vehicleName": "Scania R450 — ruchoma podłoga",
-      "reg": "SGL 4T821",
+      "reg": "SGL 4T821, SZA 12345",
       "driverId": "dr_kowalski",
-      "driverName": "Jan Kowalski",
+      "driverName": "Jan Kowalski, Piotr Nowak, Tomasz Wójcik",
       "defaultDriverId": "dr_kowalski",
-      "driverOverridden": false,
-      "km": 45,
+      "driverOverridden": true,
       "rate": 5
      },
      "place": "RiC Zabrze",
@@ -526,13 +674,15 @@
     "rawCost": 0,
     "chippingCost": 1200,
     "revenue": 0,
-    "transportCost": 225,
-    "result": -8325
+    "transportCost": 675,
+    "result": -8775
    },
    "warnings": [],
    "original": {
     "purchase": {
      "supplierId": "pa_lander",
+     "supplierKind": "firma",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "pr_drewno",
      "qty": 30,
@@ -576,15 +726,67 @@
     "transport": {
      "mode": "own",
      "place": "RiC Zabrze",
-     "cost": 225,
+     "cost": 675,
+     "runs": [
+      {
+       "no": 1,
+       "vehicleId": "ve_scania",
+       "vehicleName": "Scania R450 — ruchoma podłoga",
+       "reg": "SGL 4T821",
+       "driverId": "dr_kowalski",
+       "driverName": "Jan Kowalski",
+       "defaultDriverId": "dr_kowalski",
+       "driverOverridden": false,
+       "km": 45,
+       "rate": 5,
+       "cost": 225,
+       "qty": 40,
+       "weightT": 13.4
+      },
+      {
+       "no": 2,
+       "vehicleId": "ve_volvo",
+       "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+       "reg": "SZA 12345",
+       "driverId": "dr_nowak",
+       "driverName": "Piotr Nowak",
+       "defaultDriverId": "dr_nowak",
+       "driverOverridden": false,
+       "km": 45,
+       "rate": 5,
+       "cost": 225,
+       "qty": 40,
+       "weightT": 12.9
+      },
+      {
+       "no": 3,
+       "vehicleId": "ve_scania",
+       "vehicleName": "Scania R450 — ruchoma podłoga",
+       "reg": "SGL 4T821",
+       "driverId": "dr_wojcik",
+       "driverName": "Tomasz Wójcik",
+       "defaultDriverId": "dr_kowalski",
+       "driverOverridden": true,
+       "km": 45,
+       "rate": 5,
+       "cost": 225,
+       "qty": 40,
+       "weightT": 13.1
+      }
+     ],
+     "runCount": 3,
+     "qtyUnit": "MP",
+     "totalQty": 120,
+     "totalWeightT": 39.4,
+     "weightMissing": 0,
+     "km": 135,
      "vehicleId": "ve_scania",
      "vehicleName": "Scania R450 — ruchoma podłoga",
-     "reg": "SGL 4T821",
+     "reg": "SGL 4T821, SZA 12345",
      "driverId": "dr_kowalski",
-     "driverName": "Jan Kowalski",
+     "driverName": "Jan Kowalski, Piotr Nowak, Tomasz Wójcik",
      "defaultDriverId": "dr_kowalski",
-     "driverOverridden": false,
-     "km": 45,
+     "driverOverridden": true,
      "rate": 5
     },
     "totals": {
@@ -592,8 +794,8 @@
      "rawCost": 0,
      "chippingCost": 1200,
      "revenue": 0,
-     "transportCost": 225,
-     "result": -8325
+     "transportCost": 675,
+     "result": -8775
     }
    },
    "corrections": [],
@@ -608,14 +810,14 @@
      "rawCost": 0,
      "chippingCost": 1200,
      "revenue": 0,
-     "transportCost": 225,
-     "result": -8325
+     "transportCost": 675,
+     "result": -8775
     }
    ]
   },
   {
-   "id": "op_mueb302ci6e12lc",
-   "idemKey": "idem_mueb302chu72t73",
+   "id": "op_mufdkr5sinkgcnj",
+   "idemKey": "idem_mufdkr5sh5eo6r3",
    "type": "ZAKUP",
    "no": "PZ/002/08/2026",
    "date": "2026-08-12",
@@ -633,7 +835,9 @@
     "type": "ZAKUP",
     "date": "2026-08-12",
     "purchase": {
+     "supplierKind": "",
      "supplierId": "pa_drwal",
+     "lesnictwo": "",
      "basis": "DEKL",
      "productId": "pr_zr_tow",
      "qty": "100",
@@ -682,10 +886,17 @@
      "place": "RiC Zabrze",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "ESI Logistics",
@@ -714,6 +925,8 @@
    },
    "purchase": {
     "supplierId": "pa_drwal",
+    "supplierKind": "firma",
+    "lesnictwo": "",
     "basis": "DEKL",
     "productId": "pr_zr_tow",
     "qty": 100,
@@ -795,6 +1008,8 @@
    "original": {
     "purchase": {
      "supplierId": "pa_drwal",
+     "supplierKind": "firma",
+     "lesnictwo": "",
      "basis": "DEKL",
      "productId": "pr_zr_tow",
      "qty": 100,
@@ -847,8 +1062,8 @@
    ]
   },
   {
-   "id": "op_mueb302dmgtqn1j",
-   "idemKey": "idem_mueb302dlzxanwj",
+   "id": "op_mufdkr5tm35bo6c",
+   "idemKey": "idem_mufdkr5sly9f1e7",
    "type": "ZAKUP",
    "no": "PZ/003/08/2026",
    "date": "2026-08-20",
@@ -868,7 +1083,9 @@
     "type": "ZAKUP",
     "date": "2026-08-20",
     "purchase": {
+     "supplierKind": "",
      "supplierId": "pa_tartak",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "pr_drewno_inw",
      "qty": "25",
@@ -917,10 +1134,17 @@
      "place": "EC Katowice — bocznica",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -949,6 +1173,8 @@
    },
    "purchase": {
     "supplierId": "pa_tartak",
+    "supplierKind": "firma",
+    "lesnictwo": "",
     "basis": "KZR",
     "productId": "pr_drewno_inw",
     "qty": 25,
@@ -1152,6 +1378,8 @@
    "original": {
     "purchase": {
      "supplierId": "pa_tartak",
+     "supplierKind": "firma",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "pr_drewno_inw",
      "qty": 25,
@@ -1255,8 +1483,8 @@
    ]
   },
   {
-   "id": "op_mueb302ets2zq27",
-   "idemKey": "idem_mueb302dsirnqjz",
+   "id": "op_mufdkr5tt7kd9sb",
+   "idemKey": "idem_mufdkr5tsdfd4aa",
    "type": "ZAKUP",
    "no": "PZ/001/09/2026",
    "date": "2026-09-03",
@@ -1276,7 +1504,9 @@
     "type": "ZAKUP",
     "date": "2026-09-03",
     "purchase": {
+     "supplierKind": "",
      "supplierId": "pa_lander",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "pr_drewno",
      "qty": "20",
@@ -1325,10 +1555,17 @@
      "place": "Elektrociepłownia Zabrze S.A.",
      "placeTouched": false,
      "own": {
-      "vehicleId": "ve_volvo",
-      "driverId": "",
-      "km": "262",
-      "rate": "5"
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "ve_volvo",
+        "driverId": "",
+        "km": "262",
+        "rate": "5",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -1357,6 +1594,8 @@
    },
    "purchase": {
     "supplierId": "pa_lander",
+    "supplierKind": "firma",
+    "lesnictwo": "",
     "basis": "KZR",
     "productId": "pr_drewno",
     "qty": 20,
@@ -1413,6 +1652,29 @@
     "mode": "own",
     "place": "Elektrociepłownia Zabrze S.A.",
     "cost": 1310,
+    "runs": [
+     {
+      "no": 1,
+      "vehicleId": "ve_volvo",
+      "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+      "reg": "SZA 12345",
+      "driverId": "dr_nowak",
+      "driverName": "Piotr Nowak",
+      "defaultDriverId": "dr_nowak",
+      "driverOverridden": false,
+      "km": 262,
+      "rate": 5,
+      "cost": 1310,
+      "qty": 80,
+      "weightT": null
+     }
+    ],
+    "runCount": 1,
+    "qtyUnit": "MP",
+    "totalQty": 80,
+    "totalWeightT": null,
+    "weightMissing": 1,
+    "km": 262,
     "vehicleId": "ve_volvo",
     "vehicleName": "Volvo FH 500 — ruchoma podłoga",
     "reg": "SZA 12345",
@@ -1420,7 +1682,6 @@
     "driverName": "Piotr Nowak",
     "defaultDriverId": "dr_nowak",
     "driverOverridden": false,
-    "km": 262,
     "rate": 5
    },
    "place": "Elektrociepłownia Zabrze S.A.",
@@ -1514,6 +1775,29 @@
       "mode": "own",
       "place": "Elektrociepłownia Zabrze S.A.",
       "cost": 1310,
+      "runs": [
+       {
+        "no": 1,
+        "vehicleId": "ve_volvo",
+        "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+        "reg": "SZA 12345",
+        "driverId": "dr_nowak",
+        "driverName": "Piotr Nowak",
+        "defaultDriverId": "dr_nowak",
+        "driverOverridden": false,
+        "km": 262,
+        "rate": 5,
+        "cost": 1310,
+        "qty": 80,
+        "weightT": null
+       }
+      ],
+      "runCount": 1,
+      "qtyUnit": "MP",
+      "totalQty": 80,
+      "totalWeightT": null,
+      "weightMissing": 1,
+      "km": 262,
       "vehicleId": "ve_volvo",
       "vehicleName": "Volvo FH 500 — ruchoma podłoga",
       "reg": "SZA 12345",
@@ -1521,7 +1805,6 @@
       "driverName": "Piotr Nowak",
       "defaultDriverId": "dr_nowak",
       "driverOverridden": false,
-      "km": 262,
       "rate": 5
      },
      "place": "Elektrociepłownia Zabrze S.A.",
@@ -1536,10 +1819,14 @@
     "transportCost": 1310,
     "result": 490
    },
-   "warnings": [],
+   "warnings": [
+    "Brak wagi rzeczywistej dla 1 z 1 kursów."
+   ],
    "original": {
     "purchase": {
      "supplierId": "pa_lander",
+     "supplierKind": "firma",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "pr_drewno",
      "qty": 20,
@@ -1596,6 +1883,29 @@
      "mode": "own",
      "place": "Elektrociepłownia Zabrze S.A.",
      "cost": 1310,
+     "runs": [
+      {
+       "no": 1,
+       "vehicleId": "ve_volvo",
+       "vehicleName": "Volvo FH 500 — ruchoma podłoga",
+       "reg": "SZA 12345",
+       "driverId": "dr_nowak",
+       "driverName": "Piotr Nowak",
+       "defaultDriverId": "dr_nowak",
+       "driverOverridden": false,
+       "km": 262,
+       "rate": 5,
+       "cost": 1310,
+       "qty": 80,
+       "weightT": null
+      }
+     ],
+     "runCount": 1,
+     "qtyUnit": "MP",
+     "totalQty": 80,
+     "totalWeightT": null,
+     "weightMissing": 1,
+     "km": 262,
      "vehicleId": "ve_volvo",
      "vehicleName": "Volvo FH 500 — ruchoma podłoga",
      "reg": "SZA 12345",
@@ -1603,7 +1913,6 @@
      "driverName": "Piotr Nowak",
      "defaultDriverId": "dr_nowak",
      "driverOverridden": false,
-     "km": 262,
      "rate": 5
     },
     "totals": {
@@ -1633,8 +1942,8 @@
    ]
   },
   {
-   "id": "op_mueb302e10rozllq",
-   "idemKey": "idem_mueb302ezmjulau",
+   "id": "op_mufdkr5u10dckz6t",
+   "idemKey": "idem_mufdkr5uzqfr7kw",
    "type": "ZAKUP",
    "no": "PZ/002/09/2026",
    "date": "2026-09-08",
@@ -1652,7 +1961,9 @@
     "type": "ZAKUP",
     "date": "2026-09-08",
     "purchase": {
+     "supplierKind": "nadlesnictwo",
      "supplierId": "pa_ndl_ryb",
+     "lesnictwo": "Wielopole",
      "basis": "DEKL",
      "productId": "pr_drewno",
      "qty": "15",
@@ -1701,10 +2012,17 @@
      "place": "RiC Pyskowice",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "Transport Kowalski",
@@ -1733,6 +2051,8 @@
    },
    "purchase": {
     "supplierId": "pa_ndl_ryb",
+    "supplierKind": "nadlesnictwo",
+    "lesnictwo": "Wielopole",
     "basis": "DEKL",
     "productId": "pr_drewno",
     "qty": 15,
@@ -1814,6 +2134,8 @@
    "original": {
     "purchase": {
      "supplierId": "pa_ndl_ryb",
+     "supplierKind": "nadlesnictwo",
+     "lesnictwo": "Wielopole",
      "basis": "DEKL",
      "productId": "pr_drewno",
      "qty": 15,
@@ -1866,8 +2188,8 @@
    ]
   },
   {
-   "id": "op_mueb302e14xrkbao",
-   "idemKey": "idem_mueb302e13ugm1is",
+   "id": "op_mufdkr5u14hf65bw",
+   "idemKey": "idem_mufdkr5u13iqxq98",
    "type": "PRODUKCJA",
    "no": "PW/002/09/2026",
    "date": "2026-09-10",
@@ -1885,7 +2207,9 @@
     "type": "PRODUKCJA",
     "date": "2026-09-10",
     "purchase": {
+     "supplierKind": "firma",
      "supplierId": "",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "",
      "qty": "",
@@ -1934,10 +2258,17 @@
      "place": "",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -2110,8 +2441,8 @@
    ]
   },
   {
-   "id": "op_mueb302f19cfw69n",
-   "idemKey": "idem_mueb302f18rbqiwu",
+   "id": "op_mufdkr5v19hnsqbe",
+   "idemKey": "idem_mufdkr5u181bxs07",
    "type": "SPRZEDAZ",
    "no": "WZ/002/09/2026",
    "date": "2026-09-12",
@@ -2129,7 +2460,9 @@
     "type": "SPRZEDAZ",
     "date": "2026-09-12",
     "purchase": {
+     "supplierKind": "firma",
      "supplierId": "",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "",
      "qty": "",
@@ -2178,10 +2511,17 @@
      "place": "Ciepłownia Rybnik",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "DAP Trans",
@@ -2343,7 +2683,9 @@
       "type": "SPRZEDAZ",
       "date": "2026-09-12",
       "purchase": {
+       "supplierKind": "firma",
        "supplierId": "",
+       "lesnictwo": "",
        "basis": "KZR",
        "productId": "",
        "qty": "",
@@ -2392,10 +2734,17 @@
        "place": "Ciepłownia Rybnik",
        "placeTouched": false,
        "own": {
-        "vehicleId": "",
-        "driverId": "",
-        "km": "",
-        "rate": ""
+        "runCount": "1",
+        "runs": [
+         {
+          "vehicleId": "",
+          "driverId": "",
+          "km": "",
+          "rate": "",
+          "qty": "",
+          "weightT": ""
+         }
+        ]
        },
        "external": {
         "company": "DAP Trans",
@@ -2501,8 +2850,8 @@
    ]
   },
   {
-   "id": "op_mueb302h1d72r6o8",
-   "idemKey": "idem_mueb302g1cgzepnr",
+   "id": "op_mufdkr5x1dvtk9if",
+   "idemKey": "idem_mufdkr5w1cxj64pm",
    "type": "SPRZEDAZ",
    "no": "PW/003/09/2026",
    "date": "2026-09-15",
@@ -2521,7 +2870,9 @@
     "type": "SPRZEDAZ",
     "date": "2026-09-15",
     "purchase": {
+     "supplierKind": "firma",
      "supplierId": "",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "",
      "qty": "",
@@ -2570,10 +2921,17 @@
      "place": "Elektrownia Łaziska",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -2873,8 +3231,8 @@
    ]
   },
   {
-   "id": "op_mueb302j1i4eovq9",
-   "idemKey": "idem_mueb302i1h9oy1j1",
+   "id": "op_mufdkr5x1izcu9zz",
+   "idemKey": "idem_mufdkr5x1hta9i0h",
    "type": "MM",
    "no": "MM/001/09/2026",
    "date": "2026-09-16",
@@ -2892,7 +3250,9 @@
     "type": "MM",
     "date": "2026-09-16",
     "purchase": {
+     "supplierKind": "firma",
      "supplierId": "",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "",
      "qty": "",
@@ -2941,10 +3301,17 @@
      "place": "RiC Pyskowice",
      "placeTouched": false,
      "own": {
-      "vehicleId": "ve_scania",
-      "driverId": "",
-      "km": "28",
-      "rate": "5"
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "ve_scania",
+        "driverId": "",
+        "km": "28",
+        "rate": "5",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -2989,6 +3356,29 @@
     "mode": "own",
     "place": "RiC Pyskowice",
     "cost": 140,
+    "runs": [
+     {
+      "no": 1,
+      "vehicleId": "ve_scania",
+      "vehicleName": "Scania R450 — ruchoma podłoga",
+      "reg": "SGL 4T821",
+      "driverId": "dr_kowalski",
+      "driverName": "Jan Kowalski",
+      "defaultDriverId": "dr_kowalski",
+      "driverOverridden": false,
+      "km": 28,
+      "rate": 5,
+      "cost": 140,
+      "qty": 50,
+      "weightT": null
+     }
+    ],
+    "runCount": 1,
+    "qtyUnit": "MP",
+    "totalQty": 50,
+    "totalWeightT": null,
+    "weightMissing": 1,
+    "km": 28,
     "vehicleId": "ve_scania",
     "vehicleName": "Scania R450 — ruchoma podłoga",
     "reg": "SGL 4T821",
@@ -2996,7 +3386,6 @@
     "driverName": "Jan Kowalski",
     "defaultDriverId": "dr_kowalski",
     "driverOverridden": false,
-    "km": 28,
     "rate": 5
    },
    "place": "RiC Pyskowice",
@@ -3032,6 +3421,29 @@
       "mode": "own",
       "place": "RiC Pyskowice",
       "cost": 140,
+      "runs": [
+       {
+        "no": 1,
+        "vehicleId": "ve_scania",
+        "vehicleName": "Scania R450 — ruchoma podłoga",
+        "reg": "SGL 4T821",
+        "driverId": "dr_kowalski",
+        "driverName": "Jan Kowalski",
+        "defaultDriverId": "dr_kowalski",
+        "driverOverridden": false,
+        "km": 28,
+        "rate": 5,
+        "cost": 140,
+        "qty": 50,
+        "weightT": null
+       }
+      ],
+      "runCount": 1,
+      "qtyUnit": "MP",
+      "totalQty": 50,
+      "totalWeightT": null,
+      "weightMissing": 1,
+      "km": 28,
       "vehicleId": "ve_scania",
       "vehicleName": "Scania R450 — ruchoma podłoga",
       "reg": "SGL 4T821",
@@ -3039,7 +3451,6 @@
       "driverName": "Jan Kowalski",
       "defaultDriverId": "dr_kowalski",
       "driverOverridden": false,
-      "km": 28,
       "rate": 5
      },
      "place": "RiC Pyskowice",
@@ -3054,7 +3465,9 @@
     "transportCost": 140,
     "result": -140
    },
-   "warnings": [],
+   "warnings": [
+    "Brak wagi rzeczywistej dla 1 z 1 kursów."
+   ],
    "original": {
     "purchase": null,
     "production": null,
@@ -3074,6 +3487,29 @@
      "mode": "own",
      "place": "RiC Pyskowice",
      "cost": 140,
+     "runs": [
+      {
+       "no": 1,
+       "vehicleId": "ve_scania",
+       "vehicleName": "Scania R450 — ruchoma podłoga",
+       "reg": "SGL 4T821",
+       "driverId": "dr_kowalski",
+       "driverName": "Jan Kowalski",
+       "defaultDriverId": "dr_kowalski",
+       "driverOverridden": false,
+       "km": 28,
+       "rate": 5,
+       "cost": 140,
+       "qty": 50,
+       "weightT": null
+      }
+     ],
+     "runCount": 1,
+     "qtyUnit": "MP",
+     "totalQty": 50,
+     "totalWeightT": null,
+     "weightMissing": 1,
+     "km": 28,
      "vehicleId": "ve_scania",
      "vehicleName": "Scania R450 — ruchoma podłoga",
      "reg": "SGL 4T821",
@@ -3081,7 +3517,6 @@
      "driverName": "Jan Kowalski",
      "defaultDriverId": "dr_kowalski",
      "driverOverridden": false,
-     "km": 28,
      "rate": 5
     },
     "totals": {
@@ -3111,8 +3546,8 @@
    ]
   },
   {
-   "id": "op_mueb302j1nvxgf6r",
-   "idemKey": "idem_mueb302j1mqmax7c",
+   "id": "op_mufdkr5y1n7885zx",
+   "idemKey": "idem_mufdkr5y1m7tuac3",
    "type": "ZAKUP",
    "no": "PZ/003/09/2026",
    "date": "2026-09-17",
@@ -3130,7 +3565,9 @@
     "type": "ZAKUP",
     "date": "2026-09-17",
     "purchase": {
+     "supplierKind": "",
      "supplierId": "pa_agro",
+     "lesnictwo": "",
      "basis": "DEKL",
      "productId": "pr_lupina",
      "qty": "5",
@@ -3179,10 +3616,17 @@
      "place": "RiC Pyskowice",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -3211,6 +3655,8 @@
    },
    "purchase": {
     "supplierId": "pa_agro",
+    "supplierKind": "firma",
+    "lesnictwo": "",
     "basis": "DEKL",
     "productId": "pr_lupina",
     "qty": 5,
@@ -3266,6 +3712,8 @@
    "original": {
     "purchase": {
      "supplierId": "pa_agro",
+     "supplierKind": "firma",
+     "lesnictwo": "",
      "basis": "DEKL",
      "productId": "pr_lupina",
      "qty": 5,
@@ -3343,8 +3791,8 @@
    ]
   },
   {
-   "id": "op_mueb302k1r34o8a2",
-   "idemKey": "idem_mueb302k1qls53rd",
+   "id": "op_mufdkr5y1rzr4rxh",
+   "idemKey": "idem_mufdkr5y1qcj1b11",
    "type": "PRODUKCJA",
    "no": "PW/004/09/2026",
    "date": "2026-09-22",
@@ -3362,7 +3810,9 @@
     "type": "PRODUKCJA",
     "date": "2026-09-22",
     "purchase": {
+     "supplierKind": "firma",
      "supplierId": "",
+     "lesnictwo": "",
      "basis": "KZR",
      "productId": "",
      "qty": "",
@@ -3411,10 +3861,17 @@
      "place": "",
      "placeTouched": false,
      "own": {
-      "vehicleId": "",
-      "driverId": "",
-      "km": "",
-      "rate": ""
+      "runCount": "1",
+      "runs": [
+       {
+        "vehicleId": "",
+        "driverId": "",
+        "km": "",
+        "rate": "",
+        "qty": "",
+        "weightT": ""
+       }
+      ]
      },
      "external": {
       "company": "",
@@ -3590,7 +4047,7 @@
  "drafts": [],
  "ledger": [
   {
-   "id": "l_mueb30281vga159",
+   "id": "l_mufdkr5n1d6g705",
    "seq": 1,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3608,7 +4065,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mueb30282tkrth1",
+   "id": "l_mufdkr5n2k23652",
    "seq": 2,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3626,7 +4083,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mueb3028305prrj",
+   "id": "l_mufdkr5n3indi1b",
    "seq": 3,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3644,7 +4101,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mueb30284jk3thb",
+   "id": "l_mufdkr5n4yqbr8g",
    "seq": 4,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3662,7 +4119,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mueb30285emmorm",
+   "id": "l_mufdkr5n5j3qcgw",
    "seq": 5,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3680,7 +4137,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mueb30286tx3buy",
+   "id": "l_mufdkr5n6uy8b8k",
    "seq": 6,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3698,7 +4155,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mueb30288enobak",
+   "id": "l_mufdkr5n80gqkty",
    "seq": 7,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3716,7 +4173,7 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_mueb30289ar10mg",
+   "id": "l_mufdkr5n9gdfivu",
    "seq": 8,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -3734,14 +4191,14 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_mueb302cdnn4uij",
+   "id": "l_mufdkr5sd4yidod",
    "seq": 9,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 28.56,
    "direct": false,
-   "opId": "op_mueb302cc9o1qyu",
+   "opId": "op_mufdkr5rcd3te2e",
    "step": 1,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -3752,14 +4209,14 @@
    "docNo": "PZ/001/08/2026"
   },
   {
-   "id": "l_mueb302cenry5ma",
+   "id": "l_mufdkr5sewfumll",
    "seq": 10,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -28.56,
    "direct": false,
-   "opId": "op_mueb302cc9o1qyu",
+   "opId": "op_mufdkr5rcd3te2e",
    "step": 2,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -3770,14 +4227,14 @@
    "docNo": "RW/001/08/2026"
   },
   {
-   "id": "l_mueb302cf0ojwal",
+   "id": "l_mufdkr5sfea0h2m",
    "seq": 11,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 39.6,
    "direct": false,
-   "opId": "op_mueb302cc9o1qyu",
+   "opId": "op_mufdkr5rcd3te2e",
    "step": 3,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -3788,14 +4245,14 @@
    "docNo": "PW/001/08/2026"
   },
   {
-   "id": "l_mueb302cj68s9xz",
+   "id": "l_mufdkr5sjwudxer",
    "seq": 12,
    "ts": "2026-08-12T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_mueb302ci6e12lc",
+   "opId": "op_mufdkr5sinkgcnj",
    "step": 1,
    "date": "2026-08-12",
    "whId": "wh_zab",
@@ -3806,14 +4263,14 @@
    "docNo": "PZ/002/08/2026"
   },
   {
-   "id": "l_mueb302dnnyl7wc",
+   "id": "l_mufdkr5tngvqmvg",
    "seq": 13,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": 23.8,
    "direct": false,
-   "opId": "op_mueb302dmgtqn1j",
+   "opId": "op_mufdkr5tm35bo6c",
    "step": 1,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -3824,14 +4281,14 @@
    "docNo": "PZ/003/08/2026"
   },
   {
-   "id": "l_mueb302do54ynyk",
+   "id": "l_mufdkr5toxezu5l",
    "seq": 14,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": -23.8,
    "direct": false,
-   "opId": "op_mueb302dmgtqn1j",
+   "opId": "op_mufdkr5tm35bo6c",
    "step": 2,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -3842,14 +4299,14 @@
    "docNo": "RW/002/08/2026"
   },
   {
-   "id": "l_mueb302dpik2j5b",
+   "id": "l_mufdkr5tpoyw4rj",
    "seq": 15,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_mueb302dmgtqn1j",
+   "opId": "op_mufdkr5tm35bo6c",
    "step": 3,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -3860,14 +4317,14 @@
    "docNo": "PW/002/08/2026"
   },
   {
-   "id": "l_mueb302dq1kkb7s",
+   "id": "l_mufdkr5tqsufvmr",
    "seq": 16,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_mueb302dmgtqn1j",
+   "opId": "op_mufdkr5tm35bo6c",
    "step": 4,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -3878,14 +4335,14 @@
    "docNo": "WZ/001/08/2026"
   },
   {
-   "id": "l_mueb302eu7vju65",
+   "id": "l_mufdkr5tud6cvmi",
    "seq": 17,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 19.04,
    "direct": false,
-   "opId": "op_mueb302ets2zq27",
+   "opId": "op_mufdkr5tt7kd9sb",
    "step": 1,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -3896,14 +4353,14 @@
    "docNo": "PZ/001/09/2026"
   },
   {
-   "id": "l_mueb302evninqgd",
+   "id": "l_mufdkr5tv2z0g4c",
    "seq": 18,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -19.04,
    "direct": false,
-   "opId": "op_mueb302ets2zq27",
+   "opId": "op_mufdkr5tt7kd9sb",
    "step": 2,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -3914,14 +4371,14 @@
    "docNo": "RW/001/09/2026"
   },
   {
-   "id": "l_mueb302ew75bwol",
+   "id": "l_mufdkr5tw5kx86j",
    "seq": 19,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 26.4,
    "direct": false,
-   "opId": "op_mueb302ets2zq27",
+   "opId": "op_mufdkr5tt7kd9sb",
    "step": 3,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -3932,14 +4389,14 @@
    "docNo": "PW/001/09/2026"
   },
   {
-   "id": "l_mueb302excp8yxp",
+   "id": "l_mufdkr5ux14xe9r",
    "seq": 20,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": -26.4,
    "direct": false,
-   "opId": "op_mueb302ets2zq27",
+   "opId": "op_mufdkr5tt7kd9sb",
    "step": 4,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -3950,14 +4407,14 @@
    "docNo": "WZ/001/09/2026"
   },
   {
-   "id": "l_mueb302e11fxwtx5",
+   "id": "l_mufdkr5u11xre0s8",
    "seq": 21,
    "ts": "2026-09-08T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": 14.28,
    "direct": false,
-   "opId": "op_mueb302e10rozllq",
+   "opId": "op_mufdkr5u10dckz6t",
    "step": 1,
    "date": "2026-09-08",
    "whId": "wh_pys",
@@ -3968,14 +4425,14 @@
    "docNo": "PZ/002/09/2026"
   },
   {
-   "id": "l_mueb302e15zv2hre",
+   "id": "l_mufdkr5u1530qibs",
    "seq": 22,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -9.52,
    "direct": false,
-   "opId": "op_mueb302e14xrkbao",
+   "opId": "op_mufdkr5u14hf65bw",
    "step": 1,
    "date": "2026-09-10",
    "whId": "wh_pys",
@@ -3986,14 +4443,14 @@
    "docNo": "RW/002/09/2026"
   },
   {
-   "id": "l_mueb302e16a6uvpa",
+   "id": "l_mufdkr5u162ue6rn",
    "seq": 23,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 13.2,
    "direct": false,
-   "opId": "op_mueb302e14xrkbao",
+   "opId": "op_mufdkr5u14hf65bw",
    "step": 2,
    "date": "2026-09-10",
    "whId": "wh_pys",
@@ -4004,14 +4461,14 @@
    "docNo": "PW/002/09/2026"
   },
   {
-   "id": "l_mueb302f1az6zp2m",
+   "id": "l_mufdkr5v1a5fg6yi",
    "seq": 24,
    "ts": "2026-09-12T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_mueb302f19cfw69n",
+   "opId": "op_mufdkr5v19hnsqbe",
    "step": 1,
    "date": "2026-09-12",
    "whId": "wh_pys",
@@ -4022,14 +4479,14 @@
    "docNo": "WZ/002/09/2026"
   },
   {
-   "id": "l_mueb302h1em51yug",
+   "id": "l_mufdkr5x1e6gxf3r",
    "seq": 25,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 198,
    "direct": true,
-   "opId": "op_mueb302h1d72r6o8",
+   "opId": "op_mufdkr5x1dvtk9if",
    "step": 1,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -4040,14 +4497,14 @@
    "docNo": "PW/003/09/2026"
   },
   {
-   "id": "l_mueb302h1flllqhk",
+   "id": "l_mufdkr5x1ffded1m",
    "seq": 26,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -198,
    "direct": true,
-   "opId": "op_mueb302h1d72r6o8",
+   "opId": "op_mufdkr5x1dvtk9if",
    "step": 2,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -4058,14 +4515,14 @@
    "docNo": "WZ/003/09/2026"
   },
   {
-   "id": "l_mueb302j1jct9gua",
+   "id": "l_mufdkr5x1jtwtftc",
    "seq": 27,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -16.5,
    "direct": false,
-   "opId": "op_mueb302j1i4eovq9",
+   "opId": "op_mufdkr5x1izcu9zz",
    "step": 1,
    "date": "2026-09-16",
    "whId": "wh_zab",
@@ -4076,14 +4533,14 @@
    "docNo": "MM/001/09/2026"
   },
   {
-   "id": "l_mueb302j1k88t8cv",
+   "id": "l_mufdkr5x1kx6jrgj",
    "seq": 28,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 16.5,
    "direct": false,
-   "opId": "op_mueb302j1i4eovq9",
+   "opId": "op_mufdkr5x1izcu9zz",
    "step": 2,
    "date": "2026-09-16",
    "whId": "wh_pys",
@@ -4094,14 +4551,14 @@
    "docNo": "MM/001/09/2026"
   },
   {
-   "id": "l_mueb302j1o7ggqwn",
+   "id": "l_mufdkr5y1o596hr8",
    "seq": 29,
    "ts": "2026-09-17T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "t",
    "t": 5,
    "direct": false,
-   "opId": "op_mueb302j1nvxgf6r",
+   "opId": "op_mufdkr5y1n7885zx",
    "step": 1,
    "date": "2026-09-17",
    "whId": "wh_pys",
@@ -4112,14 +4569,14 @@
    "docNo": "PZ/003/09/2026"
   },
   {
-   "id": "l_mueb302k1swka9g2",
+   "id": "l_mufdkr5y1sup1ts5",
    "seq": 30,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -4.76,
    "direct": false,
-   "opId": "op_mueb302k1r34o8a2",
+   "opId": "op_mufdkr5y1rzr4rxh",
    "step": 1,
    "date": "2026-09-22",
    "whId": "wh_pys",
@@ -4130,14 +4587,14 @@
    "docNo": "RW/003/09/2026"
   },
   {
-   "id": "l_mueb302k1ttkhp4v",
+   "id": "l_mufdkr5y1tvu5cx5",
    "seq": 31,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 6.6,
    "direct": false,
-   "opId": "op_mueb302k1r34o8a2",
+   "opId": "op_mufdkr5y1rzr4rxh",
    "step": 2,
    "date": "2026-09-22",
    "whId": "wh_pys",
@@ -4148,14 +4605,14 @@
    "docNo": "PW/004/09/2026"
   },
   {
-   "id": "l_mueb302l1vjomeyc",
+   "id": "l_mufdkr5z1v297yl2",
    "seq": 32,
    "ts": "2026-09-14T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "MP",
    "t": 3.3,
    "direct": false,
-   "opId": "op_mueb302f19cfw69n",
+   "opId": "op_mufdkr5v19hnsqbe",
    "step": 100,
    "date": "2026-09-14",
    "whId": "wh_pys",
@@ -4167,14 +4624,14 @@
    "refDoc": "WZ/002/09/2026"
   },
   {
-   "id": "l_mueb302m1xbgxkny",
+   "id": "l_mufdkr601xf9xebp",
    "seq": 33,
    "ts": "2026-09-18T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "t",
    "t": -5,
    "direct": false,
-   "opId": "op_mueb302j1nvxgf6r",
+   "opId": "op_mufdkr5y1n7885zx",
    "step": 200,
    "date": "2026-09-18",
    "whId": "wh_pys",
@@ -4189,7 +4646,7 @@
  "inventory": [],
  "audit": [
   {
-   "id": "a_mueb30287d03jt3",
+   "id": "a_mufdkr5n71rg30d",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -4207,7 +4664,7 @@
    }
   },
   {
-   "id": "a_mueb3028abts92i",
+   "id": "a_mufdkr5naf3zjzf",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -4225,14 +4682,14 @@
    }
   },
   {
-   "id": "a_mueb302cg834bnk",
+   "id": "a_mufdkr5sgq49c1s",
    "ts": "2026-08-05T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302cc9o1qyu",
+   "entityId": "op_mufdkr5rcd3te2e",
    "opNo": "PZ/001/08/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Zakup",
@@ -4258,20 +4715,20 @@
      "rawCost": 0,
      "chippingCost": 1200,
      "revenue": 0,
-     "transportCost": 225,
-     "result": -8325
+     "transportCost": 675,
+     "result": -8775
     }
    }
   },
   {
-   "id": "a_mueb302dklsw780",
+   "id": "a_mufdkr5ska0meje",
    "ts": "2026-08-12T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302ci6e12lc",
+   "entityId": "op_mufdkr5sinkgcnj",
    "opNo": "PZ/002/08/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Zakup",
@@ -4299,14 +4756,14 @@
    }
   },
   {
-   "id": "a_mueb302dr2hmiq7",
+   "id": "a_mufdkr5tr4yeyo4",
    "ts": "2026-08-20T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302dmgtqn1j",
+   "entityId": "op_mufdkr5tm35bo6c",
    "opNo": "PZ/003/08/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Zakup",
@@ -4339,14 +4796,14 @@
    }
   },
   {
-   "id": "a_mueb302ey0y64fl",
+   "id": "a_mufdkr5uyeocxrv",
    "ts": "2026-09-03T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302ets2zq27",
+   "entityId": "op_mufdkr5tt7kd9sb",
    "opNo": "PZ/001/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Zakup",
@@ -4379,14 +4836,14 @@
    }
   },
   {
-   "id": "a_mueb302e12gedvc0",
+   "id": "a_mufdkr5u1245uhdi",
    "ts": "2026-09-08T08:00:00.000Z",
    "userId": "u_pys",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302e10rozllq",
+   "entityId": "op_mufdkr5u10dckz6t",
    "opNo": "PZ/002/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Zakup",
@@ -4414,14 +4871,14 @@
    }
   },
   {
-   "id": "a_mueb302f179cyhxm",
+   "id": "a_mufdkr5u17pr7mh2",
    "ts": "2026-09-10T08:00:00.000Z",
    "userId": "u_pys",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302e14xrkbao",
+   "entityId": "op_mufdkr5u14hf65bw",
    "opNo": "PW/002/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Produkcja na magazyn",
@@ -4451,14 +4908,14 @@
    }
   },
   {
-   "id": "a_mueb302g1b82edt1",
+   "id": "a_mufdkr5w1b04y13m",
    "ts": "2026-09-12T08:00:00.000Z",
    "userId": "u_pys",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302f19cfw69n",
+   "entityId": "op_mufdkr5v19hnsqbe",
    "opNo": "WZ/002/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Sprzedaż",
@@ -4486,14 +4943,14 @@
    }
   },
   {
-   "id": "a_mueb302i1gk1iu6g",
+   "id": "a_mufdkr5x1getd22b",
    "ts": "2026-09-15T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302h1d72r6o8",
+   "entityId": "op_mufdkr5x1dvtk9if",
    "opNo": "PW/003/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Sprzedaż (bezpośrednia)",
@@ -4522,14 +4979,14 @@
    }
   },
   {
-   "id": "a_mueb302j1lnla0rp",
+   "id": "a_mufdkr5x1l2e68sq",
    "ts": "2026-09-16T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302j1i4eovq9",
+   "entityId": "op_mufdkr5x1izcu9zz",
    "opNo": "MM/001/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Przesunięcie MM",
@@ -4559,14 +5016,14 @@
    }
   },
   {
-   "id": "a_mueb302k1peawcs6",
+   "id": "a_mufdkr5y1ptmposr",
    "ts": "2026-09-17T08:00:00.000Z",
    "userId": "u_pys",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302j1nvxgf6r",
+   "entityId": "op_mufdkr5y1n7885zx",
    "opNo": "PZ/003/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Zakup",
@@ -4593,14 +5050,14 @@
    }
   },
   {
-   "id": "a_mueb302k1uwymkik",
+   "id": "a_mufdkr5y1uqlf7py",
    "ts": "2026-09-22T08:00:00.000Z",
    "userId": "u_pys",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302k1r34o8a2",
+   "entityId": "op_mufdkr5y1rzr4rxh",
    "opNo": "PW/004/09/2026",
    "event": "create",
    "action": "Utworzenie i zatwierdzenie: Produkcja na magazyn",
@@ -4630,14 +5087,14 @@
    }
   },
   {
-   "id": "a_mueb302m1wij98bo",
+   "id": "a_mufdkr5z1w3nqzq4",
    "ts": "2026-09-14T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302f19cfw69n",
+   "entityId": "op_mufdkr5v19hnsqbe",
    "opNo": "WZ/002/09/2026",
    "relatedNo": "KOR/001/09/2026",
    "event": "correction",
@@ -4664,14 +5121,14 @@
    "reason": "błędnie wpisana ilość — kwit wagowy 90 MP"
   },
   {
-   "id": "a_mueb302m1ynex7ex",
+   "id": "a_mufdkr601yxcpc0v",
    "ts": "2026-09-18T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
    "whId": "wh_pys",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mueb302j1nvxgf6r",
+   "entityId": "op_mufdkr5y1n7885zx",
    "opNo": "PZ/003/09/2026",
    "relatedNo": "AN/001/09/2026",
    "event": "cancel",
@@ -4710,6 +5167,6 @@
  },
  "meta": {
   "lastMonthCheck": "2026-09",
-  "createdAt": "2026-09-23T16:17:02.494Z"
+  "createdAt": "2026-09-24T10:14:36.168Z"
  }
 }

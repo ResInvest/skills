@@ -15,7 +15,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "2.1.0-demo";
+  const VERSION = "2.2.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -218,6 +218,14 @@
     KOR: "Korekta dokumentu", AN: "Anulowanie dokumentu", IN: "Inwentaryzacja", BO: "Bilans otwarcia"
   };
   const BASIS = { DEKL: "Deklaracja", KZR: "KZR" };
+  /** Grupy dostawców: firma branży drzewnej → domyślnie KZR; nadleśnictwo → domyślnie Deklaracja + leśnictwo. */
+  const SUPPLIER_KINDS = {
+    firma: { label: "Firma branży drzewnej / przedsiębiorstwo drzewne", basis: "KZR" },
+    nadlesnictwo: { label: "Nadleśnictwo", basis: "DEKL" }
+  };
+  const partnerKind = p => !p ? null : SUPPLIER_KINDS[p.kind] ? p.kind : /^nadle[sś]nictwo/i.test(p.name || "") ? "nadlesnictwo" : "firma";
+  const ndlName = p => String((p && p.name) || "").replace(/^nadle[sś]nictwo\s+/i, "").trim();
+  const MAX_RUNS = 50;
   const PROD_TYPES = {
     lesna: { label: "Zrębka produkcyjna leśna", productId: "pr_zr_lesna" },
     inwestycyjna: { label: "Zrębka produkcyjna inwestycyjna", productId: "pr_zr_inw", sourceType: "Wycinka inwestycyjna" }
@@ -319,17 +327,18 @@
   /* ------------------------------------------------------------------ */
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
+  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
-      purchase: { supplierId: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
+      purchase: { supplierKind: "firma", supplierId: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
       mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
       transport: {
         mode: "none", place: "", placeTouched: false,
-        own: { vehicleId: "", driverId: "", km: "", rate: "" },
+        own: { runCount: "1", runs: [blankRun()] },
         external: { company: "", reg: "", km: "", freight: "", includedInPrice: false },
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
@@ -379,7 +388,7 @@
     const postings = [], documents = [];
     const norm = { type, purchase: null, production: null, sale: null, mm: null };
     const totals = { purchaseCost: 0, rawCost: 0, chippingCost: 0, revenue: 0, transportCost: 0, result: 0 };
-    const R_ = draft.production || {}, S = draft.sale || {}, P = draft.purchase || {}, M = draft.mm || {};
+    const R_ = Object.assign({}, draft.production || {}), S = draft.sale || {}, P = draft.purchase || {}, M = draft.mm || {};
 
     /* ---------- produkcja (wspólna dla trzech ścieżek) ----------
        mode "chain":  surowiec z zakupu w tej samej operacji, zużycie podane (domyślnie cały zakup)
@@ -475,6 +484,11 @@
       const supplier = byId(state.partners, P.supplierId);
       if (!P.supplierId) err("purchase.supplierId", "Wybierz dostawcę");
       else if (!supplier || !["supplier", "both"].includes(supplier.role) || supplier.active === false) err("purchase.supplierId", "Nieznany lub nieaktywny dostawca");
+      const sKind = partnerKind(supplier);
+      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierId", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
+      if (sKind === "nadlesnictwo" && !str(P.lesnictwo)) err("purchase.lesnictwo", "Podaj leśnictwo (wpisz nowe albo wybierz z listy)");
+      // drewno z nadleśnictwa: pochodzenie produkcji uzupełnia się z zakupu
+      if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(supplier); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
       if (!BASIS[P.basis]) err("purchase.basis", "Wybierz podstawę: Deklaracja albo KZR");
       const product = prodOf(P.productId);
       if (!P.productId) err("purchase.productId", "Wybierz produkt / surowiec");
@@ -495,7 +509,7 @@
         }
       } else if (P.weightMode !== "auto") err("purchase.weightMode", "Wybierz sposób ustalenia wagi");
       totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
-      norm.purchase = { supplierId: P.supplierId, basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
+      norm.purchase = { supplierId: P.supplierId, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
         push("ZAKUP", product.id, stockQty);
         documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: P.supplierId, partner: partyName(P.supplierId), basis: P.basis, stock: "+" });
@@ -623,20 +637,63 @@
       const mode = T.mode || "none";
       transport = { mode, place, cost: 0 };
       if (!TRANSPORT_MODES[mode]) err("transport.mode", "Nieznany tryb transportu");
+      /** Towar przewożony w operacji (jednostka magazynowa produktu). */
+      const shipped = () => {
+        if (norm.sale && norm.sale.productId) return { productId: norm.sale.productId, qty: norm.sale.stockQty || 0, unit: (prodOf(norm.sale.productId) || {}).unit };
+        if (norm.production && norm.production.outProductId && norm.production.outQty) return { productId: norm.production.outProductId, qty: norm.production.outQty, unit: norm.production.outUnit };
+        if (norm.purchase && norm.purchase.productId) return { productId: norm.purchase.productId, qty: norm.purchase.stockQty || 0, unit: norm.purchase.stockUnit };
+        if (norm.mm && norm.mm.productId) return { productId: norm.mm.productId, qty: norm.mm.stockQty || 0, unit: norm.mm.stockUnit };
+        return { productId: null, qty: 0, unit: null };
+      };
       const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
       if (mode === "own") {
+        /* Transport własny: liczba kursów → osobne kursy (pojazd, kierowca, km, stawka, ilość, waga rzeczywista).
+           Dane z wersji ≤ 2.1 (jeden kurs bez tablicy runs) są traktowane jako jeden kurs. */
         const O = T.own || {};
-        const v = byId(state.fleet.vehicles, O.vehicleId);
-        if (!O.vehicleId) err("transport.own.vehicleId", "Wybierz pojazd z floty");
-        else if (!v) err("transport.own.vehicleId", "Nieznany pojazd");
-        else if (v.status !== "aktywny") err("transport.own.vehicleId", `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
-        const driverId = O.driverId || (v && v.driverId) || "";
-        const d = byId(state.fleet.drivers, driverId);
-        if (!driverId) err("transport.own.driverId", "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
-        else if (!d) err("transport.own.driverId", "Nieznany kierowca");
-        const km = num("transport.own.km", O.km, { gt: 0, label: "liczbę km" });
-        const rate = str(O.rate) === "" ? cfg.kmRateDefault : num("transport.own.rate", O.rate, { gt: 0, label: "stawkę za km" });
-        Object.assign(transport, { vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "", driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0 });
+        const legacy = !Array.isArray(O.runs);
+        const K = (i, f) => legacy ? `transport.own.${f}` : `transport.own.runs.${i}.${f}`;
+        let count = 1;
+        if (!legacy) {
+          const n = num("transport.own.runCount", O.runCount, { gt: 0, integer: true, label: "liczbę kursów" });
+          if (n !== null && n > MAX_RUNS) err("transport.own.runCount", `Maksymalnie ${MAX_RUNS} kursów w jednej operacji`);
+          count = n && n <= MAX_RUNS ? n : 0;
+        }
+        const src = legacy ? [O] : O.runs;
+        const sp = shipped();
+        const runs = [];
+        for (let i = 0; i < count; i++) {
+          const r = src[i] || {};
+          const v = byId(state.fleet.vehicles, r.vehicleId);
+          if (!r.vehicleId) err(K(i, "vehicleId"), "Wybierz pojazd z floty");
+          else if (!v) err(K(i, "vehicleId"), "Nieznany pojazd");
+          else if (v.status !== "aktywny") err(K(i, "vehicleId"), `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
+          const driverId = r.driverId || (v && v.driverId) || "";
+          const d = byId(state.fleet.drivers, driverId);
+          if (!driverId) err(K(i, "driverId"), "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
+          else if (!d) err(K(i, "driverId"), "Nieznany kierowca");
+          const km = num(K(i, "km"), r.km, { gt: 0, label: "liczbę km" });
+          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          // ilość w kursie: przy jednym kursie domyślnie cała ilość operacji, przy wielu — wymagana
+          let q = null;
+          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
+          else q = sp.qty || null;
+          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
+          runs.push({ no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
+            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w });
+        }
+        const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
+        const weighed = runs.filter(r => r.weightT !== null);
+        const f = runs[0] || {};
+        Object.assign(transport, {
+          runs, runCount: runs.length, qtyUnit: sp.unit, totalQty, totalWeightT: weighed.length ? rq(weighed.reduce((a, r) => a + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
+          km: rq(runs.reduce((a, r) => a + r.km, 0)), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2),
+          vehicleId: f.vehicleId || "", vehicleName: f.vehicleName || "", reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "),
+          driverId: f.driverId || "", driverName: [...new Set(runs.map(r => r.driverName).filter(Boolean))].join(", "), defaultDriverId: f.defaultDriverId || "",
+          driverOverridden: runs.some(r => r.driverOverridden), rate: f.rate || 0
+        });
+        if (runs.length > 1 && sp.qty > 0 && Math.abs(totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
+        if (runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
       } else if (mode === "external") {
         const X = T.external || {};
         if (!str(X.company)) err("transport.external.company", "Podaj firmę transportową");
@@ -1289,7 +1346,17 @@
         km: rq(trOps.reduce((a, op) => a + (op.transport.km || 0), 0)),
         wagons: trOps.reduce((a, op) => a + (op.transport.wagonCount || 0), 0),
         trainT: rq(trOps.reduce((a, op) => a + (op.transport.totalT || 0), 0)),
-        carriers: (() => { const m = new Map(); for (const op of trOps) { const t = op.transport; const n = t.mode === "own" ? `Transport własny (${t.reg})` : t.mode === "external" ? t.company : `${t.carrier || "Pociąg"} (kolej)`; const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + t.cost, 2); c.km = rq(c.km + (t.km || 0)); m.set(n, c); } return [...m.values()]; })(),
+        trips: trOps.reduce((a, op) => a + (op.transport.mode === "own" ? (op.transport.runs || [1]).length : 1), 0),
+        carriers: (() => {
+          const m = new Map();
+          const addC = (n, cost, km) => { const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + cost, 2); c.km = rq(c.km + (km || 0)); m.set(n, c); };
+          for (const op of trOps) {
+            const t = op.transport;
+            if (t.mode === "own") for (const r of (t.runs || [t])) addC(`Transport własny (${r.reg})`, r.cost, r.km);
+            else addC(t.mode === "external" ? t.company : `${t.carrier || "Pociąg"} (kolej)`, t.cost, t.km);
+          }
+          return [...m.values()];
+        })(),
         rows: trOps.map(op => ({ opId: op.id, no: (op.documents.find(d => d.type === "TR") || {}).no, date: op.date, mode: TRANSPORT_MODES[op.transport.mode], place: op.transport.place, km: op.transport.km || 0, wagons: op.transport.wagonCount || 0, totalT: op.transport.totalT || 0, cost: op.transport.cost }))
       };
       const corrections = [], cancellations = [];
@@ -1361,7 +1428,7 @@
 
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
-    PROD_TYPES, DIFF_REASONS, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Reports
   };
