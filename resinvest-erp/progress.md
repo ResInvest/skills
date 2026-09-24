@@ -1,6 +1,12 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.1 (2.1.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.2 (2.2.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+
+## Wykonane — Demo v2.2
+
+- [x] Dostawca: grupa „Firma branży drzewnej / przedsiębiorstwo drzewne” (KZR) lub „Nadleśnictwo” (Deklaracja + leśnictwo z listy lub nowe), podstawa zmienialna
+- [x] Transport własny: liczba kursów → osobne rubryki (pojazd, kierowca, km, stawka, ilość, waga rzeczywista) + podsumowanie
+- [x] Poprawka powielających się opisów wyliczeń w formularzu
 
 ## Wykonane — Demo v2.1
 
@@ -20,8 +26,8 @@ Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.1 (2.1.0) — prototyp funk
 | Zestaw | Wynik |
 |---|---|
 | `npm run check` | OK |
-| `npm run test:unit` (silnik + PDF) | 56/56 |
-| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 104/104, konsola bez błędów |
+| `npm run test:unit` (silnik + PDF) | 61/61 |
+| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 119/119, konsola bez błędów |
 
 ## Znane problemy / ograniczenia
 

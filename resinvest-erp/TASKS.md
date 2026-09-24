@@ -59,6 +59,14 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 | 20 | Testy akceptacyjne (§22, §31.16, §32.23, testy 11–42) | DONE | `npm run test:unit` 56/56, `npm run test:e2e` 104/104 |
 | 21 | Review końcowy diffu (§29) | DONE | sekcja 2 poniżej (znalezione i poprawione w trakcie) |
 
+### Demo v2.2 (uwagi z oceny)
+
+| # | Wymaganie | Status | Dowód |
+|---|---|---|---|
+| 22 | Dostawca: firma drzewna (KZR) / nadleśnictwo (Deklaracja + leśnictwo z listy lub nowe), podstawa ręcznie zmienialna | DONE | U: „2.2 Dostawca…”, „2.2 Zakup z nadleśnictwa + produkcja…”; E: „2.2 Dostawca…”, „2.2 Nadleśnictwo…”, „2.2 Leśnictwo…”, „2.2 Nowe leśnictwo zapisane…” |
+| 23 | Transport własny: liczba kursów, rubryka na kurs (pojazd, kierowca domyślny, km, stawka, ilość MP, waga rzeczywista), podsumowanie MP / t / koszt | DONE | U: „2.2 Kursy…” (3 testy); E: „2.2 Liczba kursów 4…”, „2.2 Podsumowanie kursów: 400 MP, 132 t…”, „2.2 Zapisane…” |
+| 24 | Błąd: opisy wyliczeń powielały się („0 km × 5,00 zł/km · 0 km × …”) | DONE | E: „Poprawka: opis wyliczenia nie powiela się…” |
+
 ## 2. Znalezione problemy
 
 | Problem | Status |
