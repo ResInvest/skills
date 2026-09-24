@@ -83,7 +83,13 @@
         if (Array.isArray(t.own.runs)) Object.assign(d.transport.own, t.own);
         else d.transport.own = { runCount: "1", runs: [Object.assign(RIW.blankRun(), t.own)] };
       }
-      Object.assign(d.transport.external, t.external || {});
+      if (t.external) {
+        // zapis skrócony { company, reg, km, freight, includedInPrice } = jeden kurs z frachtem
+        const X = t.external;
+        if (Array.isArray(X.runs)) Object.assign(d.transport.external, X);
+        else d.transport.external = { company: X.company || "", includedInPrice: !!X.includedInPrice, runCount: "1",
+          runs: [Object.assign(RIW.blankExtRun(), { reg: X.reg || "", km: X.km || "", freight: X.includedInPrice ? "" : (X.freight || "") })] };
+      }
       Object.assign(d.transport.train, t.train || {});
     }
     d.notes = over.notes || "";
@@ -119,7 +125,10 @@
       }],
       ["u_mag", "2026-08-12", {
         purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "100", unit: "MP", price: "55" },
-        transport: { mode: "external", place: "RiC Zabrze", external: { company: "ESI Logistics", reg: "ESI 18734", km: "80", freight: "900" } }
+        // przewoźnik zewnętrzny, 2 kursy rozliczane km × stawka
+        transport: { mode: "external", place: "RiC Zabrze", external: { company: "ESI Logistics", runCount: "2", runs: [
+          { reg: "ESI 18734", driver: "Tomasz Lis", km: "80", rate: "5,50", freight: "", qty: "50", weightT: "16,4" },
+          { reg: "ESI 20511", driver: "Robert Kania", km: "80", rate: "5,50", freight: "", qty: "50", weightT: "16,9" }] } }
       }],
       ["u_kier", "2026-08-20", {
         purchase: { supplierId: "pa_tartak", basis: "KZR", productId: "pr_drewno_inw", qty: "25", unit: "m3", price: "180" },

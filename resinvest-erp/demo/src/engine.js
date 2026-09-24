@@ -15,7 +15,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "2.3.0-demo";
+  const VERSION = "2.4.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -327,6 +327,7 @@
   /* ------------------------------------------------------------------ */
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
+  function blankExtRun() { return { reg: "", driver: "", km: "", rate: "", freight: "", qty: "", weightT: "" }; }
   function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
@@ -339,7 +340,7 @@
       transport: {
         mode: "none", place: "", placeTouched: false,
         own: { runCount: "1", runs: [blankRun()] },
-        external: { company: "", reg: "", km: "", freight: "", includedInPrice: false },
+        external: { company: "", includedInPrice: false, runCount: "1", runs: [blankExtRun()] },
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
       notes: "", extDoc: ""
@@ -705,13 +706,50 @@
         if (runs.length > 1 && sp.qty > 0 && Math.abs(totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
         if (runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
       } else if (mode === "external") {
+        /* Transport zewnętrzny: firma przewozowa + liczba kursów; każdy kurs: nr rej. auta przewoźnika, kierowca,
+           km, stawka (domyślna), opcjonalnie fracht kursu z faktury, ilość, waga rzeczywista.
+           Koszt kursu = fracht kursu (jeśli podany) albo km × stawka; „wliczony w cenę” → 0 zł.
+           Dane ≤ 2.3 (jeden kurs bez listy: reg, km, freight) = jeden kurs z frachtem. */
         const X = T.external || {};
         if (!str(X.company)) err("transport.external.company", "Podaj firmę transportową");
-        if (!str(X.reg)) err("transport.external.reg", "Podaj numer rejestracyjny");
-        const km = str(X.km) === "" ? 0 : num("transport.external.km", X.km, { min: 0 });
         const included = !!X.includedInPrice;
-        const freight = included ? 0 : (num("transport.external.freight", X.freight, { min: 0, label: "kwotę frachtu" }) || 0);
-        Object.assign(transport, { company: str(X.company), reg: str(X.reg).toUpperCase(), km: km || 0, freight, includedInPrice: included, cost: included ? 0 : round(freight, 2) });
+        const legacy = !Array.isArray(X.runs);
+        const K = (i, f) => legacy ? `transport.external.${f === "freight" || f === "km" || f === "reg" ? f : "runs.0." + f}` : `transport.external.runs.${i}.${f}`;
+        let count = 1;
+        if (!legacy) {
+          const n = num("transport.external.runCount", X.runCount, { gt: 0, integer: true, label: "liczbę kursów" });
+          if (n !== null && n > MAX_RUNS) err("transport.external.runCount", `Maksymalnie ${MAX_RUNS} kursów w jednej operacji`);
+          count = n && n <= MAX_RUNS ? n : 0;
+        }
+        const src = legacy ? [{ reg: X.reg, driver: "", km: X.km, rate: "", freight: included ? "" : (str(X.freight) === "" ? "0" : X.freight), qty: "", weightT: "" }] : X.runs;
+        if (legacy && !included && str(X.freight) === "") err("transport.external.freight", "Podaj kwotę frachtu");
+        const sp = shipped();
+        const runs = [];
+        for (let i = 0; i < count; i++) {
+          const r = src[i] || {};
+          if (!str(r.reg)) err(K(i, "reg"), "Podaj numer rejestracyjny pojazdu przewoźnika");
+          const freight = str(r.freight) === "" ? null : num(K(i, "freight"), r.freight, { min: 0, label: "fracht kursu" });
+          const needKm = !included && freight === null && !legacy;
+          const km = str(r.km) === "" ? (needKm ? (err(K(i, "km"), "Podaj liczbę km (albo fracht kursu)"), null) : 0) : num(K(i, "km"), r.km, { min: 0, label: "liczbę km" });
+          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          let q = null;
+          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
+          else q = sp.qty || null;
+          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
+          const cost = included ? 0 : freight !== null ? round(freight, 2) : km !== null && rate !== null ? round(km * rate, 2) : 0;
+          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? "wliczony w cenę" : freight !== null ? "fracht" : "km × stawka", qty: q === null ? 0 : rq(q), weightT: w });
+        }
+        const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
+        const weighed = runs.filter(r => r.weightT !== null);
+        Object.assign(transport, {
+          company: str(X.company), includedInPrice: included, runs, runCount: runs.length, qtyUnit: sp.unit, totalQty,
+          totalWeightT: weighed.length ? rq(weighed.reduce((a, r) => a + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
+          reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "), driverName: [...new Set(runs.map(r => r.driver).filter(Boolean))].join(", "),
+          km: rq(runs.reduce((a, r) => a + r.km, 0)), freight: round(runs.reduce((a, r) => a + (r.freight || 0), 0), 2), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2)
+        });
+        if (runs.length > 1 && sp.qty > 0 && Math.abs(totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
+        if (!legacy && runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
       } else if (mode === "train") {
         const Tr = T.train || {};
         const n = num("transport.train.wagonCount", Tr.wagonCount, { gt: 0, integer: true, label: "liczbę wagonów" });
@@ -1366,14 +1404,15 @@
         km: rq(trOps.reduce((a, op) => a + (op.transport.km || 0), 0)),
         wagons: trOps.reduce((a, op) => a + (op.transport.wagonCount || 0), 0),
         trainT: rq(trOps.reduce((a, op) => a + (op.transport.totalT || 0), 0)),
-        trips: trOps.reduce((a, op) => a + (op.transport.mode === "own" ? (op.transport.runs || [1]).length : 1), 0),
+        trips: trOps.reduce((a, op) => a + (op.transport.mode !== "train" ? (op.transport.runs || [1]).length : 1), 0),
         carriers: (() => {
           const m = new Map();
           const addC = (n, cost, km) => { const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + cost, 2); c.km = rq(c.km + (km || 0)); m.set(n, c); };
           for (const op of trOps) {
             const t = op.transport;
             if (t.mode === "own") for (const r of (t.runs || [t])) addC(`Transport własny (${r.reg})`, r.cost, r.km);
-            else addC(t.mode === "external" ? t.company : `${t.carrier || "Pociąg"} (kolej)`, t.cost, t.km);
+            else if (t.mode === "external") for (const r of (t.runs || [t])) addC(t.company, r.cost, r.km);
+            else addC(`${t.carrier || "Pociąg"} (kolej)`, t.cost, t.km);
           }
           return [...m.values()];
         })(),
@@ -1448,7 +1487,7 @@
 
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
-    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Reports
   };

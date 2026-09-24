@@ -1,10 +1,14 @@
-# ResInvest ERP — Demo v2.3 (2.3.0)
+# ResInvest ERP — Demo v2.4 (2.4.0)
 
 Samodzielny plik **`ResInvest_ERP_demo.html`** — funkcjonalnie kompletny prototyp logiki ResInvest ERP
 (obrót i magazyn biomasy). Otwiera się dwuklikiem: bez serwera, bez internetu, bez bibliotek z CDN.
 
 > Demo zapisuje dane w `localStorage` przeglądarki **wyłącznie do celów pokazowych**. To nie jest Production v1 —
 > wdrożenie produkcyjne wymaga bazy danych z transakcjami i serwera (patrz `docs/RESINVEST_CHANGE_PLAN.md`, „Architektura Production v1”).
+
+## Nowe w 2.4
+
+* **Transport zewnętrzny — liczba kursów:** firma przewozowa + np. 4 kursy → 4 rubryki: nr rejestracyjny auta przewoźnika, kierowca, km, stawka (domyślna), ilość MP w kursie, waga rzeczywista t, opcjonalnie fracht kursu z faktury (zastępuje km × stawka). Podsumowanie: łączna ilość, tony, km i koszt; „wliczony w cenę” = 0 zł przy zachowanej ewidencji kursów. Dane z wcześniejszych wersji (jeden kurs z frachtem) działają bez zmian.
 
 ## Nowe w 2.3
 
@@ -51,7 +55,7 @@ Masa i energia są orientacyjne i nie zmieniają ilości na stanie. GJ liczone z
 | Sposób | Kroki |
 |---|---|
 | Plik | Otwórz `ResInvest_ERP_demo.html` w Chrome / Edge / Firefox |
-| Instalator Windows | `ResInvestERP_Demo_Setup_2.3.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” |
+| Instalator Windows | `ResInvestERP_Demo_Setup_2.4.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” |
 
 Użytkownika (a więc magazyn aktywny i uprawnienia) zmienia się w prawym górnym rogu:
 
@@ -103,9 +107,9 @@ Wymagany Node.js ≥ 18.
 cd resinvest-erp
 npm run check        # kontrola składni źródeł
 npm run build        # → ResInvest_ERP_demo.html (wstrzykuje konfigurację, czcionki PDF i film intro)
-npm run test:unit    # 63 testy: silnik + generator PDF
+npm run test:unit    # 66 testów: silnik + generator PDF
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e     # 128 kontroli w przeglądarce
+npm run test:e2e     # 133 kontrole w przeglądarce
 # pełna kontrola tekstu PDF (polskie znaki) — Python z pypdf:
 PDF_PYTHON=/ścieżka/do/python npm run test:e2e
 ```
@@ -118,7 +122,7 @@ Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Demo_Setup_2.3.0.exe
+# → installer\Output\ResInvestERP_Demo_Setup_2.4.0.exe
 ```
 
 ## Kopie zapasowe i dane

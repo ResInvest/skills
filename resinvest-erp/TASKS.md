@@ -73,6 +73,12 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 |---|---|---|---|
 | 25 | Dostawca (firma) i nadleśnictwo — możliwość wpisania ręcznie; nowy kontrahent dopisywany do kartoteki | DONE | U: „2.3 Dostawca wpisany ręcznie…” (2 testy); E: „2.3 …” (9 kontroli) |
 
+### Demo v2.4
+
+| # | Wymaganie | Status | Dowód |
+|---|---|---|---|
+| 26 | Transport zewnętrzny: liczba kursów, rubryka na kurs (pojazd przewoźnika, kierowca, km, stawka domyślna, ilość MP, waga rzeczywista), podsumowanie MP / t / koszt | DONE | U: „2.4 Zewnętrzny…” (3 testy); E: „2.4 …” (5 kontroli) |
+
 ## 2. Znalezione problemy
 
 | Problem | Status |

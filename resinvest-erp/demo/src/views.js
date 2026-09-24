@@ -117,7 +117,7 @@
     if (d.transport) {
       const t = d.transport, tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
       if (t.mode === "own") tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Pojazdy", t.reg], ["Kierowcy", t.driverName + (t.driverOverridden ? " (zmiana dla kursu)" : "")], ["Kilometry łącznie", `${fmtQ(t.km)} km`]);
-      if (t.mode === "external") tk.push(["Przewoźnik", `${t.company} · ${t.reg}`], ["Odległość", `${fmtQ(t.km)} km`], ["Fracht", t.includedInPrice ? "wliczony w cenę" : money(t.freight)]);
+      if (t.mode === "external") tk.push(["Przewoźnik", t.company], ["Liczba kursów", String((t.runs || [t]).length)], ["Pojazdy", t.reg], ["Kilometry łącznie", `${fmtQ(t.km)} km`], ["Rozliczenie", t.includedInPrice ? "wliczony w cenę" : "fracht / km × stawka"]);
       if (t.mode === "train") {
         tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);
         if (t.capacity !== null) tk.push(["Łączna ładowność", `${fmtQ(t.totalCapacity)} ${t.capUnit}`]);
@@ -125,6 +125,9 @@
       }
       tk.push(["Koszt transportu", money(t.cost)], ["Wpływ na stan", "brak — transport nie zmienia stanu magazynowego"]);
       blocks.push({ type: "h", text: "Transport" }, { type: "kv", rows: tk, cols: 1 });
+      if (t.mode === "external" && t.runs && t.runs.length) blocks.push({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
+        rows: t.runs.map(r => [String(r.no), r.reg, r.driver || "—", fmtQ(r.km), r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${Units.label(t.qtyUnit || "")}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
+        foot: ["Razem", "", "", fmtQ(t.km), "", `${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`, t.totalWeightT !== null && t.totalWeightT !== undefined ? fmtQ(t.totalWeightT) : "—", money(t.cost)] });
       if (t.mode === "own" && t.runs && t.runs.length) blocks.push({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Stawka", w: 1, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
         rows: t.runs.map(r => [String(r.no), r.reg, r.driverName + (r.driverOverridden ? " *" : ""), fmtQ(r.km), `${fmt(r.rate)} zł/km`, `${fmtQ(r.qty)} ${Units.label(t.qtyUnit || "")}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
         foot: ["Razem", "", "", fmtQ(t.km), "", `${fmtQ(t.totalQty)} ${Units.label(t.qtyUnit || "")}`, t.totalWeightT !== null && t.totalWeightT !== undefined ? fmtQ(t.totalWeightT) : "—", money(t.cost)], note: t.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
@@ -655,7 +658,7 @@
       const byMode = Object.keys(R.TRANSPORT_MODES).filter(k => k !== "none").map(k => { const x = live.filter(o => o.transport.mode === k); return { label: R.TRANSPORT_MODES[k], value: x.length, cost: x.reduce((a, o) => a + o.transport.cost, 0), km: x.reduce((a, o) => a + (o.transport.km || 0), 0), drill: x.map(o => o.id).join(",") }; });
       return `<div class="page-head"><div class="titles"><h2>Transport</h2><p>Kursy własne, zewnętrzne i kolejowe. Transport nie zmienia stanu — to koszt operacji i karta TR.</p></div></div>
         <div class="grid g4 mb4">
-          <div class="kpi"><div class="k-t">Kursy</div><div class="k-v">${live.reduce((a, o) => a + (o.transport.mode === "own" ? (o.transport.runs || [1]).length : 1), 0)}</div><div class="k-s">${live.length} operacji</div></div>
+          <div class="kpi"><div class="k-t">Kursy</div><div class="k-v">${live.reduce((a, o) => a + (o.transport.mode !== "train" ? (o.transport.runs || [1]).length : 1), 0)}</div><div class="k-s">${live.length} operacji</div></div>
           <div class="kpi"><div class="k-t">Koszt</div><div class="k-v">${fmt(live.reduce((a, o) => a + o.transport.cost, 0), 0)}<u>zł</u></div></div>
           <div class="kpi"><div class="k-t">Kilometry</div><div class="k-v">${fmtQ(live.reduce((a, o) => a + (o.transport.km || 0), 0), 0)}<u>km</u></div></div>
           <div class="kpi"><div class="k-t">Pociągi</div><div class="k-v">${live.filter(o => o.transport.mode === "train").reduce((a, o) => a + o.transport.wagonCount, 0)}<u>wag.</u></div><div class="k-s">${fmtQ(live.filter(o => o.transport.mode === "train").reduce((a, o) => a + o.transport.totalT, 0))} t</div></div></div>

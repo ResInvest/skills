@@ -390,6 +390,25 @@ async function fillForestDirect(page) {
     await go(page, "kontrahenci");
     check("2.3 Kontrahenci: nowi dostawcy widoczni", nb(await page.textContent("#partners-table")).includes("Tartak Nowy Las") && nb(await page.textContent("#partners-table")).includes("Nadleśnictwo Kędzierzyn"));
 
+    /* ------------- 2.4: kursy transportu zewnętrznego ------------- */
+    await preset(page, "zakup");
+    await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "100"); await page.fill("#f-purchase-price", "230");
+    await tick(page, "f-production-enabled"); await page.waitForSelector("#f-production-kwit");
+    await page.fill("#f-production-ndl", "Rudy Raciborskie"); await page.fill("#f-production-lesnictwo", "Stanica"); await page.fill("#f-production-kwit", "KW 0800/09/2026");
+    await tick(page, "f-mode-external"); await page.waitForSelector("#f-transport-external-runCount");
+    await fillTab(page, "#f-transport-external-company", "ESI Logistics");
+    await fillTab(page, "#f-transport-external-runs-0-km", "45");
+    await fillTab(page, "#f-transport-external-runCount", "4");
+    check("2.4 Zewnętrzny: liczba kursów 4 → 4 rubryki (km przejęte z poprzedniego)", (await page.$$("[data-xrun]")).length === 4 && (await page.inputValue("#f-transport-external-runs-3-km")) === "45");
+    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-external-runs-${i}-reg`, `ESI 1000${i}`); await fillTab(page, `#f-transport-external-runs-${i}-driver`, "Jan Nowak"); await fillTab(page, `#f-transport-external-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-external-runs-${i}-weightT`, "33"); }
+    check("2.4 Zewnętrzny: podsumowanie 400 MP, 132 t, 4 × 45 km × 5 zł = 900,00 zł", nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("132 t") && nb(await page.textContent("[data-runs-cost]")) === "900,00 zł",
+      [nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-cost]"))]);
+    await fillTab(page, "#f-transport-external-runs-0-freight", "300");
+    check("2.4 Zewnętrzny: fracht kursu z faktury zastępuje km × stawka (300 + 3 × 225 = 975 zł)", nb(await page.textContent("[data-runs-cost]")) === "975,00 zł", nb(await page.textContent("[data-runs-cost]")));
+    check("2.4 Zatwierdzenie zakupu z 4 kursami zewnętrznymi", (await approve(page)) === 1);
+    const xop = await page.evaluate(() => RIW_DEBUG.store.state.operations.at(-1).transport);
+    check("2.4 Zapisane: przewoźnik, 4 kursy, 400 MP, 132 t, 975 zł", xop.company === "ESI Logistics" && xop.runs.length === 4 && xop.totalQty === 400 && xop.totalWeightT === 132 && xop.cost === 975);
+
     await go(page, "flota");
     check("2.2 Flota: kursy liczone pojedynczo", nb(await page.textContent("#runs-table")).includes("kurs 4"));
 

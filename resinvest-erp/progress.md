@@ -1,6 +1,10 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.3 (2.3.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.4 (2.4.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+
+## Wykonane — Demo v2.4
+
+- [x] Transport zewnętrzny: liczba kursów → rubryki (nr rej., kierowca, km, stawka, ilość, waga, opcjonalny fracht kursu) + podsumowanie
 
 ## Wykonane — Demo v2.3
 
@@ -30,8 +34,8 @@ Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.3 (2.3.0) — prototyp funk
 | Zestaw | Wynik |
 |---|---|
 | `npm run check` | OK |
-| `npm run test:unit` (silnik + PDF) | 63/63 |
-| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 128/128, konsola bez błędów |
+| `npm run test:unit` (silnik + PDF) | 66/66 |
+| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 133/133, konsola bez błędów |
 
 ## Znane problemy / ograniczenia
 

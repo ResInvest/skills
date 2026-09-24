@@ -17,6 +17,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
   const fid = key => "f-" + key.replace(/\./g, "-");
+  const str = v => String(v == null ? "" : v).trim();
   const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
   const ssGet = (k, d) => { try { const v = sessionStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } };
@@ -529,6 +530,11 @@
       if (d.type === "ZAKUP" && d.production.enabled) return "MP";
       return p(d.purchase.productId) ? p(d.purchase.productId).unit : "MP";
     },
+    extRuns() {
+      const X = this.draft.transport.external;
+      if (!Array.isArray(X.runs)) this.draft.transport.external = { company: X.company || "", includedInPrice: !!X.includedInPrice, runCount: "1", runs: [Object.assign(R.blankExtRun(), { reg: X.reg || "", km: X.km || "", freight: X.includedInPrice ? "" : (X.freight || "") })] };
+      return this.draft.transport.external;
+    },
     ownRuns() {
       const O = this.draft.transport.own;
       if (!Array.isArray(O.runs)) { this.draft.transport.own = O.vehicleId !== undefined ? { runCount: "1", runs: [Object.assign(R.blankRun(), { vehicleId: O.vehicleId || "", driverId: O.driverId || "", km: O.km || "", rate: O.rate || "" })] } : { runCount: "1", runs: [R.blankRun()] }; }
@@ -732,16 +738,33 @@
         <div class="runs" id="own-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
         <div class="field mt3"><span class="lbl">Podsumowanie kursów</span><div data-out="runs.summary"></div></div>`;
       } else if (mode === "external") {
+        const X = this.extRuns();
+        const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(X.runCount, 0)) || 0));
+        const u = Units.label(this.shippedUnit()), inc = !!X.includedInPrice;
+        const runs = [];
+        for (let i = 0; i < count; i++) {
+          const r = X.runs[i] || R.blankExtRun(), k = f => `transport.external.runs.${i}.${f}`;
+          runs.push(`<div class="run-card" data-xrun="${i}">
+            <div class="run-h"><b>Kurs ${i + 1}</b><span class="spacer"></span><span class="run-cost" data-out="xrun.${i}.cost">—</span></div>
+            <div class="fgrid four">
+              ${field({ key: k("reg"), label: "Nr rejestracyjny", req: true, help: false, control: textIn(k("reg"), r.reg, { placeholder: "np. ESI 18734" }) })}
+              ${field({ key: k("driver"), label: "Kierowca", help: false, control: textIn(k("driver"), r.driver, { placeholder: "imię i nazwisko" }) })}
+              ${field({ key: k("km"), label: "Kilometry", req: !inc && str(r.freight) === "", help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: "np. 80" }) })}
+              ${field({ key: k("rate"), label: "Stawka (zł/km)", help: false, control: numIn(k("rate"), r.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
+              ${field({ key: k("qty"), label: `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: count > 1 ? "np. 100" : "cała ilość" }) })}
+              ${field({ key: k("weightT"), label: "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: "z kwitu wagowego" }) })}
+              ${inc ? "" : field({ key: k("freight"), label: "Fracht kursu (zł) — opcjonalnie", span: "span2", help: false, control: numIn(k("freight"), r.freight, { suffix: "zł", placeholder: "z faktury; puste = km × stawka" }) })}
+            </div></div>`);
+        }
         modeHtml = `<div class="fgrid four mt4">
-          ${field({ key: "transport.external.company", label: "Firma transportowa", req: true, span: "span2", control: textIn("transport.external.company", T.external.company, { placeholder: "np. ESI Logistics", list: "dl-carriers" }) + `<datalist id="dl-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
-          ${field({ key: "transport.external.reg", label: "Numer rejestracyjny", req: true, control: textIn("transport.external.reg", T.external.reg, { placeholder: "np. ESI 18734" }) })}
-          ${field({ key: "transport.external.km", label: "Odległość", control: numIn("transport.external.km", T.external.km, { suffix: "km", placeholder: "np. 262" }) })}
-          ${field({ key: "transport.external.freight", label: "Fracht (zł)", req: !T.external.includedInPrice, control: T.external.includedInPrice ? outBox("transport.external.freight", "wliczony w cenę") : numIn("transport.external.freight", T.external.freight, { suffix: "zł", placeholder: "np. 1 250" }) })}
-          <div class="field span2" data-field="transport.external.includedInPrice"><span class="lbl">&nbsp;</span>
-            ${optCard("transport.external.includedInPrice", { checked: T.external.includedInPrice, title: "Transport wliczony w cenę", text: "Koszt transportu tej operacji = 0 zł." })}
-            <div class="help tut">${HELP["transport.external.includedInPrice"]}</div></div>
-          ${field({ key: "transport.cost", label: "Koszt transportu", control: outBox("transport.cost", "—"), help: false })}
-        </div>`;
+          ${field({ key: "transport.external.company", label: "Firma transportowa", req: true, span: "span2", control: textIn("transport.external.company", X.company, { placeholder: "np. ESI Logistics", list: "dl-carriers" }) + `<datalist id="dl-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
+          ${field({ key: "transport.external.runCount", label: "Liczba kursów", req: true, control: numIn("transport.external.runCount", X.runCount, { suffix: "szt.", placeholder: "np. 4" }) })}
+          <div></div>
+          <div class="field span-all" data-field="transport.external.includedInPrice">
+            ${optCard("transport.external.includedInPrice", { checked: inc, title: "Transport wliczony w cenę", text: "Koszt transportu tej operacji = 0 zł (kursy i ilości nadal są ewidencjonowane)." })}</div>
+        </div>
+        <div class="runs" id="ext-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
+        <div class="field mt3"><span class="lbl">Podsumowanie kursów</span><div data-out="runs.summary"></div></div>`;
       } else if (mode === "train") {
         const count = Math.max(0, Math.min(S.config.maxWagons, Math.floor(NumParse.value(tr.wagonCount, 0)) || 0));
         const each = tr.tonMode === "each";
@@ -907,7 +930,7 @@
       this.sideEffects(key, v);
       this.persist();
       const supChanged = this._supplierChanged; this._supplierChanged = false;
-      if (el.hasAttribute("data-struct") || supChanged || key === "transport.train.wagonCount" || key === "transport.own.runCount") this.rerender();
+      if (el.hasAttribute("data-struct") || supChanged || key === "transport.train.wagonCount" || key === "transport.own.runCount" || key === "transport.external.runCount") this.rerender();
       else this.refresh();
     },
 
@@ -925,6 +948,12 @@
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
       const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
       if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
+      if (key === "transport.external.runCount") {
+        const X = this.extRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
+        const arr = X.runs.slice(0, n);
+        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankExtRun(), { km: prev.km, rate: prev.rate }) : R.blankExtRun()); }
+        X.runs = arr;
+      }
       if (key === "transport.own.runCount") {
         const O = this.ownRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
         const arr = O.runs.slice(0, n);
@@ -1060,12 +1089,10 @@
           if (r.driverOverridden) add(`transport.own.runs.${i}.driverId`, `<span style="color:var(--warn)">kierowca zmieniony tylko dla tego kursu</span>`);
           if (r.reg) add(`transport.own.runs.${i}.vehicleId`, `rej. <b>${esc(r.reg)}</b>`);
         });
-        out("runs.summary", T.runs && T.runs.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th><th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">Stawka</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
-          ${T.runs.map(r => `<tr><td>${r.no}</td><td>${esc(r.reg || "—")}</td><td>${esc(r.driverName || "—")}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${fmt(r.rate)} zł</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
-          <tfoot><tr><td colspan="3">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}</td></tr></tfoot></table></div>` : "—");
+        out("runs.summary", runsSummary(T));
       } else if (T.mode === "external") {
-        out("transport.cost", money(T.cost));
-        add("transport.cost", T.includedInPrice ? "transport wliczony w cenę towaru" : "kwota frachtu");
+        (T.runs || []).forEach((r, i) => out(`xrun.${i}.cost`, T.includedInPrice ? "wliczony w cenę · <b>0,00 zł</b>" : r.freight !== null ? `fracht = <b>${money(r.cost)}</b>` : `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`));
+        out("runs.summary", runsSummary(T));
       } else if (T.mode === "train") {
         out("train.sumT", `<b>${fmtQ(T.totalT)} t</b>`);
         const row = (k, v) => `<dt>${esc(k)}</dt><dd>${v}</dd>`;
@@ -1277,9 +1304,17 @@
     }
   };
 
+  /** Podsumowanie kursów (transport własny i zewnętrzny): ilość, tony, km, koszt. */
+  function runsSummary(T) {
+    if (!T.runs || !T.runs.length) return "—";
+    const U = Units.label(T.qtyUnit || ""), own = T.mode === "own";
+    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th><th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">${own ? "Stawka" : "Rozliczenie"}</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
+      ${T.runs.map(r => `<tr><td>${r.no}</td><td>${esc(r.reg || "—")}</td><td>${esc((own ? r.driverName : r.driver) || "—")}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : esc(r.costBasis)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="3">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}${own ? "" : ` · ${esc(T.company || "")}`}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}${T.includedInPrice ? " <small class=\"dim\">(wliczony w cenę)</small>" : ""}</td></tr></tfoot></table></div>`;
+  }
   function transportText(t) {
     if (t.mode === "own") { const n = (t.runs || [t]).length; return (n > 1 ? `${n} kursy · ` : "") + ([t.reg, t.driverName].filter(Boolean).join(" · ") || "uzupełnij pojazd"); }
-    if (t.mode === "external") return [t.company, t.reg].filter(Boolean).join(" · ") || "uzupełnij przewoźnika";
+    if (t.mode === "external") { const n = (t.runs || [t]).length; return [t.company, n > 1 ? `${n} kursy` : "", t.reg].filter(Boolean).join(" · ") || "uzupełnij przewoźnika"; }
     if (t.mode === "train") return [t.trainNo, `${t.wagonCount} wag.`, `${fmtQ(t.totalT)} t`].filter(Boolean).join(" · ");
     return "";
   }

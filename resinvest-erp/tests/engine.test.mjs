@@ -645,3 +645,34 @@ test("2.3 Dostawca wpisany ręcznie: nazwa z kartoteki (inna wielkość liter) =
   assert.match(e("AB"), /co najmniej 3 znaki/);
   assert.match(e("Nadleśnictwo Rybnik"), /nie należy do grupy/);
 });
+
+/* ============================ 2.4: kursy transportu zewnętrznego ============================ */
+const XRUNS = (n, over = {}, top = {}) => ({ mode: "external", place: "RiC Zabrze", external: Object.assign({ company: "ESI Logistics", includedInPrice: false, runCount: String(n), runs: Array.from({ length: n }, (_, i) => Object.assign({ reg: `ESI 1000${i}`, driver: "Jan Nowak", km: "45", rate: "", freight: "", qty: "100", weightT: "33" }, over)) }, top) });
+test("2.4 Zewnętrzny: 4 kursy × 100 MP = 400 MP, 132 t, koszt km × stawka domyślna (4 × 45 × 5 = 900 zł)", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0700/09/2026" }); d.transport = XRUNS(4);
+  const p = R.planOperation(s, d, ctx(s));
+  assert.equal(p.ok, true, JSON.stringify(p.errors));
+  const t = p.norm.transport;
+  assert.deepEqual([t.company, t.runCount, t.totalQty, t.qtyUnit, t.totalWeightT, t.km, t.cost], ["ESI Logistics", 4, 400, "MP", 132, 180, 900]);
+  assert.equal(t.reg.split(", ").length, 4);
+});
+test("2.4 Zewnętrzny: fracht kursu z faktury zastępuje km × stawka; „wliczony w cenę” = 0 zł; wymagany nr rej. i ilość", () => {
+  const s = fresh();
+  const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0701/09/2026" });
+  d.transport = XRUNS(2, { qty: "200", freight: "650" });
+  assert.equal(R.planOperation(s, d, ctx(s)).norm.transport.cost, 1300);
+  d.transport = XRUNS(2, { qty: "200" }, { includedInPrice: true });
+  assert.equal(R.planOperation(s, d, ctx(s)).norm.transport.cost, 0);
+  d.transport = XRUNS(2, { reg: "", qty: "" });
+  const e = R.planOperation(s, d, ctx(s)).errors;
+  assert.ok(e["transport.external.runs.0.reg"] && e["transport.external.runs.1.qty"]);
+  d.transport = XRUNS(2, { km: "", qty: "200" });
+  assert.ok(R.planOperation(s, d, ctx(s)).errors["transport.external.runs.0.km"], "bez frachtu km wymagane");
+});
+test("2.4 Zewnętrzny: dane z wersji ≤ 2.3 (reg, km, freight bez listy kursów) liczą się jak dotąd", () => {
+  const s = fresh();
+  const d = WZ(); d.transport = { mode: "external", place: "EC", external: { company: "DAP", reg: "SZA 7K901", km: "35", freight: "650", includedInPrice: false } };
+  const t = R.planOperation(s, d, ctx(s)).norm.transport;
+  assert.deepEqual([t.runCount, t.cost, t.reg, t.km], [1, 650, "SZA 7K901", 35]);
+});
