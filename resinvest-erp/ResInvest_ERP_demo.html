@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="description" content="ResInvest ERP — Demo v2: zakup, WZ, produkcja na magazyn, sprzedaż bezpośrednia, MM, korekty i anulowania, historia, raporty okresowe, kwit produkcji dnia, druk i PDF.">
-<meta name="generator" content="ResInvest ERP demo build 2.5.0-demo · 2026-09-24">
+<meta name="generator" content="ResInvest ERP demo build 2.6.0-demo · 2026-09-24">
 <title>ResInvest ERP · Demo v2</title>
 <style>
 /* =========================================================================
@@ -447,7 +447,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 (function (root) {
   "use strict";
 
-  const VERSION = "2.5.0-demo";
+  const VERSION = "2.6.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -759,8 +759,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ------------------------------------------------------------------ */
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
-  function blankExtRun() { return { reg: "", driver: "", km: "", rate: "", freight: "", qty: "", weightT: "" }; }
-  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", qty: "", weightT: "" }; }
+  function blankExtRun() { return { reg: "", driver: "", km: "", rate: "", freight: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
+  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
@@ -857,7 +857,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (R_.type === "lesna") {
           if (!str(R_.ndl)) err("production.ndl", "Podaj nadleśnictwo");
           if (!str(R_.lesnictwo)) err("production.lesnictwo", "Podaj leśnictwo");
-          if (!str(R_.kwit)) err("production.kwit", "Podaj numer kwitu wywozowego");
         } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", "Podaj miejsce wycinki / inwestycję");
       }
       const ch = byId(state.fleet.chippers, R_.chipperId);
@@ -1090,6 +1089,16 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       };
       const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
       /* Kursy transportu własnego / zewnętrznego — liczone osobno, łączone w trybie „mixed”. */
+      /* Kwity wywozowe (produkcja leśna z nadleśnictwa): numer kwitu i m³ wpisywane w każdym kursie.
+         m³ × 4 = MP na aucie; suma kursów nie może przekroczyć produkcji (MP) ani zużytego drewna (m³). */
+      const X_ = norm.production;
+      const forest = !!(X_ && X_.mode !== "stock" && X_.type === "lesna");
+      const waybill = (r, K, i) => {
+        const no = str(r.kwit);
+        if (forest && !no) err(K(i, "kwit"), `Podaj numer kwitu wywozowego (kurs ${i + 1})`);
+        const m3 = str(r.kwitM3) === "" ? null : num(K(i, "kwitM3"), r.kwitM3, { gt: 0, label: "ilość m³ z kwitu" });
+        return { no, m3: m3 === null ? null : rq(m3) };
+      };
       const ownPart = () => {
         const part = { kind: "own" };
         /* Transport własny: liczba kursów → osobne kursy (pojazd, kierowca, km, stawka, ilość, waga rzeczywista).
@@ -1119,13 +1128,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           const km = num(K(i, "km"), r.km, { gt: 0, label: "liczbę km" });
           const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
           // ilość w kursie: przy jednym kursie domyślnie cała ilość operacji, przy wielu — wymagana
+          const kw = waybill(r, K, i);
           let q = null;
           if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (kw.m3 !== null && sp.unit === "MP") q = rq(kw.m3 * cfg.m3_mp);          // m³ z kwitu × 4 = MP na aucie
           else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
           else q = sp.qty || null;
           const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
           runs.push({ no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
-            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w });
+            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
@@ -1169,13 +1180,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           const needKm = !included && freight === null && !legacy;
           const km = str(r.km) === "" ? (needKm ? (err(K(i, "km"), "Podaj liczbę km (albo fracht kursu)"), null) : 0) : num(K(i, "km"), r.km, { min: 0, label: "liczbę km" });
           const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          const kw = waybill(r, K, i);
           let q = null;
           if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (kw.m3 !== null && sp.unit === "MP") q = rq(kw.m3 * cfg.m3_mp);          // m³ z kwitu × 4 = MP na aucie
           else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
           else q = sp.qty || null;
           const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
           const cost = included ? 0 : freight !== null ? round(freight, 2) : km !== null && rate !== null ? round(km * rate, 2) : 0;
-          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? "wliczony w cenę" : freight !== null ? "fracht" : "km × stawka", qty: q === null ? 0 : rq(q), weightT: w });
+          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? "wliczony w cenę" : freight !== null ? "fracht" : "km × stawka", qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
@@ -1204,8 +1217,25 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         });
       }
       if (["own", "external", "mixed"].includes(mode)) {
-        const sp = shipped();
-        if (transport.runs.length > 1 && sp.qty > 0 && Math.abs(transport.totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(transport.totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
+        const sp = shipped(), U = Units.label(sp.unit);
+        const withM3 = transport.runs.filter(r => r.kwitM3 !== null);
+        transport.totalM3 = withM3.length ? rq(withM3.reduce((a, r) => a + r.kwitM3, 0)) : null;
+        transport.kwity = transport.runs.map(r => r.kwit).filter(Boolean);
+        transport.limitQty = sp.qty || 0;
+        transport.remainingQty = rq((sp.qty || 0) - transport.totalQty);
+        // suma kursów nie może przekroczyć ilości operacji (np. produkcji)
+        if (sp.qty > 0 && transport.totalQty > sp.qty + EPS) err("transport.runs", `Suma kursów ${fmtQ(transport.totalQty)} ${U} przekracza ilość ${X_ && X_.outQty ? "z produkcji" : "operacji"} ${fmtQ(sp.qty)} ${U} (o ${fmtQ(transport.totalQty - sp.qty)} ${U}).`);
+        else if (transport.runs.length > 1 && sp.qty > 0 && sp.qty - transport.totalQty > EPS) warnings.push(`Suma kursów ${fmtQ(transport.totalQty)} ${U} — do rozwiezienia pozostało ${fmtQ(sp.qty - transport.totalQty)} ${U} z ${fmtQ(sp.qty)} ${U}. Transport nie zmienia stanu magazynowego.`);
+        const consumed = X_ && X_.consumeQty !== null && X_.consumeUnit === "m3" ? X_.consumeQty : null;
+        if (consumed !== null && transport.totalM3 !== null && transport.totalM3 > consumed + EPS) err("transport.runs", `Suma m³ z kwitów ${fmtQ(transport.totalM3)} m³ przekracza drewno zużyte w produkcji ${fmtQ(consumed)} m³.`);
+      }
+      // produkcja leśna bez kursów (brak transportu / pociąg): kwit wpisywany przy produkcji
+      if (forest) {
+        const hasRuns = !!(transport.runs && transport.runs.length);
+        const runKw = hasRuns ? transport.runs.map(r => r.kwit).filter(Boolean) : [];
+        if (!hasRuns && !str(R_.kwit)) err("production.kwit", "Podaj numer kwitu wywozowego (bez kursów transportu kwit wpisuje się przy produkcji)");
+        X_.kwit = hasRuns ? runKw.join(", ") : str(R_.kwit);
+        documents.forEach(d => { if (d.type === "PW" && d.meta) d.meta.kwit = X_.kwit; });
       }
       if (mode === "train") {
         const Tr = T.train || {};
@@ -2072,11 +2102,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       ["u_mag", "2026-08-05", {
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "30", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Stanica", kwit: "KW 0142/08/2026", chipperId: "ch_jenz" },
-        // trzy kursy własne z rębakiem w lesie → magazyn Zabrze (3 × 40 MP = 120 MP)
+        // trzy kursy własne z rębakiem w lesie → magazyn Zabrze; każdy kurs z własnym kwitem wywozowym (3 × 10 m³ × 4 = 120 MP)
         transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "3", runs: [
-          { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", qty: "40", weightT: "13,4" },
-          { vehicleId: "ve_volvo", driverId: "", km: "45", rate: "5", qty: "40", weightT: "12,9" },
-          { vehicleId: "ve_scania", driverId: "dr_wojcik", km: "45", rate: "5", qty: "40", weightT: "13,1" }] } }
+          { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", kwit: "KW 0142/1/08/2026", kwitM3: "10", qty: "40", weightT: "13,4" },
+          { vehicleId: "ve_volvo", driverId: "", km: "45", rate: "5", kwit: "KW 0142/2/08/2026", kwitM3: "10", qty: "40", weightT: "12,9" },
+          { vehicleId: "ve_scania", driverId: "dr_wojcik", km: "45", rate: "5", kwit: "KW 0142/3/08/2026", kwitM3: "10", qty: "40", weightT: "13,1" }] } }
       }],
       ["u_mag", "2026-08-12", {
         purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "100", unit: "MP", price: "55" },
@@ -2098,12 +2128,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         // jedna produkcja, dwa rodzaje transportu: 3 kursy flotą własną + 2 kursy firmą zewnętrzną (5 × 16 MP = 80 MP)
         transport: { mode: "mixed", place: "Elektrociepłownia Zabrze S.A.",
           own: { runCount: "3", runs: [
-            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,4" },
-            { vehicleId: "ve_scania", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,2" },
-            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,3" }] },
+            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", kwit: "KW 0217/1/09/2026", kwitM3: "4", qty: "16", weightT: "5,4" },
+            { vehicleId: "ve_scania", driverId: "", km: "26", rate: "5", kwit: "KW 0217/2/09/2026", kwitM3: "4", qty: "16", weightT: "5,2" },
+            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", kwit: "KW 0217/3/09/2026", kwitM3: "4", qty: "16", weightT: "5,3" }] },
           external: { company: "DAP Trans", includedInPrice: false, runCount: "2", runs: [
-            { reg: "SZA 7K901", driver: "Marek Pawlik", km: "26", rate: "6", freight: "", qty: "16", weightT: "5,5" },
-            { reg: "SZA 7K902", driver: "Leszek Mróz", km: "26", rate: "6", freight: "", qty: "16", weightT: "5,1" }] } }
+            { reg: "SZA 7K901", driver: "Marek Pawlik", km: "26", rate: "6", freight: "", kwit: "KW 0217/4/09/2026", kwitM3: "4", qty: "16", weightT: "5,5" },
+            { reg: "SZA 7K902", driver: "Leszek Mróz", km: "26", rate: "6", freight: "", kwit: "KW 0217/5/09/2026", kwitM3: "4", qty: "16", weightT: "5,1" }] } }
       }],
       ["u_pys", "2026-09-08", {
         purchase: { supplierKind: "nadlesnictwo", supplierId: "pa_ndl_ryb", lesnictwo: "Wielopole", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
@@ -3308,6 +3338,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (d.type === "ZAKUP" && d.production.enabled) return "MP";
       return p(d.purchase.productId) ? p(d.purchase.productId).unit : "MP";
     },
+    /** Produkcja leśna (z nadleśnictwa / typ „leśna”) — kwity wywozowe w kursach. */
+    isForest() {
+      const d = this.draft;
+      return d.production.type === "lesna" && ((d.type === "ZAKUP" && !!d.production.enabled) || (d.type === "SPRZEDAZ" && !!d.sale.direct));
+    },
+    hasRuns() { return ["own", "external", "mixed"].includes(this.draft.transport.mode); },
     extRuns() {
       const X = this.draft.transport.external;
       if (!Array.isArray(X.runs)) this.draft.transport.external = { company: X.company || "", includedInPrice: !!X.includedInPrice, runCount: "1", runs: [Object.assign(R.blankExtRun(), { reg: X.reg || "", km: X.km || "", freight: X.includedInPrice ? "" : (X.freight || "") })] };
@@ -3357,7 +3393,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const origin = mode === "stock" ? "" : (P_.type === "lesna" ? `
           ${field({ key: "production.ndl", label: "Nadleśnictwo", req: true, control: textIn("production.ndl", P_.ndl, { placeholder: "np. Rudy Raciborskie", list: "dl-ndl" }) })}
           ${field({ key: "production.lesnictwo", label: "Leśnictwo", req: true, control: textIn("production.lesnictwo", P_.lesnictwo, { placeholder: "np. Stanica" }) })}
-          ${field({ key: "production.kwit", label: "Nr kwitu wywozowego", req: true, span: "span2", control: textIn("production.kwit", P_.kwit, { placeholder: "np. KW 0217/09/2026" }) })}` : `
+          ${this.hasRuns() ? `<div class="field span2" data-field="production.kwit"><span class="lbl">Kwity wywozowe</span><div class="info-line">${ic("receipt", 15)}<span>Numery kwitów wywozowych, m³, MP i tony wpisujesz <b>w każdym kursie</b> w sekcji „Miejsce i transport”.</span></div></div>`
+            : field({ key: "production.kwit", label: "Nr kwitu wywozowego", req: true, span: "span2", control: textIn("production.kwit", P_.kwit, { placeholder: "np. KW 0217/09/2026" }) + `<div class="help">Bez kursów transportu kwit wpisuje się tutaj. Przy transporcie własnym / zewnętrznym — w każdym kursie.</div>` })}` : `
           ${field({ key: "production.investSite", label: "Miejsce wycinki / inwestycja", req: true, span: "span2", control: textIn("production.investSite", P_.investSite, { placeholder: "np. Obwodnica Gliwic" }) })}
           ${field({ key: "production.sourceDoc", label: "Nr dokumentu źródłowego", span: "span2", control: textIn("production.sourceDoc", P_.sourceDoc, { placeholder: "np. Protokół wycinki 17/2026" }) })}`);
       return `<div class="fgrid four">
@@ -3489,6 +3526,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const S = Store.state, T = this.draft.transport, mode = T.mode;
       const tr = T.train;
       const useOwn = mode === "own" || mode === "mixed", useExt = mode === "external" || mode === "mixed";
+      const forest = this.isForest();
       let modeHtml = "";
       if (useOwn) {
         const O = this.ownRuns();
@@ -3503,10 +3541,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
             <div class="fgrid four">
               ${field({ key: k("vehicleId"), label: "Pojazd z floty własnej", req: true, span: "span2", help: false, control: selIn(k("vehicleId"), [{ v: "", l: "— wybierz pojazd —" }].concat(vehOpts), r.vehicleId, { struct: true }) })}
               ${field({ key: k("driverId"), label: "Kierowca", req: true, span: "span2", help: false, control: selIn(k("driverId"), [{ v: "", l: "— wybierz kierowcę —" }].concat(S.fleet.drivers.map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " (domyślny)" : "") }))), r.driverId || (veh ? veh.driverId : "")) })}
+              ${forest ? `${field({ key: k("kwit"), label: "Nr kwitu wywozowego", req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: "np. KW 0217/09/2026" }) })}
+              ${field({ key: k("kwitM3"), label: "m³ z kwitu", help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: "np. 25" }) })}` : ""}
+              ${field({ key: k("qty"), label: forest ? "MP na aucie (m³ × 4)" : `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: forest ? "auto z m³" : count > 1 ? "np. 100" : "cała ilość" }) })}
+              ${field({ key: k("weightT"), label: forest ? "Tony (z kwitu / wagi)" : "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: forest ? "z kwitu" : "z kwitu wagowego" }) })}
               ${field({ key: k("km"), label: "Kilometry", req: true, help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: "np. 45" }) })}
               ${field({ key: k("rate"), label: "Stawka (zł/km)", help: false, control: numIn(k("rate"), r.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
-              ${field({ key: k("qty"), label: `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: count > 1 ? "np. 100" : "cała ilość" }) })}
-              ${field({ key: k("weightT"), label: "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: "z kwitu wagowego" }) })}
             </div></div>`);
         }
         modeHtml += `${mode === "mixed" ? `<h4 class="mini-h mt4">Kursy floty własnej</h4>` : ""}<div class="fgrid four mt4">
@@ -3528,10 +3568,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
             <div class="fgrid four">
               ${field({ key: k("reg"), label: "Nr rejestracyjny", req: true, help: false, control: textIn(k("reg"), r.reg, { placeholder: "np. ESI 18734" }) })}
               ${field({ key: k("driver"), label: "Kierowca", help: false, control: textIn(k("driver"), r.driver, { placeholder: "imię i nazwisko" }) })}
+              ${forest ? `${field({ key: k("kwit"), label: "Nr kwitu wywozowego", req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: "np. KW 0217/09/2026" }) })}
+              ${field({ key: k("kwitM3"), label: "m³ z kwitu", help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: "np. 25" }) })}` : ""}
+              ${field({ key: k("qty"), label: forest ? "MP na aucie (m³ × 4)" : `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: forest ? "auto z m³" : count > 1 ? "np. 100" : "cała ilość" }) })}
+              ${field({ key: k("weightT"), label: forest ? "Tony (z kwitu / wagi)" : "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: forest ? "z kwitu" : "z kwitu wagowego" }) })}
               ${field({ key: k("km"), label: "Kilometry", req: !inc && str(r.freight) === "", help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: "np. 80" }) })}
               ${field({ key: k("rate"), label: "Stawka (zł/km)", help: false, control: numIn(k("rate"), r.rate, { suffix: "zł/km", placeholder: fmtQ(S.config.kmRateDefault) }) })}
-              ${field({ key: k("qty"), label: `Ilość w kursie (${u})`, req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: count > 1 ? "np. 100" : "cała ilość" }) })}
-              ${field({ key: k("weightT"), label: "Waga rzeczywista (t)", help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: "z kwitu wagowego" }) })}
               ${inc ? "" : field({ key: k("freight"), label: "Fracht kursu (zł) — opcjonalnie", span: "span2", help: false, control: numIn(k("freight"), r.freight, { suffix: "zł", placeholder: "z faktury; puste = km × stawka" }) })}
             </div></div>`);
         }
@@ -3545,7 +3587,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <div class="runs" id="ext-runs">${runs.join("") || `<div class="help">Podaj liczbę kursów — rubryki pojawią się automatycznie.</div>`}</div>
 `;
       }
-      if (useOwn || useExt) modeHtml += `<div class="field mt3"><span class="lbl">Podsumowanie kursów${mode === "mixed" ? " (flota własna + firma zewnętrzna)" : ""}</span><div data-out="runs.summary"></div></div>`;
+      if (useOwn || useExt) modeHtml += `<div class="field mt3" data-field="transport.runs"><span class="lbl">Podsumowanie kursów${mode === "mixed" ? " (flota własna + firma zewnętrzna)" : ""}</span><div data-out="runs.summary"></div><div class="msg hidden" data-msg="transport.runs" role="alert"></div></div>`;
       if (mode === "train") {
         const count = Math.max(0, Math.min(S.config.maxWagons, Math.floor(NumParse.value(tr.wagonCount, 0)) || 0));
         const each = tr.tonMode === "each";
@@ -3736,6 +3778,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
       const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
       if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
+      const m3Key = key.match(/^transport\.(own|external)\.runs\.(\d+)\.kwitM3$/);
+      if (m3Key) {
+        const r = NumParse.parse(v), run = d.transport[m3Key[1]].runs[+m3Key[2]];
+        if (r.ok && r.value > 0) {
+          run.qty = fmtQ(R.rq(r.value * S.config.m3_mp), 6);                  // m³ z kwitu × 4 = MP na aucie
+          const el = document.getElementById(fid(`transport.${m3Key[1]}.runs.${m3Key[2]}.qty`));
+          if (el) el.value = run.qty;
+        }
+      }
       if (key === "transport.external.runCount") {
         const X = this.extRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
         const arr = X.runs.slice(0, n);
@@ -3899,7 +3950,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
       $$("[data-msg]", form).forEach(m => {
         const key = m.dataset.msg, msg = plan.errors[key];
-        const show = msg && (this.showAll || this.touched.has(key) || key === "production.factor" || (key === "production.outQty" && /^Brak wystarczającej/.test(msg)));
+        const show = msg && (this.showAll || this.touched.has(key) || key === "production.factor" || key === "transport.runs" || (key === "production.outQty" && /^Brak wystarczającej/.test(msg)));
         m.classList.toggle("hidden", !show);
         m.innerHTML = show ? ic("alert", 13) + `<span>${esc(msg)}</span>` : "";
         const input = document.getElementById(fid(key));
@@ -4096,13 +4147,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   function runsSummary(T) {
     if (!T.runs || !T.runs.length) return "—";
     const U = Units.label(T.qtyUnit || ""), mixed = T.mode === "mixed";
+    const kw = T.runs.some(r => r.kwit || (r.kwitM3 !== null && r.kwitM3 !== undefined));
     const who = r => (r.kind || T.mode) === "own" ? "Flota własna" : (r.company || T.company || "Firma zewnętrzna");
     const drv = r => ((r.kind || T.mode) === "own" ? r.driverName : r.driver) || "—";
     const basis = r => (r.kind || T.mode) === "own" || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : esc(r.costBasis);
     const part = P => P ? `${P.runs.length} × ${P.kind === "own" ? "flota własna" : esc(P.company || "firma zewnętrzna")}: ${fmtQ(P.totalQty)} ${U}, ${money(P.cost)}` : "";
-    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th>${mixed ? "<th>Przewoźnik</th>" : ""}<th>Pojazd</th><th>Kierowca</th><th class="r">km</th><th class="r">Rozliczenie</th><th class="r">Ilość</th><th class="r">Waga rzecz.</th><th class="r">Koszt</th></tr></thead><tbody>
-      ${T.runs.map(r => `<tr data-run-kind="${esc(r.kind || T.mode)}"><td>${r.no}</td>${mixed ? `<td>${esc(who(r))}</td>` : ""}<td>${esc(r.reg || "—")}</td><td>${esc(drv(r))}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${basis(r)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td colspan="${mixed ? 4 : 3}">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}${T.mode === "external" ? ` · ${esc(T.company || "")}` : ""}</td><td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}${T.includedInPrice && !mixed ? " <small class=\"dim\">(wliczony w cenę)</small>" : ""}</td></tr></tfoot></table></div>
+    const lead = mixed ? 4 : 3;
+    const over = T.limitQty > 0 && T.totalQty > T.limitQty + R.EPS;
+    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>Kurs</th>${mixed ? "<th>Przewoźnik</th>" : ""}<th>Pojazd</th><th>Kierowca</th>${kw ? "<th>Kwit wywozowy</th><th class=\"r\">m³</th>" : ""}<th class="r">km</th><th class="r">Rozliczenie</th><th class="r">Ilość</th><th class="r">${kw ? "Tony" : "Waga rzecz."}</th><th class="r">Koszt</th></tr></thead><tbody>
+      ${T.runs.map(r => `<tr data-run-kind="${esc(r.kind || T.mode)}"><td>${r.no}</td>${mixed ? `<td>${esc(who(r))}</td>` : ""}<td>${esc(r.reg || "—")}</td><td>${esc(drv(r))}</td>${kw ? `<td class="mono nowrap">${esc(r.kwit || "—")}</td><td class="r">${r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"}</td>` : ""}<td class="r">${fmtQ(r.km)}</td><td class="r">${basis(r)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="${lead}">Razem: ${T.runs.length} ${T.runs.length === 1 ? "kurs" : T.runs.length < 5 ? "kursy" : "kursów"}${T.mode === "external" ? ` · ${esc(T.company || "")}` : ""}</td>${kw ? `<td></td><td class="r" data-runs-m3>${T.totalM3 !== null && T.totalM3 !== undefined ? fmtQ(T.totalM3) + " m³" : "—"}</td>` : ""}<td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">(bez ${T.weightMissing})</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}${T.includedInPrice && !mixed ? " <small class=\"dim\">(wliczony w cenę)</small>" : ""}</td></tr></tfoot></table></div>
+      ${T.limitQty > 0 ? `<p class="help mt2" data-runs-limit>Ilość do przewiezienia: <b>${fmtQ(T.limitQty)} ${U}</b> · w kursach: <b>${fmtQ(T.totalQty)} ${U}</b> · <span class="${over ? "neg" : T.remainingQty > R.EPS ? "" : "pos"}">${over ? `przekroczono o ${fmtQ(-T.remainingQty)} ${U}` : T.remainingQty > R.EPS ? `pozostało ${fmtQ(T.remainingQty)} ${U}` : "wszystko rozwiezione ✓"}</span></p>` : ""}
       ${mixed ? `<p class="help mt2" data-runs-split>${part(T.own)} · ${part(T.external)}${T.external.includedInPrice ? " (wliczony w cenę)" : ""}</p>` : ""}`;
   }
   function transportText(t) {
@@ -4271,11 +4326,14 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   function transportBlocks(t, blocks) {
     const U = Units.label(t.qtyUnit || "");
     const tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
-    const runTable = (P, own) => ({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
-      rows: P.runs.map(r => [String(r.no), r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—", fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
-      foot: ["Razem", "", "", fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)], note: own && P.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
+    const hasKw = P => P.runs.some(r => r.kwit);
+    const runTable = (P, own) => { const kw = hasKw(P); return { type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }].concat(kw ? [{ label: "Kwit wywozowy", w: 1.8 }, { label: "m³", w: 0.7, align: "right" }] : []).concat([{ label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: kw ? "Tony" : "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }]),
+      rows: P.runs.map(r => [String(r.no), r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—"].concat(kw ? [r.kwit || "—", r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"] : []).concat([fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)])),
+      foot: ["Razem", "", ""].concat(kw ? ["", fmtQ(P.runs.reduce((a, r) => a + (r.kwitM3 || 0), 0))] : []).concat([fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)]), note: own && P.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" }; };
     const ownP = t.mode === "own" ? t : t.mode === "mixed" ? t.own : null, extP = t.mode === "external" ? t : t.mode === "mixed" ? t.external : null;
     if (ownP || extP) tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Kilometry łącznie", `${fmtQ(t.km)} km`], ["Ilość przewieziona", `${fmtQ(t.totalQty || 0)} ${U}`], ["Waga rzeczywista łącznie", t.totalWeightT !== null && t.totalWeightT !== undefined ? `${fmtQ(t.totalWeightT)} t` : "—"]);
+    if (t.kwity && t.kwity.length) tk.push(["Kwity wywozowe", t.kwity.join(", ")]);
+    if (t.totalM3 !== null && t.totalM3 !== undefined) tk.push(["m³ z kwitów łącznie", `${fmtQ(t.totalM3)} m³`]);
     if (extP) tk.push(["Przewoźnik zewnętrzny", extP.company + (extP.includedInPrice ? " (wliczony w cenę)" : "")]);
     if (t.mode === "train") {
       tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);

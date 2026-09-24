@@ -117,11 +117,11 @@
       ["u_mag", "2026-08-05", {
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "30", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Stanica", kwit: "KW 0142/08/2026", chipperId: "ch_jenz" },
-        // trzy kursy własne z rębakiem w lesie → magazyn Zabrze (3 × 40 MP = 120 MP)
+        // trzy kursy własne z rębakiem w lesie → magazyn Zabrze; każdy kurs z własnym kwitem wywozowym (3 × 10 m³ × 4 = 120 MP)
         transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "3", runs: [
-          { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", qty: "40", weightT: "13,4" },
-          { vehicleId: "ve_volvo", driverId: "", km: "45", rate: "5", qty: "40", weightT: "12,9" },
-          { vehicleId: "ve_scania", driverId: "dr_wojcik", km: "45", rate: "5", qty: "40", weightT: "13,1" }] } }
+          { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", kwit: "KW 0142/1/08/2026", kwitM3: "10", qty: "40", weightT: "13,4" },
+          { vehicleId: "ve_volvo", driverId: "", km: "45", rate: "5", kwit: "KW 0142/2/08/2026", kwitM3: "10", qty: "40", weightT: "12,9" },
+          { vehicleId: "ve_scania", driverId: "dr_wojcik", km: "45", rate: "5", kwit: "KW 0142/3/08/2026", kwitM3: "10", qty: "40", weightT: "13,1" }] } }
       }],
       ["u_mag", "2026-08-12", {
         purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "100", unit: "MP", price: "55" },
@@ -143,12 +143,12 @@
         // jedna produkcja, dwa rodzaje transportu: 3 kursy flotą własną + 2 kursy firmą zewnętrzną (5 × 16 MP = 80 MP)
         transport: { mode: "mixed", place: "Elektrociepłownia Zabrze S.A.",
           own: { runCount: "3", runs: [
-            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,4" },
-            { vehicleId: "ve_scania", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,2" },
-            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", qty: "16", weightT: "5,3" }] },
+            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", kwit: "KW 0217/1/09/2026", kwitM3: "4", qty: "16", weightT: "5,4" },
+            { vehicleId: "ve_scania", driverId: "", km: "26", rate: "5", kwit: "KW 0217/2/09/2026", kwitM3: "4", qty: "16", weightT: "5,2" },
+            { vehicleId: "ve_volvo", driverId: "", km: "26", rate: "5", kwit: "KW 0217/3/09/2026", kwitM3: "4", qty: "16", weightT: "5,3" }] },
           external: { company: "DAP Trans", includedInPrice: false, runCount: "2", runs: [
-            { reg: "SZA 7K901", driver: "Marek Pawlik", km: "26", rate: "6", freight: "", qty: "16", weightT: "5,5" },
-            { reg: "SZA 7K902", driver: "Leszek Mróz", km: "26", rate: "6", freight: "", qty: "16", weightT: "5,1" }] } }
+            { reg: "SZA 7K901", driver: "Marek Pawlik", km: "26", rate: "6", freight: "", kwit: "KW 0217/4/09/2026", kwitM3: "4", qty: "16", weightT: "5,5" },
+            { reg: "SZA 7K902", driver: "Leszek Mróz", km: "26", rate: "6", freight: "", kwit: "KW 0217/5/09/2026", kwitM3: "4", qty: "16", weightT: "5,1" }] } }
       }],
       ["u_pys", "2026-09-08", {
         purchase: { supplierKind: "nadlesnictwo", supplierId: "pa_ndl_ryb", lesnictwo: "Wielopole", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },

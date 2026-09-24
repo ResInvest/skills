@@ -13,4 +13,4 @@ $iscc = @(
 if (-not $iscc) { throw "Nie znaleziono Inno Setup 6 (ISCC.exe). Pobierz: https://jrsoftware.org/isdl.php" }
 
 & $iscc "installer\ResInvestERP_Demo.iss"
-Write-Host "Gotowe: installer\Output\ResInvestERP_Demo_Setup_2.5.0.exe"
+Write-Host "Gotowe: installer\Output\ResInvestERP_Demo_Setup_2.6.0.exe"

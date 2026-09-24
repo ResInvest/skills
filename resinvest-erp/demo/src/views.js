@@ -134,11 +134,14 @@
   function transportBlocks(t, blocks) {
     const U = Units.label(t.qtyUnit || "");
     const tk = [["Transport", R.TRANSPORT_MODES[t.mode]]];
-    const runTable = (P, own) => ({ type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }, { label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }],
-      rows: P.runs.map(r => [String(r.no), r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—", fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)]),
-      foot: ["Razem", "", "", fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)], note: own && P.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" });
+    const hasKw = P => P.runs.some(r => r.kwit);
+    const runTable = (P, own) => { const kw = hasKw(P); return { type: "table", columns: [{ label: "Kurs", w: 0.6 }, { label: "Pojazd", w: 1.4 }, { label: "Kierowca", w: 1.8 }].concat(kw ? [{ label: "Kwit wywozowy", w: 1.8 }, { label: "m³", w: 0.7, align: "right" }] : []).concat([{ label: "km", w: 0.8, align: "right" }, { label: "Rozliczenie", w: 1.3, align: "right" }, { label: "Ilość", w: 1.2, align: "right" }, { label: kw ? "Tony" : "Waga rzecz. [t]", w: 1.2, align: "right" }, { label: "Koszt", w: 1.2, align: "right" }]),
+      rows: P.runs.map(r => [String(r.no), r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—"].concat(kw ? [r.kwit || "—", r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"] : []).concat([fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : r.costBasis, `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)])),
+      foot: ["Razem", "", ""].concat(kw ? ["", fmtQ(P.runs.reduce((a, r) => a + (r.kwitM3 || 0), 0))] : []).concat([fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)]), note: own && P.runs.some(r => r.driverOverridden) ? "* kierowca zmieniony tylko dla tego kursu" : "" }; };
     const ownP = t.mode === "own" ? t : t.mode === "mixed" ? t.own : null, extP = t.mode === "external" ? t : t.mode === "mixed" ? t.external : null;
     if (ownP || extP) tk.push(["Liczba kursów", String((t.runs || [t]).length)], ["Kilometry łącznie", `${fmtQ(t.km)} km`], ["Ilość przewieziona", `${fmtQ(t.totalQty || 0)} ${U}`], ["Waga rzeczywista łącznie", t.totalWeightT !== null && t.totalWeightT !== undefined ? `${fmtQ(t.totalWeightT)} t` : "—"]);
+    if (t.kwity && t.kwity.length) tk.push(["Kwity wywozowe", t.kwity.join(", ")]);
+    if (t.totalM3 !== null && t.totalM3 !== undefined) tk.push(["m³ z kwitów łącznie", `${fmtQ(t.totalM3)} m³`]);
     if (extP) tk.push(["Przewoźnik zewnętrzny", extP.company + (extP.includedInPrice ? " (wliczony w cenę)" : "")]);
     if (t.mode === "train") {
       tk.push(["Skład / przewoźnik", `${t.trainNo || "—"} · ${t.carrier || "—"}`], ["Nr dokumentu przewozowego", t.docNo || "—"], ["Miejsce załadunku", t.loadPlace || "—"], ["Liczba wagonów", String(t.wagonCount)]);

@@ -85,6 +85,12 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 |---|---|---|---|
 | 27 | Jedna produkcja: kursy flotą własną i firmą zewnętrzną razem (np. 3 + 2), wspólne podsumowanie | DONE | U: „2.5 Mieszany…” (3 testy); E: „2.5 …” (6 kontroli) |
 
+### Demo v2.6
+
+| # | Wymaganie | Status | Dowód |
+|---|---|---|---|
+| 28 | Kwit wywozowy usunięty z produkcji (przy kursach) — w każdym kursie: nr kwitu, m³, MP, tony; m³ × 4 = MP automatycznie; suma kursów ≤ produkcja | DONE | U: „2.6 Kwit…” (3 testy); E: „2.6 …” (8 kontroli) |
+
 ## 2. Znalezione problemy
 
 | Problem | Status |

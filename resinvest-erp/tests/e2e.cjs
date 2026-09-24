@@ -357,7 +357,7 @@ async function fillForestDirect(page) {
     check("2.2 Kurs: kierowca domyślny z pojazdu", (await page.inputValue("#f-transport-own-runs-2-driverId")) === "dr_kowalski");
     await page.selectOption("#f-transport-own-runs-1-vehicleId", "ve_volvo"); await page.waitForTimeout(100);
     check("2.2 Zmiana pojazdu w kursie → jego kierowca domyślny", (await page.inputValue("#f-transport-own-runs-1-driverId")) === "dr_nowak");
-    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-own-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
+    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-own-runs-${i}-kwit`, `KW O359${i}/09/2026`); await fillTab(page, `#f-transport-own-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
     check("2.2 Podsumowanie kursów: 400 MP, 132 t, 4 × 45 km × 5 zł = 900,00 zł", nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("132 t") && nb(await page.textContent("[data-runs-cost]")) === "900,00 zł",
       [nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-t]")), nb(await page.textContent("[data-runs-cost]"))]);
     const calcTxt = nb(await page.textContent('[data-calc="production.chipCost"]'));
@@ -400,7 +400,7 @@ async function fillForestDirect(page) {
     await fillTab(page, "#f-transport-external-runs-0-km", "45");
     await fillTab(page, "#f-transport-external-runCount", "4");
     check("2.4 Zewnętrzny: liczba kursów 4 → 4 rubryki (km przejęte z poprzedniego)", (await page.$$("[data-xrun]")).length === 4 && (await page.inputValue("#f-transport-external-runs-3-km")) === "45");
-    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-external-runs-${i}-reg`, `ESI 1000${i}`); await fillTab(page, `#f-transport-external-runs-${i}-driver`, "Jan Nowak"); await fillTab(page, `#f-transport-external-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-external-runs-${i}-weightT`, "33"); }
+    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-external-runs-${i}-kwit`, `KW E402${i}/09/2026`); await fillTab(page, `#f-transport-external-runs-${i}-reg`, `ESI 1000${i}`); await fillTab(page, `#f-transport-external-runs-${i}-driver`, "Jan Nowak"); await fillTab(page, `#f-transport-external-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-external-runs-${i}-weightT`, "33"); }
     check("2.4 Zewnętrzny: podsumowanie 400 MP, 132 t, 4 × 45 km × 5 zł = 900,00 zł", nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("132 t") && nb(await page.textContent("[data-runs-cost]")) === "900,00 zł",
       [nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-cost]"))]);
     await fillTab(page, "#f-transport-external-runs-0-freight", "300");
@@ -408,6 +408,29 @@ async function fillForestDirect(page) {
     check("2.4 Zatwierdzenie zakupu z 4 kursami zewnętrznymi", (await approve(page)) === 1);
     const xop = await page.evaluate(() => RIW_DEBUG.store.state.operations.at(-1).transport);
     check("2.4 Zapisane: przewoźnik, 4 kursy, 400 MP, 132 t, 975 zł", xop.company === "ESI Logistics" && xop.runs.length === 4 && xop.totalQty === 400 && xop.totalWeightT === 132 && xop.cost === 975);
+
+    /* ------------- 2.6: kwity wywozowe w każdym kursie ------------- */
+    await preset(page, "zakup");
+    await tick(page, "f-skind-nadlesnictwo"); await fillTab(page, "#f-purchase-supplierName", "Nadleśnictwo Rybnik"); await fillTab(page, "#f-purchase-lesnictwo", "Wielopole");
+    await fillTab(page, "#f-purchase-qty", "100"); await page.fill("#f-purchase-price", "210");
+    await tick(page, "f-production-enabled"); await page.waitForSelector("#f-production-outQty");
+    check("2.6 Bez transportu: kwit wywozowy przy produkcji", !!(await page.$("#f-production-kwit")));
+    await tick(page, "f-mode-own"); await page.waitForSelector("#own-runs");
+    check("2.6 Z kursami: brak pola kwitu w produkcji, kwit i m³ w kursie", !(await page.$("#f-production-kwit")) && !!(await page.$("#f-transport-own-runs-0-kwit")) && !!(await page.$("#f-transport-own-runs-0-kwitM3")));
+    await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-transport-own-runs-0-km", "30"); await fillTab(page, "#f-transport-own-runCount", "4");
+    for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-own-runs-${i}-kwit`, `KW 0300/${i + 1}/09/2026`); await fillTab(page, `#f-transport-own-runs-${i}-kwitM3`, "25"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
+    check("2.6 m³ z kwitu × 4 → MP na aucie (25 m³ → 100 MP)", (await page.inputValue("#f-transport-own-runs-2-qty")) === "100");
+    check("2.6 Podsumowanie: kwity, 100 m³, 400 MP, wszystko rozwiezione", nb(await page.textContent("#runs-summary")).includes("KW 0300/4/09/2026") && nb(await page.textContent("[data-runs-m3]")) === "100 m³" && nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-limit]")).includes("wszystko rozwiezione"));
+    await fillTab(page, "#f-transport-own-runs-3-kwitM3", "26");
+    check("2.6 Suma kursów ponad produkcję → blokada z komunikatem", nb(await page.textContent('[data-msg="transport.runs"]')).includes("Suma kursów 404 MP przekracza ilość z produkcji 400 MP"), nb(await page.textContent('[data-msg="transport.runs"]')));
+    const nK = await opsN(page);
+    await page.click("#summary [data-save]"); await page.waitForTimeout(200);
+    check("2.6 Zatwierdzenie zablokowane przy przekroczeniu", !(await page.$("#confirm-op")) && (await opsN(page)) === nK);
+    await fillTab(page, "#f-transport-own-runs-3-kwitM3", "25");
+    check("2.6 Zatwierdzenie z 4 kwitami", (await approve(page)) === 1);
+    const kwS = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { kwit: o.production.kwit, m3: o.transport.totalM3, pw: o.documents.find(d => d.type === "PW").meta.kwit }; });
+    check("2.6 Zapisane kwity w produkcji i na PW", kwS.kwit.split(", ").length === 4 && kwS.m3 === 100 && kwS.pw === kwS.kwit, kwS);
 
     /* ------------- 2.5: transport własny + zewnętrzny w jednej produkcji ------------- */
     await preset(page, "zakup");
@@ -419,9 +442,9 @@ async function fillForestDirect(page) {
     check("2.5 Własny i zewnętrzny zaznaczone razem — obie sekcje kursów widoczne", (await page.isChecked("#f-mode-own")) && (await page.isChecked("#f-mode-external")) && !!(await page.$("#own-runs")) && (await page.evaluate(() => RIW_DEBUG.plan.norm.transport.mode)) === "mixed");
     await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
     await fillTab(page, "#f-transport-own-runs-0-km", "45"); await fillTab(page, "#f-transport-own-runCount", "3");
-    for (let i = 0; i < 3; i++) { await fillTab(page, `#f-transport-own-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
+    for (let i = 0; i < 3; i++) { await fillTab(page, `#f-transport-own-runs-${i}-kwit`, `KW O421${i}/09/2026`); await fillTab(page, `#f-transport-own-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
     await fillTab(page, "#f-transport-external-company", "ESI Logistics"); await fillTab(page, "#f-transport-external-runs-0-km", "45"); await fillTab(page, "#f-transport-external-runCount", "2");
-    for (let i = 0; i < 2; i++) { await fillTab(page, `#f-transport-external-runs-${i}-reg`, `ESI 2000${i}`); await fillTab(page, `#f-transport-external-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-external-runs-${i}-weightT`, "33"); }
+    for (let i = 0; i < 2; i++) { await fillTab(page, `#f-transport-external-runs-${i}-kwit`, `KW E423${i}/09/2026`); await fillTab(page, `#f-transport-external-runs-${i}-reg`, `ESI 2000${i}`); await fillTab(page, `#f-transport-external-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-external-runs-${i}-weightT`, "33"); }
     const kinds = await page.$$eval("#runs-summary tbody tr", r => r.map(x => x.dataset.runKind).join(","));
     check("2.5 Wspólne podsumowanie: 3 kursy własne + 2 zewnętrzne, 400 MP, 165 t, 1 125,00 zł", kinds === "own,own,own,external,external" && nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("165 t") && nb(await page.textContent("[data-runs-cost]")) === "1 125,00 zł",
       [kinds, nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-cost]"))]);

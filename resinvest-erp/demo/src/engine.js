@@ -15,7 +15,7 @@
 (function (root) {
   "use strict";
 
-  const VERSION = "2.5.0-demo";
+  const VERSION = "2.6.0-demo";
   const SCHEMA = 3;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -327,8 +327,8 @@
   /* ------------------------------------------------------------------ */
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
-  function blankExtRun() { return { reg: "", driver: "", km: "", rate: "", freight: "", qty: "", weightT: "" }; }
-  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", qty: "", weightT: "" }; }
+  function blankExtRun() { return { reg: "", driver: "", km: "", rate: "", freight: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
+  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
@@ -425,7 +425,6 @@
         if (R_.type === "lesna") {
           if (!str(R_.ndl)) err("production.ndl", "Podaj nadleśnictwo");
           if (!str(R_.lesnictwo)) err("production.lesnictwo", "Podaj leśnictwo");
-          if (!str(R_.kwit)) err("production.kwit", "Podaj numer kwitu wywozowego");
         } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", "Podaj miejsce wycinki / inwestycję");
       }
       const ch = byId(state.fleet.chippers, R_.chipperId);
@@ -658,6 +657,16 @@
       };
       const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
       /* Kursy transportu własnego / zewnętrznego — liczone osobno, łączone w trybie „mixed”. */
+      /* Kwity wywozowe (produkcja leśna z nadleśnictwa): numer kwitu i m³ wpisywane w każdym kursie.
+         m³ × 4 = MP na aucie; suma kursów nie może przekroczyć produkcji (MP) ani zużytego drewna (m³). */
+      const X_ = norm.production;
+      const forest = !!(X_ && X_.mode !== "stock" && X_.type === "lesna");
+      const waybill = (r, K, i) => {
+        const no = str(r.kwit);
+        if (forest && !no) err(K(i, "kwit"), `Podaj numer kwitu wywozowego (kurs ${i + 1})`);
+        const m3 = str(r.kwitM3) === "" ? null : num(K(i, "kwitM3"), r.kwitM3, { gt: 0, label: "ilość m³ z kwitu" });
+        return { no, m3: m3 === null ? null : rq(m3) };
+      };
       const ownPart = () => {
         const part = { kind: "own" };
         /* Transport własny: liczba kursów → osobne kursy (pojazd, kierowca, km, stawka, ilość, waga rzeczywista).
@@ -687,13 +696,15 @@
           const km = num(K(i, "km"), r.km, { gt: 0, label: "liczbę km" });
           const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
           // ilość w kursie: przy jednym kursie domyślnie cała ilość operacji, przy wielu — wymagana
+          const kw = waybill(r, K, i);
           let q = null;
           if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (kw.m3 !== null && sp.unit === "MP") q = rq(kw.m3 * cfg.m3_mp);          // m³ z kwitu × 4 = MP na aucie
           else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
           else q = sp.qty || null;
           const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
           runs.push({ no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
-            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w });
+            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
@@ -737,13 +748,15 @@
           const needKm = !included && freight === null && !legacy;
           const km = str(r.km) === "" ? (needKm ? (err(K(i, "km"), "Podaj liczbę km (albo fracht kursu)"), null) : 0) : num(K(i, "km"), r.km, { min: 0, label: "liczbę km" });
           const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          const kw = waybill(r, K, i);
           let q = null;
           if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          else if (kw.m3 !== null && sp.unit === "MP") q = rq(kw.m3 * cfg.m3_mp);          // m³ z kwitu × 4 = MP na aucie
           else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
           else q = sp.qty || null;
           const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
           const cost = included ? 0 : freight !== null ? round(freight, 2) : km !== null && rate !== null ? round(km * rate, 2) : 0;
-          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? "wliczony w cenę" : freight !== null ? "fracht" : "km × stawka", qty: q === null ? 0 : rq(q), weightT: w });
+          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? "wliczony w cenę" : freight !== null ? "fracht" : "km × stawka", qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
@@ -772,8 +785,25 @@
         });
       }
       if (["own", "external", "mixed"].includes(mode)) {
-        const sp = shipped();
-        if (transport.runs.length > 1 && sp.qty > 0 && Math.abs(transport.totalQty - sp.qty) > EPS) warnings.push(`Suma kursów ${fmtQ(transport.totalQty)} ${Units.label(sp.unit)} różni się od ilości operacji ${fmtQ(sp.qty)} ${Units.label(sp.unit)}. Transport nie zmienia stanu magazynowego.`);
+        const sp = shipped(), U = Units.label(sp.unit);
+        const withM3 = transport.runs.filter(r => r.kwitM3 !== null);
+        transport.totalM3 = withM3.length ? rq(withM3.reduce((a, r) => a + r.kwitM3, 0)) : null;
+        transport.kwity = transport.runs.map(r => r.kwit).filter(Boolean);
+        transport.limitQty = sp.qty || 0;
+        transport.remainingQty = rq((sp.qty || 0) - transport.totalQty);
+        // suma kursów nie może przekroczyć ilości operacji (np. produkcji)
+        if (sp.qty > 0 && transport.totalQty > sp.qty + EPS) err("transport.runs", `Suma kursów ${fmtQ(transport.totalQty)} ${U} przekracza ilość ${X_ && X_.outQty ? "z produkcji" : "operacji"} ${fmtQ(sp.qty)} ${U} (o ${fmtQ(transport.totalQty - sp.qty)} ${U}).`);
+        else if (transport.runs.length > 1 && sp.qty > 0 && sp.qty - transport.totalQty > EPS) warnings.push(`Suma kursów ${fmtQ(transport.totalQty)} ${U} — do rozwiezienia pozostało ${fmtQ(sp.qty - transport.totalQty)} ${U} z ${fmtQ(sp.qty)} ${U}. Transport nie zmienia stanu magazynowego.`);
+        const consumed = X_ && X_.consumeQty !== null && X_.consumeUnit === "m3" ? X_.consumeQty : null;
+        if (consumed !== null && transport.totalM3 !== null && transport.totalM3 > consumed + EPS) err("transport.runs", `Suma m³ z kwitów ${fmtQ(transport.totalM3)} m³ przekracza drewno zużyte w produkcji ${fmtQ(consumed)} m³.`);
+      }
+      // produkcja leśna bez kursów (brak transportu / pociąg): kwit wpisywany przy produkcji
+      if (forest) {
+        const hasRuns = !!(transport.runs && transport.runs.length);
+        const runKw = hasRuns ? transport.runs.map(r => r.kwit).filter(Boolean) : [];
+        if (!hasRuns && !str(R_.kwit)) err("production.kwit", "Podaj numer kwitu wywozowego (bez kursów transportu kwit wpisuje się przy produkcji)");
+        X_.kwit = hasRuns ? runKw.join(", ") : str(R_.kwit);
+        documents.forEach(d => { if (d.type === "PW" && d.meta) d.meta.kwit = X_.kwit; });
       }
       if (mode === "train") {
         const Tr = T.train || {};

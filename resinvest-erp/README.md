@@ -1,10 +1,14 @@
-# ResInvest ERP — Demo v2.5 (2.5.0)
+# ResInvest ERP — Demo v2.6 (2.6.0)
 
 Samodzielny plik **`ResInvest_ERP_demo.html`** — funkcjonalnie kompletny prototyp logiki ResInvest ERP
 (obrót i magazyn biomasy). Otwiera się dwuklikiem: bez serwera, bez internetu, bez bibliotek z CDN.
 
 > Demo zapisuje dane w `localStorage` przeglądarki **wyłącznie do celów pokazowych**. To nie jest Production v1 —
 > wdrożenie produkcyjne wymaga bazy danych z transakcjami i serwera (patrz `docs/RESINVEST_CHANGE_PLAN.md`, „Architektura Production v1”).
+
+## Nowe w 2.6
+
+* **Kwity wywozowe w kursach:** przy produkcji leśnej (z nadleśnictwa) numer kwitu nie jest już wpisywany w sekcji produkcji — każdy kurs (własny i zewnętrzny) ma pola: nr kwitu wywozowego, m³ z kwitu, MP na aucie, tony z kwitu. Po wpisaniu m³ system mnoży × 4 i wstawia MP na aucie. Suma kursów nie może przekroczyć ilości z produkcji (MP) ani zużytego drewna (m³) — zatwierdzenie jest wtedy zablokowane; podsumowanie pokazuje „pozostało do rozwiezienia”. Bez kursów (brak transportu / pociąg) kwit wpisuje się przy produkcji jak dotąd. Kwity trafiają na PW, kartę TR i PDF.
 
 ## Nowe w 2.5
 
@@ -59,7 +63,7 @@ Masa i energia są orientacyjne i nie zmieniają ilości na stanie. GJ liczone z
 | Sposób | Kroki |
 |---|---|
 | Plik | Otwórz `ResInvest_ERP_demo.html` w Chrome / Edge / Firefox |
-| Instalator Windows | `ResInvestERP_Demo_Setup_2.5.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” |
+| Instalator Windows | `ResInvestERP_Demo_Setup_2.6.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” |
 
 Użytkownika (a więc magazyn aktywny i uprawnienia) zmienia się w prawym górnym rogu:
 
@@ -111,9 +115,9 @@ Wymagany Node.js ≥ 18.
 cd resinvest-erp
 npm run check        # kontrola składni źródeł
 npm run build        # → ResInvest_ERP_demo.html (wstrzykuje konfigurację, czcionki PDF i film intro)
-npm run test:unit    # 69 testów: silnik + generator PDF
+npm run test:unit    # 72 testy: silnik + generator PDF
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e     # 139 kontroli w przeglądarce
+npm run test:e2e     # 147 kontroli w przeglądarce
 # pełna kontrola tekstu PDF (polskie znaki) — Python z pypdf:
 PDF_PYTHON=/ścieżka/do/python npm run test:e2e
 ```
@@ -126,7 +130,7 @@ Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Demo_Setup_2.5.0.exe
+# → installer\Output\ResInvestERP_Demo_Setup_2.6.0.exe
 ```
 
 ## Kopie zapasowe i dane

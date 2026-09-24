@@ -583,7 +583,7 @@ test("2.2 Zakup z nadleśnictwa + produkcja: pochodzenie (nadleśnictwo, leśnic
   assert.deepEqual([op.production.ndl, op.production.lesnictwo], ["Rudy Raciborskie", "Stanica"]);
   assert.equal(op.production.outQty, 400);
 });
-const RUNS = (n, over = {}) => ({ mode: "own", place: "RiC Zabrze", own: { runCount: String(n), runs: Array.from({ length: n }, () => Object.assign({ vehicleId: "ve_scania", driverId: "", km: "45", rate: "", qty: "100", weightT: "33" }, over)) } });
+const RUNS = (n, over = {}) => ({ mode: "own", place: "RiC Zabrze", own: { runCount: String(n), runs: Array.from({ length: n }, (_, i) => Object.assign({ vehicleId: "ve_scania", driverId: "", km: "45", rate: "", kwit: `KW 1${i}/09/2026`, kwitM3: "", qty: "100", weightT: "33" }, over)) } });
 test("2.2 Kursy: 4 kursy × 100 MP = 400 MP z produkcji do Zabrza — suma ilości, ton i kosztu; stan bez zmian od transportu", () => {
   const s = fresh();
   const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0500/09/2026" }); d.transport = RUNS(4);
@@ -602,7 +602,7 @@ test("2.2 Kursy: przy wielu kursach ilość w kursie wymagana; różnica sumy = 
   assert.ok(R.planOperation(s, d, ctx(s)).errors["transport.own.runs.1.qty"]);
   d.transport = RUNS(3, { weightT: "" });
   const p = R.planOperation(s, d, ctx(s));
-  assert.ok(p.warnings.some(w => w.includes("Suma kursów 300 MP różni się od ilości operacji 400 MP")));
+  assert.ok(p.warnings.some(w => w.includes("Suma kursów 300 MP — do rozwiezienia pozostało 100 MP z 400 MP")));
   assert.ok(p.warnings.some(w => w.includes("Brak wagi rzeczywistej dla 3 z 3")));
   d.transport = RUNS(1, { qty: "" });
   assert.equal(R.planOperation(s, d, ctx(s)).norm.transport.totalQty, 400, "jeden kurs = cała ilość");
@@ -647,7 +647,7 @@ test("2.3 Dostawca wpisany ręcznie: nazwa z kartoteki (inna wielkość liter) =
 });
 
 /* ============================ 2.4: kursy transportu zewnętrznego ============================ */
-const XRUNS = (n, over = {}, top = {}) => ({ mode: "external", place: "RiC Zabrze", external: Object.assign({ company: "ESI Logistics", includedInPrice: false, runCount: String(n), runs: Array.from({ length: n }, (_, i) => Object.assign({ reg: `ESI 1000${i}`, driver: "Jan Nowak", km: "45", rate: "", freight: "", qty: "100", weightT: "33" }, over)) }, top) });
+const XRUNS = (n, over = {}, top = {}) => ({ mode: "external", place: "RiC Zabrze", external: Object.assign({ company: "ESI Logistics", includedInPrice: false, runCount: String(n), runs: Array.from({ length: n }, (_, i) => Object.assign({ reg: `ESI 1000${i}`, driver: "Jan Nowak", km: "45", rate: "", freight: "", kwit: `KW 2${i}/09/2026`, kwitM3: "", qty: "100", weightT: "33" }, over)) }, top) });
 test("2.4 Zewnętrzny: 4 kursy × 100 MP = 400 MP, 132 t, koszt km × stawka domyślna (4 × 45 × 5 = 900 zł)", () => {
   const s = fresh();
   const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "KW 0700/09/2026" }); d.transport = XRUNS(4);
@@ -701,10 +701,46 @@ test("2.5 Mieszany: błędy w obu częściach raportowane osobno; suma różna o
   const e = R.planOperation(s, d, ctx(s)).errors;
   assert.ok(e["transport.own.runs.0.qty"] && e["transport.external.runs.1.reg"]);
   d.transport = { mode: "mixed", place: "RiC Zabrze", own: RUNS(3).own, external: XRUNS(2).external };
-  assert.ok(R.planOperation(s, d, ctx(s)).warnings.some(w => w.includes("Suma kursów 500 MP różni się od ilości operacji 400 MP")));
+  assert.match(R.planOperation(s, d, ctx(s)).errors["transport.runs"], /Suma kursów 500 MP przekracza ilość z produkcji 400 MP \(o 100 MP\)/);
 });
 test("2.5 Dane przykładowe: zakup 03.09 — 3 kursy własne + 2 zewnętrzne (5 × 16 MP = 80 MP)", () => {
   const s = fresh();
   const op = s.operations.find(o => o.transport.mode === "mixed");
   assert.deepEqual([op.transport.own.runs.length, op.transport.external.runs.length, op.transport.totalQty], [3, 2, 80]);
+});
+
+/* ============================ 2.6: kwity wywozowe w kursach ============================ */
+const FOREST = () => { const d = NDL(); Object.assign(d.production, { enabled: true, type: "lesna", kwit: "" }); return d; };
+test("2.6 Kwit wywozowy: w produkcji leśnej z kursami numer kwitu wymagany w każdym kursie (nie przy produkcji)", () => {
+  const s = fresh();
+  const d = FOREST(); d.transport = RUNS(4, { kwit: "" });
+  const e = R.planOperation(s, d, ctx(s)).errors;
+  assert.ok(e["transport.own.runs.0.kwit"] && e["transport.own.runs.3.kwit"]);
+  assert.ok(!e["production.kwit"], "przy kursach kwit nie jest wymagany w sekcji produkcji");
+  d.transport = RUNS(4);
+  const p = R.planOperation(s, d, ctx(s));
+  assert.equal(p.ok, true, JSON.stringify(p.errors));
+  assert.equal(p.norm.production.kwit, "KW 10/09/2026, KW 11/09/2026, KW 12/09/2026, KW 13/09/2026");
+  assert.equal(p.documents.find(x => x.type === "PW").meta.kwit, p.norm.production.kwit);
+});
+test("2.6 Kwit: m³ z kwitu × 4 = MP na aucie; suma kursów nie przekracza produkcji ani zużytego drewna", () => {
+  const s = fresh();
+  const d = FOREST(); d.transport = RUNS(4, { qty: "", kwitM3: "25" });
+  const p = R.planOperation(s, d, ctx(s));
+  assert.equal(p.ok, true, JSON.stringify(p.errors));
+  assert.deepEqual([p.norm.transport.runs[0].qty, p.norm.transport.totalQty, p.norm.transport.totalM3, p.norm.transport.remainingQty], [100, 400, 100, 0]);
+  d.transport = RUNS(4, { qty: "", kwitM3: "26" });
+  const e = R.planOperation(s, d, ctx(s)).errors["transport.runs"];
+  assert.match(e, /przekracza ilość z produkcji 400 MP/);
+  d.transport = RUNS(4, { qty: "100", kwitM3: "26" });
+  assert.match(R.planOperation(s, d, ctx(s)).errors["transport.runs"], /Suma m³ z kwitów 104 m³ przekracza drewno zużyte w produkcji 100 m³/);
+});
+test("2.6 Kwit: bez kursów (brak transportu) kwit wpisuje się przy produkcji; firma drzewna (KZR, inwestycyjna) kwitu nie wymaga", () => {
+  const s = fresh();
+  const d = FOREST();
+  assert.ok(R.planOperation(s, d, ctx(s)).errors["production.kwit"]);
+  d.production.kwit = "KW 99/09/2026";
+  assert.equal(R.planOperation(s, d, ctx(s)).ok, true);
+  const f = draft({ purchase: Object.assign({}, PURCHASE_A, { productId: "pr_drewno_inw" }), production: { enabled: true, type: "inwestycyjna", investSite: "Obwodnica" }, transport: RUNS(2, { kwit: "", qty: "40" }) });
+  assert.equal(R.planOperation(s, f, ctx(s)).ok, true, JSON.stringify(R.planOperation(s, f, ctx(s)).errors));
 });
