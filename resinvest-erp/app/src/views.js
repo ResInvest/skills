@@ -113,6 +113,7 @@
     if (d.fromWh) { add(t("Z magazynu"), d.fromWh); add(t("Do magazynu"), d.toWh); }
     if (d.partner) add(d.type === "PZ" ? t("Dostawca") : t("Odbiorca"), d.partner);
     if (d.basis) add(t("Podstawa"), t(R.BASIS[d.basis]));
+    if (d.type === "PZ" && d.price != null) add(t("Cena jednostkowa"), `${fmt(d.price)} zł/${Units.label(d.priceUnit || d.unit)}${d.priceUnit && d.priceUnit !== d.unit && d.priceQty != null ? " · " + t("ilość do ceny: {q} {u}", { q: fmtQ(d.priceQty, 6), u: Units.label(d.priceUnit) }) : ""}`);
     if (d.value) add(d.type === "PW" ? t("Koszt rąbania") : t("Wartość netto"), money(d.value));
     const META = { productionType: N_("Rodzaj produkcji"), ndl: N_("Nadleśnictwo"), lesnictwo: N_("Leśnictwo"), kwit: N_("Nr kwitu wywozowego"), sourceType: N_("Typ źródła"), investSite: N_("Miejsce wycinki"), sourceDoc: N_("Dokument źródłowy"), chipRate: N_("Cena za rąbanie [zł/MP]"), chippingCost: N_("Koszt rąbania [zł]"), chipper: N_("Rębak"), operator: N_("Operator"), fromDoc: N_("Z dokumentu zużycia"), direct: N_("Sprzedaż / produkcja bezpośrednia"), rawInfo: N_("Surowiec z lasu (informacyjnie)") };
     const TRANSLATED = new Set(["productionType", "sourceType", "direct"]);
@@ -178,7 +179,7 @@
       const add = (k, v) => { if (v !== undefined && v !== null && v !== "") kv.push(`<dt>${esc(k)}</dt><dd>${v}</dd>`); };
       add(t("Rodzaj"), TYPE_BADGE(op)); add(t("Status"), statusBadge(op.status)); add(t("Data"), esc(Dates.pl(op.date))); add(t("Magazyn"), esc(App.whName(op.whId)) + (op.toWhId ? ` → ${esc(App.whName(op.toWhId))}` : ""));
       add(t("Wystawił"), esc(`${op.userName} · ${Dates.ts(op.createdAt)}`));
-      if (op.purchase) add(t("Zakup"), `${esc(partnerName(op.purchase.supplierId))} · ${esc(fmtQ(op.purchase.qty))} ${Units.label(op.purchase.unit)} ${esc(pName(op.purchase.productId))} × ${fmt(op.purchase.price)} zł`);
+      if (op.purchase) add(t("Zakup"), `${esc(partnerName(op.purchase.supplierId))} · ${esc(fmtQ(op.purchase.qty))} ${Units.label(op.purchase.unit)} ${esc(pName(op.purchase.productId))} × ${fmt(op.purchase.price)} zł/${Units.label(op.purchase.priceUnit || op.purchase.unit)}${op.purchase.priceUnit && op.purchase.priceUnit !== op.purchase.unit ? ` (${esc(fmtQ(op.purchase.priceQty))} ${Units.label(op.purchase.priceUnit)})` : ""}`);
       if (op.production) {
         const X = op.production;
         add(X.mode === "direct" ? t("Produkcja w lesie") : t("Produkcja"), `${X.rawProductId ? `${esc(pName(X.rawProductId))} ${esc(fmtQ(X.consumeQty, 6))} ${Units.label(X.consumeUnit)}${X.mode === "direct" ? " " + esc(t("(nie ze stanu)")) : ""} → ` : ""}<b>${esc(fmtQ(X.outQty, 6))} ${Units.label(X.outUnit)}</b> ${esc(pName(X.outProductId))}`);

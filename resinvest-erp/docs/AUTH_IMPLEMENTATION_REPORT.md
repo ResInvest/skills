@@ -119,6 +119,7 @@ dokładnie według panelu Resend. Program nie tworzy rekordów DNS.
 
 * Rzeczywista wysyłka przez Resend (API i SMTP) i doręczalność (SPF/DKIM/DMARC) — **NIEPOTWIERDZONE**;
   przetestowano przebieg z transportem `file` oraz zachowanie przy błędzie wysyłki (brak klucza).
-* Kompilacja instalatora 3.2.0 w Inno Setup 7 na Windows — **NIEPOTWIERDZONE** (plik `.iss` w UTF-8 z BOM,
-  skrypt wyszukuje ISCC 7/6).
+* Instalator 3.2.0 skompilowany kompilatorem Inno Setup **6.4.1** (Wine) i sprawdzony w Wine 9 (win64): instalacja,
+  start serwera, aktualizacja na istniejących danych, deinstalacja. Kompilacja w **Inno Setup 7** i praca na prawdziwym
+  Windows — **NIEPOTWIERDZONE** (plik `.iss` w UTF-8 z BOM, skrypt wyszukuje ISCC 7/6).
 * „TypeScript przechodzi” — nie dotyczy: projekt jest w JavaScript (ES2020, bez kroku kompilacji TypeScript).

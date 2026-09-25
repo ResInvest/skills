@@ -152,30 +152,45 @@
   const Units = {
     LIST: ["m3", "MP", "t"],
     label(u) { return u === "m3" ? "m³" : u; },
+    /**
+     * Przeliczniki produktu (od 3.2 ustawiane w kartotece Produkty):
+     *   k   — MP z 1 m³ (produkt.mpPerM3, domyślnie konfiguracja m3_mp = 4),
+     *   tm3 — ton na 1 m³: jednostka m³ → masa 1 m³ (tPerUnit / woodTPerM3), MP → masa 1 MP × k,
+     *         t → produkt.tPerM3 (gęstość nasypowa; bez niej produkt tonowy liczy się tylko w t).
+     */
+    factors(p, cfg) {
+      const k = Number(p && p.mpPerM3) > 0 ? Number(p.mpPerM3) : cfg.m3_mp;
+      let tm3 = null;
+      if (p && p.unit === "m3") tm3 = Number(p.tPerUnit) > 0 ? Number(p.tPerUnit) : cfg.woodTPerM3;
+      else if (p && p.unit === "MP") tm3 = (Number(p.tPerUnit) > 0 ? Number(p.tPerUnit) : cfg.mp_t) * k;
+      else if (p && p.unit === "t") tm3 = Number(p.tPerM3) > 0 ? Number(p.tPerM3) : null;
+      return { k, tm3 };
+    },
     massPerUnit(p, cfg) {
       if (!p) return 0;
       if (p.unit === "t") return 1;
-      if (p.unit === "MP") return cfg.mp_t;
-      return p.tPerUnit || cfg.woodTPerM3;
+      const { k, tm3 } = this.factors(p, cfg);
+      return p.unit === "m3" ? tm3 : rq(tm3 / k);
     },
+    /** Jednostki dozwolone na dokumentach: lista z kartoteki (jeśli ustawiona) albo domyślna wg jednostki magazynowej. */
+    defaultUnits(p) { return !p ? [] : p.unit === "t" ? ["t"] : p.unit === "MP" ? ["MP", "t"] : ["m3", "MP", "t"]; },
     allowed(p) {
       if (!p) return [];
-      if (p.unit === "t") return ["t"];
-      if (p.unit === "MP") return ["MP", "t"];
-      return ["m3", "MP", "t"];
+      const list = Array.isArray(p.units) && p.units.length ? p.units.filter(u => this.LIST.includes(u)) : this.defaultUnits(p);
+      const out = [...new Set([p.unit].concat(list))];
+      // produkt tonowy bez gęstości nie ma przelicznika na m³ / MP
+      return p.unit === "t" && !(Number(p.tPerM3) > 0) ? ["t"] : this.LIST.filter(u => out.includes(u));
     },
+    /** Ilość w jednostce `u` → m³ (wspólna miara pośrednia) i z powrotem. */
+    toM3(x, u, p, cfg) { const { k, tm3 } = this.factors(p, cfg); return u === "m3" ? x : u === "MP" ? x / k : x / tm3; },
+    fromM3(x, u, p, cfg) { const { k, tm3 } = this.factors(p, cfg); return u === "m3" ? x : u === "MP" ? x * k : x * tm3; },
     convert(q, from, to, p, cfg) {
       const x = Number(q);
       if (from === to) return rq(x);
       const ok = this.allowed(p);
       if (!ok.includes(from) || !ok.includes(to)) throw new Error(t("Brak przelicznika {a} → {b} dla „{p}”", { a: this.label(from), b: this.label(to), p: p ? p.name : "?" }));
-      const m = this.massPerUnit(p, cfg);
-      const toBase = u => { if (u === p.unit) return x; if (u === "t") return x / m; if (p.unit === "m3" && u === "MP") return x / cfg.m3_mp; throw new Error(t("Brak przelicznika")); };
-      const b = toBase(from);
-      if (to === p.unit) return rq(b);
-      if (to === "t") return rq(b * m);
-      if (p.unit === "m3" && to === "MP") return rq(b * cfg.m3_mp);
-      throw new Error(t("Brak przelicznika"));
+      if (p.unit === "t" && (from === "t" || to === "t") && !(Number(p.tPerM3) > 0)) throw new Error(t("Brak przelicznika"));
+      return rq(this.fromM3(this.toM3(x, from, p, cfg), to, p, cfg));
     },
     mass(q, p, cfg) { return rq(Number(q) * this.massPerUnit(p, cfg)); },
     energy(t, cfg) { return rq(Number(t) * cfg.t_gj); },
@@ -188,11 +203,12 @@
     prodFactor(raw, out, cfg) {
       if (!raw || !out) return { error: t("Wybierz surowiec i produkt wyjściowy") };
       if (raw.id === out.id) return { error: t("Surowiec i produkt wyjściowy muszą być różnymi produktami") };
-      if (raw.unit === "m3" && out.unit === "MP") {
-        if (!(Number.isFinite(cfg.m3_mp) && cfg.m3_mp > 0)) return { error: t("Nie można zatwierdzić produkcji. Brak prawidłowego przelicznika jednostek (m³ → MP).") };
-        return { factor: cfg.m3_mp, from: "m3", to: "MP" };
-      }
-      return { error: t("Brak przelicznika {a} → {b} dla wybranego produktu ({r} → {o}).", { a: this.label(raw.unit), b: this.label(out.unit), r: raw.name, o: out.name }) };
+      if (!(Number.isFinite(cfg.m3_mp) && cfg.m3_mp > 0)) return { error: t("Nie można zatwierdzić produkcji. Brak prawidłowego przelicznika jednostek (m³ → MP).") };
+      // surowiec przeliczany na m³ drewna, z 1 m³ powstaje m3_mp MP zrębki; wynik w jednostce magazynowej produktu
+      if (!this.allowed(raw).includes("m3") || !this.allowed(out).includes("MP")) return { error: t("Brak przelicznika {a} → {b} dla wybranego produktu ({r} → {o}).", { a: this.label(raw.unit), b: this.label(out.unit), r: raw.name, o: out.name }) };
+      const m3 = raw.unit === "m3" ? 1 : this.toM3(1, raw.unit, raw, cfg);
+      const mp = m3 * cfg.m3_mp, factor = out.unit === "MP" ? mp : this.fromM3(this.toM3(mp, "MP", out, cfg), out.unit, out, cfg);
+      return { factor: raw.unit === "m3" && out.unit === "MP" ? cfg.m3_mp : factor, from: raw.unit, to: out.unit };
     }
   };
 
@@ -292,7 +308,7 @@
   };
   const DIFF_REASONS = { wilgotnosc: N_("Wilgotność / osiadanie"), jakosc: N_("Jakość surowca"), straty: N_("Straty przy rębaniu"), pomiar: N_("Różnica pomiaru"), inna: N_("Inna przyczyna") };
   const CORRECTION_REASONS = [N_("błędnie wpisana ilość"), N_("błędna cena"), N_("błędna jednostka"), N_("błędny kontrahent"), N_("błędny magazyn"), N_("błędne zużycie surowca"), N_("błędny transport"), N_("pomyłka operatora"), N_("korekta dokumentu zewnętrznego"), N_("inny")];
-  const TRANSPORT_MODES = { none: N_("Brak transportu"), own: N_("Transport własny"), external: N_("Transport zewnętrzny"), mixed: N_("Transport własny + zewnętrzny"), train: N_("Pociąg") };
+  const TRANSPORT_MODES = { none: N_("Brak transportu"), own: N_("Transport własny"), external: N_("Transport zewnętrzny"), mixed: N_("Transport własny + zewnętrzny"), train: N_("Pociąg"), supplier: N_("Transport w cenie zakupu — zapewnia dostawca") };
   const VEHICLE_TYPES = { ruchoma_podloga: N_("Ruchoma podłoga"), ciezarowy: N_("Samochód ciężarowy"), wywrotka: N_("Wywrotka") };
   const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
   const INV_STATUS = { OTWARTA: N_("OTWARTA"), ZAMKNIETA: N_("ZAMKNIĘTA") };
@@ -475,7 +491,7 @@
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
-      purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", price: "", weightMode: "auto", weightManual: "" },
+      purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", priceUnit: "", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
       mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
@@ -652,6 +668,11 @@
       if (product && !unitOk) err("purchase.unit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(U).join(", ") }));
       const qty = num("purchase.qty", P.qty, { gt: 0, label: N_("ilość") });
       const price = num("purchase.price", P.price, { min: 0, label: N_("cenę") });
+      // jednostka ceny może być inna niż jednostka ilości (np. ilość w m³ z kwitu, cena za MP) — puste = jak ilość
+      const priceUnit = str(P.priceUnit) || P.unit;
+      const priceUnitOk = product && Units.allowed(product).includes(priceUnit);
+      if (product && unitOk && !priceUnitOk) err("purchase.priceUnit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(U).join(", ") }));
+      const priceQty = qty !== null && unitOk && priceUnitOk ? Units.convert(qty, P.unit, priceUnit, product, cfg) : null;
       if (price === 0) warnings.push(t("Cena zakupu wynosi 0 zł — upewnij się, że to zamierzone."));
       const stockQty = qty !== null && unitOk ? Units.convert(qty, P.unit, product.unit, product, cfg) : 0;
       const autoWeight = product ? Units.mass(stockQty, product, cfg) : 0;
@@ -663,11 +684,11 @@
           if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(t("Waga rzeczywista {a} t różni się o ponad 25% od orientacyjnej {b} t — sprawdź kwit wagowy.", { a: fmtQ(weightT), b: fmtQ(autoWeight) }));
         }
       } else if (P.weightMode !== "auto") err("purchase.weightMode", t("Wybierz sposób ustalenia wagi"));
-      totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
-      norm.purchase = { supplierId: supplier ? supplier.id : "", supplierName: sObj ? sObj.name : "", newSupplier, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
+      totals.purchaseCost = priceQty !== null && price !== null ? round(priceQty * price, 2) : 0;
+      norm.purchase = { supplierId: supplier ? supplier.id : "", supplierName: sObj ? sObj.name : "", newSupplier, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, priceUnit, priceQty, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
         push("ZAKUP", product.id, stockQty);
-        documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: supplier ? supplier.id : "", partner: sObj ? sObj.name : "", basis: P.basis, stock: "+" });
+        documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, price, priceUnit, priceQty, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: supplier ? supplier.id : "", partner: sObj ? sObj.name : "", basis: P.basis, stock: "+" });
       }
       if (R_.enabled) {
         if (product && product.cat !== "drewno") err("production.enabled", t("Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)"));
@@ -793,6 +814,12 @@
       const mode = T.mode || "none";
       transport = { mode, place, cost: 0 };
       if (!TRANSPORT_MODES[mode]) err("transport.mode", t("Nieznany tryb transportu"));
+      // dostawa organizowana i opłacana przez dostawcę (koszt w cenie zakupu) — bez kursów i bez dokumentu TR
+      if (mode === "supplier") {
+        if (type !== "ZAKUP") err("transport.mode", t("Transport zapewniany przez dostawcę dotyczy tylko zakupu"));
+        const sup = norm.purchase || {};
+        Object.assign(transport, { company: sup.supplierName || "", includedInPrice: true, cost: 0 });
+      }
       /** Towar przewożony w operacji (jednostka magazynowa produktu). */
       const shipped = () => {
         if (norm.sale && norm.sale.productId) return { productId: norm.sale.productId, qty: norm.sale.stockQty || 0, unit: (prodOf(norm.sale.productId) || {}).unit };
@@ -979,7 +1006,7 @@
         });
         if (totalT > 0 && shippedT > 0 && Math.abs(totalT - shippedT) / shippedT > 0.05) warnings.push(t("Tonaż składu {a} t różni się od orientacyjnej masy ładunku {b} t. Transport nie zmienia stanu magazynowego.", { a: fmtQ(totalT), b: fmtQ(shippedT) }));
       }
-      if (mode !== "none") documents.push({ type: "TR", kind: "TRANSPORT", productId: null, qty: null, unit: null, value: transport.cost, stock: "brak", transport: clone(transport) });
+      if (mode !== "none" && mode !== "supplier") documents.push({ type: "TR", kind: "TRANSPORT", productId: null, qty: null, unit: null, value: transport.cost, stock: "brak", transport: clone(transport) });
     } else {
       transport.place = wh ? wh.name : "";
     }
@@ -1254,7 +1281,7 @@
   /* ------------------------------------------------------------------ */
   const CORR_FIELDS = [
     ["purchase.qty", N_("Ilość zakupu"), o => o.purchase && o.purchase.qty, o => o.purchase && Units.label(o.purchase.unit)],
-    ["purchase.price", N_("Cena zakupu"), o => o.purchase && o.purchase.price, () => "zł"],
+    ["purchase.price", N_("Cena zakupu"), o => o.purchase && o.purchase.price, o => o.purchase && `zł/${Units.label(o.purchase.priceUnit || o.purchase.unit)}`],
     ["purchase.supplierId", N_("Dostawca"), o => o.purchase && o.purchase.supplierId],
     ["sale.qty", N_("Ilość sprzedaży"), o => o.sale && o.sale.qty, o => o.sale && Units.label(o.sale.unit)],
     ["sale.price", N_("Cena sprzedaży"), o => o.sale && o.sale.price, () => "zł"],
@@ -1555,7 +1582,7 @@
   }
   const Master = {
     KINDS: {
-      products: { label: N_("Produkt"), prefix: "pr", fields: ["code", "name", "cat", "unit", "tPerUnit", "active"] },
+      products: { label: N_("Produkt"), prefix: "pr", fields: ["code", "name", "cat", "unit", "units", "tPerUnit", "mpPerM3", "tPerM3", "active"] },
       partners: { label: N_("Kontrahent"), prefix: "pa", fields: ["name", "role", "kind", "city", "address", "nip", "phone", "email", "lesnictwa", "active"] },
       warehouses: { label: N_("Magazyn"), prefix: "wh", fields: ["code", "name", "address", "active"] }
     },
@@ -1571,14 +1598,18 @@
         else if (list.some(x => other(x) && same(x.code, code))) e.code = t("Taki kod już istnieje");
       }
       if (kind === "products") {
+        // od 3.2 kategoria grupuje produkty; jednostkę magazynową i dozwolone jednostki wybiera się dowolnie
         if (!PRODUCT_CATS[rec.cat]) e.cat = t("Wybierz kategorię");
-        else if (rec.unit !== CAT_UNIT[rec.cat]) e.unit = t("Dla kategorii „{c}” jednostką magazynową jest {u}", { c: t(PRODUCT_CATS[rec.cat]), u: Units.label(CAT_UNIT[rec.cat]) });
+        if (!Units.LIST.includes(rec.unit)) e.unit = t("Wybierz jednostkę magazynową");
         const prev = byId(list, rec.id);
         if (prev && prev.unit !== rec.unit && this.usedProduct(state, rec.id)) e.unit = t("Produkt ma ruchy w księdze — jednostki magazynowej nie można zmienić");
-        if (str(rec.tPerUnit) !== "" && rec.tPerUnit !== null && rec.tPerUnit !== undefined) {
-          const r = NumParse.parse(rec.tPerUnit);
-          if (!r.ok || !(r.value > 0) || r.value > 5) e.tPerUnit = t("Masa jednostki: liczba większa od 0 (t)");
-        }
+        const pos = (k, max, msg) => { if (rec[k] === undefined || rec[k] === null || str(rec[k]) === "") return null; const r = NumParse.parse(rec[k]); if (!r.ok || !(r.value > 0) || r.value > max) { e[k] = msg; return null; } return r.value; };
+        pos("tPerUnit", 5, t("Masa jednostki: liczba większa od 0 (t)"));
+        pos("mpPerM3", 20, t("Przelicznik MP z 1 m³: liczba większa od 0"));
+        const dens = pos("tPerM3", 5, t("Gęstość: t na 1 m³ — liczba większa od 0"));
+        const units = Array.isArray(rec.units) ? rec.units : [];
+        if (units.some(u => !Units.LIST.includes(u))) e.units = t("Nieznana jednostka");
+        else if (rec.unit === "t" && units.some(u => u !== "t") && dens === null && !e.tPerM3) e.tPerM3 = t("Podaj gęstość (t na 1 m³) — bez niej produkt w tonach nie ma przelicznika na m³ i MP");
       }
       if (kind === "partners") {
         if (!PARTNER_ROLES[rec.role]) e.role = t("Wybierz rolę kontrahenta");
@@ -1609,7 +1640,10 @@
       if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono") };
       const r = Object.assign({}, prev || {}, rec);
       r.active = rec.active === undefined ? (prev ? prev.active !== false : true) : !!rec.active && rec.active !== "false";
-      if (kind === "products") { r.code = str(r.code).toUpperCase(); if (!r.unit) r.unit = CAT_UNIT[r.cat]; }
+      if (kind === "products") {
+        r.code = str(r.code).toUpperCase(); if (!r.unit) r.unit = CAT_UNIT[r.cat] || "t";
+        r.units = [...new Set([r.unit].concat(Array.isArray(r.units) ? r.units : Units.defaultUnits(r)))].filter(Boolean);
+      }
       if (kind === "warehouses") r.code = str(r.code).toUpperCase();
       if (kind === "partners") {
         if (r.role === "buyer") delete r.kind;
@@ -1621,7 +1655,11 @@
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
       const clean = { id: prev ? prev.id : uid(K.prefix) };
       for (const f of K.fields) if (r[f] !== undefined) clean[f] = typeof r[f] === "string" ? str(r[f]) : r[f];
-      if (kind === "products") clean.tPerUnit = str(r.tPerUnit) === "" || r.tPerUnit == null ? undefined : rq(NumParse.value(r.tPerUnit, 0));
+      if (kind === "products") {
+        for (const k of ["tPerUnit", "mpPerM3", "tPerM3"]) clean[k] = str(r[k]) === "" || r[k] == null ? undefined : rq(NumParse.value(r[k], 0));
+        if (clean.unit === "t") delete clean.tPerUnit;
+        clean.units = Units.LIST.filter(u => clean.units.includes(u));
+      }
       if (prev && prev.createdBy) clean.createdBy = prev.createdBy;
       if (prev && prev.createdAt) clean.createdAt = prev.createdAt; else if (!prev) { clean.createdAt = nowIso(ctx); clean.createdBy = ctx.user.name; }
       const list = state[kind], idx = list.findIndex(x => x.id === clean.id);

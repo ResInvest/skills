@@ -576,6 +576,42 @@ async function fillForestDirect(page) {
     await preset(page, "produkcja");
     const chOpts = await page.$$eval("#f-production-chipperId option", o => o.map(x => x.value).filter(Boolean));
     check("3.1 Formularz: tylko rębaki magazynu operacji", chOpts.length === 1 && chOpts[0] === "ch_albach", chOpts);
+    // 3.2: zakup — ilość w m³, cena za MP; zmiana jednostki ilości przelicza ilość; transport zapewnia dostawca
+    await preset(page, "zakup");
+    await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "10");
+    await page.selectOption("#f-purchase-priceUnit", "MP"); await page.waitForTimeout(150);
+    await fillTab(page, "#f-purchase-price", "57,5");
+    check("3.2 Zakup: 10 m³ × 57,50 zł/MP = 2 300 zł (ilość w m³, cena za MP)", nb(await out(page, "purchase.cost")).startsWith("2 300,00"), await out(page, "purchase.cost"));
+    await page.selectOption("#f-purchase-unit", "MP"); await page.waitForTimeout(150);
+    check("3.2 Zmiana jednostki ilości m³ → MP przelicza ilość (10 m³ = 40 MP), koszt bez zmian", (await page.inputValue("#f-purchase-qty")) === "40" && nb(await out(page, "purchase.cost")).startsWith("2 300,00"), await page.inputValue("#f-purchase-qty"));
+    await tick(page, "f-mode-supplier"); await page.waitForTimeout(150);
+    check("3.2 Transport w cenie zakupu — zapewnia dostawca (bez TR)", nb(await page.textContent("#opf")).includes("Transport zapewnia dostawca Lander Agro") && !nb(await page.textContent("#summary")).includes("TR "));
+    const nBuy = await opsN(page);
+    check("3.2 Zatwierdzenie zakupu z transportem dostawcy", (await approve(page)) === 1 && (await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return o.transport.mode === "supplier" && o.totals.purchaseCost === 2300 && !o.documents.some(d => d.type === "TR"); })), nBuy);
+    await closeModals(page);
+    // 3.2: korekta zakupu drewna — zmiana jednostki ilości MP → m³ i ceny na zł/m³ (zgłoszenie: „brak korekty z m³ na MP”)
+    const buyOp = await lastOp(page), wood0 = await bal(page, "pr_drewno", "wh_rok");
+    await openOp(page, buyOp.id); await page.click("#op-detail [data-correct]"); await page.waitForSelector("#corr-preview");
+    await page.selectOption("#f-purchase-unit", "m3"); await page.waitForTimeout(150);
+    check("3.2 Korekta: zmiana jednostki MP → m³ przelicza ilość (40 MP = 10 m³)", (await page.inputValue("#f-purchase-qty")) === "10", await page.inputValue("#f-purchase-qty"));
+    await page.selectOption("#f-purchase-priceUnit", "m3"); await page.waitForTimeout(150); await fillTab(page, "#f-purchase-price", "240");
+    await page.selectOption("#corr-reason", { index: 1 });
+    await page.click("#summary [data-save]"); await page.click(".scrim [data-yes]");
+    await page.waitForSelector("#op-detail"); await page.waitForTimeout(200);
+    const corrOp = await page.evaluate(id => { const o = RIW_DEBUG.store.state.operations.find(x => x.id === id); return { st: o.status, unit: o.purchase.unit, pu: o.purchase.priceUnit, cost: o.totals.purchaseCost, stock: o.purchase.stockQty }; }, buyOp.id);
+    check("3.2 Korekta zapisana: 10 m³ × 240 zł/m³ = 2 400 zł, stan drewna bez zmian", corrOp.st === "CORRECTED" && corrOp.unit === "m3" && corrOp.pu === "m3" && corrOp.cost === 2400 && corrOp.stock === 10 && (await bal(page, "pr_drewno", "wh_rok")) === wood0, corrOp);
+    await closeModals(page);
+    // 3.2: Produkty — nowa łupina liczona w MP, PKS z gęstością (m³)
+    await go(page, "produkty"); await page.click('[data-madd="products"]'); await page.waitForSelector("#master-edit");
+    await page.fill("#me-code", "LUP-MP"); await page.fill("#me-name", "Łupina nerkowca MP"); await page.selectOption("#me-cat", "agro");
+    await page.selectOption("#me-unit", "MP"); await page.check('[data-unit-ok="m3"]'); await page.fill("#me-tPerUnit", "0,25");
+    await page.click("#master-edit [data-yes]"); await page.waitForTimeout(300);
+    const lupMP = await page.evaluate(() => { const p = RIW_DEBUG.store.state.products.find(x => x.code === "LUP-MP"); return p ? `${p.unit}/${RIW_DEBUG.R.Units.allowed(p).join(",")}` : null; });
+    check("3.2 Produkty: nowa łupina w MP (dozwolone m³, MP, t)", lupMP === "MP/m3,MP,t", lupMP);
+    await page.click('[data-medit="products|pr_pks"]'); await page.waitForSelector("#master-edit");
+    check("3.2 Produkty: PKS — jednostka magazynowa zablokowana (ruchy w księdze)", await page.$eval("#me-unit", x => x.disabled));
+    await page.check('[data-unit-ok="m3"]'); await page.fill("#me-tPerM3", "0,6"); await page.click("#master-edit [data-yes]"); await page.waitForTimeout(300);
+    check("3.2 Produkty: PKS kupowany także w m³ (gęstość 0,6 t/m³)", await page.evaluate(() => { const p = RIW_DEBUG.store.state.products.find(x => x.id === "pr_pks"); return RIW_DEBUG.R.Units.allowed(p).join(",") === "m3,t" && RIW_DEBUG.R.Units.convert(10, "m3", "t", p, RIW_DEBUG.store.state.config) === 6; }));
     // 3.2: dodanie użytkownika (OFFLINE — hasło tymczasowe), wiele magazynów, status
     await go(page, "admin/users"); await page.waitForSelector("#users-table");
     check("3.2 Tabela użytkowników: kolumny wg specyfikacji", (await page.$$eval("#users-table thead th", l => l.map(x => x.textContent.trim()).join("|"))) === "Użytkownik|E-mail|Rola|Magazyn|Status|Ostatnie logowanie|Akcje");

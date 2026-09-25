@@ -23,10 +23,11 @@
     "purchase.lesnictwo": N_("<b>Co:</b> leśnictwo w wybranym nadleśnictwie. Wybierz zapisane z listy albo wpisz nowe — po zatwierdzeniu pojawi się na liście. <b>Przykład:</b> Wielopole."),
     "transport.own.runCount": N_("<b>Co:</b> ile kursów wykonała flota własna. Po wpisaniu np. <b>4</b> pojawią się 4 osobne rubryki: pojazd, kierowca, km, stawka, ilość i waga rzeczywista. <b>Przykład:</b> 4 kursy × 100 MP = 400 MP."),
     "purchase.basis": N_("<b>Co:</b> podstawa pochodzenia biomasy. Ustawia się automatycznie według grupy dostawcy (firma → KZR, nadleśnictwo → Deklaracja) — możesz ją zmienić. <b>Deklaracja</b> — oświadczenie dostawcy, <b>KZR</b> — dostawa rozliczana w systemie certyfikacji KZR."),
-    "purchase.productId": N_("<b>Co:</b> kupowany towar. <b>Po co:</b> ustala jednostkę magazynową (drewno m³, zrębka MP, PKS i łupina t)."),
+    "purchase.productId": N_("<b>Co:</b> kupowany towar. <b>Po co:</b> ustala jednostkę magazynową i dozwolone jednostki (ustawiane w module Produkty)."),
     "purchase.qty": N_("<b>Co:</b> ilość z dokumentu dostawcy, w jednostce wybranej obok. Możesz wpisać <b>12,50</b> albo <b>12.50</b> lub wkleić <b>1 250,50</b>."),
-    "purchase.unit": N_("<b>Co:</b> jednostka ilości i ceny — tylko te, które mają sens dla towaru. <b>1 m³ drewna = 4 MP</b>. PKS i łupina — wyłącznie t."),
-    "purchase.price": N_("<b>Co:</b> cena netto za 1 jednostkę zakupu. <b>Po co:</b> koszt zakupu = ilość × cena."),
+    "purchase.unit": N_("<b>Co:</b> w czym podajesz ilość (np. drewno w m³ z kwitu). Zmiana jednostki <b>przelicza wpisaną ilość</b> — stan magazynu się nie zmienia. <b>1 m³ drewna = 4 MP</b>."),
+    "purchase.priceUnit": N_("<b>Co:</b> za jaką jednostkę płacimy (np. drewno w m³, cena za wyprodukowane MP). <b>Po co:</b> koszt zakupu = ilość przeliczona na tę jednostkę × cena."),
+    "purchase.price": N_("<b>Co:</b> cena netto za 1 jednostkę zakupu (wybraną obok). <b>Po co:</b> koszt zakupu = ilość w jednostce zakupu × cena."),
     "purchase.weightMode": N_("<b>Orientacyjna</b> = przelicznik produktu (zrębka 0,33 t/MP). <b>Ręczna</b> = waga rzeczywista z kwitu wagowego. Masa nie zmienia ilości na stanie."),
     "purchase.weightManual": N_("<b>Co:</b> waga z wagi samochodowej (kwit wagowy), w tonach. <b>Przykład:</b> 19,20."),
     "production.type": N_("<b>Co:</b> rodzaj wyprodukowanej zrębki — wskazuje produkt wynikowy i wymagane dane pochodzenia."),
@@ -314,7 +315,7 @@
         const suppliers = S.partners.filter(p => (p.active !== false || p.id === d.purchase.supplierId) && ["supplier", "both"].includes(p.role) && R.partnerKind(p) === sKind);
         const kindCard = (k, text) => optCard("", { checked: sKind === k, struct: false, radio: true, id: `f-skind-${k}`, title: t(R.SUPPLIER_KINDS[k].label), text, attrs: `data-skind="${k}"` });
         const units = prod ? Units.allowed(prod) : Units.LIST;
-        const u = Units.label(d.purchase.unit);
+        const u = Units.label(d.purchase.unit), pu = Units.label(d.purchase.priceUnit || d.purchase.unit);
         html += section(n++, "purchase", t("Zakup"), t("Co kupujemy, od kogo, w jakiej jednostce i za ile."), `
           <div class="scope mb3">
             ${optCard("production.enabled", { checked: d.production.enabled, disabled: !isWood || corr, title: t("+ Produkcja z automatycznym zużyciem"), text: isWood ? t("Zużycie zakupionego drewna (RW) i przyjęcie zrębki (PW) w tej samej operacji.") : t("Dostępna dla drewna.") })}
@@ -329,8 +330,9 @@
             ${field({ key: "purchase.basis", label: t("Podstawa"), req: true, span: sKind === "nadlesnictwo" ? "" : "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: t("Deklaracja") }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
             ${field({ key: "purchase.productId", label: t("Produkt / surowiec"), req: true, span: "span2", control: selIn("purchase.productId", [pick(t("wybierz produkt"))].concat(S.products.filter(p => active(p) || p.id === d.purchase.productId).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
             ${field({ key: "purchase.qty", label: t("Ilość"), req: true, control: numIn("purchase.qty", d.purchase.qty, { suffix: u, placeholder: eg("20") }) })}
-            ${field({ key: "purchase.unit", label: t("Jednostka zakupu"), req: true, control: selIn("purchase.unit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.unit, { struct: true }) })}
-            ${field({ key: "purchase.price", label: t("Cena jednostkowa (zł/{u})", { u }), req: true, control: numIn("purchase.price", d.purchase.price, { suffix: `zł/${u}`, placeholder: eg("230") }) })}
+            ${field({ key: "purchase.unit", label: t("Jednostka ilości"), req: true, control: selIn("purchase.unit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.unit, { struct: true }) })}
+            ${field({ key: "purchase.priceUnit", label: t("Jednostka zakupu (cena za)"), req: true, control: selIn("purchase.priceUnit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.priceUnit || d.purchase.unit, { struct: true }) })}
+            ${field({ key: "purchase.price", label: t("Cena jednostkowa (zł/{u})", { u: pu }), req: true, control: numIn("purchase.price", d.purchase.price, { suffix: `zł/${pu}`, placeholder: eg("230") }) })}
             ${field({ key: "purchase.cost", label: t("Koszt całkowity zakupu"), control: outBox("purchase.cost", "—"), help: false })}
             ${field({ key: "purchase.weightMode", label: t("Masa"), req: true, control: selIn("purchase.weightMode", [{ v: "auto", l: t("Orientacyjna (przelicznik)") }, { v: "manual", l: t("Ręczna — waga rzeczywista") }], d.purchase.weightMode, { struct: true }) })}
             ${d.purchase.weightMode === "manual"
@@ -399,6 +401,7 @@
       const forest = this.isForest();
       const runsHint = `<div class="help">${esc(t("Podaj liczbę kursów — rubryki pojawią się automatycznie."))}</div>`;
       let modeHtml = "";
+      if (mode === "supplier") modeHtml += `<div class="info-line mt4">${ic("truck", 15)}<span>${esc(t("Transport zapewnia dostawca {c} — koszt jest wliczony w cenę zakupu; operacja nie ma dokumentu TR ani kosztu transportu.", { c: this.supplierText() || t("(wpisz dostawcę)") }))}</span></div>`;
       if (useOwn) {
         const O = this.ownRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
@@ -494,6 +497,7 @@
             ${optCard("", { checked: useOwn, struct: false, id: "f-mode-own", title: t("Transport własny"), text: t("Kursy pojazdami z Floty, koszt = km × stawka."), attrs: 'data-mode="own"' })}
             ${optCard("", { checked: useExt, struct: false, id: "f-mode-external", title: t("Transport zewnętrzny"), text: t("Kursy firmy przewozowej, km × stawka albo fracht."), attrs: 'data-mode="external"' })}
             ${optCard("", { checked: mode === "train", struct: false, radio: true, id: "f-mode-train", title: t("Pociąg"), text: t("Wagony, tonaż, podsumowanie składu."), attrs: 'data-mode="train"' })}
+            ${this.draft.type === "ZAKUP" ? optCard("", { checked: mode === "supplier", struct: false, radio: true, id: "f-mode-supplier", title: t("Transport w cenie zakupu — zapewnia dostawca (firma)"), text: t("Dostawca przywozi towar na swój koszt; bez kursów i bez kosztu transportu."), attrs: 'data-mode="supplier"' }) : ""}
           </div>
           <div class="help tut">${t(HELP["transport.mode"])}</div></div>
         ${modeHtml}`);
@@ -604,6 +608,7 @@
           if (!el.checked) { el.checked = true; return; }
           d.type = el.dataset.type;
           d.sale.enabled = false; d.production.enabled = false;
+          if (d.transport.mode === "supplier" && d.type !== "ZAKUP") d.transport.mode = "none";
           if (d.type === "PRODUKCJA" || (d.type === "SPRZEDAZ" && d.sale.direct)) { if (!d.production.rawProductId) d.production.rawProductId = "pr_drewno"; if (!d.production.outProductId) d.production.outProductId = "pr_zr_lesna"; }
           if (!d.transport.placeTouched) d.transport.place = this.defaultPlace();
           this.touched = new Set(); this.showAll = false;
@@ -621,7 +626,7 @@
           // własny i zewnętrzny łączą się (tryb „mixed”); pociąg wyklucza pozostałe
           const m = d.transport.mode, want = el.dataset.mode;
           let own = m === "own" || m === "mixed", ext = m === "external" || m === "mixed";
-          if (want === "train") { own = ext = false; d.transport.mode = el.checked ? "train" : "none"; }
+          if (want === "train" || want === "supplier") { own = ext = false; d.transport.mode = el.checked ? want : "none"; }
           else {
             if (want === "own") own = el.checked; else ext = el.checked;
             d.transport.mode = own && ext ? "mixed" : own ? "own" : ext ? "external" : "none";
@@ -638,20 +643,28 @@
       if (!isChange && (el.type === "checkbox" || el.tagName === "SELECT" || el.type === "date")) return;
       if (isChange && el.tagName === "INPUT" && el.type === "text") return;
       const v = el.type === "checkbox" ? el.checked : el.value;
+      const prev = key === "purchase.unit" ? d.purchase.unit : undefined;
       setPath(d, key, v);
       this.touched.add(key);
-      this.sideEffects(key, v);
+      this.sideEffects(key, v, prev);
       this.persist();
       const supChanged = this._supplierChanged; this._supplierChanged = false;
       if (el.hasAttribute("data-struct") || supChanged || key === "transport.train.wagonCount" || key === "transport.own.runCount" || key === "transport.external.runCount") this.rerender();
       else this.refresh();
     },
 
-    sideEffects(key, v) {
+    sideEffects(key, v, prev) {
       const d = this.draft, S = Store.state;
+      if (key === "purchase.unit" && prev && prev !== v) {
+        // zmiana jednostki ilości przelicza wpisaną ilość (ta sama fizyczna ilość, stan bez zmian); cena zostaje „za” poprzednią jednostkę
+        const p = App.product(d.purchase.productId), conv = x => { const r = NumParse.parse(x); if (!p || !r.ok) return x; try { return fmtQ(Units.convert(r.value, prev, v, p, S.config), 6); } catch (e) { return x; } };
+        if (!d.purchase.priceUnit) d.purchase.priceUnit = prev;
+        if (String(d.purchase.qty).trim() !== "") d.purchase.qty = conv(d.purchase.qty);
+        if (String(d.production.consumeQty || "").trim() !== "") d.production.consumeQty = conv(d.production.consumeQty);
+      }
       if (key === "purchase.productId") {
         const p = App.product(v);
-        if (p) d.purchase.unit = p.unit;
+        if (p) { d.purchase.unit = p.unit; d.purchase.priceUnit = ""; }
         if (!p || p.cat !== "drewno") { d.production.enabled = false; d.sale.enabled = false; }
       }
       if (key === "sale.productId") { const p = App.product(v); if (p) d.sale.unit = p.unit; }
@@ -760,7 +773,9 @@
         if (P.qty !== null && p && P.unit !== p.unit) add("purchase.qty", t("= <b>{q}</b> na stanie", { q: esc(qn(P.stockQty, p.id)) }));
         if (P.newSupplier) add("purchase.supplierName", `<span class="badge info">${esc(t("nowy dostawca"))}</span> ` + esc(t("zostanie dopisany do kartoteki ({g}) przy zatwierdzeniu", { g: t(R.SUPPLIER_KINDS[P.newSupplier.kind].label) })));
         else if (P.supplierId) add("purchase.supplierName", esc(t("z kartoteki ✓")));
-        if (P.qty !== null && P.price !== null) add("purchase.price", `${fmtQ(P.qty)} ${Units.label(P.unit)} × ${fmt(P.price)} zł`);
+        if (P.qty !== null && P.price !== null) add("purchase.price", P.priceUnit && P.priceUnit !== P.unit && P.priceQty !== null
+          ? `${fmtQ(P.qty)} ${Units.label(P.unit)} = ${fmtQ(P.priceQty)} ${Units.label(P.priceUnit)} × ${fmt(P.price)} zł`
+          : `${fmtQ(P.qty)} ${Units.label(P.unit)} × ${fmt(P.price)} zł`);
         out("purchase.cost", P.qty !== null && P.price !== null ? money(P.cost) : "—");
         out("purchase.weightAuto", P.qty !== null && p ? orient(P.stockQty, p.id) : "—");
         if (P.qty !== null) add("purchase.weightManual", esc(t("orientacyjnie: {q} t — ilość na stanie się nie zmienia", { q: fmtQ(P.autoWeight) })));
@@ -852,7 +867,7 @@
       const flow = plan.postings.map(p => `<li><span class="d">${p.doc}</span>
           <span>${p.step}. ${esc(t(R.KINDS[p.kind].label))}${p.direct ? " " + esc(t("(bezpośrednio)")) : ""} — ${esc(name(p.productId))}${p.whId !== plan.whId ? ` <small class="dim">[${esc(App.whName(p.whId))}]</small>` : ""}<br><small class="dim">${esc(t("stan {a} → {b}", { a: App.qtyNative(p.before, p.productId), b: App.qtyNative(p.after, p.productId) }))}</small></span>
           <span class="q ${p.qty > 0 ? "plus" : "minus"}">${p.qty > 0 ? "+" : ""}${fmtQ(p.qty)} ${unitOf(p.productId)}</span></li>`).join("")
-        + (plan.norm.transport.mode !== "none" ? `<li><span class="d">TR</span><span>${esc(t(R.TRANSPORT_MODES[plan.norm.transport.mode]))} — ${esc(transportText(plan.norm.transport))}<br><small class="dim">${esc(t("koszt {m} · wpływ na stan: brak", { m: money(plan.norm.transport.cost) }))}</small></span><span class="q zero">0</span></li>` : "");
+        + (plan.norm.transport.mode !== "none" ? `<li><span class="d">${plan.norm.transport.mode === "supplier" ? "—" : "TR"}</span><span>${esc(t(R.TRANSPORT_MODES[plan.norm.transport.mode]))} — ${esc(transportText(plan.norm.transport))}<br><small class="dim">${esc(t("koszt {m} · wpływ na stan: brak", { m: money(plan.norm.transport.cost) }))}</small></span><span class="q zero">0</span></li>` : "");
       const bal = plan.balances.map(b => `<tr><td>${esc(name(b.productId))}${b.whId !== plan.whId ? `<br><small class="dim">${esc(App.whName(b.whId))}</small>` : ""}</td><td class="r">${esc(App.qtyNative(b.before, b.productId))}</td><td class="r"><b>${esc(App.qtyNative(b.after, b.productId))}</b></td></tr>`).join("");
       const tt = plan.totals;
       const docs = plan.documents.map(dc => `<tr><td><span class="badge ${dc.type === "TR" ? "info" : dc.stock === "+" ? "ok" : dc.stock === "±" ? "" : "warn"}">${dc.type}</span></td>
@@ -1001,7 +1016,7 @@
         add(t("Magazyn"), esc(App.whName(plan.whId)));
         add(t("Data"), esc(Dates.pl(plan.date)));
         add(t("Użytkownik"), esc(plan.user.name));
-        if (n.purchase) { add(t("Dostawca"), esc(n.purchase.supplierName) + (n.purchase.newSupplier ? ` <span class="badge info">${esc(t("nowy — zostanie dodany do kartoteki"))}</span>` : "")); add(t("Zakup"), `${esc(fmtQ(n.purchase.qty))} ${Units.label(n.purchase.unit)} ${esc(name(n.purchase.productId))} × ${fmt(n.purchase.price)} zł = <b>${money(n.purchase.cost)}</b>`); }
+        if (n.purchase) { add(t("Dostawca"), esc(n.purchase.supplierName) + (n.purchase.newSupplier ? ` <span class="badge info">${esc(t("nowy — zostanie dodany do kartoteki"))}</span>` : "")); add(t("Zakup"), `${esc(fmtQ(n.purchase.qty))} ${Units.label(n.purchase.unit)} ${esc(name(n.purchase.productId))}${n.purchase.priceUnit && n.purchase.priceUnit !== n.purchase.unit ? ` = ${esc(fmtQ(n.purchase.priceQty))} ${Units.label(n.purchase.priceUnit)}` : ""} × ${fmt(n.purchase.price)} zł/${Units.label(n.purchase.priceUnit || n.purchase.unit)} = <b>${money(n.purchase.cost)}</b>`); }
         if (X) {
           const raw = App.product(X.rawProductId), outP = App.product(X.outProductId);
           if (raw) add(X.mode === "direct" ? t("Surowiec (z lasu, nie ze stanu)") : t("Surowiec"), esc(raw.name));
@@ -1075,6 +1090,7 @@
     if (x.mode === "own") { const n = (x.runs || [x]).length; return (n > 1 ? tp("{n} kurs|{n} kursy|{n} kursów", n) + " · " : "") + ([x.reg, x.driverName].filter(Boolean).join(" · ") || t("uzupełnij pojazd")); }
     if (x.mode === "external") { const n = (x.runs || [x]).length; return [x.company, n > 1 ? tp("{n} kurs|{n} kursy|{n} kursów", n) : "", x.reg].filter(Boolean).join(" · ") || t("uzupełnij przewoźnika"); }
     if (x.mode === "train") return [x.trainNo, t("{n} wag.", { n: x.wagonCount }), `${fmtQ(x.totalT)} t`].filter(Boolean).join(" · ");
+    if (x.mode === "supplier") return t("dostawca: {c} — koszt w cenie zakupu", { c: x.company || "—" });
     return "";
   }
 

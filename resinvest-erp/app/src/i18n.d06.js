@@ -79,7 +79,6 @@
   "Podstawa": ["Podklad", "Basis"],
   "Produkt / surowiec": ["Produkt / surovina", "Product / raw material"],
   "Ilość": ["Množství", "Quantity"],
-  "Jednostka zakupu": ["Jednotka nákupu", "Purchase unit"],
   "Cena jednostkowa (zł/{u})": ["Jednotková cena (zł/{u})", "Unit price (zł/{u})"],
   "Koszt całkowity zakupu": ["Celkové náklady na nákup", "Total purchase cost"],
   "Masa": ["Hmotnost", "Mass"],

@@ -24,7 +24,10 @@
 | dokumentacja gotowa | DONE | `docs/AUTHENTICATION.md`, `USERS_AND_ROLES.md`, `EMAIL_SETUP.md`, `SECURITY.md`, `SUPABASE_SETUP.md` |
 | istniejące moduły ERP działają | DONE | `engine.test` 68/68, E2E 178/178 |
 | wysyłka przez Resend na prawdziwym koncie | NIEPOTWIERDZONE | wymaga klucza API i weryfikacji domeny (DNS) — `docs/EMAIL_SETUP.md` |
-| kompilacja instalatora 3.2.0 na Windows (Inno Setup 7) | NIEPOTWIERDZONE | wymaga Windows; `installer\build-installer.ps1` |
+| kompilacja instalatora 3.2.0 | DONE (Inno Setup 6.4.1 w Wine) | `ResInvestERP_Setup_3.2.0.exe`; instalacja cicha, start serwera, aktualizacja na danych i deinstalacja sprawdzone w Wine 9 (win64). Inno Setup 7 na prawdziwym Windows — NIEPOTWIERDZONE |
+| zakup: ilość w m³, cena za MP; korekta m³ ↔ MP | DONE | `platform.test` (3.2), E2E „3.2 Zakup”, „3.2 Korekta” |
+| transport w cenie zakupu — zapewnia dostawca | DONE | `platform.test`, E2E |
+| produkty: dowolna jednostka magazynowa, dozwolone jednostki, przeliczniki | DONE | `platform.test`, E2E „3.2 Produkty” |
 
 ## 3.1.0 — prototyp końcowy
 

@@ -39,6 +39,15 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
 * **Dziennik audytu** (`#/admin/audit`): kody zdarzeń (USER_INVITED, ROLE_CHANGED, WAREHOUSE_ACCESS_CHANGED,
   PASSWORD_RESET_REQUESTED…), adres IP i przeglądarka, dziennik logowań, dziennik wysyłek e-mail, CSV.
 * **Obieg zatwierdzania wyłączony domyślnie** — magazynier zatwierdza operację sam; włączenie w *Administracji*.
+* **Zakup: jednostka ilości i jednostka ceny osobno** — np. drewno kupowane w **m³** (ilość z kwitu), cena **za MP**
+  (koszt = 10 m³ = 40 MP × cena/MP). Zmiana jednostki ilości przelicza wpisaną ilość (stan się nie zmienia) —
+  także w **korekcie** (np. PZ z m³ na MP). Dokument PZ pokazuje cenę jednostkową z jednostką.
+* **Transport w cenie zakupu — zapewnia dostawca (firma)** — nowy rodzaj transportu w zakupie: bez kursów,
+  bez kosztu i bez dokumentu TR; na dokumentach widać, że dostawę zapewnia dostawca.
+* **Produkty — pełna elastyczność jednostek:** każdy produkt ma własną jednostkę magazynową (m³, MP lub t),
+  listę jednostek dozwolonych na dokumentach i przeliczniki (masa jednostki, MP z 1 m³, gęstość t/m³ dla produktów
+  w tonach). Można np. dodać łupinę liczoną w MP albo kupować PKS także w m³. Jednostki magazynowej nie zmienia się
+  po pierwszym ruchu w księdze; dozwolone jednostki i przeliczniki — zawsze.
 * Zabezpieczenia: brak zmiany własnej roli, rolę ADMINISTRATOR nadaje tylko administrator, ostatniego aktywnego
   administratora nie można zdegradować / zawiesić / dezaktywować / usunąć; magazyny zmienia tylko Administrator.
 * Schemat danych **6** (migracja 5 → 6 automatyczna, bez utraty danych). Dokumentacja: `docs/AUTHENTICATION.md`,
@@ -270,6 +279,9 @@ Plik `.iss` jest zapisany w UTF-8 z BOM (polskie i czeskie znaki w Inno Setup 7)
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 # → installer\Output\ResInvestERP_Setup_3.2.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
+
+Bez Windows (serwer budowania Linux): `bash installer/build-installer-wine.sh` — ten sam plik `.iss`,
+kompilator Inno Setup 6.4 (pakiet npm `innosetup`) uruchamiany w Wine (wymaga `wine64` i `wine32:i386`).
 
 ## Kopie zapasowe i bezpieczeństwo danych
 

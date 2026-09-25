@@ -367,3 +367,72 @@ test("Administrator przełącza magazyn roboczy; start pracy na czysto zachowuje
   assert.equal(cl.state.operations.length, 0); assert.equal(cl.state.ledger.length, 0);
   assert.equal(cl.state.users.length, s.users.length); assert.equal(cl.state.warehouses.length, 3); assert.equal(cl.state.fleet.vehicles.length, s.fleet.vehicles.length);
 });
+
+/* ============================ 3.2: jednostki ilości / ceny, transport dostawcy, elastyczne produkty ============================ */
+const BUY = (over = {}) => R.Seed.draftOf(TODAY, Object.assign({ purchase: Object.assign({ supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "10", unit: "m3", price: "57,5", priceUnit: "MP" }, over.purchase || {}), transport: over.transport || { mode: "none", place: "RiC Zabrze" } }, over.type ? { type: over.type } : {}));
+
+test("Zakup: ilość w m³, cena za MP — koszt = ilość przeliczona na MP × cena, stan w m³", () => {
+  const s = fresh(), b0 = R.Stock.balance(s, "wh_zab", "pr_drewno");
+  const r = Service.run(s, "op.commit", { draft: BUY() }, ctxOf(s, "u_mag"));
+  assert.equal(r.res.ok, true, r.res.error);
+  const op = r.state.operations.at(-1);
+  assert.equal(op.purchase.priceQty, 40); assert.equal(op.purchase.priceUnit, "MP");
+  assert.equal(op.totals.purchaseCost, 2300);
+  assert.equal(R.Stock.balance(r.state, "wh_zab", "pr_drewno"), b0 + 10);
+  const pz = op.documents.find(d => d.type === "PZ");
+  assert.equal(pz.priceUnit, "MP"); assert.equal(pz.value, 2300);
+  // bez jednostki ceny — cena za jednostkę ilości (zgodność z danymi sprzed 3.2)
+  const old = Service.run(s, "op.commit", { draft: BUY({ purchase: { price: "230", priceUnit: "" } }) }, ctxOf(s, "u_mag"));
+  assert.equal(old.state.operations.at(-1).totals.purchaseCost, 2300);
+});
+
+test("Korekta zakupu: zmiana jednostki m³ → MP (ta sama ilość) nie zmienia stanu ani kosztu", () => {
+  const s0 = fresh(), c = ctxOf(s0, "u_admin");
+  const s1 = Service.run(s0, "op.commit", { draft: BUY({ purchase: { price: "230", priceUnit: "m3" } }) }, c).state;
+  const op = s1.operations.at(-1), b1 = R.Stock.balance(s1, "wh_zab", "pr_drewno");
+  const d = R.clone(op.input); d.purchase.unit = "MP"; d.purchase.qty = "40"; d.purchase.priceUnit = "m3";
+  const cr = Service.run(s1, "op.correct", { opId: op.id, draft: d, reason: "zmiana jednostki na dokumencie" }, c);
+  assert.equal(cr.res.ok, true, cr.res.error);
+  const after = R.byId(cr.state.operations, op.id);
+  assert.equal(after.purchase.unit, "MP"); assert.equal(after.purchase.stockQty, 10); assert.equal(after.totals.purchaseCost, 2300);
+  assert.equal(R.Stock.balance(cr.state, "wh_zab", "pr_drewno"), b1);
+  // korekta ceny: płacimy za MP (40 MP × 60 zł)
+  const d2 = R.clone(after.input); d2.purchase.priceUnit = "MP"; d2.purchase.price = "60";
+  const cr2 = Service.run(cr.state, "op.correct", { opId: op.id, draft: d2, reason: "cena za MP" }, c);
+  assert.equal(cr2.res.ok, true, cr2.res.error);
+  assert.equal(R.byId(cr2.state.operations, op.id).totals.purchaseCost, 2400);
+});
+
+test("Transport w cenie zakupu — zapewnia dostawca: bez kosztu i dokumentu TR, tylko dla zakupu", () => {
+  const s = fresh();
+  const r = Service.run(s, "op.commit", { draft: BUY({ transport: { mode: "supplier", place: "RiC Zabrze" } }) }, ctxOf(s, "u_mag"));
+  assert.equal(r.res.ok, true, r.res.error);
+  const op = r.state.operations.at(-1);
+  assert.equal(op.transport.mode, "supplier"); assert.equal(op.transport.cost, 0); assert.equal(op.transport.company, "Lander Agro");
+  assert.equal(op.documents.some(d => d.type === "TR"), false);
+  const wz = R.Seed.draftOf(TODAY, { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "5", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "supplier", place: "EC" } });
+  assert.equal(Service.exec(R.clone(s), "op.commit", { draft: wz }, ctxOf(s, "u_mag")).ok, false);
+});
+
+test("Produkty: dowolna jednostka magazynowa, dozwolone jednostki i przeliczniki (łupina w MP, PKS także w m³)", () => {
+  const s = fresh(), c = ctxOf(s, "u_admin");
+  const lup = Service.run(s, "master.save", { kind: "products", rec: { code: "LUP-MP", name: "Łupina nerkowca (MP)", cat: "agro", unit: "MP", units: ["MP", "m3", "t"], tPerUnit: "0,25", mpPerM3: "1", active: true } }, c);
+  assert.equal(lup.res.ok, true, lup.res.error);
+  const p = lup.res.rec;
+  assert.deepEqual(R.Units.allowed(p), ["m3", "MP", "t"]);
+  assert.equal(R.Units.convert(8, "MP", "t", p, lup.state.config), 2);
+  assert.equal(R.Units.convert(8, "m3", "MP", p, lup.state.config), 8);
+  // PKS (tony): m³ wymaga gęstości
+  const pks = R.byId(lup.state.products, "pr_pks");
+  const bad = Service.exec(R.clone(lup.state), "master.save", { kind: "products", rec: Object.assign({}, pks, { units: ["t", "m3"] }) }, c);
+  assert.equal(bad.ok, false); assert.ok(bad.errors.tPerM3);
+  const ok = Service.run(lup.state, "master.save", { kind: "products", rec: Object.assign({}, pks, { units: ["t", "m3"], tPerM3: "0,6" }) }, c);
+  assert.equal(ok.res.ok, true, ok.res.error);
+  const b0 = R.Stock.balance(ok.state, "wh_zab", "pr_pks");
+  const buy = Service.run(ok.state, "op.commit", { draft: BUY({ purchase: { productId: "pr_pks", qty: "10", unit: "m3", price: "600", priceUnit: "t" } }) }, ctxOf(ok.state, "u_mag"));
+  assert.equal(buy.res.ok, true, buy.res.error);
+  assert.equal(R.Stock.balance(buy.state, "wh_zab", "pr_pks"), b0 + 6);
+  assert.equal(buy.state.operations.at(-1).totals.purchaseCost, 3600);
+  // jednostki magazynowej produktu z ruchami nie zmienia się
+  assert.equal(Service.exec(R.clone(buy.state), "master.save", { kind: "products", rec: Object.assign({}, R.byId(buy.state.products, "pr_pks"), { unit: "m3" }) }, c).ok, false);
+});

@@ -96,4 +96,13 @@ Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z
 | `node tests/e2e.cjs` — Chromium, tryb OFFLINE | 178/178, konsola bez błędów |
 | `node tests/e2e-server.cjs` — Chromium + serwer, zaproszenie i reset linkiem z .eml | 24/24, konsola bez błędów |
 | Wysyłka przez Resend (API/SMTP) | NIEPOTWIERDZONE — brak klucza API i dostępu do DNS w środowisku budowy |
-| Instalator 3.2.0 (Inno Setup 7) | NIEPOTWIERDZONE — kompilacja wymaga Windows |
+| Instalator 3.2.0 | skompilowany Inno Setup 6.4.1 w Wine 9; w Wine (win64): instalacja cicha, start serwera przez `ResInvestERP-Serwer.cmd`, API i strona, zakup / korekta / zaproszenie / kopia, aktualizacja na danych, deinstalacja (dane zostają). Na prawdziwym Windows i w Inno Setup 7 — NIEPOTWIERDZONE |
+
+### 3.2.0 — poprawki po zgłoszeniu (jednostki zakupu, transport dostawcy, produkty)
+
+| Zestaw | Wynik |
+|---|---|
+| unit (engine, pdf, platform) | 105/105 |
+| server + auth | 34/34 |
+| E2E OFFLINE | 187/187 |
+| E2E FIRMOWY | 24/24 |

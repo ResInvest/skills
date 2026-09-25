@@ -27,14 +27,20 @@
   /* ================================================================== */
   const Master = {
     edit(kind, id) {
-      const S = Store.state, rec = id ? R.clone(R.byId(S[kind], id)) : ({ products: { code: "", name: "", cat: "zrebka", unit: "MP", active: true }, partners: { name: "", role: "supplier", kind: "firma", city: "", address: "", nip: "", phone: "", email: "", lesnictwa: [], active: true }, warehouses: { code: "", name: "", address: "", active: true } })[kind];
+      const S = Store.state, rec = id ? R.clone(R.byId(S[kind], id)) : ({ products: { code: "", name: "", cat: "zrebka", unit: "MP", units: ["MP", "t"], active: true }, partners: { name: "", role: "supplier", kind: "firma", city: "", address: "", nip: "", phone: "", email: "", lesnictwa: [], active: true }, warehouses: { code: "", name: "", address: "", active: true } })[kind];
       let body = "";
       if (kind === "products") {
         const used = id && R.Master.usedProduct(S, id);
+        const allowedNow = Units.allowed(rec), num = v => v != null && v !== "" ? fmtQ(v, 4) : "";
         body = `<div class="fgrid">${ff("code", t("Kod"), `<input class="ctrl" id="me-code" value="${esc(rec.code)}" maxlength="12" autocapitalize="characters">`)}
           ${ff("name", t("Nazwa"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}">`)}
-          ${ff("cat", t("Kategoria"), `<select class="ctrl" id="me-cat" ${used ? "disabled" : ""}>${opts(Object.entries(R.PRODUCT_CATS).map(([k, v]) => [k, `${t(v)} (${Units.label(R.CAT_UNIT[k])})`]), rec.cat)}</select>`, used ? t("Produkt ma ruchy w księdze — jednostki magazynowej nie można zmienić") : t("Kategoria wyznacza jednostkę magazynową: drewno m³, zrębka MP, produkty tonowe t."))}
-          ${ff("tPerUnit", t("Masa 1 jednostki [t] (opcjonalnie)"), `<input class="ctrl num-in" id="me-tPerUnit" inputmode="decimal" value="${esc(rec.tPerUnit != null ? fmtQ(rec.tPerUnit, 4) : "")}" placeholder="${esc(t("domyślnie z konfiguracji"))}">`, t("Dotyczy drewna (m³). Zrębka: {a} t/MP, produkty tonowe: 1 t.", { a: fmt(S.config.mp_t, 2) }))}
+          ${ff("cat", t("Grupa"), `<select class="ctrl" id="me-cat">${opts(Object.entries(R.PRODUCT_CATS).map(([k, v]) => [k, t(v)]), rec.cat)}</select>`, t("Grupa porządkuje kartotekę; do produkcji zrębki służą produkty z grupy „Drewno”."))}
+          ${ff("unit", t("Jednostka magazynowa (stan)"), `<select class="ctrl" id="me-unit" ${used ? "disabled" : ""}>${opts(Units.LIST.map(u => [u, Units.label(u)]), rec.unit)}</select>`, used ? t("Produkt ma ruchy w księdze — jednostki magazynowej nie można zmienić") : t("W tej jednostce prowadzony jest stan magazynu i księga."))}
+          <div class="field span-all" data-ff="units"><label>${th("Dozwolone jednostki na dokumentach (zakup, sprzedaż, MM)")}</label><div class="row wrap">${Units.LIST.map(u => `<label class="inline-opt"><input type="checkbox" data-unit-ok="${u}" ${(Array.isArray(rec.units) ? rec.units : allowedNow).includes(u) ? "checked" : ""}> ${esc(Units.label(u))}</label>`).join("")}</div><div class="msg hidden" data-fmsg="units"></div>
+            <div class="help">${th("Jednostka magazynowa jest zawsze dozwolona. Przeliczenie między jednostkami — według przeliczników poniżej.")}</div></div>
+          ${ff("tPerUnit", t("Masa 1 jednostki magazynowej [t]"), `<input class="ctrl num-in" id="me-tPerUnit" inputmode="decimal" value="${esc(num(rec.tPerUnit))}" placeholder="${esc(t("domyślnie z konfiguracji"))}">`, t("Dla m³ i MP. Domyślnie: drewno {a} t/m³, zrębka {b} t/MP.", { a: fmt(S.config.woodTPerM3, 3), b: fmt(S.config.mp_t, 2) }))}
+          ${ff("tPerM3", t("Gęstość: t na 1 m³"), `<input class="ctrl num-in" id="me-tPerM3" inputmode="decimal" value="${esc(num(rec.tPerM3))}" placeholder="${esc(t("np. {x}", { x: fmt(0.6, 2) }))}">`, t("Dla produktów prowadzonych w tonach, które mają być kupowane także w m³ lub MP (np. łupina)."))}
+          ${ff("mpPerM3", t("MP z 1 m³"), `<input class="ctrl num-in" id="me-mpPerM3" inputmode="decimal" value="${esc(num(rec.mpPerM3))}" placeholder="${esc(fmtQ(S.config.m3_mp))}">`, t("Przelicznik m³ ↔ MP dla tego produktu (domyślnie {k}).", { k: fmtQ(S.config.m3_mp) }))}
           ${ff("active", t("Status"), `<select class="ctrl" id="me-active">${opts([["true", t("aktywny")], ["false", t("nieaktywny")]], String(rec.active !== false))}</select>`)}</div>`;
       } else if (kind === "partners") {
         body = `<div class="fgrid">${ff("name", t("Nazwa"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}">`, "", "span-all")}
@@ -56,6 +62,14 @@
       const label = t(R.Master.KINDS[kind].label).toLowerCase();
       const m = Modal.open({ title: `${id ? t("Edycja") : t("Nowy")}: ${label}`, id: "master-edit", wide: kind === "partners", body,
         footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${ic("check", 15)} ${th("Zapisz")}</button>` });
+      const us = $("#me-unit", m.el), cs = $("#me-cat", m.el);
+      if (kind === "products" && us) {
+        // nowa pozycja: grupa podpowiada jednostkę; jednostka magazynowa zawsze zaznaczona jako dozwolona
+        const syncUnit = () => { $$("[data-unit-ok]", m.el).forEach(x => { if (x.dataset.unitOk === us.value) { x.checked = true; x.disabled = true; } else x.disabled = false; }); $("[data-ff=tPerM3]", m.el).classList.toggle("hidden", us.value !== "t"); $("[data-ff=tPerUnit]", m.el).classList.toggle("hidden", us.value === "t"); };
+        us.addEventListener("change", syncUnit);
+        if (!id && cs) cs.addEventListener("change", () => { us.value = R.CAT_UNIT[cs.value] || us.value; syncUnit(); });
+        syncUnit();
+      }
       const syncKind = () => { const r = $("#me-role", m.el), k = $("[data-ff=kind]", m.el); if (r && k) k.classList.toggle("hidden", r.value === "buyer"); };
       const rs = $("#me-role", m.el); if (rs) { rs.onchange = syncKind; syncKind(); }
       $("[data-no]", m.el).onclick = () => m.close();
@@ -63,7 +77,7 @@
         const next = Object.assign({}, rec, id ? { id } : {});
         for (const f of R.Master.KINDS[kind].fields) { const el = $("#me-" + f, m.el); if (el && !el.disabled) next[f] = el.value; }
         next.active = next.active === true || next.active === "true";
-        if (kind === "products") next.unit = R.CAT_UNIT[next.cat];
+        if (kind === "products") { if ($("#me-unit", m.el).disabled) next.unit = rec.unit; next.units = $$("[data-unit-ok]", m.el).filter(x => x.checked).map(x => x.dataset.unitOk); }
         const res = await Store.exec("master.save", { kind, rec: next }, SRC_MASTER);
         if (!res.ok) { showErrors(m, res); Toast.err(t("Nie zapisano"), res.error); return; }
         m.close(); Toast.ok(t("Zapisano"), res.rec.name); App.render();
@@ -90,10 +104,10 @@
   Views.produkty = {
     html() {
       const S = Store.state, cfg = S.config, stock = Stock.byProduct(S, null);
-      return `<div class="page-head"><div class="titles"><h2>${th("Produkty")}</h2><p>${th("Kartoteka produktów z jednostką magazynową i przelicznikami. Jednostka magazynowa decyduje o dozwolonych jednostkach na dokumentach i nie zmienia się po pierwszym ruchu w księdze.")}</p></div>
+      return `<div class="page-head"><div class="titles"><h2>${th("Produkty")}</h2><p>${th("Kartoteka produktów: każdy produkt ma własną jednostkę magazynową (m³, MP lub t), listę jednostek dozwolonych na dokumentach i przeliczniki. Jednostki magazynowej nie zmienia się po pierwszym ruchu w księdze — dozwolone jednostki i przeliczniki można zmieniać zawsze.")}</p></div>
           <div class="actions">${addBtn("products", N_("Nowy produkt"))}</div></div>
-        <div class="card"><div class="tbl-wrap"><table class="tbl" id="products-table"><thead><tr><th>${th("Kod")}</th><th>${th("Nazwa")}</th><th>${th("Kategoria")}</th><th>${th("Jedn. magazynowa")}</th><th>${th("Dozwolone jednostki")}</th><th class="r">${th("Masa ≈ t / jedn.")}</th><th class="r">${th("Energia ≈ GJ / jedn.")}</th><th>${th("Przelicznik produkcji")}</th><th class="r">${th("Stan firmy")}</th><th>${th("Status")}</th><th></th></tr></thead><tbody>
-          ${S.products.map(p => { const m = Units.massPerUnit(p, cfg); return `<tr class="${p.active === false ? "void" : ""}"><td class="mono">${esc(p.code)}</td><td><b>${esc(p.name)}</b></td><td>${esc(t(R.PRODUCT_CATS[p.cat] || p.cat))}</td><td>${Units.label(p.unit)}</td><td>${Units.allowed(p).map(Units.label).join(", ")}</td><td class="r">${fmt(m, 3)}</td><td class="r">${fmt(m * cfg.t_gj, 2)}</td><td>${esc(p.unit === "m3" ? t("1 m³ → {q} MP zrębki", { q: fmtQ(cfg.m3_mp) }) : p.unit === "MP" ? t("z drewna: 1 MP = {q} m³", { q: fmtQ(1 / cfg.m3_mp, 3) }) : t("brak (tylko t)"))}</td><td class="r">${esc(App.qtyNative(stock.get(p.id) || 0, p.id))}</td><td>${activeBadge(p.active)}</td><td class="r">${editBtn("products", p.id)}</td></tr>`; }).join("")}</tbody></table></div></div>
+        <div class="card"><div class="tbl-wrap"><table class="tbl" id="products-table"><thead><tr><th>${th("Kod")}</th><th>${th("Nazwa")}</th><th>${th("Kategoria")}</th><th>${th("Jedn. magazynowa")}</th><th>${th("Dozwolone jednostki")}</th><th class="r">${th("Masa ≈ t / jedn.")}</th><th class="r">${th("Energia ≈ GJ / jedn.")}</th><th>${th("Przeliczniki")}</th><th class="r">${th("Stan firmy")}</th><th>${th("Status")}</th><th></th></tr></thead><tbody>
+          ${S.products.map(p => { const m = Units.massPerUnit(p, cfg); return `<tr class="${p.active === false ? "void" : ""}"><td class="mono">${esc(p.code)}</td><td><b>${esc(p.name)}</b></td><td>${esc(t(R.PRODUCT_CATS[p.cat] || p.cat))}</td><td>${Units.label(p.unit)}</td><td>${Units.allowed(p).map(Units.label).join(", ")}</td><td class="r">${fmt(m, 3)}</td><td class="r">${fmt(m * cfg.t_gj, 2)}</td><td>${esc(Units.allowed(p).length < 2 ? t("brak (tylko {u})", { u: Units.label(p.unit) }) : [Units.allowed(p).includes("m3") && Units.allowed(p).includes("MP") ? `1 m³ = ${fmtQ(Units.factors(p, cfg).k)} MP` : "", Units.factors(p, cfg).tm3 ? `1 m³ ≈ ${fmt(Units.factors(p, cfg).tm3, 3)} t` : ""].filter(Boolean).join(" · "))}</td><td class="r">${esc(App.qtyNative(stock.get(p.id) || 0, p.id))}</td><td>${activeBadge(p.active)}</td><td class="r">${editBtn("products", p.id)}</td></tr>`; }).join("")}</tbody></table></div></div>
         <div class="card mt4"><div class="card-h"><h3>${th("Przeliczniki (config/app.config.json)")}</h3></div><div class="card-b"><dl class="money-list" style="max-width:560px"><dt>${th("1 m³ drewna")}</dt><dd>${fmtQ(cfg.m3_mp)} MP</dd><dt>1 MP</dt><dd>${fmtQ(1 / cfg.m3_mp, 3)} m³ · ${fmt(cfg.mp_t, 2)} t</dd><dt>${th("1 m³ drewna (masa)")}</dt><dd>${fmt(cfg.woodTPerM3, 3)} t</dd><dt>1 t</dt><dd>${fmt(cfg.t_gj, 1)} GJ</dd></dl></div></div>`;
     },
     bind(page) { bindMaster(page); }
