@@ -1,4 +1,4 @@
-/* Testy E2E ResInvest ERP 3.0 (Playwright + Chromium) — tryb lokalny z logowaniem, interfejs PL.
+/* Testy E2E ResInvest ERP 3.2 (Playwright + Chromium) — tryb lokalny z logowaniem, interfejs PL.
    Uruchomienie z katalogu resinvest-erp:
      NODE_PATH=$(npm root -g) node tests/e2e.cjs
    Zmienne: SHOTS=<katalog> — zrzuty ekranu; PDF_PYTHON=<python z pypdf> — pełna kontrola tekstu PDF
@@ -341,8 +341,9 @@ async function fillForestDirect(page) {
       await go(page, r);
       check(`Moduł „${r}” działa`, !!(await page.$(sel)));
     }
-    check("Użytkownicy: moduł niedostępny dla Kierownika (tylko Administrator)", !(await page.$$eval("#nav .nav-item", l => l.map(x => x.getAttribute("href") || "").join(" "))).includes("uzytkownicy"));
-    await setUser(page, "u_admin"); await go(page, "uzytkownicy"); await page.waitForSelector("#perm-table");
+    await go(page, "uzytkownicy"); await page.waitForSelector("#users-table");
+    check("Użytkownicy: Kierownik — tylko podgląd (bez dodawania i zmian statusu)", !(await page.$("#user-add")) && !(await page.$("[data-ustat]")));
+    await setUser(page, "u_admin"); await go(page, "admin/permissions"); await page.waitForSelector("#perm-table");
     check("Administracja: uprawnienia documents.cancel / documents.correct w macierzy", nb(await page.textContent("#perm-table")).includes("documents.cancel") && nb(await page.textContent("#perm-table")).includes("production.correct"));
     await setUser(page, "u_kier");
     /* ------------- 2.2: grupa dostawcy, leśnictwo, kursy transportu własnego ------------- */
@@ -518,9 +519,16 @@ async function fillForestDirect(page) {
     const page = await ctx.newPage(); watch(page, "3.1"); await boot(page);
     check("3.1 Stopka autorska w programie", nb(await page.textContent(".app-foot")).includes("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"));
     check("3.1 Trzy magazyny RiC", (await page.evaluate(() => RIW_DEBUG.store.state.warehouses.map(w => w.name).join("|"))) === "RiC Zabrze|RiC Brąszewice|RiC Rokitki");
-    // rejestracja
+    // 3.2: rejestracja domyślnie wyłączona — konta zakłada administrator
     await page.evaluate(() => RIW_DEBUG.app.logout()); await page.waitForSelector("#login-form");
-    check("3.1 Logowanie: pole „E-mail firmowy”", nb(await page.textContent('label[for="lg-login"]')) === "E-mail firmowy");
+    check("3.2 Logowanie: pole „E-mail służbowy”, tryb OFFLINE, bez zakładki rejestracji", nb(await page.textContent('label[for="lg-login"]')) === "E-mail służbowy" && nb(await page.textContent(".auth-box .lead")).startsWith("OFFLINE") && !(await page.$('[data-auth-tab="register"]')));
+    check("3.2 Wylogowanie: adres #/login", await page.evaluate(() => location.hash === "#/login"));
+    await page.fill("#lg-login", "jan@gmail.com"); await page.fill("#lg-pass", "Cokolwiek2026"); await page.click("#lg-submit"); await page.waitForTimeout(200);
+    check("3.2 Logowanie: domena spoza firmy odrzucona", nb(await page.textContent("#lg-err")).includes("Wymagany e-mail firmowy"));
+    await login(page, LOGINS.u_admin); await go(page, "administracja"); await page.waitForSelector("#access-card");
+    await page.check("#cfg-selfreg"); await page.waitForTimeout(250); await page.check("#cfg-approval"); await page.waitForTimeout(250);
+    check("3.2 Konfiguracja dostępu: rejestracja i obieg zatwierdzania włączone (audyt SETTINGS_CHANGED)", await page.evaluate(() => { const S = RIW_DEBUG.store.state; return S.config.allowSelfRegistration && S.config.requireApproval && S.audit.filter(a => a.code === "SETTINGS_CHANGED").length === 2; }));
+    await page.evaluate(() => RIW_DEBUG.app.logout()); await page.waitForSelector("#login-form");
     await page.click('[data-auth-tab="register"]');
     const reg = async (name, email) => { await page.fill("#rg-name", name); await page.fill("#rg-email", email); await page.fill("#rg-pass", "Rejestracja2026"); await page.fill("#rg-pass2", "Rejestracja2026"); await page.click("#rg-submit"); await page.waitForTimeout(400); };
     await reg("Jan Obcy", "jan@gmail.com");
@@ -534,7 +542,7 @@ async function fillForestDirect(page) {
     await go(page, "uzytkownicy"); await page.waitForSelector("#reg-table");
     await page.click("[data-uapprove]"); await page.waitForSelector("#user-edit");
     await page.selectOption("#me-role", "magazynier"); await page.selectOption("#me-whId", "wh_zab"); await page.click("#user-edit [data-yes]"); await page.waitForTimeout(400);
-    check("3.1 Administrator aktywuje konto (rola, magazyn)", (await page.evaluate(() => { const u = RIW_DEBUG.store.state.users.find(x => x.login === "ewa.nowicka@resinvest.group"); return `${u.role}/${u.whId}/${u.active}/${!!u.pending}`; })) === "magazynier/wh_zab/true/false");
+    check("3.1 Administrator aktywuje konto (rola, magazyn, status)", (await page.evaluate(() => { const u = RIW_DEBUG.store.state.users.find(x => x.login === "ewa.nowicka@resinvest.group"); return `${u.role}/${u.whId}/${u.status}`; })) === "magazynier/wh_zab/ACTIVE");
     // magazynier przekazuje operację do zatwierdzenia
     await login(page, "ewa.nowicka@resinvest.group", "Rejestracja2026");
     await preset(page, "wz");
@@ -554,6 +562,10 @@ async function fillForestDirect(page) {
     const apr = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { no: o.no, by: o.userName, ap: o.approvedByName }; });
     check("3.1 Zatwierdzenie: dokument WZ, autor magazynier, zatwierdził kierownik", apr.no.startsWith("WZ/") && apr.by === "Ewa Nowicka" && apr.ap === "Anna Górska" && (await bal(page, "pr_zr_lesna")) === st0 - 120, apr);
     await closeModals(page);
+    // obieg wyłączony — magazynier zatwierdza sam
+    await login(page, LOGINS.u_admin); await go(page, "administracja"); await page.waitForSelector("#access-card"); await page.uncheck("#cfg-approval"); await page.waitForTimeout(250);
+    await login(page, "ewa.nowicka@resinvest.group", "Rejestracja2026"); await preset(page, "wz");
+    check("3.2 Obieg wyłączony: magazynier ma przycisk „Zatwierdź…”", nb(await page.textContent("#summary [data-save]")) === "Zatwierdź…");
     // obserwator
     await login(page, LOGINS.u_view);
     check("3.1 Obserwator: brak „Nowej operacji” i edycji kartotek", await page.evaluate(() => document.querySelector("#top-new").classList.contains("hidden")) && (await go(page, "produkty"), !(await page.$("[data-madd]"))));
@@ -564,6 +576,39 @@ async function fillForestDirect(page) {
     await preset(page, "produkcja");
     const chOpts = await page.$$eval("#f-production-chipperId option", o => o.map(x => x.value).filter(Boolean));
     check("3.1 Formularz: tylko rębaki magazynu operacji", chOpts.length === 1 && chOpts[0] === "ch_albach", chOpts);
+    // 3.2: dodanie użytkownika (OFFLINE — hasło tymczasowe), wiele magazynów, status
+    await go(page, "admin/users"); await page.waitForSelector("#users-table");
+    check("3.2 Tabela użytkowników: kolumny wg specyfikacji", (await page.$$eval("#users-table thead th", l => l.map(x => x.textContent.trim()).join("|"))) === "Użytkownik|E-mail|Rola|Magazyn|Status|Ostatnie logowanie|Akcje");
+    await page.click("#user-add"); await page.waitForSelector("#user-edit");
+    await page.fill("#me-firstName", "Olga"); await page.fill("#me-lastName", "Testowa"); await page.fill("#me-email", "Olga.Testowa@resinvest.group");
+    await page.selectOption("#me-role", "kierownik"); await page.selectOption("#me-whId", "wh_bra"); await page.check('[data-whacc="wh_rok"]');
+    await page.fill("#me-pw", "Tymczas2026"); await page.fill("#me-pw2", "Tymczas2026"); await page.click("#user-edit [data-yes]"); await page.waitForTimeout(400);
+    const olga = await page.evaluate(() => { const u = RIW_DEBUG.store.state.users.find(x => x.login === "olga.testowa@resinvest.group"); return u ? `${u.name}/${u.role}/${u.whId}/${u.warehouseIds.sort().join(",")}/${u.status}` : null; });
+    check("3.2 Dodanie użytkownika: imię, nazwisko, e-mail (małe litery), rola, magazyn domyślny + dostępne", olga === "Olga Testowa/kierownik/wh_bra/wh_bra,wh_rok/ACTIVE", olga);
+    const oid = await page.evaluate(() => RIW_DEBUG.store.state.users.find(x => x.login === "olga.testowa@resinvest.group").id);
+    await page.click(`[data-ustat="${oid}|SUSPENDED"]`); await page.waitForTimeout(200); await page.click(".scrim [data-yes] >> nth=-1"); await page.waitForTimeout(300);
+    check("3.2 Zawieszenie konta (status SUSPENDED, audyt USER_SUSPENDED)", await page.evaluate(id => { const S = RIW_DEBUG.store.state; return S.users.find(u => u.id === id).status === "SUSPENDED" && S.audit.some(a => a.code === "USER_SUSPENDED" && a.entityId === id); }, oid));
+    // role i audyt
+    await go(page, "admin/roles"); await page.waitForSelector("#roles-grid");
+    const rolesTxt = nb(await page.textContent("#roles-grid"));
+    check("3.2 Role: ADMINISTRATOR, MANAGER, MAGAZYNIER, OBSERWATOR, AUDYTOR", ["ADMINISTRATOR", "MANAGER", "MAGAZYNIER", "OBSERWATOR", "AUDYTOR"].every(c => rolesTxt.includes(c)));
+    await page.check('[data-perm="obserwator|reports.export"]'); await page.click('[data-rsave="obserwator"]'); await page.waitForTimeout(300);
+    check("3.2 Edycja uprawnień roli (audyt ROLE_PERMISSIONS_CHANGED)", await page.evaluate(() => RIW_DEBUG.R.can({ role: "obserwator" }, "reports.export") && RIW_DEBUG.store.state.audit.at(-1).code === "ROLE_PERMISSIONS_CHANGED"));
+    await page.click('[data-rreset="obserwator"]'); await page.waitForTimeout(300);
+    check("3.2 Przywrócenie domyślnych uprawnień", await page.evaluate(() => !RIW_DEBUG.R.can({ role: "obserwator" }, "reports.export")));
+    await go(page, "admin/audit"); await page.waitForSelector("#audit-admin-table");
+    const auTxt = nb(await page.textContent("#audit-admin-table"));
+    check("3.2 Dziennik audytu: kody zdarzeń (USER_CREATED, USER_SUSPENDED, ROLE_PERMISSIONS_CHANGED)", ["USER_CREATED", "USER_SUSPENDED", "ROLE_PERMISSIONS_CHANGED"].every(c => auTxt.includes(c)));
+    // kierownik z dwoma magazynami przełącza magazyn roboczy tylko na przydzielone
+    await login(page, LOGINS.u_kier);
+    await page.click("#wh-chip"); await page.waitForSelector(".dd [data-wh], [data-wh]");
+    const whOpts = await page.$$eval("[data-wh]", l => l.map(x => x.dataset.wh).join(","));
+    check("3.2 Magazyn roboczy: tylko przydzielone magazyny (Zabrze, Brąszewice)", whOpts === "wh_zab,wh_bra", whOpts);
+    await page.click('[data-wh="wh_bra"]'); await page.waitForTimeout(300);
+    check("3.2 Przełączenie na RiC Brąszewice", nb(await page.textContent("#wh-chip")).includes("RiC Brąszewice"));
+    await page.click("#wh-chip"); await page.click('[data-wh="wh_zab"]'); await page.waitForTimeout(200);
+    await login(page, LOGINS.u_bra);
+    check("3.2 Magazynier jednego magazynu: bez przełącznika", !(await page.evaluate(() => document.querySelector("#wh-chip").classList.contains("switchable"))));
     await ctx.close();
   }
 

@@ -175,7 +175,7 @@
     fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
     whId() { return this.mode === "correct" && this.op ? this.op.whId : this.review ? this.review.whId : App.user().whId; },
     /** Co zrobi przycisk główny: przegląd (zatwierdź przekazaną), zatwierdzenie bezpośrednie albo przekazanie do zatwierdzenia. */
-    action() { return this.review ? "approve" : R.canApprove(App.user(), App.user().whId) ? "commit" : "submit"; },
+    action() { return this.review ? "approve" : (!Store.state.config.requireApproval || R.canApprove(App.user(), App.user().whId)) ? "commit" : "submit"; },
     /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
     supplierText() {
       const P = this.draft.purchase;

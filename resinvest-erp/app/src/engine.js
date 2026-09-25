@@ -1713,7 +1713,7 @@
       const clean = { id: prev ? prev.id : uid("u"), firstName: str(r.firstName), lastName: str(r.lastName), name: this.fullName(r), login: r.email, email: r.email,
         role: r.role, whId: r.whId, warehouseIds: r.warehouseIds, status: r.status, active: r.status === "ACTIVE", phone: str(r.phone), lang: r.lang || "", theme: r.theme || "",
         createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
-      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "registeredAt", "selfRegistered", "approvedAt", "approvedBy"]) if (prev && prev[k] !== undefined) clean[k] = prev[k];
+      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy"]) if (prev && prev[k] !== undefined) clean[k] = prev[k];
       if (prev && statusOf(prev) === "INVITED" && clean.status === "ACTIVE" && prev.selfRegistered) { clean.approvedAt = nowIso(ctx); clean.approvedBy = actor.name; delete clean.selfRegistered; }
       if (!prev && clean.status === "INVITED") clean.invitedAt = nowIso(ctx);
       const idx = state.users.findIndex(u => u.id === clean.id);

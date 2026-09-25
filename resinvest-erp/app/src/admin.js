@@ -1,7 +1,8 @@
 /* =========================================================================
-   ResInvest ERP 3.0 — kartoteki (produkty, kontrahenci, magazyny),
-   użytkownicy i hasła, mój profil, administracja (kopie, dziennik logowań,
-   uprawnienia, preferencje, narzędzia trybu lokalnego).
+   ResInvest ERP 3.2 — kartoteki (produkty, kontrahenci, magazyny),
+   użytkownicy (zaproszenia, statusy, magazyny), role i uprawnienia,
+   dziennik audytu, mój profil, administracja (kopie, konfiguracja dostępu,
+   preferencje, narzędzia trybu lokalnego).
    ========================================================================= */
 (function (root) {
   "use strict";
@@ -133,7 +134,7 @@
           for (const [pid, q] of m) { const p = App.product(pid); if (Math.abs(q) > R.EPS) per[p.unit] = R.rq((per[p.unit] || 0) + q); }
           return `<div class="card" data-wh="${esc(w.id)}"><div class="card-h"><h3>${esc(w.name)}</h3><span class="sub">${esc(w.code)}</span>${activeBadge(w.active)}<span class="spacer"></span>${editBtn("warehouses", w.id)}</div><div class="card-b">
             <dl class="money-list"><dt>${th("Adres")}</dt><dd>${esc(w.address || "")}</dd><dt>${th("Stan wg jednostek")}</dt><dd>${esc(Object.entries(per).map(([u, q]) => `${fmtQ(q)} ${Units.label(u)}`).join(" · ") || "—")}</dd>
-            <dt>${th("Zamknięte do")}</dt><dd>${esc(R.lockedMonth(S, w.id) || "—")}</dd>${["kierownik", "magazynier", "obserwator", "admin"].map(r => { const us = S.users.filter(u => u.whId === w.id && u.role === r && u.active !== false && !u.pending); return us.length ? `<dt>${esc(t(R.ROLES[r].label))}</dt><dd>${esc(us.map(u => u.name).join(", "))}</dd>` : ""; }).join("")}
+            <dt>${th("Zamknięte do")}</dt><dd>${esc(R.lockedMonth(S, w.id) || "—")}</dd>${["kierownik", "magazynier", "obserwator", "admin"].map(r => { const us = S.users.filter(u => u.role === r && R.statusOf(u) === "ACTIVE" && (R.whAccess(u) || [u.whId]).includes(w.id)); return us.length ? `<dt>${esc(t(R.ROLES[r].label))}</dt><dd>${esc(us.map(u => u.name).join(", "))}</dd>` : ""; }).join("")}
             <dt>${th("Pojazdy")}</dt><dd>${esc(S.fleet.vehicles.filter(v => v.whId === w.id).map(v => `${v.reg}`).join(", ") || "—")}</dd>
             <dt>${th("Kierowcy")}</dt><dd>${esc(S.fleet.drivers.filter(v => v.whId === w.id).map(v => v.name).join(", ") || "—")}</dd>
             <dt>${th("Rębaki i operatorzy")}</dt><dd>${esc(S.fleet.chippers.filter(v => v.whId === w.id).map(v => v.name).concat(S.fleet.operators.filter(v => v.whId === w.id).map(v => v.name)).join(", ") || "—")}</dd>
@@ -145,59 +146,139 @@
   /* ================================================================== */
   /* Użytkownicy                                                          */
   /* ================================================================== */
+  const ST_BADGE = { ACTIVE: "ok", INVITED: "info", SUSPENDED: "warn", DISABLED: "" };
+  const statusChip = u => { const st = R.statusOf(u); return `<span class="badge ${ST_BADGE[st]}" data-ustatus="${st}">${esc(t(R.USER_STATUS[st]))}${u.selfRegistered && st === "INVITED" ? " · " + esc(t("rejestracja")) : ""}${u.emailUnverified ? " · " + esc(t("e-mail niepotwierdzony")) : ""}</span>`; };
+  const roleChip = role => `<span class="badge role-${esc(role)}" title="${esc((R.ROLES[role] || {}).code || "")}">${esc(App.roleLabel(role))}</span>`;
+  const whList = u => { const acc = R.whAccess(u); return acc === null ? t("wszystkie magazyny") : acc.map(App.whName).join(", "); };
+  /** Wynik wysyłki e-mail → komunikat dla administratora. */
+  const mailToast = (mail, okTitle, who) => {
+    if (!mail) return;
+    if (mail.ok) Toast.ok(okTitle, mail.transport === "file" ? t("{w} — poczta nieskonfigurowana: wiadomość zapisano w folderze serwera (mail-outbox).", { w: who }) : who);
+    else Toast.err(t("E-mail nie został wysłany"), `${who}: ${mail.error} ${t("Konto pozostaje nieaktywne — użyj „Wyślij ponownie zaproszenie”.")}`);
+  };
   const Users = {
     async accounts() {
       if (Store.mode === "server") return ServerBackend.accounts();
       const out = {}; for (const u of Store.state.users) out[u.id] = AuthLib.LocalAuth.info(u.id); return out;
     },
+    /**
+     * Dodawanie / edycja konta. FIRMOWY: nowe konto przez zaproszenie e-mail (albo hasło tymczasowe);
+     * OFFLINE: hasło tymczasowe (brak poczty). Bez uprawnienia users.manage — podgląd.
+     */
     edit(id, how = {}) {
-      const S = Store.state, isNew = !id;
-      const rec = id ? R.clone(R.byId(S.users, id)) : { name: "", login: "", role: "magazynier", whId: App.user().whId, active: true, lang: "", theme: "", email: "", phone: "" };
-      const self = id === Store.userId, approving = !!(rec.pending && how.approve);
+      const S = Store.state, isNew = !id, srv = Store.mode === "server", manage = App.can("users.manage");
+      const base = id ? R.clone(R.byId(S.users, id)) : null;
+      if (id && !base) return Toast.err(t("Nie znaleziono użytkownika"));
+      const rec = base || { firstName: "", lastName: "", email: "", role: "magazynier", whId: App.user().whId, warehouseIds: [App.user().whId], status: "ACTIVE", lang: "", phone: "" };
+      if (!rec.firstName && !rec.lastName && rec.name) { const p = String(rec.name).split(/\s+/); rec.firstName = p[0]; rec.lastName = p.slice(1).join(" "); }
+      const self = id === Store.userId, st = R.statusOf(rec), approving = !!(rec.selfRegistered && st === "INVITED" && how.approve);
+      const ro = !manage ? "disabled" : "";
       const domains = (S.config.companyDomains || []).map(d => "@" + d).join(", ");
-      const roleHelp = r => `<span data-role-help>${esc(t(R.ROLE_INFO[r] || ""))}</span>`;
+      const whs = S.warehouses.filter(w => w.active !== false || w.id === rec.whId || (rec.warehouseIds || []).includes(w.id));
+      const statusOpts = [["ACTIVE", t(R.USER_STATUS.ACTIVE)], ["SUSPENDED", t(R.USER_STATUS.SUSPENDED)], ["DISABLED", t(R.USER_STATUS.DISABLED)]].concat(st === "INVITED" ? [["INVITED", t(R.USER_STATUS.INVITED)]] : []);
       const body = `<div class="fgrid">
-        ${approving ? `<div class="span-all info-line">${ic("user", 15)}<span>${esc(t("Zgłoszenie z rejestracji ({d}). Nadaj rolę i magazyn — zapis aktywuje konto.", { d: Dates.ts(rec.registeredAt) }))}</span></div>` : ""}
-        ${ff("name", t("Imię i nazwisko"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}" autocomplete="off">`)}
-        ${ff("login", t("E-mail firmowy (login)"), `<input class="ctrl" id="me-login" type="email" value="${esc(rec.login)}" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}">`, domains ? t("Dozwolone domeny: {d}", { d: domains }) : "")}
-        ${ff("role", t("Rola"), `<select class="ctrl" id="me-role" ${self ? "disabled" : ""}>${opts(Object.entries(R.ROLES).map(([k, v]) => [k, t(v.label)]), approving && rec.role === "obserwator" ? "magazynier" : rec.role)}</select>`, self ? t("Nie możesz zmienić własnej roli") : roleHelp(approving && rec.role === "obserwator" ? "magazynier" : rec.role))}
-        ${ff("whId", t("Magazyn"), `<select class="ctrl" id="me-whId">${opts(S.warehouses.filter(w => w.active !== false || w.id === rec.whId).map(w => [w.id, w.name]), rec.whId)}</select>`, t("Kierownik zatwierdza operacje tego magazynu; Administrator ma dostęp do wszystkich."))}
-        ${ff("phone", t("Telefon"), `<input class="ctrl" id="me-phone" type="tel" value="${esc(rec.phone || "")}">`)}
-        ${ff("lang", t("Język interfejsu"), `<select class="ctrl" id="me-lang">${opts([["", t("wybór użytkownika / przeglądarki")]].concat(Object.values(I18N.LANGS).map(L => [L.code, L.label])), rec.lang)}</select>`)}
-        ${isNew ? "" : ff("active", t("Status konta"), `<select class="ctrl" id="me-active" ${self ? "disabled" : ""}>${opts([["true", t("aktywne")], ["false", rec.pending ? t("oczekuje na zatwierdzenie") : t("nieaktywne (logowanie zablokowane)")]], String(approving || rec.active !== false))}</select>`)}
-        ${isNew ? `<div class="span-all"><h4 class="mini-h">${th("Hasło startowe")}</h4><p class="help">${th("Użytkownik zmieni je przy pierwszym logowaniu.")}</p></div>
-          <div data-ff="password">${pwField("me-pw", t("Hasło"), "new-password")}${pwMeter("me-pw-meter")}<div class="msg hidden" data-fmsg="password"></div></div>
-          <div>${pwField("me-pw2", t("Powtórz hasło"), "new-password")}</div>` : ""}
+        ${approving ? `<div class="span-all info-line">${ic("user", 15)}<span>${esc(t("Zgłoszenie z rejestracji ({d}). Nadaj rolę i magazyn — zapis ze statusem „aktywny” aktywuje konto.", { d: Dates.ts(rec.registeredAt) }))}</span></div>` : ""}
+        ${ff("firstName", t("Imię"), `<input class="ctrl" id="me-firstName" value="${esc(rec.firstName || "")}" autocomplete="off" ${ro}>`)}
+        ${ff("lastName", t("Nazwisko"), `<input class="ctrl" id="me-lastName" value="${esc(rec.lastName || "")}" autocomplete="off" ${ro}>`)}
+        ${ff("email", t("E-mail służbowy (login)"), `<input class="ctrl" id="me-email" type="email" value="${esc(rec.email || rec.login || "")}" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" ${ro}>`, (domains ? t("Dozwolone domeny: {d}", { d: domains }) : "") + (!isNew && srv ? " " + t("Zmiana adresu wymaga potwierdzenia linkiem z nowej skrzynki.") : ""), "span-all")}
+        ${ff("role", t("Rola"), `<select class="ctrl" id="me-role" ${self || !manage ? "disabled" : ""}>${opts(Object.entries(R.ROLES).filter(([k]) => k !== "admin" || App.user().role === "admin" || rec.role === "admin").map(([k, v]) => [k, `${t(v.label)} (${v.code})`]), approving && rec.role === "obserwator" ? "magazynier" : rec.role)}</select>`, self ? t("Nie możesz zmienić własnej roli") : `<span data-role-help>${esc(t(R.ROLE_INFO[rec.role] || ""))}</span>`)}
+        ${ff("whId", t("Magazyn domyślny"), `<select class="ctrl" id="me-whId" ${ro}>${opts(whs.map(w => [w.id, w.name]), rec.whId)}</select>`)}
+        <div class="field span-all" data-ff="warehouseIds" id="me-whs-box"><label>${th("Dostępne magazyny")}</label><div class="row wrap">${whs.map(w => `<label class="inline-opt"><input type="checkbox" data-whacc="${esc(w.id)}" ${(rec.warehouseIds || []).includes(w.id) || w.id === rec.whId ? "checked" : ""} ${ro}> ${esc(w.name)}</label>`).join("")}</div>
+          <div class="msg hidden" data-fmsg="warehouseIds"></div><div class="help" id="me-whs-help">${th("Dane pozostałych magazynów są dla tej osoby niewidoczne (izolacja po stronie serwera).")}</div></div>
+        ${ff("phone", t("Telefon"), `<input class="ctrl" id="me-phone" type="tel" value="${esc(rec.phone || "")}" ${ro}>`)}
+        ${ff("lang", t("Język interfejsu"), `<select class="ctrl" id="me-lang" ${ro}>${opts([["", t("wybór użytkownika / przeglądarki")]].concat(Object.values(I18N.LANGS).map(L => [L.code, L.label])), rec.lang)}</select>`)}
+        ${isNew ? "" : ff("status", t("Status"), `<select class="ctrl" id="me-status" ${self || !manage ? "disabled" : ""}>${opts(statusOpts, approving ? "ACTIVE" : st)}</select>`, self ? t("Nie możesz zablokować ani dezaktywować własnego konta") : t("Zawieszone i dezaktywowane konto nie loguje się; historia operacji zostaje."))}
+        ${isNew ? `<div class="span-all">${srv ? `<h4 class="mini-h">${th("Sposób aktywacji")}</h4>
+            <label class="inline-opt"><input type="radio" name="me-how" value="invite" checked> ${th("Wyślij zaproszenie e-mail — pracownik sam ustawi hasło (zalecane)")}</label><br>
+            <label class="inline-opt"><input type="radio" name="me-how" value="password"> ${th("Ustaw hasło tymczasowe (zmiana przy pierwszym logowaniu)")}</label>`
+            : `<h4 class="mini-h">${th("Hasło tymczasowe")}</h4><p class="help">${th("Tryb OFFLINE: bez poczty — przekaż hasło osobiście; użytkownik zmieni je przy pierwszym logowaniu.")}</p>`}</div>
+          <div class="span-all fgrid ${srv ? "hidden" : ""}" id="me-pw-box"><div data-ff="password">${pwField("me-pw", t("Hasło"), "new-password")}${pwMeter("me-pw-meter")}<div class="msg hidden" data-fmsg="password"></div></div>
+          <div>${pwField("me-pw2", t("Powtórz hasło"), "new-password")}</div></div>` : ""}
       </div>`;
-      const m = Modal.open({ title: isNew ? t("Nowy użytkownik") : approving ? t("Zatwierdzenie rejestracji: {l}", { l: rec.login }) : t("Edycja użytkownika {l}", { l: rec.login }), id: "user-edit", wide: true, body,
-        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${ic("check", 15)} ${approving ? th("Zatwierdź i aktywuj") : th("Zapisz")}</button>` });
-      bindEyes(m.el); if (isNew) bindMeter($("#me-pw", m.el), $("#me-pw-meter", m.el));
-      const nm = $("#me-name", m.el), lg = $("#me-login", m.el), rl = $("#me-role", m.el);
-      rl.onchange = () => { const h = $("[data-role-help]", m.el); if (h) h.textContent = t(R.ROLE_INFO[rl.value] || ""); };
-      $("[data-no]", m.el).onclick = () => m.close();
-      $("[data-yes]", m.el).onclick = async () => {
-        const email = lg.value.trim().toLowerCase();
-        const next = Object.assign({}, rec, { name: nm.value, login: email, email, role: rl.value, whId: $("#me-whId", m.el).value, lang: $("#me-lang", m.el).value, phone: $("#me-phone", m.el).value });
-        if (!isNew) next.active = $("#me-active", m.el).value === "true";
-        let res;
-        if (isNew) {
-          const pw = $("#me-pw", m.el).value;
-          if (pw !== $("#me-pw2", m.el).value) { showErrors(m, { errors: { password: t("Hasła nie są takie same") } }); return; }
-          delete next.id;
-          res = await Store.backend.createUser(next, pw);
-        } else res = await Store.exec("user.save", { rec: next }, SRC_USERS);
-        if (!res || !res.ok) { showErrors(m, res || {}); Toast.err(t("Nie zapisano"), (res && res.error) || ""); return; }
-        m.close(); Toast.ok(isNew ? t("Utworzono konto") : approving ? t("Konto aktywowane") : t("Zapisano"), res.rec ? `${res.rec.name} (${res.rec.login})` : ""); App.render();
+      const title = isNew ? t("Dodaj użytkownika") : approving ? t("Zatwierdzenie rejestracji: {l}", { l: rec.login }) : manage ? t("Edycja użytkownika {l}", { l: rec.login }) : t("Użytkownik {l}", { l: rec.login });
+      const saveLabel = isNew ? (srv ? t("Wyślij zaproszenie") : t("Utwórz konto")) : approving ? t("Zatwierdź i aktywuj") : t("Zapisz");
+      const m = Modal.open({ title, id: "user-edit", wide: true, body,
+        footer: `<button class="btn ghost" type="button" data-no>${manage ? th("Anuluj") : th("Zamknij")}</button>${manage ? `<button class="btn primary" type="button" data-yes>${ic(isNew && srv ? "up" : "check", 15)} <span data-yes-label>${esc(saveLabel)}</span></button>` : ""}` });
+      bindEyes(m.el);
+      const pw = $("#me-pw", m.el); if (pw) bindMeter(pw, $("#me-pw-meter", m.el));
+      const rl = $("#me-role", m.el), wh = $("#me-whId", m.el);
+      // zmiana magazynu domyślnego przenosi dostęp: poprzedni domyślny odznaczany, chyba że administrator zaznaczył go ręcznie
+      const manual = new Set(); let prevWh = wh.value;
+      $$("[data-whacc]", m.el).forEach(x => x.addEventListener("change", () => manual.add(x.dataset.whacc)));
+      const sync = () => {
+        const global = (R.ROLES[rl.value] || {}).global;
+        $("#me-whs-box", m.el).classList.toggle("hidden", !!global);
+        if (prevWh !== wh.value) { const old = $(`[data-whacc="${prevWh}"]`, m.el); if (old && !manual.has(prevWh)) old.checked = false; prevWh = wh.value; }
+        const cb = $(`[data-whacc="${wh.value}"]`, m.el); if (cb) { cb.checked = true; }
+        $$("[data-whacc]", m.el).forEach(x => { x.disabled = !manage || x.dataset.whacc === wh.value; });
+        const h = $("[data-role-help]", m.el); if (h) h.textContent = t(R.ROLE_INFO[rl.value] || "");
       };
-      nm.focus();
+      rl.onchange = sync; wh.onchange = sync; sync();
+      $$("[name=me-how]", m.el).forEach(r => r.onchange = () => {
+        const byPw = $("[name=me-how]:checked", m.el).value === "password";
+        $("#me-pw-box", m.el).classList.toggle("hidden", !byPw);
+        $("[data-yes-label]", m.el).textContent = byPw ? t("Utwórz konto") : t("Wyślij zaproszenie");
+      });
+      $("[data-no]", m.el).onclick = () => m.close();
+      const yes = $("[data-yes]", m.el);
+      if (yes) yes.onclick = async () => {
+        const email = $("#me-email", m.el).value.trim().toLowerCase();
+        const next = Object.assign({}, isNew ? {} : rec, { firstName: $("#me-firstName", m.el).value.trim(), lastName: $("#me-lastName", m.el).value.trim(), email, login: email, role: rl.value, whId: wh.value,
+          warehouseIds: $$("[data-whacc]", m.el).filter(x => x.checked).map(x => x.dataset.whacc), lang: $("#me-lang", m.el).value, phone: $("#me-phone", m.el).value });
+        delete next.name;
+        if (!isNew) { next.status = $("#me-status", m.el).value; delete next.active; }
+        yes.disabled = true;
+        let res, mail = null;
+        try {
+          if (isNew && srv && $("[name=me-how]:checked", m.el).value === "invite") {
+            const r = await ServerBackend.invite(next);
+            res = r.res || r; mail = r.mail;
+          } else if (isNew) {
+            const p1 = $("#me-pw", m.el).value;
+            if (p1 !== $("#me-pw2", m.el).value) { showErrors(m, { errors: { password: t("Hasła nie są takie same") } }); return; }
+            res = await Store.backend.createUser(Object.assign(next, { status: "ACTIVE" }), p1);
+          } else res = await Store.exec("user.save", { rec: next }, SRC_USERS);
+        } finally { yes.disabled = false; }
+        if (!res || !res.ok) { showErrors(m, res || {}); Toast.err(t("Nie zapisano"), (res && res.error) || ""); return; }
+        m.close();
+        const who = res.rec ? `${res.rec.name} (${res.rec.login})` : "";
+        if (mail) mailToast(mail, t("Zaproszenie wysłane"), who);
+        else Toast.ok(isNew ? t("Utworzono konto") : approving ? t("Konto aktywowane") : t("Zapisano"), who);
+        App.render();
+      };
+      if (manage) $("#me-firstName", m.el).focus();
+    },
+    /** Szybka zmiana statusu z tabeli (aktywuj / zawieś / dezaktywuj). */
+    async setStatus(id, status) {
+      const u = R.byId(Store.state.users, id);
+      const txt = { ACTIVE: t("Aktywować konto {l}?", { l: u.login }), SUSPENDED: t("Zawiesić konto {l}? Logowanie zostanie zablokowane do czasu ponownej aktywacji.", { l: u.login }), DISABLED: t("Dezaktywować konto {l}? Użytkownik zostanie wylogowany; historia operacji zostaje.", { l: u.login }) }[status];
+      const r = await Modal.confirm({ title: t("Status konta"), text: txt, ok: { ACTIVE: t("Aktywuj"), SUSPENDED: t("Zawieś"), DISABLED: t("Dezaktywuj") }[status], danger: status !== "ACTIVE" });
+      if (!r.ok) return;
+      const res = await Store.exec("user.save", { rec: Object.assign({}, u, { status }) }, SRC_USERS);
+      if (!res.ok) return Toast.err(t("Nie zapisano"), res.error);
+      Toast.ok(t("Status konta: {s}", { s: t(R.USER_STATUS[status]) }), u.login); App.render();
+    },
+    async resend(id) {
+      const u = R.byId(Store.state.users, id);
+      const r = await ServerBackend.resendInvite(id);
+      if (!r || !r.ok) return Toast.err(t("Nie wysłano"), r && r.error);
+      mailToast(r.mail, u.emailUnverified ? t("Wysłano prośbę o potwierdzenie adresu") : t("Zaproszenie wysłane ponownie"), u.login); App.render();
+    },
+    async resetLink(id) {
+      const u = R.byId(Store.state.users, id);
+      const c = await Modal.confirm({ title: t("Reset hasła"), text: t("Wysłać do {l} link do ustawienia nowego hasła (ważny 1 godzinę)? Obecne hasło działa do czasu jego zmiany.", { l: u.login }), ok: t("Wyślij link") });
+      if (!c.ok) return;
+      const r = await ServerBackend.sendResetLink(id);
+      if (!r || !r.ok) return Toast.err(t("Nie wysłano"), r && r.error);
+      mailToast(r.mail, t("Wysłano link do resetu hasła"), u.login);
     },
     async remove(id) {
-      const u = R.byId(Store.state.users, id);
-      const r = await Modal.confirm({ title: u.pending ? t("Odrzucić zgłoszenie {l}?", { l: u.login }) : t("Usunąć konto {l}?", { l: u.login }), text: u.pending ? t("Zgłoszenie i hasło zostaną usunięte. Osoba może zarejestrować się ponownie.") : t("Usunąć można tylko konto bez historii operacji. Konto z historią dezaktywuj — historia zostaje."), ok: u.pending ? t("Odrzuć zgłoszenie") : t("Usuń konto"), danger: true });
+      const u = R.byId(Store.state.users, id), req = u.selfRegistered && R.statusOf(u) === "INVITED";
+      const r = await Modal.confirm({ title: req ? t("Odrzucić zgłoszenie {l}?", { l: u.login }) : t("Usunąć konto {l}?", { l: u.login }), text: req ? t("Zgłoszenie i hasło zostaną usunięte. Osoba może zarejestrować się ponownie.") : t("Usunąć można tylko konto bez historii (np. zaproszenie wysłane omyłkowo). Konto z historią dezaktywuj — historia zostaje."), ok: req ? t("Odrzuć zgłoszenie") : t("Usuń konto"), danger: true });
       if (!r.ok) return;
       const res = await Store.backend.removeUser(id);
       if (!res || !res.ok) return Toast.err(t("Nie usunięto"), res && res.error);
-      Toast.ok(u.pending ? t("Zgłoszenie odrzucone") : t("Konto usunięte"), u.login); App.render();
+      Toast.ok(req ? t("Zgłoszenie odrzucone") : t("Konto usunięte"), u.login); App.render();
     },
     resetPassword(id) {
       const u = R.byId(Store.state.users, id);
@@ -218,52 +299,179 @@
   };
   Views.uzytkownicy = {
     html() {
-      const S = Store.state, f = App.tabs.users || (App.tabs.users = { wh: "", role: "", q: "" });
-      const pend = S.users.filter(u => u.pending);
-      const list = S.users.filter(u => !u.pending && (!f.wh || u.whId === f.wh) && (!f.role || u.role === f.role)
+      const S = Store.state, f = App.tabs.users || (App.tabs.users = { wh: "", role: "", status: "", q: "" }), manage = App.can("users.manage"), srv = Store.mode === "server";
+      const reqs = S.users.filter(u => u.selfRegistered && R.statusOf(u) === "INVITED");
+      const list = S.users.filter(u => !(u.selfRegistered && R.statusOf(u) === "INVITED") && (!f.wh || R.canAccessWh(u, f.wh)) && (!f.role || u.role === f.role) && (!f.status || R.statusOf(u) === f.status)
         && (!f.q || `${u.name} ${u.login} ${u.phone || ""}`.toLowerCase().includes(f.q.toLowerCase())))
         .sort((a, b) => (a.whId + a.role + a.name).localeCompare(b.whId + b.role + b.name));
-      const row = u => `<tr data-user="${esc(u.id)}" class="${u.active === false ? "void" : ""}"><td><div class="row"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b>${u.phone ? `<br><small class="dim">${esc(u.phone)}</small>` : ""}</div></div></td><td class="mono small">${esc(u.login)}</td><td><span class="badge role-${esc(u.role)}">${esc(App.roleLabel(u.role))}</span></td><td>${esc(App.whName(u.whId))}</td><td>${activeBadge(u.active)}</td><td data-acc="${esc(u.id)}"><span class="dim">…</span></td><td data-last="${esc(u.id)}">—</td>
-            <td class="r nowrap"><button class="btn sm" type="button" data-uedit="${esc(u.id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm icon" type="button" data-upw="${esc(u.id)}" title="${esc(t("Ustaw hasło"))}" aria-label="${esc(t("Ustaw hasło"))}">${ic("key", 14)}</button> <button class="btn sm icon hidden" type="button" data-unlock="${esc(u.id)}" title="${esc(t("Odblokuj"))}" aria-label="${esc(t("Odblokuj"))}">${ic("lock", 14)}</button>${u.id !== Store.userId ? ` <button class="btn sm icon danger" type="button" data-udel="${esc(u.id)}" title="${esc(t("Usuń konto"))}" aria-label="${esc(t("Usuń konto"))}">${ic("trash", 14)}</button>` : ""}</td></tr>`;
-      return `<div class="page-head"><div class="titles"><h2>${th("Użytkownicy i uprawnienia")}</h2><p>${th("Konta (logowanie e-mailem firmowym), role, przypisanie do magazynu, hasła i blokady. Konto z historią operacji dezaktywuje się — usunąć można tylko konto bez historii.")}</p></div>
-          <div class="actions"><button class="btn primary" type="button" id="user-add">${ic("plus", 15)} ${th("Nowy użytkownik")}</button></div></div>
-        ${pend.length ? `<div class="card mb4 queue-card" id="reg-requests"><div class="card-h"><h3>${ic("user", 16)} ${th("Zgłoszenia rejestracji")}</h3><span class="sub">${esc(t("konta oczekujące na nadanie roli i magazynu"))}</span></div><div class="tbl-wrap"><table class="tbl" id="reg-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("E-mail")}</th><th>${th("Telefon")}</th><th>${th("Zgłoszono")}</th><th></th></tr></thead><tbody>
-          ${pend.map(u => `<tr data-reg="${esc(u.id)}"><td><b>${esc(u.name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(u.phone || "—")}</td><td>${esc(Dates.ts(u.registeredAt))}</td><td class="r nowrap"><button class="btn sm primary" type="button" data-uapprove="${esc(u.id)}">${ic("check", 13)} ${th("Nadaj rolę i aktywuj")}</button> <button class="btn sm danger" type="button" data-udel="${esc(u.id)}">${ic("x", 13)} ${th("Odrzuć")}</button></td></tr>`).join("")}</tbody></table></div></div>` : ""}
+      const act = u => {
+        if (!manage) return `<button class="btn sm" type="button" data-uedit="${esc(u.id)}">${th("Szczegóły")}</button>`;
+        const st = R.statusOf(u), self = u.id === Store.userId, b = [];
+        b.push(`<button class="btn sm" type="button" data-uedit="${esc(u.id)}">${ic("edit", 13)} ${th("Edytuj")}</button>`);
+        if (!self && st !== "ACTIVE" && st !== "INVITED") b.push(`<button class="btn sm" type="button" data-ustat="${esc(u.id)}|ACTIVE">${th("Aktywuj")}</button>`);
+        if (!self && st === "ACTIVE") b.push(`<button class="btn sm" type="button" data-ustat="${esc(u.id)}|SUSPENDED">${th("Zawieś")}</button>`, `<button class="btn sm danger" type="button" data-ustat="${esc(u.id)}|DISABLED">${th("Dezaktywuj")}</button>`);
+        if (srv && (st === "INVITED" || u.emailUnverified)) b.push(`<button class="btn sm" type="button" data-uresend="${esc(u.id)}">${ic("up", 13)} ${th("Wyślij ponownie zaproszenie")}</button>`);
+        if (srv && st === "ACTIVE") b.push(`<button class="btn sm icon" type="button" data-ulink="${esc(u.id)}" title="${esc(t("Reset hasła (link e-mail)"))}" aria-label="${esc(t("Reset hasła (link e-mail)"))}">${ic("key", 14)}</button>`);
+        if (st !== "INVITED") b.push(`<button class="btn sm icon" type="button" data-upw="${esc(u.id)}" title="${esc(t("Ustaw hasło tymczasowe"))}" aria-label="${esc(t("Ustaw hasło tymczasowe"))}">${ic("lock", 14)}</button>`);
+        b.push(`<button class="btn sm icon hidden" type="button" data-unlock="${esc(u.id)}" title="${esc(t("Odblokuj"))}" aria-label="${esc(t("Odblokuj"))}">${ic("check", 14)}</button>`);
+        b.push(`<a class="btn sm icon" href="#/audyt?user=${esc(u.id)}" title="${esc(t("Zobacz historię"))}" aria-label="${esc(t("Zobacz historię"))}">${ic("clock", 14)}</a>`);
+        if (!self && st === "INVITED") b.push(`<button class="btn sm icon danger" type="button" data-udel="${esc(u.id)}" title="${esc(t("Usuń konto"))}" aria-label="${esc(t("Usuń konto"))}">${ic("trash", 14)}</button>`);
+        return b.join(" ");
+      };
+      const row = u => `<tr data-user="${esc(u.id)}" class="${R.statusOf(u) === "DISABLED" ? "void" : ""}"><td><div class="row"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b>${u.phone ? `<br><small class="dim">${esc(u.phone)}</small>` : ""}</div></div></td><td class="mono small">${esc(u.login)}</td><td>${roleChip(u.role)}</td><td>${esc(App.whName(u.whId))}${(R.whAccess(u) || []).length > 1 || R.whAccess(u) === null ? `<br><small class="dim">${esc(whList(u))}</small>` : ""}</td><td>${statusChip(u)}<div data-acc="${esc(u.id)}"></div></td><td data-last="${esc(u.id)}">—</td>
+            <td class="r"><div class="row wrap" style="justify-content:flex-end;gap:4px">${act(u)}</div></td></tr>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Użytkownicy")}</h2><p>${th("Konta pracowników (logowanie e-mailem służbowym), role, magazyn domyślny i dostępne magazyny, statusy. Nowego pracownika dodaje się zaproszeniem e-mail. Konto z historią dezaktywuje się — historia zostaje.")}</p></div>
+          <div class="actions">${manage ? `<button class="btn primary" type="button" id="user-add">${ic("plus", 15)} ${th("Dodaj użytkownika")}</button>` : `<span class="badge">${th("tylko podgląd")}</span>`}<a class="btn" href="#/role">${ic("shield", 15)} ${th("Role i uprawnienia")}</a></div></div>
+        ${reqs.length && manage ? `<div class="card mb4 queue-card" id="reg-requests"><div class="card-h"><h3>${ic("user", 16)} ${th("Zgłoszenia rejestracji")}</h3><span class="sub">${esc(t("konta oczekujące na nadanie roli i magazynu"))}</span></div><div class="tbl-wrap"><table class="tbl" id="reg-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("E-mail")}</th><th>${th("Telefon")}</th><th>${th("Zgłoszono")}</th><th></th></tr></thead><tbody>
+          ${reqs.map(u => `<tr data-reg="${esc(u.id)}"><td><b>${esc(u.name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(u.phone || "—")}</td><td>${esc(Dates.ts(u.registeredAt))}</td><td class="r nowrap"><button class="btn sm primary" type="button" data-uapprove="${esc(u.id)}">${ic("check", 13)} ${th("Nadaj rolę i aktywuj")}</button> <button class="btn sm danger" type="button" data-udel="${esc(u.id)}">${ic("x", 13)} ${th("Odrzuć")}</button></td></tr>`).join("")}</tbody></table></div></div>` : ""}
         <div class="card"><div class="toolbar">
           <div class="field"><label for="uf-wh">${th("Magazyn")}</label><select class="ctrl" id="uf-wh"><option value="">${th("Wszystkie")}</option>${S.warehouses.map(w => `<option value="${esc(w.id)}" ${f.wh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
           <div class="field"><label for="uf-role">${th("Rola")}</label><select class="ctrl" id="uf-role"><option value="">${th("Wszystkie")}</option>${Object.entries(R.ROLES).map(([k, v]) => `<option value="${k}" ${f.role === k ? "selected" : ""}>${esc(t(v.label))}</option>`).join("")}</select></div>
+          <div class="field"><label for="uf-status">${th("Status")}</label><select class="ctrl" id="uf-status"><option value="">${th("Wszystkie")}</option>${Object.entries(R.USER_STATUS).map(([k, v]) => `<option value="${k}" ${f.status === k ? "selected" : ""}>${esc(t(v))}</option>`).join("")}</select></div>
           ${searchInput("uf-q", f.q, t("nazwisko, e-mail, telefon…"))}</div>
-          <div class="tbl-wrap"><table class="tbl" id="users-table"><thead><tr><th>${th("Użytkownik")}</th><th>${th("E-mail")}</th><th>${th("Rola")}</th><th>${th("Magazyn")}</th><th>${th("Status")}</th><th>${th("Hasło")}</th><th>${th("Ostatnie logowanie")}</th><th></th></tr></thead>
-          <tbody id="users-body">${list.map(row).join("") || `<tr><td colspan="8" class="empty">${th("Brak wpisów.")}</td></tr>`}</tbody></table></div></div>
-        <div class="card mt4"><div class="card-h"><h3>${th("Role")}</h3></div><div class="card-b"><div class="role-grid">${Object.entries(R.ROLES).map(([k, v]) => `<div class="role-card"><span class="badge role-${k}">${esc(t(v.label))}</span><p>${esc(t(R.ROLE_INFO[k]))}</p><small class="dim">${esc(tp("{n} osoba|{n} osoby|{n} osób", S.users.filter(u => u.role === k && !u.pending && u.active !== false).length))}</small></div>`).join("")}</div></div></div>
-        <div class="card mt4"><div class="card-h"><h3>${th("Macierz uprawnień")}</h3><span class="sub">${th("uprawnienia sprawdzane w silniku przy każdej operacji")}</span></div><div class="tbl-wrap"><table class="tbl" id="perm-table"><thead><tr><th>${th("Uprawnienie")}</th>${Object.values(R.ROLES).map(r => `<th class="c">${esc(t(r.label))}</th>`).join("")}</tr></thead><tbody>
-          ${Object.keys(R.PERMS).map(p => `<tr><td><span class="mono">${esc(p)}</span><br><small class="dim">${esc(t(R.PERMS[p]))}</small></td>${Object.keys(R.ROLES).map(k => `<td class="c">${R.can({ role: k }, p) ? `<span class="badge ok">${ic("check", 12)}</span>` : "—"}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>
-        <div class="card mt4"><div class="card-h"><h3>${th("Dziennik logowań")}</h3><span class="sub">${th("ostatnie 100 zdarzeń")}</span></div><div id="login-log"><div class="empty">…</div></div></div>`;
+          <div class="tbl-wrap"><table class="tbl" id="users-table"><thead><tr><th>${th("Użytkownik")}</th><th>${th("E-mail")}</th><th>${th("Rola")}</th><th>${th("Magazyn")}</th><th>${th("Status")}</th><th>${th("Ostatnie logowanie")}</th><th class="r">${th("Akcje")}</th></tr></thead>
+          <tbody id="users-body">${list.map(row).join("") || `<tr><td colspan="7" class="empty">${th("Brak wpisów.")}</td></tr>`}</tbody></table></div></div>
+        <p class="help mt3">${esc(srv ? t("Tryb FIRMOWY: zaproszenia, reset hasła i potwierdzenie adresu wysyła serwer (e-mail). Link zaproszenia jest ważny 72 h, resetu — 1 h; każdy działa jednorazowo.") : t("Tryb OFFLINE: bez poczty — administrator ustawia hasło tymczasowe, użytkownik zmienia je przy pierwszym logowaniu."))}</p>`;
     },
-    async bind(page) {
-      $("#user-add", page).onclick = () => Users.edit(null);
+    async bind(page, params) {
+      const add = $("#user-add", page); if (add) add.onclick = () => Users.edit(null);
       const f = App.tabs.users;
       const on = (sel, k) => { const el = $(sel, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
-      on("#uf-wh", "wh"); on("#uf-role", "role");
+      on("#uf-wh", "wh"); on("#uf-role", "role"); on("#uf-status", "status");
       bindSearch(page, "#uf-q", f, "q", this);
       $$("[data-uapprove]", page).forEach(b => b.onclick = () => Users.edit(b.dataset.uapprove, { approve: true }));
       $$("[data-udel]", page).forEach(b => b.onclick = () => Users.remove(b.dataset.udel));
       $$("[data-uedit]", page).forEach(b => b.onclick = () => Users.edit(b.dataset.uedit));
+      $$("[data-ustat]", page).forEach(b => b.onclick = () => { const [id, st] = b.dataset.ustat.split("|"); Users.setStatus(id, st); });
+      $$("[data-uresend]", page).forEach(b => b.onclick = () => Users.resend(b.dataset.uresend));
+      $$("[data-ulink]", page).forEach(b => b.onclick = () => Users.resetLink(b.dataset.ulink));
       $$("[data-upw]", page).forEach(b => b.onclick = () => Users.resetPassword(b.dataset.upw));
       $$("[data-unlock]", page).forEach(b => b.onclick = async () => { const r = await Store.backend.unlock(b.dataset.unlock); if (r && r.ok) { Toast.ok(t("Konto odblokowane")); App.render(); } else Toast.err(t("Nie odblokowano"), r && r.error); });
+      if (params && params.id && this._opened !== params.id) { this._opened = params.id; Users.edit(params.id); }
+      if (!params || !params.id) this._opened = null;
       const acc = await Users.accounts();
       for (const u of Store.state.users) {
         const a = acc[u.id] || { hasPassword: false }, cell = $(`[data-acc="${u.id}"]`, page), last = $(`[data-last="${u.id}"]`, page);
         if (!cell) continue;
-        const locked = a.lockedUntil && Date.parse(a.lockedUntil) > Date.now();
-        cell.innerHTML = !a.hasPassword ? `<span class="badge warn">${th("brak hasła")}</span>` : locked ? `<span class="badge err">${th("zablokowane")}</span>` : a.mustChange ? `<span class="badge info">${th("do zmiany")}</span>` : a.demo ? `<span class="badge">${th("demonstracyjne")}</span>` : `<span class="badge ok">${th("ustawione")}</span>`;
+        const locked = a.lockedUntil && Date.parse(a.lockedUntil) > Date.now(), st = R.statusOf(u);
+        const tag = st === "INVITED" ? (a.invite ? (a.invite.expired ? `<span class="badge warn">${th("zaproszenie wygasło")}</span>` : `<small class="dim">${esc(t("zaproszenie ważne do {d}", { d: Dates.ts(a.invite.expiresAt) }))}</small>`) : Store.mode === "server" && !u.selfRegistered ? `<span class="badge warn">${th("zaproszenie niewysłane")}</span>` : "")
+          : !a.hasPassword && App.can("users.manage") ? `<span class="badge warn">${th("brak hasła")}</span>` : locked ? `<span class="badge err">${th("zablokowane")}</span>` : a.mustChange ? `<small class="dim">${th("hasło do zmiany")}</small>` : a.demo ? `<small class="dim">${th("hasło demonstracyjne")}</small>` : "";
+        cell.innerHTML = tag;
         if (last) last.textContent = a.lastLogin ? Dates.ts(a.lastLogin) : "—";
         const ub = $(`[data-unlock="${u.id}"]`, page); if (ub) ub.classList.toggle("hidden", !locked);
       }
-      const log = (await Store.backend.loginLog()).slice(0, 100);
-      const box = $("#login-log", page);
-      if (box) box.innerHTML = log.length ? `<div class="tbl-wrap"><table class="tbl dense" id="login-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("E-mail")}</th><th>${th("Wynik")}</th><th>${th("Szczegóły")}</th>${Store.mode === "server" ? `<th>${th("Adres")}</th>` : ""}</tr></thead><tbody>
-        ${log.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.login || (R.byId(Store.state.users, x.userId) || {}).login || "")}</td><td>${x.ok ? `<span class="badge ok">${th("OK")}</span>` : `<span class="badge err">${th("odrzucone")}</span>`}</td><td>${esc(t(x.reason || ""))}</td>${Store.mode === "server" ? `<td class="mono">${esc(x.ip || "")}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wpisów.")}</div>`;
+    }
+  };
+
+  /* ================================================================== */
+  /* Role i uprawnienia                                                   */
+  /* ================================================================== */
+  const PERM_GROUPS = [
+    [N_("Operacje"), ["receipts.create", "issues.create", "production.create", "mm.create", "op.approve"]],
+    [N_("Korekty i anulowania"), ["documents.cancel", "documents.correct", "purchases.correct", "sales.correct", "production.correct", "inventory.correct"]],
+    [N_("Inwentaryzacja"), ["inv.open", "inv.count", "inv.close"]],
+    [N_("Kartoteki"), ["fleet.edit", "master.edit", "warehouses.edit"]],
+    [N_("Odczyt i raporty"), ["report.view", "reports.export", "history.read", "audit.read"]],
+    [N_("Administracja"), ["users.read", "users.manage", "roles.assign", "settings.edit", "data.backup", "data.import"]]
+  ];
+  Views.role = {
+    html() {
+      const S = Store.state, edit = App.can("roles.assign");
+      const cnt = k => S.users.filter(u => u.role === k && R.statusOf(u) === "ACTIVE").length;
+      const card = ([k, v]) => {
+        const perms = R.permsOf(k), custom = Array.isArray((S.rolePerms || {})[k]), locked = k === "admin" || !edit;
+        return `<div class="card" data-role-card="${k}"><div class="card-h"><h3>${roleChip(k)} <span class="mono small">${esc(v.code)}</span></h3><span class="sub">${esc(v.global ? t("wszystkie magazyny") : t("przydzielone magazyny"))} · ${esc(tp("{n} osoba|{n} osoby|{n} osób", cnt(k)))}${custom ? " · " + esc(t("zmienione przez administratora")) : ""}</span></div>
+          <div class="card-b"><p class="muted">${esc(t(R.ROLE_INFO[k]))}</p>
+          ${k === "admin" ? `<div class="info-line">${ic("shield", 15)}<span>${th("ADMINISTRATOR ma zawsze pełne uprawnienia. Rolę nadaje i odbiera wyłącznie administrator; ostatniego aktywnego administratora nie można zdegradować ani dezaktywować.")}</span></div>`
+          : `<div class="perm-groups">${PERM_GROUPS.map(([g, list]) => `<fieldset class="perm-group"><legend>${esc(t(g))}</legend>${list.map(p => `<label class="inline-opt" title="${esc(p)}"><input type="checkbox" data-perm="${k}|${p}" ${perms.includes(p) ? "checked" : ""} ${locked ? "disabled" : ""}> ${esc(t(R.PERMS[p]))}</label>`).join("")}</fieldset>`).join("")}</div>
+          ${edit ? `<div class="row wrap mt3"><button class="btn primary sm" type="button" data-rsave="${k}">${ic("check", 13)} ${th("Zapisz uprawnienia")}</button>${custom ? `<button class="btn sm" type="button" data-rreset="${k}">${th("Przywróć domyślne")}</button>` : ""}</div>` : ""}`}</div></div>`;
+      };
+      return `<div class="page-head"><div class="titles"><h2>${th("Role i uprawnienia")}</h2><p>${th("Uprawnienia są sprawdzane na serwerze przy każdej komendzie — ukrycie przycisku nie jest zabezpieczeniem. Zmiana zestawu uprawnień roli obowiązuje od razu dla wszystkich jej użytkowników i trafia do dziennika audytu.")}</p></div>
+          <div class="actions"><a class="btn" href="#/uzytkownicy">${ic("users", 15)} ${th("Użytkownicy")}</a></div></div>
+        <div class="grid g2" id="roles-grid">${Object.entries(R.ROLES).map(card).join("")}</div>
+        <div class="card mt4" id="permissions"><div class="card-h"><h3>${th("Macierz uprawnień")}</h3><span class="sub">${th("stan bieżący (z uwzględnieniem zmian administratora)")}</span></div><div class="tbl-wrap"><table class="tbl" id="perm-table"><thead><tr><th>${th("Uprawnienie")}</th>${Object.values(R.ROLES).map(r => `<th class="c">${esc(t(r.label))}<br><small class="dim mono">${esc(r.code)}</small></th>`).join("")}</tr></thead><tbody>
+          ${Object.keys(R.PERMS).map(p => `<tr><td><span class="mono">${esc(p)}</span><br><small class="dim">${esc(t(R.PERMS[p]))}</small></td>${Object.keys(R.ROLES).map(k => `<td class="c">${R.can({ role: k }, p) ? `<span class="badge ok">${ic("check", 12)}</span>` : "—"}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`;
+    },
+    bind(page) {
+      $$("[data-rsave]", page).forEach(b => b.onclick = async () => {
+        const role = b.dataset.rsave, perms = $$(`[data-perm^="${role}|"]`, page).filter(x => x.checked).map(x => x.dataset.perm.split("|")[1]);
+        const res = await Store.exec("roles.save", { role, perms }, N_("Administracja — role"));
+        if (!res.ok) return Toast.err(t("Nie zapisano"), res.error);
+        Toast.ok(res.unchanged ? t("Bez zmian") : t("Zapisano uprawnienia roli {r}", { r: R.ROLES[role].code })); App.render();
+      });
+      $$("[data-rreset]", page).forEach(b => b.onclick = async () => {
+        const res = await Store.exec("roles.reset", { role: b.dataset.rreset }, N_("Administracja — role"));
+        if (!res.ok) return Toast.err(t("Nie zapisano"), res.error);
+        Toast.ok(t("Przywrócono domyślne uprawnienia")); App.render();
+      });
+    }
+  };
+
+  /* ================================================================== */
+  /* Dziennik audytu (administrator, audytor)                             */
+  /* ================================================================== */
+  Views.audyt = {
+    extra: null,
+    f(params) {
+      const f = App.tabs.audit || (App.tabs.audit = { tab: "events", from: Dates.addDays(App.today(), -30), to: "", code: "", user: "", wh: "", q: "", limit: 300 });
+      if (params && params.user && f._u !== params.user) { f.user = params.user; f._u = params.user; f.from = "2000-01-01"; }
+      return f;
+    },
+    rows() {
+      const S = Store.state, f = this.f(), q = f.q.trim().toLowerCase();
+      return S.audit.filter(a => (!f.from || a.ts.slice(0, 10) >= f.from) && (!f.to || a.ts.slice(0, 10) <= f.to) && (!f.code || a.code === f.code) && (!f.user || a.userId === f.user || a.entityId === f.user) && (!f.wh || a.whId === f.wh) &&
+        (!q || [a.code, R.auditText(a), a.source, a.opNo, a.userName, a.ip, a.ua, a.reason].join(" ").toLowerCase().includes(q))).slice().sort((a, b) => a.ts < b.ts ? 1 : -1);
+    },
+    html(params) {
+      const S = Store.state, f = this.f(params), srv = Store.mode === "server";
+      const codes = [...new Set(S.audit.map(a => a.code).filter(Boolean))].sort();
+      const tabs = [["events", t("Zdarzenia")], ["logins", t("Logowania")]].concat(srv ? [["mail", t("Wiadomości e-mail")]] : []);
+      const sel = (id, label, list, v) => `<div class="field"><label for="${id}">${esc(label)}</label><select class="ctrl" id="${id}">${list.map(([k, l]) => `<option value="${esc(k)}" ${String(v) === String(k) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>`;
+      let body = "";
+      if (f.tab === "events") {
+        const rows = this.rows(), shown = rows.slice(0, f.limit);
+        body = `<div class="toolbar">
+            <div class="field"><label for="au-from">${th("Od")}</label><input class="ctrl" type="date" id="au-from" value="${esc(f.from)}"></div>
+            <div class="field"><label for="au-to">${th("Do")}</label><input class="ctrl" type="date" id="au-to" value="${esc(f.to)}"></div>
+            ${sel("au-code", t("Zdarzenie"), [["", t("Wszystkie")]].concat(codes.map(c => [c, c])), f.code)}
+            ${sel("au-user", t("Użytkownik"), [["", t("Wszyscy")], ["system", t("System")]].concat(S.users.map(u => [u.id, u.name])), f.user)}
+            ${sel("au-wh", t("Magazyn"), [["", t("Wszystkie")]].concat(S.warehouses.map(w => [w.id, w.name])), f.wh)}
+            ${searchInput("au-q", f.q, t("kod, akcja, IP, przeglądarka…"))}
+            ${App.can("reports.export") || App.can("audit.read") ? `<button class="btn" type="button" id="au-csv">${ic("dl", 15)} CSV</button>` : ""}</div>
+          ${shown.length ? `<div class="tbl-wrap"><table class="tbl dense" id="audit-admin-table"><thead><tr><th>${th("Czas")}</th><th>${th("Kto")}</th><th>${th("Zdarzenie")}</th><th>${th("Akcja")}</th><th>${th("Obiekt")}</th><th>${th("Magazyn")}</th><th>${th("Adres IP")}</th><th>${th("Przeglądarka")}</th><th>${th("Przed / po")}</th></tr></thead><tbody>
+            ${shown.map(a => `<tr><td class="nowrap">${esc(Dates.ts(a.ts, true))}</td><td>${esc(a.userName === "System" ? t("System") : a.userName)}</td><td>${a.code ? `<span class="badge mono">${esc(a.code)}</span>` : `<small class="dim">${esc(a.entity || "")}</small>`}</td><td>${esc(R.auditText(a))}${a.reason ? `<br><small class="dim">${esc(t("powód: {r}", { r: R.trReason(a.reason) }))}</small>` : ""}</td><td class="mono small">${esc(a.opNo || a.entityId || "")}</td><td>${esc(a.whId ? App.whName(a.whId) : "—")}</td><td class="mono small">${esc(a.ip || "—")}</td><td class="small" title="${esc(a.ua || "")}">${esc(String(a.ua || "—").slice(0, 40))}</td>
+              <td>${a.before || a.after ? `<details class="audit"><summary>${th("pokaż")}</summary><div class="grid g2 mt2"><div><small class="dim">${th("Przed")}</small><pre class="json">${esc(JSON.stringify(a.before, null, 1))}</pre></div><div><small class="dim">${th("Po")}</small><pre class="json">${esc(JSON.stringify(a.after, null, 1))}</pre></div></div></details>` : ""}</td></tr>`).join("")}</tbody></table></div>
+            <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} wpis|{n} wpisy|{n} wpisów", rows.length))}</span>${rows.length > shown.length ? `<button class="btn sm" type="button" id="au-more">${th("Pokaż więcej")}</button>` : ""}</div>` : `<div class="empty">${th("Brak wpisów dla filtrów.")}</div>`}`;
+      } else body = `<div id="au-extra"><div class="empty">…</div></div>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Dziennik audytu")}</h2><p>${th("Wszystkie zmiany danych i operacje administracyjne (konta, role, uprawnienia, statusy, zaproszenia, hasła) z autorem, czasem, adresem IP i przeglądarką. Wpisów nie można edytować ani usuwać.")}</p></div></div>
+        <div class="seg mb3" role="tablist">${tabs.map(([k, l]) => `<button type="button" data-autab="${k}" aria-pressed="${f.tab === k}">${esc(l)}</button>`).join("")}</div>
+        <div class="card">${body}</div>`;
+    },
+    async bind(page) {
+      const f = this.f();
+      $$("[data-autab]", page).forEach(b => b.onclick = () => { f.tab = b.dataset.autab; App.render(); });
+      const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; f.limit = 300; App.render(); }; };
+      on("#au-from", "from"); on("#au-to", "to"); on("#au-code", "code"); on("#au-user", "user"); on("#au-wh", "wh");
+      if ($("#au-q", page)) bindSearch(page, "#au-q", f, "q", this);
+      const more = $("#au-more", page); if (more) more.onclick = () => { f.limit += 500; App.render(); };
+      const csv = $("#au-csv", page);
+      if (csv) csv.onclick = () => download(`resinvest_audyt_${f.from || "start"}_${f.to || App.today()}.csv`, UI.toCSV([t("Czas"), t("Kto"), t("Zdarzenie"), t("Akcja"), t("Obiekt"), t("Magazyn"), t("Adres IP"), t("Przeglądarka"), t("Źródło")],
+        this.rows().map(a => [a.ts, a.userName, a.code || "", R.auditText(a), a.opNo || a.entityId || "", a.whId ? App.whName(a.whId) : "", a.ip || "", a.ua || "", t(a.source || "")])), "text/csv");
+      if (f.tab === "events") return;
+      const box = $("#au-extra", page);
+      let rows;
+      if (Store.mode === "server") { const r = await ServerBackend.auditExtra(); if (!r || !r.ok) { box.innerHTML = `<div class="empty">${esc((r && r.error) || t("Brak danych"))}</div>`; return; } this.extra = r; }
+      if (f.tab === "logins") {
+        rows = Store.mode === "server" ? this.extra.log : await Store.backend.loginLog();
+        box.innerHTML = rows.length ? `<div class="tbl-wrap"><table class="tbl dense" id="login-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("E-mail")}</th><th>${th("Wynik")}</th><th>${th("Szczegóły")}</th>${Store.mode === "server" ? `<th>${th("Adres IP")}</th>` : ""}</tr></thead><tbody>
+          ${rows.slice(0, 500).map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.login || (R.byId(Store.state.users, x.userId) || {}).login || "")}</td><td>${x.ok ? `<span class="badge ok">${th("OK")}</span>` : `<span class="badge err">${th("odrzucone")}</span>`}</td><td>${esc(t(x.reason || ""))}</td>${Store.mode === "server" ? `<td class="mono">${esc(x.ip || "")}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wpisów.")}</div>`;
+      } else {
+        const mc = this.extra.mailConfig || {};
+        rows = this.extra.mail || [];
+        box.innerHTML = `<div class="card-b"><dl class="money-list"><dt>${th("Transport")}</dt><dd>${esc(mc.transport || "—")}${mc.configured ? "" : " · " + esc(t("brak klucza — wysyłka nie działa"))}</dd><dt>${th("Nadawca")}</dt><dd>${esc(mc.from || "—")}</dd>${mc.outDir ? `<dt>${th("Folder wiadomości")}</dt><dd class="mono small">${esc(mc.outDir)}</dd>` : ""}</dl></div>
+          ${rows.length ? `<div class="tbl-wrap"><table class="tbl dense" id="mail-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("Szablon")}</th><th>${th("Adresat")}</th><th>${th("Wynik")}</th><th>${th("Błąd")}</th></tr></thead><tbody>
+          ${rows.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.template)}</td><td class="mono">${esc(x.to)}</td><td>${x.status === "SENT" ? `<span class="badge ok">${th("wysłano")}</span>` : `<span class="badge err">${th("błąd")}</span>`}</td><td class="small">${esc(x.error || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wysłanych wiadomości.")}</div>`}`;
+      }
     }
   };
 
@@ -278,7 +486,7 @@
         <div class="grid g2">
           <div class="card"><div class="card-h"><h3>${th("Konto")}</h3></div><div class="card-b">
             <div class="row mb4"><span class="avatar lg">${esc(initials(u.name))}</span><div><b style="font-size:var(--t-lg)">${esc(u.name)}</b><div class="dim">${esc(u.login)} · ${esc(App.roleLabel(u.role))}</div></div></div>
-            <dl class="money-list"><dt>${th("Magazyn")}</dt><dd>${esc(App.whName(u.whId))}</dd><dt>${th("E-mail")}</dt><dd>${esc(u.email || "—")}</dd><dt>${th("Tryb pracy")}</dt><dd>${esc(Store.mode === "server" ? t("serwer (wielostanowiskowy)") : t("lokalny (ta przeglądarka)"))}</dd><dt>${th("Wylogowanie po bezczynności")}</dt><dd>${esc(t("{n} min", { n: AuthLib.POLICY.idleMinutes }))}</dd></dl>
+            <dl class="money-list"><dt>${th("Rola")}</dt><dd>${esc(App.roleLabel(u.role))} <span class="mono small dim">${esc((R.ROLES[u.role] || {}).code || "")}</span></dd><dt>${th("Magazyn domyślny")}</dt><dd>${esc(App.whName(u.whId))}</dd><dt>${th("Dostępne magazyny")}</dt><dd>${esc(whList(u))}</dd><dt>${th("E-mail")}</dt><dd>${esc(u.email || "—")}</dd><dt>${th("Tryb pracy")}</dt><dd><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(Store.mode === "server" ? t("serwer (wielostanowiskowy)") : t("lokalny (ta przeglądarka)"))}</dd><dt>${th("Wylogowanie po bezczynności")}</dt><dd>${esc(t("{n} min", { n: AuthLib.POLICY.idleMinutes }))}</dd></dl>
             <div class="row wrap mt4"><button class="btn" type="button" id="pf-pw">${ic("key", 15)} ${th("Zmień hasło")}</button><button class="btn danger" type="button" id="pf-logout">${ic("logout", 15)} ${th("Wyloguj")}</button></div></div></div>
           <div class="card"><div class="card-h"><h3>${th("Wygląd i język")}</h3></div><div class="card-b">
             <div class="set-list">
@@ -309,14 +517,21 @@
       const intro = root.Intro, today = ssGet("riw.today", "");
       const size = Store.backend.sizeBytes();
       return `<div class="page-head"><div class="titles"><h2>${th("Administracja")}</h2><p>${th("Kopie zapasowe, import danych, preferencje programu i informacje o systemie. Konta i hasła — moduł Użytkownicy.")}</p></div>
-          ${App.can("users.manage") ? `<div class="actions"><a class="btn" href="#/uzytkownicy">${ic("users", 15)} ${th("Użytkownicy i uprawnienia")}</a></div>` : ""}</div>
+          ${App.can("users.read") ? `<div class="actions"><a class="btn" href="#/uzytkownicy">${ic("users", 15)} ${th("Użytkownicy")}</a></div>` : ""}</div>
         <div class="grid g2">
           <div class="card"><div class="card-h"><h3>${th("Kopia zapasowa i import")}</h3></div><div class="card-b stack">
             <p class="muted">${th("Pełna kopia danych (operacje, dokumenty, korekty, anulowania, księga, inwentaryzacja, flota, kartoteki, audyt) w pliku JSON. Hasła nie trafiają do kopii. Wczytanie kopii zastępuje bieżące dane po kontroli struktury i migracji do bieżącej wersji.")}</p>
             <div class="row wrap"><button class="btn primary" type="button" id="bk-export" ${App.can("data.backup") ? "" : "disabled"}>${ic("dl", 15)} ${th("Pobierz kopię (JSON)")}</button>
               <button class="btn" type="button" id="bk-import" ${App.can("data.import") ? "" : "disabled"}>${ic("up", 15)} ${th("Wczytaj kopię")}</button>
               <input type="file" id="bk-file" accept="application/json,.json" class="hidden"></div>
-            <p class="help">${esc(t("Wymagana rola: Kierownik lub Administrator. Rozmiar danych: {kb} kB (rewizja {rev}, schemat {s}).", { kb: fmt(size / 1024, 1), rev: S.rev, s: S.schema }))}</p></div></div>
+            <p class="help">${esc(t("Wymagana rola: Administrator. Rozmiar danych: {kb} kB (rewizja {rev}, schemat {s}).", { kb: fmt(size / 1024, 1), rev: S.rev, s: S.schema }))}</p></div></div>
+          ${App.can("settings.edit") ? `<div class="card" id="access-card"><div class="card-h"><h3>${th("Konfiguracja dostępu")}</h3></div><div class="card-b stack">
+            <label class="inline-opt"><input type="checkbox" id="cfg-approval" ${S.config.requireApproval ? "checked" : ""}> ${th("Obieg zatwierdzania operacji")}</label>
+            <p class="help">${th("Wyłączony (domyślnie): osoba z uprawnieniem do wprowadzania zatwierdza operację sama. Włączony: operacje osób bez uprawnienia „op.approve” czekają na zatwierdzenie kierownika magazynu.")}</p>
+            <label class="inline-opt"><input type="checkbox" id="cfg-selfreg" ${S.config.allowSelfRegistration ? "checked" : ""}> ${th("Samodzielna rejestracja z ekranu logowania")}</label>
+            <p class="help">${th("Wyłączona (zalecane): konta zakłada wyłącznie administrator — zaproszeniem e-mail. Włączona: zgłoszenie czeka na nadanie roli i magazynu przez administratora.")}</p>
+            <p class="help">${esc(t("Dozwolone domeny e-mail: {d} (config/app.config.json).", { d: (S.config.companyDomains || []).map(d => "@" + d).join(", ") }))}</p>
+            <div><a class="btn sm" href="#/role">${ic("shield", 13)} ${th("Role i uprawnienia")}</a> <a class="btn sm" href="#/audyt">${ic("clock", 13)} ${th("Dziennik audytu")}</a></div></div></div>` : ""}
           ${srv ? `<div class="card"><div class="card-h"><h3>${th("Kopie serwera (SQLite)")}</h3><span class="spacer"></span><button class="btn sm" type="button" id="srv-bk" ${App.can("data.backup") ? "" : "disabled"}>${ic("db", 13)} ${th("Utwórz kopię teraz")}</button></div><div id="srv-bk-list"><div class="empty">…</div></div></div>` : ""}
           ${App.can("users.manage") ? `<div class="card" id="clean-card"><div class="card-h"><h3>${th("Start pracy na czysto")}</h3></div><div class="card-b stack">
             <p class="muted">${th("Usuwa operacje, dokumenty, księgę, wersje robocze i okresy inwentaryzacji — zostają magazyny, produkty, kontrahenci, flota i konta użytkowników. Użyj przed rozpoczęciem pracy na prawdziwych danych (po szkoleniu na danych przykładowych). Przed wyczyszczeniem pobierz kopię.")}</p>
@@ -335,7 +550,7 @@
         </div>
         <div class="card mt4"><div class="card-h"><h3>${th("O programie")}</h3></div><div class="card-b">
           <dl class="money-list" style="max-width:720px"><dt>${th("Wersja")}</dt><dd>${esc(R.VERSION)} · ${esc(t("schemat {s}", { s: R.SCHEMA }))}</dd>
-          <dt>${th("Tryb pracy")}</dt><dd>${esc(srv ? t("serwer — dane w bazie SQLite, wielu użytkowników") : Store.memoryOnly ? t("lokalny — tylko pamięć (zapis zablokowany)") : t("lokalny — dane w tej przeglądarce"))}</dd>
+          <dt>${th("Tryb pracy")}</dt><dd><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(srv ? t("serwer — dane w bazie SQLite, wielu użytkowników") : Store.memoryOnly ? t("lokalny — tylko pamięć (zapis zablokowany)") : t("lokalny — dane w tej przeglądarce"))}</dd>
           ${srv && ServerBackend.info ? `<dt>${th("Serwer")}</dt><dd>${esc(ServerBackend.info.version || "")} · ${esc(ServerBackend.info.host || location.host)}</dd>` : ""}
           <dt>${th("Przeliczniki")}</dt><dd>1 m³ = ${fmtQ(S.config.m3_mp)} MP · 1 MP = ${fmt(S.config.mp_t, 2)} t · 1 t = ${fmt(S.config.t_gj, 1)} GJ</dd><dt>${th("Cena za rąbanie")}</dt><dd>${esc(t("{m} zł/MP (domyślnie)", { m: fmt(S.config.chipRateDefault) }))}</dd>
           <dt>${th("Blokada zapisu między kartami")}</dt><dd>${esc(srv ? t("transakcje bazy danych na serwerze") : root.navigator && navigator.locks ? t("Web Locks — aktywna") : t("niedostępna w tej przeglądarce"))}</dd><dt>PDF</dt><dd>${th("generator wbudowany, czcionka ResInvestDocSans (OFL)")}</dd></dl>
@@ -346,6 +561,13 @@
       $("#pf-intro", page).onchange = e => intro && intro.setEnabled(e.target.checked);
       $("#pf-music", page).onchange = e => intro && intro.setMusic(e.target.checked);
       $("#pf-play", page).onclick = () => intro && intro.play({ force: true });
+      const setCfg = async (key, val) => {
+        const res = await Store.exec("settings.save", { settings: { [key]: val } }, N_("Administracja"));
+        if (!res.ok) { Toast.err(t("Nie zapisano"), res.error); } else Toast.ok(t("Zapisano konfigurację"));
+        App.render();
+      };
+      const ca = $("#cfg-approval", page); if (ca) ca.onchange = e => setCfg("requireApproval", e.target.checked);
+      const cs = $("#cfg-selfreg", page); if (cs) cs.onchange = e => setCfg("allowSelfRegistration", e.target.checked);
       $("#bk-export", page).onclick = async () => {
         download(`resinvest_kopia_${App.today()}.json`, JSON.stringify(Store.state, null, 1), "application/json");
         await Store.exec("data.backupLogged", { format: "json" }, N_("Administracja"));

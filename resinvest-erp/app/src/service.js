@@ -26,7 +26,8 @@
     const errs = R.validateStateShape(n);
     if (errs.length) return { ok: false, error: t("Kopia odrzucona: {e}", { e: errs.slice(0, 3).join("; ") }) };
     // zalogowany administrator musi istnieć w nowych danych (inaczej system byłby bez dostępu)
-    if (!n.users.some(u => u.id === ctx.user.id && u.role === "admin" && u.active !== false) && !n.users.some(u => u.login === ctx.user.login && u.role === "admin" && u.active !== false)) {
+    const liveAdmin = u => u.role === "admin" && R.statusOf(u) === "ACTIVE";
+    if (!n.users.some(u => u.id === ctx.user.id && liveAdmin(u)) && !n.users.some(u => u.login === ctx.user.login && liveAdmin(u))) {
       const me = R.clone(R.byId(s.users, ctx.user.id));
       if (me) { if (!R.byId(n.warehouses, me.whId)) me.whId = (n.warehouses[0] || {}).id; n.users.push(me); }
     }

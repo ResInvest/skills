@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="description" content="ResInvest ERP 3.0 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
-<meta name="generator" content="ResInvest ERP build 3.1.0 · 2026-09-25">
+<meta name="generator" content="ResInvest ERP build 3.2.0 · 2026-09-25">
 <title>ResInvest ERP</title>
 <script>
 /* Motyw przed pierwszym malowaniem — bez „mignięcia” jasnego tła w motywie ciemnym. */
@@ -583,6 +583,14 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
 .btn.sm.icon{width:32px;padding:0;justify-content:center}
 .tbl td.small{font-size:var(--t-xs)}
 #users-table td:last-child{width:1%}
+
+/* ---------- 3.2: tryb pracy, role i uprawnienia ---------- */
+.mode-tag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.4px;background:var(--brand-soft);color:var(--brand-2);border:1px solid var(--brand-line);vertical-align:1px}
+.perm-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:8px}
+.perm-group{border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px 10px;margin:0;min-width:0}
+.perm-group legend{padding:0 4px;font-size:var(--t-sm);font-weight:650;color:var(--text-2)}
+.perm-group .inline-opt{display:flex;margin:4px 0;font-size:var(--t-sm);line-height:1.3}
+.badge.role-audytor{background:var(--warn-soft);color:var(--warn)}
 
 </style>
 </head>
@@ -2488,8 +2496,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.1.0";
-  const SCHEMA = 5;
+  const VERSION = "3.2.0";
+  const SCHEMA = 6;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -2663,37 +2671,70 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ------------------------------------------------------------------ */
   /* Słowniki, uprawnienia, statusy                                      */
   /* ------------------------------------------------------------------ */
+  /**
+   * Uprawnienia (nazwy zgodne ze specyfikacją tam, gdzie to możliwe). Role mają domyślne zestawy,
+   * które administrator może zmienić (state.rolePerms) — z wyjątkiem ADMINISTRATOR (zawsze pełny dostęp).
+   */
   const PERMS = {
-    "op.create": N_("Tworzenie operacji"), "documents.cancel": N_("Anulowanie dokumentów"), "documents.correct": N_("Korekty dokumentów"),
+    "receipts.create": N_("Przyjęcia i zakupy — wprowadzanie"), "issues.create": N_("Wydania i sprzedaż — wprowadzanie"),
+    "production.create": N_("Produkcja — wprowadzanie"), "mm.create": N_("Przesunięcia MM — wprowadzanie"),
+    "op.approve": N_("Zatwierdzanie operacji (gdy obieg zatwierdzania jest włączony)"),
+    "documents.cancel": N_("Anulowanie dokumentów"), "documents.correct": N_("Korekty dokumentów"),
     "inventory.correct": N_("Korekty stanów / MM"), "production.correct": N_("Korekty produkcji"), "sales.correct": N_("Korekty sprzedaży"),
     "purchases.correct": N_("Korekty zakupów"), "inv.open": N_("Otwarcie okresu inwentaryzacji"), "inv.count": N_("Spis z natury"),
-    "inv.close": N_("Zamknięcie okresu"), "fleet.edit": N_("Edycja floty"), "master.edit": N_("Edycja kartotek (produkty, kontrahenci, magazyny)"),
-    "users.manage": N_("Zarządzanie użytkownikami i hasłami"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii"),
-    "report.view": N_("Raporty i historia"), "op.approve": N_("Zatwierdzanie operacji")
+    "inv.close": N_("Zamknięcie okresu"), "fleet.edit": N_("Edycja floty"), "master.edit": N_("Edycja kartotek (produkty, kontrahenci)"),
+    "report.view": N_("Stany, dokumenty i raporty — odczyt"), "reports.export": N_("Eksport raportów (CSV, PDF)"),
+    "history.read": N_("Historia operacji — odczyt"), "audit.read": N_("Dziennik audytu — odczyt"),
+    "users.read": N_("Użytkownicy — podgląd"), "users.manage": N_("Użytkownicy — zapraszanie, edycja, blokowanie, hasła"),
+    "roles.assign": N_("Role i uprawnienia — zmiana"), "warehouses.edit": N_("Magazyny — dodawanie i edycja"),
+    "settings.edit": N_("Konfiguracja systemu"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii")
   };
+  const CREATE_PERMS = ["receipts.create", "issues.create", "production.create", "mm.create"];
+  const ROLE_DEFAULTS = {
+    admin: ["*"],
+    kierownik: [...CREATE_PERMS, "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
+    magazynier: [...CREATE_PERMS, "inv.count", "report.view", "history.read"],
+    obserwator: ["report.view", "history.read"],
+    audytor: ["report.view", "reports.export", "history.read", "audit.read", "users.read"]
+  };
+  /** Role: kod (specyfikacja), etykieta, dostęp do wszystkich magazynów (global). */
   const ROLES = {
-    admin: { label: N_("Administrator"), perms: ["*"] },
-    kierownik: { label: N_("Kierownik"), perms: ["op.create", "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "data.backup", "data.import", "report.view"] },
-    magazynier: { label: N_("Magazynier"), perms: ["op.create", "inv.open", "inv.count", "report.view"] },
-    obserwator: { label: N_("Obserwator"), perms: ["report.view"] }
+    admin: { code: "ADMINISTRATOR", label: N_("Administrator"), global: true, perms: ROLE_DEFAULTS.admin },
+    kierownik: { code: "MANAGER", label: N_("Kierownik"), global: false, perms: ROLE_DEFAULTS.kierownik },
+    magazynier: { code: "MAGAZYNIER", label: N_("Magazynier"), global: false, perms: ROLE_DEFAULTS.magazynier },
+    obserwator: { code: "OBSERWATOR", label: N_("Obserwator"), global: false, perms: ROLE_DEFAULTS.obserwator },
+    audytor: { code: "AUDYTOR", label: N_("Audytor"), global: true, perms: ROLE_DEFAULTS.audytor }
   };
   /** Opis ról (ekran użytkowników): kto co może. */
   const ROLE_INFO = {
-    admin: N_("Pełny dostęp: wszystkie magazyny, użytkownicy i role, kartoteki, kopie, zatwierdzanie, korekty i anulowania."),
-    kierownik: N_("Zatwierdza operacje swojego magazynu, wykonuje korekty i anulowania, zamyka okresy, prowadzi flotę i kartoteki."),
-    magazynier: N_("Wprowadza operacje i przekazuje je do zatwierdzenia; wersje robocze, spis z natury."),
-    obserwator: N_("Tylko podgląd: stany, dokumenty, historia i raporty — bez zmian w danych.")
+    admin: N_("Pełny dostęp: wszystkie magazyny, użytkownicy i role, kartoteki, kopie, konfiguracja, korekty i anulowania."),
+    kierownik: N_("Operacje, dokumenty, korekty i anulowania w przydzielonych magazynach, zamykanie okresów, flota i kartoteki, podgląd użytkowników."),
+    magazynier: N_("Przyjęcia, wydania, produkcja i MM w przydzielonych magazynach; stany, dokumenty, raporty podstawowe, spis z natury."),
+    obserwator: N_("Tylko odczyt: stany, dokumenty, raporty i historia w przydzielonych magazynach."),
+    audytor: N_("Odczyt wszystkich magazynów, raporty, historia zmian i dziennik audytu — bez zmian w danych.")
   };
+  /** Statusy kont. ACTIVE — jedyny pozwalający się zalogować. */
+  const USER_STATUS = { INVITED: N_("zaproszony"), ACTIVE: N_("aktywny"), SUSPENDED: N_("zawieszony"), DISABLED: N_("dezaktywowany") };
+  const statusOf = u => !u ? "DISABLED" : u.status || (u.pending ? "INVITED" : u.active === false ? "DISABLED" : "ACTIVE");
+  /** Zestawy uprawnień ról nadpisane przez administratora (ładowane z danych przy każdej komendzie i odświeżeniu stanu). */
+  let rolePermsOverride = {};
+  function applyRoles(state) { rolePermsOverride = (state && state.rolePerms && typeof state.rolePerms === "object") ? state.rolePerms : {}; }
+  function permsOf(role) { if (role === "admin") return ["*"]; return Array.isArray(rolePermsOverride[role]) ? rolePermsOverride[role] : (ROLES[role] || ROLES.obserwator).perms; }
+  /** Dostęp do magazynu: role globalne — wszystkie; pozostałe — magazyn domyślny i przydzielone. */
+  function whAccess(user) { if (!user) return []; if ((ROLES[user.role] || {}).global) return null; return [...new Set([user.whId].concat(user.warehouseIds || []).filter(Boolean))]; }
+  function canAccessWh(user, whId) { const a = whAccess(user); return a === null || a.includes(whId); }
   function can(user, perm) {
-    if (!user || user.active === false || user.pending) return false;
-    const p = (ROLES[user.role] || ROLES.obserwator).perms;
-    return p.includes("*") || p.includes(perm);
+    if (!user || user.active === false || user.pending || (user.status && user.status !== "ACTIVE")) return false;
+    const p = permsOf(user.role);
+    if (p.includes("*")) return true;
+    if (perm === "op.create") return CREATE_PERMS.some(x => p.includes(x));      // „dowolna operacja”
+    return p.includes(perm);
   }
   const OP_TYPES = {
-    ZAKUP: { label: N_("Zakup"), flow: N_("dostawca → magazyn"), correctPerm: "purchases.correct" },
-    SPRZEDAZ: { label: N_("Sprzedaż"), flow: N_("magazyn → odbiorca (WZ)"), correctPerm: "sales.correct" },
-    PRODUKCJA: { label: N_("Produkcja na magazyn"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct" },
-    MM: { label: N_("Przesunięcie MM"), flow: N_("magazyn → magazyn"), correctPerm: "inventory.correct" }
+    ZAKUP: { label: N_("Zakup"), flow: N_("dostawca → magazyn"), correctPerm: "purchases.correct", createPerm: "receipts.create" },
+    SPRZEDAZ: { label: N_("Sprzedaż"), flow: N_("magazyn → odbiorca (WZ)"), correctPerm: "sales.correct", createPerm: "issues.create" },
+    PRODUKCJA: { label: N_("Produkcja na magazyn"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct", createPerm: "production.create" },
+    MM: { label: N_("Przesunięcie MM"), flow: N_("magazyn → magazyn"), correctPerm: "inventory.correct", createPerm: "mm.create" }
   };
   const STATUS = { DRAFT: N_("ROBOCZY"), PENDING: N_("DO ZATWIERDZENIA"), POSTED: N_("ZATWIERDZONY"), CANCELLED: N_("ANULOWANY"), CORRECTED: N_("SKORYGOWANY") };
   const KINDS = {
@@ -2745,21 +2786,28 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const str = v => String(v == null ? "" : v).trim();
   const nowIso = ctx => (ctx && ctx.now) || new Date().toISOString();
   const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
-  /** Adres e-mail w domenie firmowej (lista w konfiguracji; pusta lista = każda domena). */
-  function companyEmail(state, email) {
-    const e = str(email).toLowerCase();
-    if (!EMAIL_RE.test(e)) return false;
-    const doms = (state && state.config && state.config.companyDomains) || [];
-    return !doms.length || doms.some(d => e.endsWith("@" + String(d).toLowerCase()));
+  /** Normalizacja adresu: bez spacji (także wewnątrz), małe litery. */
+  function normalizeEmail(email) { return String(email == null ? "" : email).replace(/\s+/g, "").toLowerCase(); }
+  /**
+   * Adres firmowy: poprawny składniowo i z domeną DOKŁADNIE z listy (sub.resinvest.group ani resinvest.group.pl nie przechodzą).
+   * Wywoływane po stronie serwera (silnik) — walidacja w przeglądarce jest tylko pomocnicza.
+   */
+  function validateCompanyEmail(email, domains) {
+    const e = normalizeEmail(email);
+    if (!EMAIL_RE.test(e) || e.split("@").length !== 2) return { ok: false, email: e, error: t("Podaj adres e-mail") };
+    const doms = (domains || []).map(d => String(d).toLowerCase());
+    if (doms.length && !doms.includes(e.split("@")[1])) return { ok: false, email: e, error: t("Wymagany e-mail firmowy ({d})", { d: doms.map(d => "@" + d).join(", ") }) };
+    return { ok: true, email: e };
   }
+  function companyEmail(state, email) { return validateCompanyEmail(email, state && state.config && state.config.companyDomains).ok; }
 
   function emptyState(config) {
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
-      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"] }, config || {}),
+      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
-      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {},
+      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {},
       meta: { lastMonthCheck: null, createdAt: null }
     };
   }
@@ -2818,6 +2866,20 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       for (const k of ["vehicles", "drivers", "chippers", "operators"]) for (const x of (s.fleet && s.fleet[k]) || []) if (x.whId === undefined) x.whId = "";
       s.schema = 5; s.version = VERSION;
       notes.push(t("Schemat 4 → 5: logowanie e-mailem firmowym, rola Obserwator, flota przypisana do magazynów, zatwierdzanie operacji"));
+    }
+    if (s.schema === 5) {
+      if (s.config.requireApproval === undefined) s.config.requireApproval = false;
+      if (s.config.allowSelfRegistration === undefined) s.config.allowSelfRegistration = false;
+      if (!s.rolePerms || typeof s.rolePerms !== "object") s.rolePerms = {};
+      for (const u of s.users || []) {
+        u.status = statusOf(u); u.active = u.status === "ACTIVE"; delete u.pending;
+        if (!u.firstName && !u.lastName) { const parts = str(u.name).split(/\s+/); u.firstName = parts[0] || ""; u.lastName = parts.slice(1).join(" "); }
+        if (!Array.isArray(u.warehouseIds)) u.warehouseIds = u.whId ? [u.whId] : [];
+      }
+      // obieg zatwierdzania wyłączony: operacje „do zatwierdzenia” wracają do autorów jako wersje robocze
+      for (const d of s.drafts || []) if (d.status === "PENDING" && !s.config.requireApproval) d.status = "DRAFT";
+      s.schema = 6; s.version = VERSION;
+      notes.push(t("Schemat 5 → 6: statusy kont, wiele magazynów na użytkownika, role AUDYTOR i edytowalne uprawnienia"));
     }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
@@ -2931,6 +2993,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
     const type = OP_TYPES[draft.type] ? draft.type : null;
     if (!type) err("type", t("Wybierz rodzaj operacji"));
+    else if (user && !can(user, OP_TYPES[type].createPerm)) err("type", t("Twoja rola nie pozwala wprowadzać operacji tego rodzaju"), "FORBIDDEN");
+    if (user && wh && !canAccessWh(user, wh.id)) err("_wh", t("Brak dostępu do magazynu {w}", { w: wh.name }), "FORBIDDEN");
     const date = str(draft.date);
     if (!Dates.isISO(date)) err("date", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (!(ctx && ctx.correction)) {
@@ -3430,6 +3494,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   function audit(state, ctx, rec) {
     const user = ctx && ctx.user;
     const r = Object.assign({ id: uid("a"), ts: nowIso(ctx), userId: user ? user.id : "system", userName: user ? user.name : "System", whId: user ? user.whId : null, source: (ctx && ctx.source) || N_("Aplikacja") }, rec);
+    if (ctx && ctx.ip) r.ip = String(ctx.ip).slice(0, 64);
+    if (ctx && ctx.ua) r.ua = String(ctx.ua).slice(0, 200);
     if (r.act && !r.action) r.action = I18N.canon(r.act);
     state.audit.push(r);
     return r;
@@ -3535,7 +3601,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /*   Operacja „DO ZATWIERDZENIA” nie ma numeru i nie zmienia stanów.    */
   /* ------------------------------------------------------------------ */
   /** Czy użytkownik może zatwierdzać operacje danego magazynu (kierownik — tylko swojego). */
-  function canApprove(user, whId) { return can(user, "op.approve") && (user.role === "admin" || user.whId === whId); }
+  function canApprove(user, whId) { return can(user, "op.approve") && canAccessWh(user, whId); }
   function submitOperation(state, draft, ctx) {
     const user = ctx && ctx.user;
     if (!can(user, "op.create")) return { ok: false, error: t("Twoja rola nie pozwala tworzyć operacji"), code: "FORBIDDEN" };
@@ -3593,7 +3659,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     if (!op) return { ok: false, error: t("Nie znaleziono operacji") };
     if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest już anulowany", { no: op.no }) };
     if (!can(user, "documents.cancel")) return { ok: false, error: t("Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
-    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: t("Anulowanie wykonuje się w magazynie operacji"), code: "FORBIDDEN" };
+    if (!canAccessWh(user, op.whId)) return { ok: false, error: t("Brak dostępu do magazynu tej operacji"), code: "FORBIDDEN" };
     const entries = state.ledger.filter(l => l.opId === op.id);
     const whs = [...new Set(entries.map(e => e.whId))];
     for (const w of whs) if (isLocked(state, w, today)) return { ok: false, error: t("Bieżący okres jest zamknięty — anulowanie niemożliwe"), code: "LOCKED" };
@@ -3683,7 +3749,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest anulowany — nie można go korygować. Wprowadź nową operację.", { no: op.no }) };
     if (!can(user, "documents.correct")) return { ok: false, error: t("Brak uprawnienia „{p}”", { p: "documents.correct" }), code: "FORBIDDEN" };
     if (!can(user, OP_TYPES[op.type].correctPerm)) return { ok: false, error: t("Brak uprawnienia „{p}”", { p: OP_TYPES[op.type].correctPerm }), code: "FORBIDDEN" };
-    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: t("Korektę wykonuje się w magazynie operacji"), code: "FORBIDDEN" };
+    if (!canAccessWh(user, op.whId)) return { ok: false, error: t("Brak dostępu do magazynu tej operacji"), code: "FORBIDDEN" };
     if (newDraft.type !== op.type || !!(newDraft.sale && newDraft.sale.direct) !== !!op.direct) return { ok: false, error: t("Korekta nie może zmienić rodzaju operacji — anuluj i wprowadź nową") };
     const d = Object.assign(clone(newDraft), { date: op.date, idemKey: "corr" });
     // stan „bez tej operacji” — nowa wersja przechodzi te same zabezpieczenia co zwykła operacja
@@ -4063,80 +4129,137 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ------------------------------------------------------------------ */
   const THEMES = { pearl: N_("Perła (jasny)"), graphite: N_("Grafit (ciemny)"), azure: N_("Graphite Azure") };
   const Users = {
-    validate(state, rec) {
+    fullName(r) { return [str(r.firstName), str(r.lastName)].filter(Boolean).join(" ") || str(r.name); },
+    validate(state, rec, prev) {
       const e = {};
-      if (!str(rec.name) || str(rec.name).length < 3) e.name = t("Podaj imię i nazwisko (co najmniej 3 znaki)");
-      const login = str(rec.login).toLowerCase();
-      const doms = (state.config.companyDomains || []).map(d => "@" + d).join(", ");
-      if (!EMAIL_RE.test(login)) e.login = t("Podaj adres e-mail");
-      else if (!companyEmail(state, login)) e.login = t("Wymagany e-mail firmowy ({d})", { d: doms });
-      else if (state.users.some(u => u.id !== rec.id && (str(u.login).toLowerCase() === login || str(u.email).toLowerCase() === login))) e.login = t("Konto z tym adresem e-mail już istnieje");
+      if (str(rec.firstName).length < 2) e.firstName = t("Podaj imię (co najmniej 2 znaki)");
+      if (str(rec.lastName).length < 2) e.lastName = t("Podaj nazwisko (co najmniej 2 znaki)");
+      const em = validateCompanyEmail(rec.email || rec.login, state.config.companyDomains);
+      if (!em.ok) e.email = em.error;
+      else if (state.users.some(u => u.id !== rec.id && (normalizeEmail(u.login) === em.email || normalizeEmail(u.email) === em.email))) e.email = t("Konto z tym adresem e-mail już istnieje");
       if (!ROLES[rec.role]) e.role = t("Wybierz rolę");
       const wh = byId(state.warehouses, rec.whId);
-      if (!wh) e.whId = t("Wybierz magazyn");
-      else if (wh.active === false) e.whId = t("Magazyn jest nieaktywny");
+      if (!wh) e.whId = t("Wybierz magazyn domyślny");
+      else if (wh.active === false && !(prev && prev.whId === rec.whId)) e.whId = t("Magazyn jest nieaktywny");
+      if ((rec.warehouseIds || []).some(id => !byId(state.warehouses, id))) e.warehouseIds = t("Nieznany magazyn");
+      if (!USER_STATUS[rec.status]) e.status = t("Wybierz status");
       if (rec.lang && !I18N.has(rec.lang)) e.lang = t("Nieznany język");
       if (rec.theme && !THEMES[rec.theme]) e.theme = t("Nieznany motyw");
       return e;
     },
     /** Liczba aktywnych administratorów po zmianie (zabezpieczenie przed zablokowaniem systemu). */
-    adminsAfter(state, rec) { return state.users.map(u => u.id === rec.id ? rec : u).filter(u => u.role === "admin" && u.active !== false).length; },
+    adminsAfter(state, rec) { return state.users.map(u => u.id === rec.id ? rec : u).filter(u => u.role === "admin" && statusOf(u) === "ACTIVE").length; },
+    /** Ochrona przed eskalacją: kontami administratorów i rolą ADMINISTRATOR zarządza wyłącznie administrator. */
+    guard(actor, prev, next) {
+      if (!actor || actor.role === "admin") return null;
+      if (next.role === "admin" || (prev && prev.role === "admin")) return t("Rolę ADMINISTRATOR nadaje i odbiera wyłącznie administrator");
+      return null;
+    },
+    /**
+     * Zapis profilu (nowe konto lub zmiana). Nowe konto: status ACTIVE (hasło nadaje administrator — tryb OFFLINE)
+     * albo INVITED (zaproszenie e-mailem — tryb FIRMOWY). Każda zmiana roli, dostępu do magazynów i statusu — osobny wpis audytu.
+     */
     save(state, rec, ctx) {
-      if (!can(ctx && ctx.user, "users.manage")) return { ok: false, error: t("Zarządzanie użytkownikami wymaga roli Administrator"), code: "FORBIDDEN" };
+      const actor = ctx && ctx.user;
+      if (!can(actor, "users.manage")) return { ok: false, error: t("Zarządzanie użytkownikami wymaga roli Administrator"), code: "FORBIDDEN" };
       const prev = rec.id ? byId(state.users, rec.id) : null;
       if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono użytkownika") };
-      const r = Object.assign({ lang: "", theme: "", email: "" }, prev || {}, rec);
-      r.login = str(r.email || r.login).toLowerCase(); r.name = str(r.name); r.active = r.active !== false && r.active !== "false";
-      const e = this.validate(state, r);
-      if (prev && prev.id === ctx.user.id && !r.active) e.active = t("Nie możesz dezaktywować własnego konta");
-      if (prev && prev.id === ctx.user.id && r.role !== prev.role) e.role = t("Nie możesz zmienić własnej roli");
+      const r = Object.assign({ lang: "", theme: "", phone: "" }, prev ? clone(prev) : {}, clone(rec));
+      if (!r.firstName && !r.lastName && r.name && !prev) { const parts = str(r.name).split(/\s+/); r.firstName = parts[0]; r.lastName = parts.slice(1).join(" "); }
+      r.email = normalizeEmail(rec.email || rec.login || r.email || r.login); r.login = r.email;
+      // status: jawna zmiana statusu ma pierwszeństwo; zgodność wstecz — pole `active` (aktywny / nieaktywny)
+      const prevSt = prev ? statusOf(prev) : null;
+      r.status = rec.status && (!prev || rec.status !== prevSt) ? rec.status : (prevSt || "ACTIVE");
+      if (prev && r.status === prevSt && rec.active !== undefined) {
+        const want = !(rec.active === false || rec.active === "false");
+        if (want !== (prevSt === "ACTIVE")) r.status = want ? (prevSt === "INVITED" && !prev.selfRegistered ? "INVITED" : "ACTIVE") : "DISABLED";
+      }
+      r.warehouseIds = [...new Set([r.whId].concat(Array.isArray(r.warehouseIds) ? r.warehouseIds : []).filter(Boolean))];
+      if (ROLES[r.role] && ROLES[r.role].global) r.warehouseIds = [r.whId];
+      const e = this.validate(state, r, prev);
+      const escal = this.guard(actor, prev, r); if (escal) e.role = escal;
+      if (prev && prev.id === actor.id && statusOf(r) !== "ACTIVE") e.status = t("Nie możesz zablokować ani dezaktywować własnego konta");
+      if (prev && prev.id === actor.id && r.role !== prev.role) e.role = t("Nie możesz zmienić własnej roli");
       if (this.adminsAfter(state, Object.assign({ id: r.id || "__new" }, r)) === 0) e.role = t("W systemie musi pozostać co najmniej jeden aktywny administrator");
-      if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
-      const clean = { id: prev ? prev.id : uid("u"), name: r.name, login: r.login, email: r.login, role: r.role, whId: r.whId, active: r.active, phone: str(r.phone), lang: r.lang || "", theme: r.theme || "", createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
-      // zgłoszenie z rejestracji: aktywacja przez administratora kończy oczekiwanie
-      if (prev && prev.pending && !clean.active) { clean.pending = true; clean.registeredAt = prev.registeredAt; }
-      if (prev && prev.pending && clean.active) { clean.approvedAt = nowIso(ctx); clean.approvedBy = ctx.user.name; clean.registeredAt = prev.registeredAt; }
+      if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0], code: escal ? "FORBIDDEN" : undefined };
+      const clean = { id: prev ? prev.id : uid("u"), firstName: str(r.firstName), lastName: str(r.lastName), name: this.fullName(r), login: r.email, email: r.email,
+        role: r.role, whId: r.whId, warehouseIds: r.warehouseIds, status: r.status, active: r.status === "ACTIVE", phone: str(r.phone), lang: r.lang || "", theme: r.theme || "",
+        createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
+      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy"]) if (prev && prev[k] !== undefined) clean[k] = prev[k];
+      if (prev && statusOf(prev) === "INVITED" && clean.status === "ACTIVE" && prev.selfRegistered) { clean.approvedAt = nowIso(ctx); clean.approvedBy = actor.name; delete clean.selfRegistered; }
+      if (!prev && clean.status === "INVITED") clean.invitedAt = nowIso(ctx);
       const idx = state.users.findIndex(u => u.id === clean.id);
       if (idx >= 0) state.users[idx] = clean; else state.users.push(clean);
       state.rev += 1;
-      audit(state, ctx, { entity: "user", entityId: clean.id, opNo: clean.login, event: "user", act: Lx(prev ? N_("Zmiana konta użytkownika {l}") : N_("Utworzenie konta użytkownika {l}"), { l: clean.login }), before: prev ? clone(prev) : null, after: clean, source: (ctx && ctx.source) || N_("Administracja") });
-      return { ok: true, rec: clean, created: !prev };
+      const src = (ctx && ctx.source) || N_("Administracja — użytkownicy");
+      const A = (code, act, before, after) => audit(state, ctx, { entity: "user", entityId: clean.id, opNo: clean.login, event: "user", code, act, before, after, source: src });
+      if (!prev) A(clean.status === "INVITED" ? "USER_INVITED" : "USER_CREATED", Lx(clean.status === "INVITED" ? N_("Zaproszenie użytkownika {l}") : N_("Utworzenie konta użytkownika {l}"), { l: clean.login }), null, { rola: ROLES[clean.role].code, magazyny: clean.warehouseIds, status: clean.status });
+      else {
+        let any = false;
+        if (prev.role !== clean.role) { any = true; A("ROLE_CHANGED", Lx("Zmiana roli {l}: {a} → {b}", { l: clean.login, a: ROLES[prev.role] ? ROLES[prev.role].code : prev.role, b: ROLES[clean.role].code }), { rola: prev.role }, { rola: clean.role }); }
+        const wa = JSON.stringify([prev.whId, [...(prev.warehouseIds || [])].sort()]), wb = JSON.stringify([clean.whId, [...clean.warehouseIds].sort()]);
+        if (wa !== wb) { any = true; A("WAREHOUSE_ACCESS_CHANGED", Lx("Zmiana dostępu do magazynów: {l}", { l: clean.login }), { domyslny: prev.whId, magazyny: prev.warehouseIds || [] }, { domyslny: clean.whId, magazyny: clean.warehouseIds }); }
+        if (statusOf(prev) !== clean.status) {
+          any = true; const code = { ACTIVE: "USER_ACTIVATED", SUSPENDED: "USER_SUSPENDED", DISABLED: "USER_DISABLED", INVITED: "USER_INVITED" }[clean.status];
+          A(code, Lx("Zmiana statusu konta {l}: {a} → {b}", { l: clean.login, a: { t: USER_STATUS[statusOf(prev)] }, b: { t: USER_STATUS[clean.status] } }), { status: statusOf(prev) }, { status: clean.status });
+        }
+        if (normalizeEmail(prev.email || prev.login) !== clean.email) { any = true; A("EMAIL_CHANGED", Lx("Zmiana adresu e-mail: {a} → {b}", { a: prev.login, b: clean.login }), { email: prev.login }, { email: clean.login }); }
+        if (!any) A("USER_UPDATED", Lx(N_("Zmiana konta użytkownika {l}"), { l: clean.login }), clone(prev), clean);
+      }
+      return { ok: true, rec: clean, created: !prev, before: prev ? clone(prev) : null };
+    },
+    /** Aktywacja zaproszenia (link z e-maila) — adres potwierdzony, konto ACTIVE. Wykonuje host po weryfikacji tokenu. */
+    activate(state, userId, ctx) {
+      const u = byId(state.users, userId);
+      if (!u) return { ok: false, error: t("Nie znaleziono użytkownika") };
+      const st = statusOf(u);
+      if (st !== "INVITED" && st !== "ACTIVE") return { ok: false, error: t("Twoje konto jest nieaktywne."), code: "INACTIVE" };
+      if (st === "INVITED" && u.selfRegistered) return { ok: false, error: t("Twoje konto nie zostało jeszcze aktywowane."), code: "INVITED" };
+      u.status = "ACTIVE"; u.active = true; u.emailVerifiedAt = nowIso(ctx); if (!u.activatedAt) u.activatedAt = nowIso(ctx); delete u.pending;
+      state.rev += 1;
+      audit(state, Object.assign({}, ctx, { user: u }), { entity: "user", entityId: u.id, opNo: u.login, event: "user", code: "USER_ACTIVATED", act: Lx("Aktywacja konta z zaproszenia: {l} (adres e-mail potwierdzony)", { l: u.login }), before: { status: st }, after: { status: "ACTIVE" }, source: N_("Zaproszenie e-mail") });
+      return { ok: true, rec: u };
     },
     /**
-     * Rejestracja z ekranu logowania (bez sesji): konto oczekuje na zatwierdzenie przez administratora,
-     * który nadaje rolę i magazyn. Hasło przechowuje moduł Auth hosta.
+     * Rejestracja z ekranu logowania — domyślnie WYŁĄCZONA (konta zakłada administrator zaproszeniem).
+     * Po włączeniu w konfiguracji: konto INVITED (samodzielne), rolę i magazyn nadaje administrator.
      */
     register(state, rec, ctx) {
-      const r = { name: str(rec.name), login: str(rec.email).toLowerCase(), role: "obserwator", whId: rec.whId || (state.warehouses.find(w => w.active !== false) || {}).id, phone: str(rec.phone) };
+      if (!state.config.allowSelfRegistration) return { ok: false, error: t("Rejestracja jest wyłączona — konto zakłada administrator (zaproszenie e-mailem)."), code: "DISABLED" };
+      const parts = str(rec.name).split(/\s+/);
+      const r = { firstName: str(rec.firstName) || parts[0] || "", lastName: str(rec.lastName) || parts.slice(1).join(" "), email: normalizeEmail(rec.email), role: "obserwator", status: "INVITED", phone: str(rec.phone),
+        whId: (state.warehouses.find(w => w.active !== false) || {}).id, warehouseIds: [] };
       const e = this.validate(state, r);
-      delete e.role;
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
-      const clean = { id: uid("u"), name: r.name, login: r.login, email: r.login, role: "obserwator", whId: r.whId, active: false, pending: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx) };
+      const clean = { id: uid("u"), firstName: r.firstName, lastName: r.lastName, name: this.fullName(r), login: r.email, email: r.email, role: "obserwator", whId: r.whId, warehouseIds: [r.whId],
+        status: "INVITED", active: false, selfRegistered: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx) };
       state.users.push(clean); state.rev += 1;
-      audit(state, Object.assign({}, ctx, { user: null }), { entity: "user", entityId: clean.id, opNo: clean.login, event: "register", act: Lx("Rejestracja konta {l} — oczekuje na zatwierdzenie", { l: clean.login }), before: null, after: { nazwa: clean.name, email: clean.login }, source: N_("Rejestracja") });
+      audit(state, Object.assign({}, ctx, { user: null }), { entity: "user", entityId: clean.id, opNo: clean.login, event: "register", code: "USER_REGISTERED", act: Lx("Rejestracja konta {l} — oczekuje na zatwierdzenie", { l: clean.login }), before: null, after: { nazwa: clean.name, email: clean.login }, source: N_("Rejestracja") });
       return { ok: true, rec: clean };
     },
-    /** Usunięcie konta bez historii (np. odrzucone zgłoszenie). Konto z historią — tylko dezaktywacja. */
+    /** Usunięcie konta bez historii (np. zaproszenie wysłane omyłkowo). Konto z historią — tylko dezaktywacja. */
     remove(state, id, ctx) {
       if (!can(ctx && ctx.user, "users.manage")) return { ok: false, error: t("Zarządzanie użytkownikami wymaga roli Administrator"), code: "FORBIDDEN" };
       const u = byId(state.users, id);
       if (!u) return { ok: false, error: t("Nie znaleziono użytkownika") };
       if (u.id === ctx.user.id) return { ok: false, error: t("Nie możesz usunąć własnego konta") };
-      if (this.adminsAfter(state, Object.assign({}, u, { active: false })) === 0) return { ok: false, error: t("W systemie musi pozostać co najmniej jeden aktywny administrator") };
+      const g = this.guard(ctx.user, u, u); if (g) return { ok: false, error: g, code: "FORBIDDEN" };
+      if (this.adminsAfter(state, Object.assign({}, u, { status: "DISABLED" })) === 0) return { ok: false, error: t("W systemie musi pozostać co najmniej jeden aktywny administrator") };
       const hist = state.operations.some(o => o.userId === id || o.approvedById === id) || state.ledger.some(l => l.userId === id) || state.drafts.some(d => d.userId === id) || state.audit.some(a => a.userId === id);
       if (hist) return { ok: false, error: t("Konto ma historię operacji — nie można go usunąć; dezaktywuj je (historia zostaje)") };
       state.users = state.users.filter(x => x.id !== id); state.rev += 1;
-      audit(state, ctx, { entity: "user", entityId: id, opNo: u.login, event: "user", act: Lx("Usunięcie konta użytkownika {l}", { l: u.login }), before: clone(u), after: null, source: (ctx && ctx.source) || N_("Administracja — użytkownicy") });
+      audit(state, ctx, { entity: "user", entityId: id, opNo: u.login, event: "user", code: "USER_DELETED", act: Lx("Usunięcie konta użytkownika {l}", { l: u.login }), before: clone(u), after: null, source: (ctx && ctx.source) || N_("Administracja — użytkownicy") });
       return { ok: true };
     },
-    /** Administrator przełącza swój magazyn roboczy (operacje, pulpit, raporty domyślne). */
+    /** Zmiana magazynu roboczego — tylko na magazyn, do którego użytkownik ma dostęp. */
     setMyWarehouse(state, whId, ctx) {
       const u = ctx && ctx.user && byId(state.users, ctx.user.id);
       if (!u) return { ok: false, error: t("Brak zalogowanego użytkownika") };
-      if (u.role !== "admin") return { ok: false, error: t("Magazyn przydziela administrator"), code: "FORBIDDEN" };
       const wh = byId(state.warehouses, whId);
       if (!wh || wh.active === false) return { ok: false, error: t("Wybierz magazyn") };
+      if (!canAccessWh(u, whId)) return { ok: false, error: t("Brak dostępu do magazynu {w}", { w: wh.name }), code: "FORBIDDEN" };
       if (u.whId === whId) return { ok: true, unchanged: true };
+      if (!(ROLES[u.role] || {}).global) u.warehouseIds = [...new Set([u.whId].concat(u.warehouseIds || []))];
       u.whId = whId; state.rev += 1;
       return { ok: true };
     },
@@ -4150,6 +4273,36 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (next.lang === u.lang && next.theme === u.theme) return { ok: true, unchanged: true };
       u.lang = next.lang || ""; u.theme = next.theme || "";
       state.rev += 1;
+      return { ok: true };
+    }
+  };
+
+  /** Role: zmiana zestawu uprawnień (tylko administrator; ADMINISTRATOR zawsze pełny). */
+  const Roles = {
+    save(state, role, perms, ctx) {
+      const actor = ctx && ctx.user;
+      if (!actor || actor.role !== "admin" || !can(actor, "roles.assign")) return { ok: false, error: t("Role i uprawnienia zmienia wyłącznie administrator"), code: "FORBIDDEN" };
+      if (!ROLES[role]) return { ok: false, error: t("Wybierz rolę") };
+      if (role === "admin") return { ok: false, error: t("Rola ADMINISTRATOR ma zawsze pełne uprawnienia") };
+      const list = [...new Set((perms || []).filter(p => PERMS[p]))].sort();
+      const before = permsOf(role).slice().sort();
+      if (JSON.stringify(before) === JSON.stringify(list)) return { ok: true, unchanged: true };
+      state.rolePerms = Object.assign({}, state.rolePerms, { [role]: list }); applyRoles(state); state.rev += 1;
+      audit(state, ctx, { entity: "role", entityId: role, opNo: ROLES[role].code, event: "role", code: "ROLE_PERMISSIONS_CHANGED", act: Lx("Zmiana uprawnień roli {r}", { r: ROLES[role].code }), before: { uprawnienia: before }, after: { uprawnienia: list }, source: (ctx && ctx.source) || N_("Administracja — role") });
+      return { ok: true };
+    },
+    reset(state, role, ctx) { return this.save(state, role, (ROLES[role] || {}).perms, ctx); }
+  };
+  /** Konfiguracja systemu (obieg zatwierdzania, rejestracja samodzielna). */
+  const Settings = {
+    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool" },
+    save(state, next, ctx) {
+      if (!can(ctx && ctx.user, "settings.edit")) return { ok: false, error: t("Konfigurację zmienia administrator"), code: "FORBIDDEN" };
+      const before = {}, after = {};
+      for (const [k, ty] of Object.entries(this.KEYS)) if (next[k] !== undefined) { const v = ty === "bool" ? !!next[k] && next[k] !== "false" : next[k]; if (state.config[k] !== v) { before[k] = state.config[k]; after[k] = v; state.config[k] = v; } }
+      if (!Object.keys(after).length) return { ok: true, unchanged: true };
+      state.rev += 1;
+      audit(state, ctx, { entity: "system", entityId: "settings", opNo: "—", event: "settings", code: "SETTINGS_CHANGED", act: Lx(N_("Zmiana konfiguracji systemu")), before, after, source: (ctx && ctx.source) || N_("Administracja") });
       return { ok: true };
     }
   };
@@ -4379,7 +4532,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
-    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, ROLE_INFO, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
+    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
+    normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Master, Users, Reports, audit
@@ -4392,7 +4546,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 <script>
 /* service.js */
 /* =========================================================================
-   ResInvest ERP 3.0 — warstwa S: usługa aplikacyjna (komendy)
+   ResInvest ERP 3.2 — warstwa S: usługa aplikacyjna (komendy)
 
    Jedyne wejście do zmian danych — identyczne w trybie lokalnym (przeglądarka)
    i serwerowym (Node + SQLite):
@@ -4419,7 +4573,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const errs = R.validateStateShape(n);
     if (errs.length) return { ok: false, error: t("Kopia odrzucona: {e}", { e: errs.slice(0, 3).join("; ") }) };
     // zalogowany administrator musi istnieć w nowych danych (inaczej system byłby bez dostępu)
-    if (!n.users.some(u => u.id === ctx.user.id && u.role === "admin" && u.active !== false) && !n.users.some(u => u.login === ctx.user.login && u.role === "admin" && u.active !== false)) {
+    const liveAdmin = u => u.role === "admin" && R.statusOf(u) === "ACTIVE";
+    if (!n.users.some(u => u.id === ctx.user.id && liveAdmin(u)) && !n.users.some(u => u.login === ctx.user.login && liveAdmin(u))) {
       const me = R.clone(R.byId(s.users, ctx.user.id));
       if (me) { if (!R.byId(n.warehouses, me.whId)) me.whId = (n.warehouses[0] || {}).id; n.users.push(me); }
     }
@@ -4435,8 +4590,14 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     /* ---- operacje ---- */
     "draft.save": { perm: "op.create", run: (s, a, c) => R.saveDraft(s, a.draft, c) },
     "draft.delete": { run: (s, a, c) => R.deleteDraft(s, a.id, c) },
-    /** Zatwierdzenie bezpośrednie (kierownik / administrator). Magazynier przekazuje operację: op.submit. */
-    "op.commit": { perm: "op.approve", run: (s, a, c) => R.commitOperation(s, a.draft, c) },
+    /**
+     * Zatwierdzenie operacji. Obieg zatwierdzania wyłączony (domyślnie) — każdy z uprawnieniem do wprowadzania;
+     * włączony (`config.requireApproval`) — tylko z „op.approve”, pozostali przekazują operację (op.submit).
+     */
+    "op.commit": { perm: "op.create", run: (s, a, c) => {
+      if (s.config.requireApproval && !R.can(c.user, "op.approve")) return { ok: false, error: t("Obieg zatwierdzania jest włączony — przekaż operację do zatwierdzenia"), code: "FORBIDDEN" };
+      return R.commitOperation(s, a.draft, c);
+    } },
     "op.submit": { perm: "op.create", run: (s, a, c) => R.submitOperation(s, a.draft, c) },
     "op.approve": { perm: "op.approve", run: (s, a, c) => R.approvePending(s, a.id, a.draft || null, c) },
     "op.reject": { perm: "op.approve", run: (s, a, c) => R.rejectPending(s, a.id, a.reason, c) },
@@ -4461,6 +4622,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     "user.remove": { perm: "users.manage", run: (s, a, c) => R.Users.remove(s, a.id, c) },
     "me.prefs": { run: (s, a, c) => R.Users.setPrefs(s, { lang: a.lang, theme: a.theme }, c) },
     "me.warehouse": { run: (s, a, c) => R.Users.setMyWarehouse(s, a.whId, c) },
+    /* ---- role, uprawnienia, konfiguracja (administrator) ---- */
+    "roles.save": { perm: "roles.assign", run: (s, a, c) => R.Roles.save(s, str(a.role), a.perms, c) },
+    "roles.reset": { perm: "roles.assign", run: (s, a, c) => R.Roles.reset(s, str(a.role), c) },
+    "settings.save": { perm: "settings.edit", run: (s, a, c) => R.Settings.save(s, a.settings || {}, c) },
     /* ---- dane ---- */
     "data.backupLogged": { perm: "data.backup", run: (s, a, c) => { s.rev += 1; R.audit(s, c, { entity: "system", entityId: "backup", opNo: N_("kopia"), event: "backup", action: N_("Pobranie kopii zapasowej"), before: null, after: { rewizja: s.rev, format: str(a.format) || "json" } }); return { ok: true }; } },
     "data.import": { perm: "data.import", run: (s, a, c) => replaceState(s, a.state, c, "import", N_("Import kopii zapasowej")) },
@@ -4476,6 +4641,33 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     } }
   };
 
+  /**
+   * Widok danych dla użytkownika — izolacja magazynów (serwer wysyła do przeglądarki WYŁĄCZNIE ten widok).
+   * Role globalne (ADMINISTRATOR, AUDYTOR) — całość; pozostałe — magazyn domyślny i przydzielone:
+   * operacje (magazyn źródłowy lub docelowy MM), księga, inwentaryzacja, robocze, flota (magazyn lub wspólna),
+   * dziennik zmian (wpisy magazynu lub własne), użytkownicy dzielący magazyn.
+   */
+  function project(state, user) {
+    const u = user && R.byId(state.users, user.id);
+    if (!u) return null;
+    const acc = R.whAccess(u);
+    if (acc === null) return state;
+    const A = new Set(acc), inA = w => A.has(w);
+    const out = Object.assign({}, state);
+    out.operations = state.operations.filter(o => inA(o.whId) || (o.toWhId && inA(o.toWhId)));
+    const opIds = new Set(out.operations.map(o => o.id));
+    out.ledger = state.ledger.filter(l => inA(l.whId) || (l.opId && opIds.has(l.opId)));
+    out.drafts = state.drafts.filter(d => d.userId === u.id || (d.status === "PENDING" && inA(d.whId)));
+    out.inventory = state.inventory.filter(p => inA(p.whId));
+    out.audit = state.audit.filter(a => a.userId === u.id || (a.whId && inA(a.whId) && a.entity !== "user" && a.entity !== "role" && a.entity !== "system"));
+    const fl = state.fleet || {};
+    out.fleet = Object.fromEntries(Object.entries(fl).map(([k, v]) => [k, Array.isArray(v) ? v.filter(x => !x.whId || inA(x.whId)) : v]));
+    out.users = state.users.filter(x => x.id === u.id || R.whAccess(x) === null && x.role === "admin" || (x.warehouseIds || [x.whId]).concat(x.whId).some(inA))
+      .map(x => x.id === u.id ? x : { id: x.id, name: x.name, firstName: x.firstName, lastName: x.lastName, login: x.login, email: x.email, role: x.role, whId: x.whId, warehouseIds: x.warehouseIds, status: x.status, active: x.active });
+    out.projected = true;
+    return out;
+  }
+
   const Service = {
     COMMANDS,
     has(cmd) { return Object.prototype.hasOwnProperty.call(COMMANDS, cmd); },
@@ -4484,9 +4676,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const c = COMMANDS[cmd];
       if (!c) return { ok: false, error: t("Nieznana komenda: {c}", { c: cmd }), code: "UNKNOWN" };
       if (!ctx || !ctx.user) return { ok: false, error: t("Brak zalogowanego użytkownika"), code: "AUTH" };
+      R.applyRoles(state);
       const user = R.byId(state.users, ctx.user.id);
-      if (!user || user.active === false) return { ok: false, error: t("Konto jest nieaktywne"), code: "AUTH" };
-      if (c.perm && !R.can(user, c.perm)) return { ok: false, error: t("Brak uprawnienia „{p}”", { p: c.perm }), code: "FORBIDDEN" };
+      if (!user || R.statusOf(user) !== "ACTIVE") return { ok: false, error: t("Twoje konto jest nieaktywne."), code: "AUTH" };
+      if (c.perm && !R.can(user, c.perm)) return { ok: false, error: t("Nie masz uprawnień do wykonania tej operacji."), detail: c.perm, code: "FORBIDDEN" };
       const a = Object.assign({}, args || {});
       const full = Object.assign({}, ctx, { user, source: str(a.source).slice(0, 120) || ctx.source || N_("Aplikacja") });
       try {
@@ -4506,12 +4699,20 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       return { res, state: work };
     },
     replaceState,
-    /** Rejestracja z ekranu logowania (bez sesji) — konto oczekuje na zatwierdzenie przez administratora. */
-    register(state, rec, today) {
+    /** Rejestracja z ekranu logowania (bez sesji) — tylko gdy włączona w konfiguracji; konto czeka na administratora. */
+    register(state, rec, today, meta) {
       const work = R.clone(state), rev0 = work.rev;
-      const res = R.Users.register(work, rec || {}, { today, source: N_("Rejestracja") });
+      const res = R.Users.register(work, rec || {}, Object.assign({ today, source: N_("Rejestracja") }, meta || {}));
       return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
-    }
+    },
+    /** Zmiana stanu wykonywana przez hosta poza sesją (aktywacja zaproszenia, wpis audytu). */
+    apply(state, fn) {
+      const work = R.clone(state), rev0 = work.rev;
+      R.applyRoles(work);
+      const res = fn(work) || { ok: false };
+      return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
+    },
+    project
   };
 
   R.Service = Service;
@@ -4527,7 +4728,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
    * build()   — dane przykładowe (szkolenie, testy): 3 magazyny RiC, konta
                  e-mail firmowe, flota przypisana do magazynów, operacje wzorcowe.
                  Operacje przechodzą przez ten sam silnik co formularz — dane są
-                 spójne z regułami (salda, numeracja, obieg zatwierdzania, audyt).
+                 spójne z regułami (salda, numeracja, audyt).
    * minimal() — start firmy: 3 magazyny, katalog produktów, administrator.
    ========================================================================= */
 (function (root) {
@@ -4547,16 +4748,23 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   function base() {
     const s = RIW.emptyState(root.RIW_CONFIG || null);
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
-    const U = (id, email, name, role, whId) => ({ id, login: email, email, name, role, whId, active: true, lang: "", theme: "" });
+    // konto: e-mail firmowy = login; magazyn domyślny (whId) + przydzielone (warehouseIds); status konta
+    const U = (id, email, name, role, whId, more) => {
+      const [firstName, ...rest] = name.split(" ");
+      return Object.assign({ id, login: email, email, name, firstName, lastName: rest.join(" "), role, whId, warehouseIds: [whId], status: "ACTIVE", active: true, lang: "", theme: "" }, more || {});
+    };
     s.users = [
       U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab"),
-      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab"),
+      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab", { warehouseIds: ["wh_zab", "wh_bra"] }),
       U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab"),
       U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra"),
       U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra"),
       U("u_krok", "michal.lewandowski@resinvest.group", "Michał Lewandowski", "kierownik", "wh_rok"),
       U("u_rok", "karolina.wisniewska@resinvest.group", "Karolina Wiśniewska", "magazynier", "wh_rok"),
-      U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab")
+      U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab"),
+      U("u_aud", "ewa.krawczyk@resinvest.group", "Ewa Krawczyk", "audytor", "wh_zab"),
+      // zaproszenie wysłane, konto jeszcze nieaktywne (nie może się zalogować)
+      U("u_inv", "jan.mazur@resinvest.group", "Jan Mazur", "magazynier", "wh_rok", { status: "INVITED", active: false, invitedAt: "2026-09-20T08:00:00.000Z" })
     ];
     s.products = [
       { id: "pr_drewno", code: "DRW-O", name: "Drewno opałowe", cat: "drewno", unit: "m3", active: true },
@@ -4734,11 +4942,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }]
     );
     const byNo = {};
-    // obieg zatwierdzania: operacje magazyniera zatwierdza kierownik jego magazynu
-    const approverOf = uid => { const u = user(uid); return u.role === "magazynier" ? s.users.find(k => k.role === "kierownik" && k.whId === u.whId) : null; };
+    // obieg zatwierdzania jest domyślnie wyłączony — magazynier zatwierdza operację sam
     for (const [uid, date, over] of ops) {
-      const ap = approverOf(uid);
-      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date), ap ? { author: user(uid), approver: ap } : {});
+      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
     }
@@ -4765,7 +4971,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     s.products = b.products;
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
     const email = String(opts.email || opts.login || ADMIN_EMAIL).trim().toLowerCase();
-    s.users = [{ id: "u_admin", login: email, email, name: opts.name || "Administrator", role: "admin", whId: "wh_zab", active: true, lang: opts.lang || "", theme: "" }];
+    const name = String(opts.name || "Administrator").trim(), [firstName, ...rest] = name.split(/\s+/);
+    s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "" }];
     s.carriers = [];
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());
@@ -5144,7 +5351,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 <script>
 /* auth.js */
 /* =========================================================================
-   ResInvest ERP 3.0 — warstwa A0: logowanie w trybie lokalnym (jedno stanowisko)
+   ResInvest ERP 3.2 — warstwa A0: logowanie w trybie lokalnym (jedno stanowisko)
 
    * Hasła: PBKDF2-SHA256 (Web Crypto; awaryjnie implementacja JS), sól 16 B,
      120 000 iteracji. Hasła nigdy nie są zapisywane ani logowane jawnie.
@@ -5253,7 +5460,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Konta danych przykładowych (tryb lokalny / demonstracyjny) — hasło startowe „demo1234”. */
   const DEMO_PASSWORD = "demo1234";
   const DEMO_LOGINS = ["magazyn@resinvest.group", "anna.gorska@resinvest.group", "adrian.wojciechowski@resinvest.group", "tomasz.zajac@resinvest.group",
-    "pawel.kaczmarek@resinvest.group", "michal.lewandowski@resinvest.group", "karolina.wisniewska@resinvest.group", "beata.nowak@resinvest.group"];
+    "pawel.kaczmarek@resinvest.group", "michal.lewandowski@resinvest.group", "karolina.wisniewska@resinvest.group", "beata.nowak@resinvest.group", "ewa.krawczyk@resinvest.group"];
 
   const LocalAuth = {
     store: null, memory: null,
@@ -5282,8 +5489,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const L = String(login || "").trim().toLowerCase();
       const u = state.users.find(x => String(x.login).toLowerCase() === L || String(x.email || "").toLowerCase() === L);
       const s = this.read();
-      const fail = (code, reason) => { this.log({ login: L, userId: u ? u.id : null, ok: false, reason }); return { ok: false, code, error: code === "LOCKED" ? reason : t("Nieprawidłowy login lub hasło") }; };
-      if (!L || !password) return { ok: false, code: "EMPTY", error: t("Podaj login i hasło") };
+      const fail = (code, reason) => { this.log({ login: L, userId: u ? u.id : null, ok: false, reason }); return { ok: false, code, error: code === "LOCKED" ? reason : t("Nieprawidłowy e-mail lub hasło.") }; };
+      if (!L || !password) return { ok: false, code: "EMPTY", error: t("Podaj e-mail służbowy i hasło") };
       if (!u) return fail("BAD", N_("nieznany login"));
       const acc = s.accounts[u.id];
       if (!acc) return fail("BAD", N_("konto bez hasła"));
@@ -5297,8 +5504,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         this.write();
         return fail("BAD", N_("błędne hasło"));
       }
-      if (u.pending) { this.log({ login: L, userId: u.id, ok: false, reason: N_("konto oczekuje na zatwierdzenie") }); return { ok: false, code: "PENDING", error: t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") }; }
-      if (u.active === false) return fail("BAD", N_("konto nieaktywne"));
+      const st = root.RIW.statusOf(u);
+      if (st === "INVITED") { this.log({ login: L, userId: u.id, ok: false, reason: N_("konto nieaktywowane") }); return { ok: false, code: "INVITED", error: u.selfRegistered ? t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") : t("Twoje konto nie zostało jeszcze aktywowane.") }; }
+      if (st !== "ACTIVE") { this.log({ login: L, userId: u.id, ok: false, reason: st === "SUSPENDED" ? N_("konto zawieszone") : N_("konto dezaktywowane") }); return { ok: false, code: "INACTIVE", error: t("Twoje konto jest nieaktywne.") }; }
       acc.failed = 0; acc.lockedUntil = null; acc.lastLogin = new Date().toISOString();
       this.write();
       this.log({ login: L, userId: u.id, ok: true, reason: "" });
@@ -5901,7 +6109,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       return Promise.resolve(run());
     },
     async login(login, pw) { const r = await this.auth.login(Store.state, login, pw); if (r.ok) Store.userId = r.userId; return r; },
-    async resume() { const s = this.auth.session(); if (s && R.byId(Store.state.users, s.userId) && R.byId(Store.state.users, s.userId).active !== false) { Store.userId = s.userId; return { ok: true, mustChange: this.auth.info(s.userId).mustChange }; } return { ok: false }; },
+    async resume() { const s = this.auth.session(); if (s && R.byId(Store.state.users, s.userId) && R.statusOf(R.byId(Store.state.users, s.userId)) === "ACTIVE") { Store.userId = s.userId; return { ok: true, mustChange: this.auth.info(s.userId).mustChange }; } return { ok: false }; },
     async logout(reason) { this.auth.logout(reason || "user"); Store.userId = null; },
     async afterPasswordChange() {},
     touch() { this.auth.touch(); },
@@ -5983,6 +6191,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     async loginLog() { const r = await this.api("GET", "/api/auth/log"); return r && r.ok ? r.log : []; },
     async createUser(rec, pw) { const r = await this.api("POST", "/api/users", { rec, password: pw }); if (r && r.state) Store.state = r.state; return r && r.res ? r.res : r; },
     async register(rec, pw) { const r = await this.api("POST", "/api/auth/register", { rec, password: pw }); return r || { ok: false, error: t("Nieprawidłowa odpowiedź serwera") }; },
+    /** Zaproszenie e-mail (konto INVITED); wynik: { res, mail }. */
+    async invite(rec) { const r = await this.api("POST", "/api/users/invite", { rec }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    async resendInvite(userId) { const r = await this.api("POST", "/api/users/resend", { userId }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    async sendResetLink(userId) { const r = await this.api("POST", "/api/users/reset-link", { userId }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    auditExtra() { return this.api("GET", "/api/audit/extra"); },
     removeUser(id) { return this.exec("user.remove", { id }, N_("Administracja — użytkownicy")); },
     backups() { return this.api("GET", "/api/backups"); },
     backupNow() { return this.api("POST", "/api/backups", {}); },
@@ -6041,11 +6254,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     { id: "kontrahenci", label: N_("Kontrahenci"), icon: "users" },
     { id: "magazyny", label: N_("Magazyny"), icon: "building" },
     { group: N_("System") },
-    { id: "uzytkownicy", label: N_("Użytkownicy"), icon: "key", perm: "users.manage" },
-    { id: "administracja", label: N_("Administracja"), icon: "shield" },
+    { id: "uzytkownicy", label: N_("Użytkownicy"), icon: "key", perm: "users.read" },
+    { id: "role", label: N_("Role i uprawnienia"), icon: "shield", perm: "users.read" },
+    { id: "audyt", label: N_("Dziennik audytu"), icon: "clock", perm: "audit.read" },
+    { id: "administracja", label: N_("Administracja"), icon: "building" },
     { id: "profil", label: N_("Mój profil"), icon: "user" }
   ];
   const HIDDEN_ROUTES = { nowa: { label: N_("Nowa operacja"), parent: "operacje" }, korekta: { label: N_("Korekta dokumentu"), parent: "operacje" } };
+  /** Adresy administracyjne (zgodne ze specyfikacją) → widoki programu. */
+  const ROUTE_ALIAS = { "admin/users": "uzytkownicy", "admin/roles": "role", "admin/permissions": "role", "admin/audit": "audyt", "account": "profil" };
+  /** Ekrany dostępne bez zalogowania (linki z wiadomości e-mail). */
+  const PUBLIC_ROUTES = ["login", "forgot-password", "reset-password", "invite/accept", "confirm-email"];
 
   /* ------------------------------------------------------------------ */
   /* Aplikacja                                                           */
@@ -6060,11 +6279,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     user() { return Store.state && Store.userId ? R.byId(Store.state.users, Store.userId) : (Store.userId && Store.pendingUser && Store.pendingUser.id === Store.userId ? Store.pendingUser : null); },
     wh() { const u = this.user(); return u ? R.byId(Store.state.warehouses, u.whId) : null; },
     ctx(source) { return { user: this.user(), today: this.today(), source }; },
-    can(p) { return R.can(this.user(), p); },
+    can(p) { R.applyRoles(Store.state); return R.can(this.user(), p); },
+    /** Magazyny, do których zalogowany użytkownik ma dostęp (role globalne — wszystkie aktywne). */
+    myWarehouses() { const u = this.user(), acc = R.whAccess(u); return Store.state.warehouses.filter(w => w.active !== false && (acc === null || acc.includes(w.id))); },
     product(id) { return R.byId(Store.state.products, id); },
     partner(id) { return R.byId(Store.state.partners, id); },
     whName(id) { return (R.byId(Store.state.warehouses, id) || {}).name || "—"; },
-    roleLabel(role) { return t((R.ROLES[role] || R.ROLES.podglad).label); },
+    roleLabel(role) { return t((R.ROLES[role] || R.ROLES.obserwator).label); },
+    /** Tryb pracy wg specyfikacji: OFFLINE (jedno stanowisko, przeglądarka) / FIRMOWY (serwer). */
+    modeLabel() { return Store.mode === "server" ? t("FIRMOWY") : t("OFFLINE"); },
     qtyNative(q, productId, dec = 3) {
       const p = this.product(productId);
       return fmtQ(q, dec) + " " + Units.label(p ? p.unit : "");
@@ -6092,17 +6315,20 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       else if (r.migrated) setTimeout(() => Toast.info(t("Przeniesiono dane z Demo 2.x"), t("Dane zostały zmigrowane do wersji 3.0. Zaloguj się kontem z danych przykładowych.")), 600);
       if (Store.memoryOnly) setTimeout(() => Toast.warn(t("Tryb bez zapisu"), t("Przeglądarka blokuje localStorage — zmiany znikną po zamknięciu karty.")), 400);
       document.body.classList.toggle("no-tutorial", lsGet("riw.tutorial", "1") === "0");
-      root.addEventListener("hashchange", () => { if (Store.userId) this.render(); });
+      root.addEventListener("hashchange", () => { if (Store.userId) this.render(); else Auth.routePublic(); });
       root.addEventListener("storage", e => this.onStorage(e));
       ["mousedown", "keydown", "touchstart", "wheel"].forEach(ev => root.addEventListener(ev, () => { if (Store.userId) Store.backend.touch(); }, { passive: true }));
       DBG.app = App; DBG.store = Store; DBG.R = R; DBG.I18N = I18N;
       DBG.loginAs = async (login, pw) => { if (Store.userId) await this.logout(true); const res = await Store.backend.login(login, pw || AuthLib.DEMO_PASSWORD); if (res.ok) await this.afterLogin(res); return res; };
       if (r.setup) return Auth.setupScreen();
+      const pub = Auth.publicPath();
+      if (pub && pub !== "login") return Auth.routePublic();
       const again = await Store.backend.resume();
-      if (again.ok) return this.afterLogin(again);
+      if (again.ok) { if (pub) location.hash = "#/pulpit"; return this.afterLogin(again); }
       Auth.loginScreen();
     },
     async afterLogin(res) {
+      if (Auth.publicPath()) history.replaceState(null, "", location.pathname + location.search + "#/pulpit");
       const u = this.user();
       Prefs.fromUser(u);
       if (res && res.mustChange) return Auth.forceChange();
@@ -6122,14 +6348,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       clearInterval(this.idleTimer);
       if (root.RIWForm) { root.RIWForm.draft = null; root.RIWForm.mode = "new"; }
       await Store.backend.logout("user");
-      if (!silent) { Prefs.fromUser(null); Auth.loginScreen({ info: t("Wylogowano.") }); }
+      // czyszczenie stanu użytkownika i wrażliwej pamięci podręcznej; powrót na ekran logowania
+      this.tabs = {}; ssSet(DRAFT_KEY, null);
+      if (!silent) { Prefs.fromUser(null); history.replaceState(null, "", location.pathname + location.search + "#/login"); Auth.loginScreen({ info: t("Wylogowano.") }); }
     },
     sessionLost(idle) {
       if (!Store.userId) return;
       clearInterval(this.idleTimer);
       Store.backend.logout(idle ? "timeout" : "user");
-      Store.userId = null;
+      Store.userId = null; this.tabs = {};
       $$(".scrim").forEach(x => x.remove());
+      history.replaceState(null, "", location.pathname + location.search + "#/login");
       Auth.loginScreen({ info: idle ? t("Wylogowano po {n} min bezczynności.", { n: AuthLib.POLICY.idleMinutes }) : t("Sesja wygasła — zaloguj się ponownie.") });
     },
     onStorage(e) {
@@ -6139,7 +6368,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           const s = LocalBackend.read(); if (!s) return;
           Store.state = s;
           const u = this.user();
-          if (!u || u.active === false) return this.sessionLost();
+          if (!u || R.statusOf(u) !== "ACTIVE") return this.sessionLost();
           Toast.info(t("Dane zmienione w innej karcie"), t("Stany i dokumenty odświeżono."));
           this.onExternalChange();
         } catch (x) {}
@@ -6199,16 +6428,16 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (!u) return;
       $("#user-btn").innerHTML = `<span class="avatar">${esc(initials(u.name))}</span><span class="who"><b>${esc(u.name)}</b><small>${esc(this.roleLabel(u.role))}</small></span>`;
       $("#user-btn").setAttribute("aria-label", t("Konto: {n}", { n: u.name }));
-      const canSwitch = u.role === "admin" && Store.state.warehouses.filter(w => w.active !== false).length > 1;
+      const canSwitch = this.myWarehouses().length > 1;
       $("#wh-chip").innerHTML = `<span class="dot"></span><small>${esc(t("Magazyn:"))}</small><b>${esc(wh ? wh.name : "—")}</b>${canSwitch ? ic("chevDown", 14) : ""}`;
-      $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn aktywny wynika z zalogowanego użytkownika");
+      $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn przydzielony przez administratora");
       $("#wh-chip").classList.toggle("switchable", canSwitch);
       $("#lang-btn").innerHTML = `<span class="lbl">${esc(I18N.info().short)}</span>`;
       $("#lang-btn").title = t("Język") + ": " + I18N.info().label;
       const th = THEME_LIST.find(x => x.id === Prefs.theme);
       $("#theme-btn").innerHTML = ic(th.icon, 17); $("#theme-btn").title = t("Motyw") + ": " + t(th.label) + " (Ctrl+D)";
       const srv = Store.mode === "server", on = srv ? ServerBackend.online : true;
-      $("#sb-foot").innerHTML = `<span class="conn-dot ${srv ? (on ? "" : "off") : "local"}"></span><span>${esc(srv ? (on ? t("Serwer · połączono") : t("Serwer · brak połączenia")) : Store.memoryOnly ? t("Tryb lokalny · bez zapisu") : t("Tryb lokalny · dane w tej przeglądarce"))}</span>`;
+      $("#sb-foot").innerHTML = `<span class="conn-dot ${srv ? (on ? "" : "off") : "local"}"></span><span><b class="mode-tag">${esc(this.modeLabel())}</b> ${esc(srv ? (on ? t("Serwer · połączono") : t("Serwer · brak połączenia")) : Store.memoryOnly ? t("Tryb lokalny · bez zapisu") : t("Tryb lokalny · dane w tej przeglądarce"))}</span>`;
     },
     rerenderAll() {
       if (!Store.userId) { Auth.rerender(); return; }
@@ -6217,21 +6446,23 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     userMenu(btn) {
       const u = this.user();
       Dropdown.open(btn, `<div class="dd-head"><span class="avatar lg">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><small>${esc(u.login)} · ${esc(this.roleLabel(u.role))}</small><small>${esc(this.whName(u.whId))}</small></div></div>
-        <a class="dd-item" href="#/profil" data-go><span class="ic">${ic("user", 16)}</span>${esc(t("Mój profil i ustawienia"))}</a>
-        <button class="dd-item" type="button" data-pw><span class="ic">${ic("key", 16)}</span>${esc(t("Zmień hasło"))}</button>
-        ${this.can("users.manage") ? `<a class="dd-item" href="#/uzytkownicy" data-go><span class="ic">${ic("users", 16)}</span>${esc(t("Użytkownicy i uprawnienia"))}</a>` : ""}
+        <a class="dd-item" href="#/profil" data-go><span class="ic">${ic("user", 16)}</span>${esc(t("Moje konto"))}</a>
+        <button class="dd-item" type="button" data-pw><span class="ic">${ic("key", 16)}</span>${esc(t("Zmiana hasła"))}</button>
+        ${this.myWarehouses().length > 1 ? `<button class="dd-item" type="button" data-whsw><span class="ic">${ic("building", 16)}</span>${esc(t("Magazyn"))}: ${esc(this.whName(u.whId))}</button>` : ""}
+        ${this.can("users.read") ? `<a class="dd-item" href="#/uzytkownicy" data-go><span class="ic">${ic("users", 16)}</span>${esc(t("Użytkownicy"))}</a>` : ""}
         <div class="dd-sep"></div>
         <button class="dd-item danger" type="button" data-logout id="logout-btn"><span class="ic">${ic("logout", 16)}</span>${esc(t("Wyloguj"))}</button>`, el => {
         $$("[data-go]", el).forEach(a => a.onclick = () => Dropdown.close());
         $("[data-pw]", el).onclick = () => { Dropdown.close(); Auth.changePasswordDialog(); };
+        const sw = $("[data-whsw]", el); if (sw) sw.onclick = () => { Dropdown.close(); this.whMenu($("#wh-chip")); };
         $("[data-logout]", el).onclick = () => this.logout();
       });
     },
-    /** Administrator: przełączenie magazynu roboczego (pozostałe role mają magazyn przydzielony). */
+    /** Przełączenie magazynu roboczego — tylko magazyny przydzielone (role globalne: wszystkie). */
     whMenu(btn) {
-      const u = this.user();
-      if (u.role !== "admin") return;
-      Dropdown.open(btn, `<div class="dd-label">${esc(t("Magazyn roboczy"))}</div>` + Store.state.warehouses.filter(w => w.active !== false).map(w => `<button class="dd-item" type="button" data-wh="${esc(w.id)}"><span class="ic">${ic("building", 16)}</span>${esc(w.name)}${w.id === u.whId ? `<span class="chk">${ic("check", 15)}</span>` : ""}</button>`).join(""),
+      const u = this.user(), list = this.myWarehouses();
+      if (list.length < 2) return;
+      Dropdown.open(btn, `<div class="dd-label">${esc(t("Magazyn roboczy"))}</div>` + list.map(w => `<button class="dd-item" type="button" data-wh="${esc(w.id)}"><span class="ic">${ic("building", 16)}</span>${esc(w.name)}${w.id === u.whId ? `<span class="chk">${ic("check", 15)}</span>` : ""}</button>`).join(""),
         el => $$("[data-wh]", el).forEach(b => b.onclick = async () => {
           Dropdown.close();
           const r = await Store.exec("me.warehouse", { whId: b.dataset.wh }, N_("Zmiana magazynu roboczego"));
@@ -6251,15 +6482,19 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
     parseHash() {
       const h = (location.hash || "#/pulpit").replace(/^#\/?/, "");
-      const [path, q] = h.split("?");
+      let [path, q] = h.split("?");
       const params = {};
       (q || "").split("&").filter(Boolean).forEach(kv => { const [k, v] = kv.split("="); params[decodeURIComponent(k)] = decodeURIComponent(v || ""); });
+      const um = /^admin\/users\/([\w-]+)$/.exec(path);
+      if (um) { path = "uzytkownicy"; params.id = um[1]; } else if (ROUTE_ALIAS[path]) path = ROUTE_ALIAS[path];
+      if (PUBLIC_ROUTES.includes(path)) path = "pulpit";
       const item = NAV.find(n => n.id === path);
       const route = (item && (!item.perm || this.can(item.perm))) || HIDDEN_ROUTES[path] ? path : "pulpit";
       return { route, params };
     },
     render(opts = {}) {
       if (!Store.userId || !$("#page")) return;
+      R.applyRoles(Store.state);
       const { route, params } = this.parseHash();
       const changed = route !== this.route;
       this.route = route; this.params = params;
@@ -6291,7 +6526,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (pend) return `<span class="cnt warn" title="${esc(t("Do zatwierdzenia"))}">${pend}</span>`;
         const n = S.drafts.filter(d => d.userId === u.id).length; return n ? `<span class="cnt" title="${esc(t("Wersje robocze"))}">${n}</span>` : "";
       }
-      if (id === "uzytkownicy") { const n = S.users.filter(x => x.pending).length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
+      if (id === "uzytkownicy" && this.can("users.manage")) { const n = S.users.filter(x => x.selfRegistered && R.statusOf(x) === "INVITED").length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
       return "";
     },
     go(route) { if (location.hash !== "#/" + route) location.hash = "#/" + route; else this.render(); }
@@ -6314,7 +6549,104 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
   const Auth = {
     screen: null, opts: {},
-    rerender() { if (this.screen === "login") this.loginScreen(this.opts); else if (this.screen === "setup") this.setupScreen(); else if (this.screen === "force") this.forceChange(); },
+    rerender() {
+      if (this.screen === "login") this.loginScreen(this.opts); else if (this.screen === "setup") this.setupScreen(); else if (this.screen === "force") this.forceChange();
+      else if (this.screen === "forgot") this.forgotScreen(this.opts); else if (this.screen === "token") this.tokenScreen(this.opts.kind, this.opts.token, this.opts);
+    },
+    /** Ścieżka ekranu publicznego z adresu (#/login, #/forgot-password, #/invite/accept?token=…) albo null. */
+    publicPath() { const p = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; return PUBLIC_ROUTES.includes(p) ? p : null; },
+    /** Ekrany bez logowania — wywoływane przy starcie i przy zmianie adresu, gdy nikt nie jest zalogowany. */
+    routePublic() {
+      if (Store.userId) return;
+      const p = this.publicPath(), q = new URLSearchParams((location.hash.split("?")[1] || ""));
+      if (p === "forgot-password") return this.forgotScreen();
+      const kind = { "invite/accept": "invite", "reset-password": "reset", "confirm-email": "confirm" }[p];
+      if (kind) {
+        const token = q.get("token") || "";
+        // token nie zostaje w adresie ani w historii przeglądarki
+        history.replaceState(null, "", location.pathname + location.search + "#/" + p);
+        return this.tokenScreen(kind, token || (this.opts && this.opts.kind === kind ? this.opts.token : ""));
+      }
+      if (this.screen !== "login") this.loginScreen();
+    },
+    selfRegistration() { return Store.mode === "server" ? !!(ServerBackend.info && ServerBackend.info.selfRegistration) : !!(Store.state && Store.state.config.allowSelfRegistration); },
+    /** Okno ekranu publicznego (wspólny układ z ekranem logowania). */
+    frame(id, title, lead, inner) {
+      document.getElementById("app").innerHTML = `<div class="auth" id="${id}">${this.side()}
+        <section class="auth-form">${this.tools()}
+          <div class="auth-box"><h3>${esc(title)}</h3>${lead ? `<p class="lead">${esc(lead)}</p>` : ""}${inner}
+            <p class="auth-foot">ResInvest ERP ${esc(R.VERSION)} · ${esc(App.modeLabel())}</p>${this.credit()}</div></section></div>`;
+      const scope = $("#" + id); this.bindTools(scope); bindEyes(scope); return scope;
+    },
+    /** „Nie pamiętam hasła” — link e-mail (tryb FIRMOWY); w trybie OFFLINE hasło nadaje administrator. */
+    forgotScreen(opts = {}) {
+      this.screen = "forgot"; this.opts = opts;
+      document.title = t("Nie pamiętam hasła") + " · ResInvest ERP";
+      if (Store.mode !== "server") {
+        this.frame("forgot-screen", t("Nie pamiętam hasła"), "", `<div class="info-line">${ic("alert", 15)}<span>${esc(t("W trybie OFFLINE nowe hasło tymczasowe nadaje administrator w module Użytkownicy."))}</span></div>
+          <a class="btn block mt4" href="#/login">${esc(t("Wróć do logowania"))}</a>`);
+        return;
+      }
+      const scope = this.frame("forgot-screen", t("Nie pamiętam hasła"), t("Podaj e-mail służbowy. Jeśli konto istnieje i jest aktywne, wyślemy link do ustawienia nowego hasła (ważny 1 godzinę)."),
+        opts.sent ? `<div class="info-line ok mt4">${ic("check", 15)}<span id="fp-info">${esc(opts.sent)}</span></div><a class="btn primary block mt4" href="#/login">${esc(t("Wróć do logowania"))}</a>`
+          : `<form id="fp-form" novalidate><div class="field"><label for="fp-email">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="fp-email" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.email || lsGet("riw.lastLogin", ""))}"></div>
+            <div class="auth-err hidden" id="fp-err" role="alert"></div>
+            <button class="btn primary lg block" type="submit" id="fp-submit">${ic("key", 16)} ${esc(t("Wyślij link"))}</button>
+            <a class="btn ghost block mt2" href="#/login">${esc(t("Wróć do logowania"))}</a></form>`);
+      const f = $("#fp-form", scope); if (!f) return;
+      f.onsubmit = async e => {
+        e.preventDefault();
+        const err = $("#fp-err"), email = $("#fp-email").value.trim();
+        const em = R.validateCompanyEmail(email, ((Store.state && Store.state.config) || root.RIW_CONFIG || {}).companyDomains || ["resinvest.group"]);
+        if (!em.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(em.error)}</span>`; err.classList.remove("hidden"); return; }
+        $("#fp-submit").disabled = true;
+        const r = await ServerBackend.api("POST", "/api/auth/forgot", { email: em.email });
+        $("#fp-submit").disabled = false;
+        if (!r || !r.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc((r && r.error) || t("Nieprawidłowa odpowiedź serwera"))}</span>`; err.classList.remove("hidden"); return; }
+        this.forgotScreen({ sent: r.message });
+      };
+      $("#fp-email").focus();
+    },
+    /** Link z e-maila: aktywacja zaproszenia (hasło), reset hasła, potwierdzenie adresu. */
+    async tokenScreen(kind, token, opts = {}) {
+      this.screen = "token"; this.opts = Object.assign({}, opts, { kind, token });
+      const T = { invite: [N_("Aktywacja konta"), N_("Ustaw hasło i aktywuj konto")], reset: [N_("Ustaw nowe hasło"), N_("Zapisz nowe hasło")], confirm: [N_("Potwierdzenie adresu e-mail"), ""] }[kind];
+      document.title = t(T[0]) + " · ResInvest ERP";
+      const bad = msg => this.frame("token-screen", t(T[0]), "", `<div class="auth-err" role="alert">${ic("alert", 15)}<span id="tk-err">${esc(msg)}</span></div>
+        ${kind === "reset" ? `<a class="btn primary block mt4" href="#/forgot-password">${esc(t("Wyślij nowy link"))}</a>` : ""}<a class="btn ghost block mt2" href="#/login">${esc(t("Wróć do logowania"))}</a>`);
+      if (Store.mode !== "server") return bad(t("Linki z wiadomości e-mail działają w trybie FIRMOWYM (ResInvest ERP Serwer)."));
+      if (!token) return bad(t("Link jest nieprawidłowy."));
+      if (!opts.info) {
+        this.frame("token-screen", t(T[0]), t("Sprawdzanie linku…"), "");
+        const info = kind === "confirm" ? await ServerBackend.api("POST", "/api/auth/confirm", { token }) : await ServerBackend.api("POST", "/api/auth/token", { kind, token });
+        if (!info || !info.ok) return bad((info && info.error) || t("Link jest nieprawidłowy."));
+        if (kind === "confirm") { history.replaceState(null, "", location.pathname + location.search + "#/login"); return this.loginScreen({ login: info.email, ok: true, info: t("Adres e-mail {e} potwierdzony. Możesz się zalogować.", { e: info.email }) }); }
+        this.opts.info = info;
+      }
+      const info = this.opts.info;
+      const scope = this.frame("token-screen", t(T[0]), kind === "invite" ? t("{n}, ustaw hasło do konta {e}. Link działa jednorazowo.", { n: info.firstName || info.name, e: info.email }) : t("Konto: {e}. Link działa jednorazowo.", { e: info.email }),
+        `<form id="tk-form" novalidate><input type="email" autocomplete="username" value="${esc(info.email)}" class="hidden" readonly>
+          ${pwField("tk-pass", t("Nowe hasło"), "new-password")}${pwMeter("tk-meter")}${pwField("tk-pass2", t("Powtórz hasło"), "new-password")}
+          <p class="help">${esc(t("Hasło musi mieć: {x}", { x: [t("co najmniej {n} znaków", { n: AuthLib.POLICY.minLength }), t("litery i cyfry")].join(", ") }))}</p>
+          <div class="auth-err hidden" id="tk-err" role="alert"></div>
+          <button class="btn primary lg block" type="submit" id="tk-submit">${ic("check", 16)} ${esc(t(T[1]))}</button></form>`);
+      bindMeter($("#tk-pass"), $("#tk-meter"));
+      $("#tk-form", scope).onsubmit = async e => {
+        e.preventDefault();
+        const err = $("#tk-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
+        const pw = $("#tk-pass").value, pw2 = $("#tk-pass2").value;
+        if (pw !== pw2) return fail(t("Hasła nie są takie same"));
+        const pe = AuthLib.passwordError(pw, info.email); if (pe) return fail(pe);
+        $("#tk-submit").disabled = true;
+        const r = await ServerBackend.api("POST", kind === "invite" ? "/api/invite/accept" : "/api/auth/reset", { token, password: pw, password2: pw2 });
+        $("#tk-submit").disabled = false;
+        if (!r || !r.ok) return fail((r && r.error) || t("Nieprawidłowa odpowiedź serwera"));
+        this.opts = {};
+        history.replaceState(null, "", location.pathname + location.search + "#/login");
+        this.loginScreen({ login: info.email, ok: true, info: kind === "invite" ? t("Konto aktywne. Zaloguj się ustawionym hasłem.") : t("Hasło zmienione. Zaloguj się nowym hasłem.") });
+      };
+      $("#tk-pass").focus();
+    },
     tools() {
       return `<div class="auth-tools">
         <div class="seg" role="group" aria-label="${esc(t("Język"))}">${Object.values(I18N.LANGS).map(L => `<button type="button" data-auth-lang="${L.code}" aria-pressed="${L.code === I18N.lang}" title="${esc(L.label)}">${L.short}</button>`).join("")}</div>
@@ -6334,19 +6666,21 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     credit() { return `<p class="credit">${esc(t("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"))} · © 2026</p>`; },
     loginScreen(opts = {}) {
       this.screen = "login"; this.opts = opts;
-      const reg = opts.tab === "register";
+      if (this.publicPath() && this.publicPath() !== "login") history.replaceState(null, "", location.pathname + location.search + "#/login");
+      const reg = opts.tab === "register" && this.selfRegistration();
       document.title = (reg ? t("Rejestracja") : t("Logowanie")) + " · ResInvest ERP";
       const local = Store.mode === "local";
       const domains = ((Store.state && Store.state.config && Store.state.config.companyDomains) || ["resinvest.group"]).map(d => "@" + d).join(", ");
       const demo = local && Store.state ? Store.state.users.filter(u => AuthLib.DEMO_LOGINS.includes(u.login) && u.active !== false && AuthLib.LocalAuth.info(u.id).demo) : [];
-      const tabs = `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
+      const tabs = !this.selfRegistration() ? "" : `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
       const loginForm = `<form id="login-form" novalidate autocomplete="on">
-              <div class="field"><label for="lg-login">${esc(t("E-mail firmowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
+              <div class="field"><label for="lg-login">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
               ${pwField("lg-pass", t("Hasło"), "current-password")}
               <div class="caps hidden" id="lg-caps">${esc(t("Włączony Caps Lock"))}</div>
               <div class="auth-err hidden" id="lg-err" role="alert"></div>
-              <button class="btn primary lg block" type="submit" id="lg-submit">${ic("lock", 16)} ${esc(t("Zaloguj"))}</button>
-              <p class="help mt2">${esc(t("Nie pamiętasz hasła? Nowe hasło tymczasowe nadaje administrator ({e}).", { e: R.Seed ? R.Seed.ADMIN_EMAIL : "" }))}</p>
+              <button class="btn primary lg block" type="submit" id="lg-submit">${ic("lock", 16)} ${esc(t("Zaloguj się"))}</button>
+              ${local ? `<p class="help mt2">${esc(t("Nie pamiętasz hasła? W trybie OFFLINE nowe hasło tymczasowe nadaje administrator ({e}).", { e: R.Seed ? R.Seed.ADMIN_EMAIL : "" }))}</p>`
+                : `<a class="btn ghost block mt2" href="#/forgot-password" id="lg-forgot">${esc(t("Nie pamiętam hasła"))}</a>`}
             </form>`;
       const regForm = `<form id="reg-form" novalidate autocomplete="on">
               <p class="help">${esc(t("Rejestracja wyłącznie adresem firmowym ({d}). Konto aktywuje administrator — nadaje rolę i magazyn.", { d: domains }))}</p>
@@ -6362,7 +6696,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <section class="auth-form">${this.tools()}
           <div class="auth-box">
             <h3>${esc(reg ? t("Załóż konto") : t("Zaloguj się"))}</h3>
-            <p class="lead">${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
+            <p class="lead"><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
             ${tabs}
             ${opts.info ? `<div class="info-line mt4 ${opts.ok ? "ok" : ""}">${ic(opts.ok ? "check" : "alert", 15)}<span id="auth-info">${esc(opts.info)}</span></div>` : ""}
             ${reg ? regForm : loginForm}
@@ -6384,7 +6718,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const btn = $("#lg-submit");
         btn.disabled = true; err.classList.add("hidden");
         let res;
-        try { res = await Store.backend.login(login.value.trim().toLowerCase(), pass.value); }
+        const em = R.validateCompanyEmail(login.value, ((Store.state && Store.state.config) || root.RIW_CONFIG || {}).companyDomains || ["resinvest.group"]);
+        if (!pass.value) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(t("Podaj e-mail służbowy i hasło"))}</span>`; err.classList.remove("hidden"); return; }
+        if (!em.ok) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(em.error)}</span>`; err.classList.remove("hidden"); login.focus(); return; }
+        login.value = em.email;
+        try { res = await Store.backend.login(em.email, pass.value); }
         catch (x) { res = { ok: false, error: t("Nie udało się zalogować: {m}", { m: x.message }) }; }
         btn.disabled = false;
         if (!res.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(res.error)}</span>`; err.classList.remove("hidden"); pass.select(); return; }
@@ -6423,7 +6761,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <section class="auth-form">${this.tools()}
           <div class="auth-box" style="max-width:440px">
             <h3>${esc(t("Pierwsze uruchomienie serwera"))}</h3>
-            <p class="lead">${esc(t("Utwórz konto administratora. Pozostałych użytkowników dodasz w module Użytkownicy albo zatwierdzisz ich rejestrację."))}</p>
+            <p class="lead">${esc(t("Utwórz konto administratora. Pozostałych użytkowników zaprosisz e-mailem w module Użytkownicy."))}</p>
             <form id="setup-form" novalidate>
               <div class="field"><label for="su-name">${esc(t("Imię i nazwisko administratora"))}</label><input class="ctrl" id="su-name" autocomplete="name"></div>
               <div class="field"><label for="su-login">${esc(t("E-mail firmowy administratora"))}</label><input class="ctrl" id="su-login" type="email" value="${esc(R.Seed.ADMIN_EMAIL)}" autocapitalize="off" spellcheck="false" autocomplete="username"></div>
@@ -6691,7 +7029,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
     whId() { return this.mode === "correct" && this.op ? this.op.whId : this.review ? this.review.whId : App.user().whId; },
     /** Co zrobi przycisk główny: przegląd (zatwierdź przekazaną), zatwierdzenie bezpośrednie albo przekazanie do zatwierdzenia. */
-    action() { return this.review ? "approve" : R.canApprove(App.user(), App.user().whId) ? "commit" : "submit"; },
+    action() { return this.review ? "approve" : (!Store.state.config.requireApproval || R.canApprove(App.user(), App.user().whId)) ? "commit" : "submit"; },
     /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
     supplierText() {
       const P = this.draft.purchase;
@@ -7807,8 +8145,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       add(t("Miejsce"), esc(op.place)); add(t("Dokument zewnętrzny"), esc(op.extDoc)); add(t("Uwagi"), esc(op.notes));
       add(t("Wynik operacji"), `<b>${money(op.totals.result)}</b>`);
 
-      const canCorr = op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && (App.user().whId === op.whId || App.user().role === "admin");
-      const canCancel = op.status !== "CANCELLED" && App.can("documents.cancel") && (App.user().whId === op.whId || App.user().role === "admin");
+      const canCorr = op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && R.canAccessWh(App.user(), op.whId);
+      const canCancel = op.status !== "CANCELLED" && App.can("documents.cancel") && R.canAccessWh(App.user(), op.whId);
       const lastCorr = op.corrections[op.corrections.length - 1];
       const corrRows = op.corrections.map(c => `<tr><td class="mono nowrap"><a href="#" data-doc="${esc(c.no)}">${esc(c.no)}</a></td><td class="nowrap">${esc(Dates.pl(c.date))}</td><td>${esc(c.userName)}</td><td>${esc(R.trReason(c.reason))}${c.reverses ? `<br><small class="dim">${esc(t("odwraca {no}", { no: c.reverses }))}</small>` : ""}</td>
           <td>${c.changes.map(x => `${esc(t(x.label))}: ${esc(x.beforeText)} → <b>${esc(x.afterText)}</b>`).join("<br>") || "—"}</td>
@@ -8602,7 +8940,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     html() {
       const S = Store.state;
       const tab = App.tabs.fleet || "vehicles";
-      const fwh = App.tabs.fleetWh === undefined ? (App.user().role === "admin" ? "" : App.user().whId) : App.tabs.fleetWh;
+      const fwh = App.tabs.fleetWh === undefined ? (R.whAccess(App.user()) === null ? "" : App.user().whId) : App.tabs.fleetWh;
       const inWh = x => !fwh || x.whId === fwh || !x.whId;
       const whCell = x => `<td>${x.whId ? esc(App.whName(x.whId)) : `<span class="dim">${th("wspólny")}</span>`}</td>`;
       const drv = id => (R.byId(S.fleet.drivers, id) || {}).name || "—";
@@ -8850,7 +9188,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (myRejected) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja odrzucona|{n} operacje odrzucone|{n} operacji odrzuconych", myRejected), text: t("Popraw według uwag kierownika i przekaż ponownie.") });
       const myPending = S.drafts.filter(d => d.userId === u.id && d.status === "PENDING").length;
       if (myPending && !pendingForMe) alerts.push({ cls: "info", href: "#/operacje", title: tp("{n} operacja przekazana|{n} operacje przekazane|{n} operacji przekazanych", myPending), text: t("Czeka na zatwierdzenie przez kierownika magazynu.") });
-      const regs = App.can("users.manage") ? S.users.filter(x => x.pending).length : 0;
+      const regs = App.can("users.manage") ? S.users.filter(x => x.selfRegistered && R.statusOf(x) === "INVITED").length : 0;
       if (regs) alerts.push({ cls: "warn", href: "#/uzytkownicy", title: tp("{n} zgłoszenie rejestracji|{n} zgłoszenia rejestracji|{n} zgłoszeń rejestracji", regs), text: t("Nadaj rolę i magazyn albo odrzuć zgłoszenie.") });
       if (Store.mode === "local" && root.RIW_Auth && root.RIW_Auth.LocalAuth.info(u.id).demo) alerts.push({ cls: "info", href: "#/profil", title: t("Hasło startowe konta"), text: t("Konto używa hasła demonstracyjnego — zmień je w „Mój profil” przed pracą na prawdziwych danych.") });
       if (openPrev) alerts.push({ cls: "", href: "#/inwentaryzacja", title: tp("{n} niezamknięty okres|{n} niezamknięte okresy|{n} niezamkniętych okresów", openPrev), text: t("Zamknij poprzednie miesiące — do tego czasu dokumenty z tych okresów można zmieniać.") });
@@ -8888,9 +9226,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 <script>
 /* admin.js */
 /* =========================================================================
-   ResInvest ERP 3.0 — kartoteki (produkty, kontrahenci, magazyny),
-   użytkownicy i hasła, mój profil, administracja (kopie, dziennik logowań,
-   uprawnienia, preferencje, narzędzia trybu lokalnego).
+   ResInvest ERP 3.2 — kartoteki (produkty, kontrahenci, magazyny),
+   użytkownicy (zaproszenia, statusy, magazyny), role i uprawnienia,
+   dziennik audytu, mój profil, administracja (kopie, konfiguracja dostępu,
+   preferencje, narzędzia trybu lokalnego).
    ========================================================================= */
 (function (root) {
   "use strict";
@@ -9022,7 +9361,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           for (const [pid, q] of m) { const p = App.product(pid); if (Math.abs(q) > R.EPS) per[p.unit] = R.rq((per[p.unit] || 0) + q); }
           return `<div class="card" data-wh="${esc(w.id)}"><div class="card-h"><h3>${esc(w.name)}</h3><span class="sub">${esc(w.code)}</span>${activeBadge(w.active)}<span class="spacer"></span>${editBtn("warehouses", w.id)}</div><div class="card-b">
             <dl class="money-list"><dt>${th("Adres")}</dt><dd>${esc(w.address || "")}</dd><dt>${th("Stan wg jednostek")}</dt><dd>${esc(Object.entries(per).map(([u, q]) => `${fmtQ(q)} ${Units.label(u)}`).join(" · ") || "—")}</dd>
-            <dt>${th("Zamknięte do")}</dt><dd>${esc(R.lockedMonth(S, w.id) || "—")}</dd>${["kierownik", "magazynier", "obserwator", "admin"].map(r => { const us = S.users.filter(u => u.whId === w.id && u.role === r && u.active !== false && !u.pending); return us.length ? `<dt>${esc(t(R.ROLES[r].label))}</dt><dd>${esc(us.map(u => u.name).join(", "))}</dd>` : ""; }).join("")}
+            <dt>${th("Zamknięte do")}</dt><dd>${esc(R.lockedMonth(S, w.id) || "—")}</dd>${["kierownik", "magazynier", "obserwator", "admin"].map(r => { const us = S.users.filter(u => u.role === r && R.statusOf(u) === "ACTIVE" && (R.whAccess(u) || [u.whId]).includes(w.id)); return us.length ? `<dt>${esc(t(R.ROLES[r].label))}</dt><dd>${esc(us.map(u => u.name).join(", "))}</dd>` : ""; }).join("")}
             <dt>${th("Pojazdy")}</dt><dd>${esc(S.fleet.vehicles.filter(v => v.whId === w.id).map(v => `${v.reg}`).join(", ") || "—")}</dd>
             <dt>${th("Kierowcy")}</dt><dd>${esc(S.fleet.drivers.filter(v => v.whId === w.id).map(v => v.name).join(", ") || "—")}</dd>
             <dt>${th("Rębaki i operatorzy")}</dt><dd>${esc(S.fleet.chippers.filter(v => v.whId === w.id).map(v => v.name).concat(S.fleet.operators.filter(v => v.whId === w.id).map(v => v.name)).join(", ") || "—")}</dd>
@@ -9034,59 +9373,139 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* ================================================================== */
   /* Użytkownicy                                                          */
   /* ================================================================== */
+  const ST_BADGE = { ACTIVE: "ok", INVITED: "info", SUSPENDED: "warn", DISABLED: "" };
+  const statusChip = u => { const st = R.statusOf(u); return `<span class="badge ${ST_BADGE[st]}" data-ustatus="${st}">${esc(t(R.USER_STATUS[st]))}${u.selfRegistered && st === "INVITED" ? " · " + esc(t("rejestracja")) : ""}${u.emailUnverified ? " · " + esc(t("e-mail niepotwierdzony")) : ""}</span>`; };
+  const roleChip = role => `<span class="badge role-${esc(role)}" title="${esc((R.ROLES[role] || {}).code || "")}">${esc(App.roleLabel(role))}</span>`;
+  const whList = u => { const acc = R.whAccess(u); return acc === null ? t("wszystkie magazyny") : acc.map(App.whName).join(", "); };
+  /** Wynik wysyłki e-mail → komunikat dla administratora. */
+  const mailToast = (mail, okTitle, who) => {
+    if (!mail) return;
+    if (mail.ok) Toast.ok(okTitle, mail.transport === "file" ? t("{w} — poczta nieskonfigurowana: wiadomość zapisano w folderze serwera (mail-outbox).", { w: who }) : who);
+    else Toast.err(t("E-mail nie został wysłany"), `${who}: ${mail.error} ${t("Konto pozostaje nieaktywne — użyj „Wyślij ponownie zaproszenie”.")}`);
+  };
   const Users = {
     async accounts() {
       if (Store.mode === "server") return ServerBackend.accounts();
       const out = {}; for (const u of Store.state.users) out[u.id] = AuthLib.LocalAuth.info(u.id); return out;
     },
+    /**
+     * Dodawanie / edycja konta. FIRMOWY: nowe konto przez zaproszenie e-mail (albo hasło tymczasowe);
+     * OFFLINE: hasło tymczasowe (brak poczty). Bez uprawnienia users.manage — podgląd.
+     */
     edit(id, how = {}) {
-      const S = Store.state, isNew = !id;
-      const rec = id ? R.clone(R.byId(S.users, id)) : { name: "", login: "", role: "magazynier", whId: App.user().whId, active: true, lang: "", theme: "", email: "", phone: "" };
-      const self = id === Store.userId, approving = !!(rec.pending && how.approve);
+      const S = Store.state, isNew = !id, srv = Store.mode === "server", manage = App.can("users.manage");
+      const base = id ? R.clone(R.byId(S.users, id)) : null;
+      if (id && !base) return Toast.err(t("Nie znaleziono użytkownika"));
+      const rec = base || { firstName: "", lastName: "", email: "", role: "magazynier", whId: App.user().whId, warehouseIds: [App.user().whId], status: "ACTIVE", lang: "", phone: "" };
+      if (!rec.firstName && !rec.lastName && rec.name) { const p = String(rec.name).split(/\s+/); rec.firstName = p[0]; rec.lastName = p.slice(1).join(" "); }
+      const self = id === Store.userId, st = R.statusOf(rec), approving = !!(rec.selfRegistered && st === "INVITED" && how.approve);
+      const ro = !manage ? "disabled" : "";
       const domains = (S.config.companyDomains || []).map(d => "@" + d).join(", ");
-      const roleHelp = r => `<span data-role-help>${esc(t(R.ROLE_INFO[r] || ""))}</span>`;
+      const whs = S.warehouses.filter(w => w.active !== false || w.id === rec.whId || (rec.warehouseIds || []).includes(w.id));
+      const statusOpts = [["ACTIVE", t(R.USER_STATUS.ACTIVE)], ["SUSPENDED", t(R.USER_STATUS.SUSPENDED)], ["DISABLED", t(R.USER_STATUS.DISABLED)]].concat(st === "INVITED" ? [["INVITED", t(R.USER_STATUS.INVITED)]] : []);
       const body = `<div class="fgrid">
-        ${approving ? `<div class="span-all info-line">${ic("user", 15)}<span>${esc(t("Zgłoszenie z rejestracji ({d}). Nadaj rolę i magazyn — zapis aktywuje konto.", { d: Dates.ts(rec.registeredAt) }))}</span></div>` : ""}
-        ${ff("name", t("Imię i nazwisko"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}" autocomplete="off">`)}
-        ${ff("login", t("E-mail firmowy (login)"), `<input class="ctrl" id="me-login" type="email" value="${esc(rec.login)}" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}">`, domains ? t("Dozwolone domeny: {d}", { d: domains }) : "")}
-        ${ff("role", t("Rola"), `<select class="ctrl" id="me-role" ${self ? "disabled" : ""}>${opts(Object.entries(R.ROLES).map(([k, v]) => [k, t(v.label)]), approving && rec.role === "obserwator" ? "magazynier" : rec.role)}</select>`, self ? t("Nie możesz zmienić własnej roli") : roleHelp(approving && rec.role === "obserwator" ? "magazynier" : rec.role))}
-        ${ff("whId", t("Magazyn"), `<select class="ctrl" id="me-whId">${opts(S.warehouses.filter(w => w.active !== false || w.id === rec.whId).map(w => [w.id, w.name]), rec.whId)}</select>`, t("Kierownik zatwierdza operacje tego magazynu; Administrator ma dostęp do wszystkich."))}
-        ${ff("phone", t("Telefon"), `<input class="ctrl" id="me-phone" type="tel" value="${esc(rec.phone || "")}">`)}
-        ${ff("lang", t("Język interfejsu"), `<select class="ctrl" id="me-lang">${opts([["", t("wybór użytkownika / przeglądarki")]].concat(Object.values(I18N.LANGS).map(L => [L.code, L.label])), rec.lang)}</select>`)}
-        ${isNew ? "" : ff("active", t("Status konta"), `<select class="ctrl" id="me-active" ${self ? "disabled" : ""}>${opts([["true", t("aktywne")], ["false", rec.pending ? t("oczekuje na zatwierdzenie") : t("nieaktywne (logowanie zablokowane)")]], String(approving || rec.active !== false))}</select>`)}
-        ${isNew ? `<div class="span-all"><h4 class="mini-h">${th("Hasło startowe")}</h4><p class="help">${th("Użytkownik zmieni je przy pierwszym logowaniu.")}</p></div>
-          <div data-ff="password">${pwField("me-pw", t("Hasło"), "new-password")}${pwMeter("me-pw-meter")}<div class="msg hidden" data-fmsg="password"></div></div>
-          <div>${pwField("me-pw2", t("Powtórz hasło"), "new-password")}</div>` : ""}
+        ${approving ? `<div class="span-all info-line">${ic("user", 15)}<span>${esc(t("Zgłoszenie z rejestracji ({d}). Nadaj rolę i magazyn — zapis ze statusem „aktywny” aktywuje konto.", { d: Dates.ts(rec.registeredAt) }))}</span></div>` : ""}
+        ${ff("firstName", t("Imię"), `<input class="ctrl" id="me-firstName" value="${esc(rec.firstName || "")}" autocomplete="off" ${ro}>`)}
+        ${ff("lastName", t("Nazwisko"), `<input class="ctrl" id="me-lastName" value="${esc(rec.lastName || "")}" autocomplete="off" ${ro}>`)}
+        ${ff("email", t("E-mail służbowy (login)"), `<input class="ctrl" id="me-email" type="email" value="${esc(rec.email || rec.login || "")}" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" ${ro}>`, (domains ? t("Dozwolone domeny: {d}", { d: domains }) : "") + (!isNew && srv ? " " + t("Zmiana adresu wymaga potwierdzenia linkiem z nowej skrzynki.") : ""), "span-all")}
+        ${ff("role", t("Rola"), `<select class="ctrl" id="me-role" ${self || !manage ? "disabled" : ""}>${opts(Object.entries(R.ROLES).filter(([k]) => k !== "admin" || App.user().role === "admin" || rec.role === "admin").map(([k, v]) => [k, `${t(v.label)} (${v.code})`]), approving && rec.role === "obserwator" ? "magazynier" : rec.role)}</select>`, self ? t("Nie możesz zmienić własnej roli") : `<span data-role-help>${esc(t(R.ROLE_INFO[rec.role] || ""))}</span>`)}
+        ${ff("whId", t("Magazyn domyślny"), `<select class="ctrl" id="me-whId" ${ro}>${opts(whs.map(w => [w.id, w.name]), rec.whId)}</select>`)}
+        <div class="field span-all" data-ff="warehouseIds" id="me-whs-box"><label>${th("Dostępne magazyny")}</label><div class="row wrap">${whs.map(w => `<label class="inline-opt"><input type="checkbox" data-whacc="${esc(w.id)}" ${(rec.warehouseIds || []).includes(w.id) || w.id === rec.whId ? "checked" : ""} ${ro}> ${esc(w.name)}</label>`).join("")}</div>
+          <div class="msg hidden" data-fmsg="warehouseIds"></div><div class="help" id="me-whs-help">${th("Dane pozostałych magazynów są dla tej osoby niewidoczne (izolacja po stronie serwera).")}</div></div>
+        ${ff("phone", t("Telefon"), `<input class="ctrl" id="me-phone" type="tel" value="${esc(rec.phone || "")}" ${ro}>`)}
+        ${ff("lang", t("Język interfejsu"), `<select class="ctrl" id="me-lang" ${ro}>${opts([["", t("wybór użytkownika / przeglądarki")]].concat(Object.values(I18N.LANGS).map(L => [L.code, L.label])), rec.lang)}</select>`)}
+        ${isNew ? "" : ff("status", t("Status"), `<select class="ctrl" id="me-status" ${self || !manage ? "disabled" : ""}>${opts(statusOpts, approving ? "ACTIVE" : st)}</select>`, self ? t("Nie możesz zablokować ani dezaktywować własnego konta") : t("Zawieszone i dezaktywowane konto nie loguje się; historia operacji zostaje."))}
+        ${isNew ? `<div class="span-all">${srv ? `<h4 class="mini-h">${th("Sposób aktywacji")}</h4>
+            <label class="inline-opt"><input type="radio" name="me-how" value="invite" checked> ${th("Wyślij zaproszenie e-mail — pracownik sam ustawi hasło (zalecane)")}</label><br>
+            <label class="inline-opt"><input type="radio" name="me-how" value="password"> ${th("Ustaw hasło tymczasowe (zmiana przy pierwszym logowaniu)")}</label>`
+            : `<h4 class="mini-h">${th("Hasło tymczasowe")}</h4><p class="help">${th("Tryb OFFLINE: bez poczty — przekaż hasło osobiście; użytkownik zmieni je przy pierwszym logowaniu.")}</p>`}</div>
+          <div class="span-all fgrid ${srv ? "hidden" : ""}" id="me-pw-box"><div data-ff="password">${pwField("me-pw", t("Hasło"), "new-password")}${pwMeter("me-pw-meter")}<div class="msg hidden" data-fmsg="password"></div></div>
+          <div>${pwField("me-pw2", t("Powtórz hasło"), "new-password")}</div></div>` : ""}
       </div>`;
-      const m = Modal.open({ title: isNew ? t("Nowy użytkownik") : approving ? t("Zatwierdzenie rejestracji: {l}", { l: rec.login }) : t("Edycja użytkownika {l}", { l: rec.login }), id: "user-edit", wide: true, body,
-        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${ic("check", 15)} ${approving ? th("Zatwierdź i aktywuj") : th("Zapisz")}</button>` });
-      bindEyes(m.el); if (isNew) bindMeter($("#me-pw", m.el), $("#me-pw-meter", m.el));
-      const nm = $("#me-name", m.el), lg = $("#me-login", m.el), rl = $("#me-role", m.el);
-      rl.onchange = () => { const h = $("[data-role-help]", m.el); if (h) h.textContent = t(R.ROLE_INFO[rl.value] || ""); };
-      $("[data-no]", m.el).onclick = () => m.close();
-      $("[data-yes]", m.el).onclick = async () => {
-        const email = lg.value.trim().toLowerCase();
-        const next = Object.assign({}, rec, { name: nm.value, login: email, email, role: rl.value, whId: $("#me-whId", m.el).value, lang: $("#me-lang", m.el).value, phone: $("#me-phone", m.el).value });
-        if (!isNew) next.active = $("#me-active", m.el).value === "true";
-        let res;
-        if (isNew) {
-          const pw = $("#me-pw", m.el).value;
-          if (pw !== $("#me-pw2", m.el).value) { showErrors(m, { errors: { password: t("Hasła nie są takie same") } }); return; }
-          delete next.id;
-          res = await Store.backend.createUser(next, pw);
-        } else res = await Store.exec("user.save", { rec: next }, SRC_USERS);
-        if (!res || !res.ok) { showErrors(m, res || {}); Toast.err(t("Nie zapisano"), (res && res.error) || ""); return; }
-        m.close(); Toast.ok(isNew ? t("Utworzono konto") : approving ? t("Konto aktywowane") : t("Zapisano"), res.rec ? `${res.rec.name} (${res.rec.login})` : ""); App.render();
+      const title = isNew ? t("Dodaj użytkownika") : approving ? t("Zatwierdzenie rejestracji: {l}", { l: rec.login }) : manage ? t("Edycja użytkownika {l}", { l: rec.login }) : t("Użytkownik {l}", { l: rec.login });
+      const saveLabel = isNew ? (srv ? t("Wyślij zaproszenie") : t("Utwórz konto")) : approving ? t("Zatwierdź i aktywuj") : t("Zapisz");
+      const m = Modal.open({ title, id: "user-edit", wide: true, body,
+        footer: `<button class="btn ghost" type="button" data-no>${manage ? th("Anuluj") : th("Zamknij")}</button>${manage ? `<button class="btn primary" type="button" data-yes>${ic(isNew && srv ? "up" : "check", 15)} <span data-yes-label>${esc(saveLabel)}</span></button>` : ""}` });
+      bindEyes(m.el);
+      const pw = $("#me-pw", m.el); if (pw) bindMeter(pw, $("#me-pw-meter", m.el));
+      const rl = $("#me-role", m.el), wh = $("#me-whId", m.el);
+      // zmiana magazynu domyślnego przenosi dostęp: poprzedni domyślny odznaczany, chyba że administrator zaznaczył go ręcznie
+      const manual = new Set(); let prevWh = wh.value;
+      $$("[data-whacc]", m.el).forEach(x => x.addEventListener("change", () => manual.add(x.dataset.whacc)));
+      const sync = () => {
+        const global = (R.ROLES[rl.value] || {}).global;
+        $("#me-whs-box", m.el).classList.toggle("hidden", !!global);
+        if (prevWh !== wh.value) { const old = $(`[data-whacc="${prevWh}"]`, m.el); if (old && !manual.has(prevWh)) old.checked = false; prevWh = wh.value; }
+        const cb = $(`[data-whacc="${wh.value}"]`, m.el); if (cb) { cb.checked = true; }
+        $$("[data-whacc]", m.el).forEach(x => { x.disabled = !manage || x.dataset.whacc === wh.value; });
+        const h = $("[data-role-help]", m.el); if (h) h.textContent = t(R.ROLE_INFO[rl.value] || "");
       };
-      nm.focus();
+      rl.onchange = sync; wh.onchange = sync; sync();
+      $$("[name=me-how]", m.el).forEach(r => r.onchange = () => {
+        const byPw = $("[name=me-how]:checked", m.el).value === "password";
+        $("#me-pw-box", m.el).classList.toggle("hidden", !byPw);
+        $("[data-yes-label]", m.el).textContent = byPw ? t("Utwórz konto") : t("Wyślij zaproszenie");
+      });
+      $("[data-no]", m.el).onclick = () => m.close();
+      const yes = $("[data-yes]", m.el);
+      if (yes) yes.onclick = async () => {
+        const email = $("#me-email", m.el).value.trim().toLowerCase();
+        const next = Object.assign({}, isNew ? {} : rec, { firstName: $("#me-firstName", m.el).value.trim(), lastName: $("#me-lastName", m.el).value.trim(), email, login: email, role: rl.value, whId: wh.value,
+          warehouseIds: $$("[data-whacc]", m.el).filter(x => x.checked).map(x => x.dataset.whacc), lang: $("#me-lang", m.el).value, phone: $("#me-phone", m.el).value });
+        delete next.name;
+        if (!isNew) { next.status = $("#me-status", m.el).value; delete next.active; }
+        yes.disabled = true;
+        let res, mail = null;
+        try {
+          if (isNew && srv && $("[name=me-how]:checked", m.el).value === "invite") {
+            const r = await ServerBackend.invite(next);
+            res = r.res || r; mail = r.mail;
+          } else if (isNew) {
+            const p1 = $("#me-pw", m.el).value;
+            if (p1 !== $("#me-pw2", m.el).value) { showErrors(m, { errors: { password: t("Hasła nie są takie same") } }); return; }
+            res = await Store.backend.createUser(Object.assign(next, { status: "ACTIVE" }), p1);
+          } else res = await Store.exec("user.save", { rec: next }, SRC_USERS);
+        } finally { yes.disabled = false; }
+        if (!res || !res.ok) { showErrors(m, res || {}); Toast.err(t("Nie zapisano"), (res && res.error) || ""); return; }
+        m.close();
+        const who = res.rec ? `${res.rec.name} (${res.rec.login})` : "";
+        if (mail) mailToast(mail, t("Zaproszenie wysłane"), who);
+        else Toast.ok(isNew ? t("Utworzono konto") : approving ? t("Konto aktywowane") : t("Zapisano"), who);
+        App.render();
+      };
+      if (manage) $("#me-firstName", m.el).focus();
+    },
+    /** Szybka zmiana statusu z tabeli (aktywuj / zawieś / dezaktywuj). */
+    async setStatus(id, status) {
+      const u = R.byId(Store.state.users, id);
+      const txt = { ACTIVE: t("Aktywować konto {l}?", { l: u.login }), SUSPENDED: t("Zawiesić konto {l}? Logowanie zostanie zablokowane do czasu ponownej aktywacji.", { l: u.login }), DISABLED: t("Dezaktywować konto {l}? Użytkownik zostanie wylogowany; historia operacji zostaje.", { l: u.login }) }[status];
+      const r = await Modal.confirm({ title: t("Status konta"), text: txt, ok: { ACTIVE: t("Aktywuj"), SUSPENDED: t("Zawieś"), DISABLED: t("Dezaktywuj") }[status], danger: status !== "ACTIVE" });
+      if (!r.ok) return;
+      const res = await Store.exec("user.save", { rec: Object.assign({}, u, { status }) }, SRC_USERS);
+      if (!res.ok) return Toast.err(t("Nie zapisano"), res.error);
+      Toast.ok(t("Status konta: {s}", { s: t(R.USER_STATUS[status]) }), u.login); App.render();
+    },
+    async resend(id) {
+      const u = R.byId(Store.state.users, id);
+      const r = await ServerBackend.resendInvite(id);
+      if (!r || !r.ok) return Toast.err(t("Nie wysłano"), r && r.error);
+      mailToast(r.mail, u.emailUnverified ? t("Wysłano prośbę o potwierdzenie adresu") : t("Zaproszenie wysłane ponownie"), u.login); App.render();
+    },
+    async resetLink(id) {
+      const u = R.byId(Store.state.users, id);
+      const c = await Modal.confirm({ title: t("Reset hasła"), text: t("Wysłać do {l} link do ustawienia nowego hasła (ważny 1 godzinę)? Obecne hasło działa do czasu jego zmiany.", { l: u.login }), ok: t("Wyślij link") });
+      if (!c.ok) return;
+      const r = await ServerBackend.sendResetLink(id);
+      if (!r || !r.ok) return Toast.err(t("Nie wysłano"), r && r.error);
+      mailToast(r.mail, t("Wysłano link do resetu hasła"), u.login);
     },
     async remove(id) {
-      const u = R.byId(Store.state.users, id);
-      const r = await Modal.confirm({ title: u.pending ? t("Odrzucić zgłoszenie {l}?", { l: u.login }) : t("Usunąć konto {l}?", { l: u.login }), text: u.pending ? t("Zgłoszenie i hasło zostaną usunięte. Osoba może zarejestrować się ponownie.") : t("Usunąć można tylko konto bez historii operacji. Konto z historią dezaktywuj — historia zostaje."), ok: u.pending ? t("Odrzuć zgłoszenie") : t("Usuń konto"), danger: true });
+      const u = R.byId(Store.state.users, id), req = u.selfRegistered && R.statusOf(u) === "INVITED";
+      const r = await Modal.confirm({ title: req ? t("Odrzucić zgłoszenie {l}?", { l: u.login }) : t("Usunąć konto {l}?", { l: u.login }), text: req ? t("Zgłoszenie i hasło zostaną usunięte. Osoba może zarejestrować się ponownie.") : t("Usunąć można tylko konto bez historii (np. zaproszenie wysłane omyłkowo). Konto z historią dezaktywuj — historia zostaje."), ok: req ? t("Odrzuć zgłoszenie") : t("Usuń konto"), danger: true });
       if (!r.ok) return;
       const res = await Store.backend.removeUser(id);
       if (!res || !res.ok) return Toast.err(t("Nie usunięto"), res && res.error);
-      Toast.ok(u.pending ? t("Zgłoszenie odrzucone") : t("Konto usunięte"), u.login); App.render();
+      Toast.ok(req ? t("Zgłoszenie odrzucone") : t("Konto usunięte"), u.login); App.render();
     },
     resetPassword(id) {
       const u = R.byId(Store.state.users, id);
@@ -9107,52 +9526,179 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   };
   Views.uzytkownicy = {
     html() {
-      const S = Store.state, f = App.tabs.users || (App.tabs.users = { wh: "", role: "", q: "" });
-      const pend = S.users.filter(u => u.pending);
-      const list = S.users.filter(u => !u.pending && (!f.wh || u.whId === f.wh) && (!f.role || u.role === f.role)
+      const S = Store.state, f = App.tabs.users || (App.tabs.users = { wh: "", role: "", status: "", q: "" }), manage = App.can("users.manage"), srv = Store.mode === "server";
+      const reqs = S.users.filter(u => u.selfRegistered && R.statusOf(u) === "INVITED");
+      const list = S.users.filter(u => !(u.selfRegistered && R.statusOf(u) === "INVITED") && (!f.wh || R.canAccessWh(u, f.wh)) && (!f.role || u.role === f.role) && (!f.status || R.statusOf(u) === f.status)
         && (!f.q || `${u.name} ${u.login} ${u.phone || ""}`.toLowerCase().includes(f.q.toLowerCase())))
         .sort((a, b) => (a.whId + a.role + a.name).localeCompare(b.whId + b.role + b.name));
-      const row = u => `<tr data-user="${esc(u.id)}" class="${u.active === false ? "void" : ""}"><td><div class="row"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b>${u.phone ? `<br><small class="dim">${esc(u.phone)}</small>` : ""}</div></div></td><td class="mono small">${esc(u.login)}</td><td><span class="badge role-${esc(u.role)}">${esc(App.roleLabel(u.role))}</span></td><td>${esc(App.whName(u.whId))}</td><td>${activeBadge(u.active)}</td><td data-acc="${esc(u.id)}"><span class="dim">…</span></td><td data-last="${esc(u.id)}">—</td>
-            <td class="r nowrap"><button class="btn sm" type="button" data-uedit="${esc(u.id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm icon" type="button" data-upw="${esc(u.id)}" title="${esc(t("Ustaw hasło"))}" aria-label="${esc(t("Ustaw hasło"))}">${ic("key", 14)}</button> <button class="btn sm icon hidden" type="button" data-unlock="${esc(u.id)}" title="${esc(t("Odblokuj"))}" aria-label="${esc(t("Odblokuj"))}">${ic("lock", 14)}</button>${u.id !== Store.userId ? ` <button class="btn sm icon danger" type="button" data-udel="${esc(u.id)}" title="${esc(t("Usuń konto"))}" aria-label="${esc(t("Usuń konto"))}">${ic("trash", 14)}</button>` : ""}</td></tr>`;
-      return `<div class="page-head"><div class="titles"><h2>${th("Użytkownicy i uprawnienia")}</h2><p>${th("Konta (logowanie e-mailem firmowym), role, przypisanie do magazynu, hasła i blokady. Konto z historią operacji dezaktywuje się — usunąć można tylko konto bez historii.")}</p></div>
-          <div class="actions"><button class="btn primary" type="button" id="user-add">${ic("plus", 15)} ${th("Nowy użytkownik")}</button></div></div>
-        ${pend.length ? `<div class="card mb4 queue-card" id="reg-requests"><div class="card-h"><h3>${ic("user", 16)} ${th("Zgłoszenia rejestracji")}</h3><span class="sub">${esc(t("konta oczekujące na nadanie roli i magazynu"))}</span></div><div class="tbl-wrap"><table class="tbl" id="reg-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("E-mail")}</th><th>${th("Telefon")}</th><th>${th("Zgłoszono")}</th><th></th></tr></thead><tbody>
-          ${pend.map(u => `<tr data-reg="${esc(u.id)}"><td><b>${esc(u.name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(u.phone || "—")}</td><td>${esc(Dates.ts(u.registeredAt))}</td><td class="r nowrap"><button class="btn sm primary" type="button" data-uapprove="${esc(u.id)}">${ic("check", 13)} ${th("Nadaj rolę i aktywuj")}</button> <button class="btn sm danger" type="button" data-udel="${esc(u.id)}">${ic("x", 13)} ${th("Odrzuć")}</button></td></tr>`).join("")}</tbody></table></div></div>` : ""}
+      const act = u => {
+        if (!manage) return `<button class="btn sm" type="button" data-uedit="${esc(u.id)}">${th("Szczegóły")}</button>`;
+        const st = R.statusOf(u), self = u.id === Store.userId, b = [];
+        b.push(`<button class="btn sm" type="button" data-uedit="${esc(u.id)}">${ic("edit", 13)} ${th("Edytuj")}</button>`);
+        if (!self && st !== "ACTIVE" && st !== "INVITED") b.push(`<button class="btn sm" type="button" data-ustat="${esc(u.id)}|ACTIVE">${th("Aktywuj")}</button>`);
+        if (!self && st === "ACTIVE") b.push(`<button class="btn sm" type="button" data-ustat="${esc(u.id)}|SUSPENDED">${th("Zawieś")}</button>`, `<button class="btn sm danger" type="button" data-ustat="${esc(u.id)}|DISABLED">${th("Dezaktywuj")}</button>`);
+        if (srv && (st === "INVITED" || u.emailUnverified)) b.push(`<button class="btn sm" type="button" data-uresend="${esc(u.id)}">${ic("up", 13)} ${th("Wyślij ponownie zaproszenie")}</button>`);
+        if (srv && st === "ACTIVE") b.push(`<button class="btn sm icon" type="button" data-ulink="${esc(u.id)}" title="${esc(t("Reset hasła (link e-mail)"))}" aria-label="${esc(t("Reset hasła (link e-mail)"))}">${ic("key", 14)}</button>`);
+        if (st !== "INVITED") b.push(`<button class="btn sm icon" type="button" data-upw="${esc(u.id)}" title="${esc(t("Ustaw hasło tymczasowe"))}" aria-label="${esc(t("Ustaw hasło tymczasowe"))}">${ic("lock", 14)}</button>`);
+        b.push(`<button class="btn sm icon hidden" type="button" data-unlock="${esc(u.id)}" title="${esc(t("Odblokuj"))}" aria-label="${esc(t("Odblokuj"))}">${ic("check", 14)}</button>`);
+        b.push(`<a class="btn sm icon" href="#/audyt?user=${esc(u.id)}" title="${esc(t("Zobacz historię"))}" aria-label="${esc(t("Zobacz historię"))}">${ic("clock", 14)}</a>`);
+        if (!self && st === "INVITED") b.push(`<button class="btn sm icon danger" type="button" data-udel="${esc(u.id)}" title="${esc(t("Usuń konto"))}" aria-label="${esc(t("Usuń konto"))}">${ic("trash", 14)}</button>`);
+        return b.join(" ");
+      };
+      const row = u => `<tr data-user="${esc(u.id)}" class="${R.statusOf(u) === "DISABLED" ? "void" : ""}"><td><div class="row"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b>${u.phone ? `<br><small class="dim">${esc(u.phone)}</small>` : ""}</div></div></td><td class="mono small">${esc(u.login)}</td><td>${roleChip(u.role)}</td><td>${esc(App.whName(u.whId))}${(R.whAccess(u) || []).length > 1 || R.whAccess(u) === null ? `<br><small class="dim">${esc(whList(u))}</small>` : ""}</td><td>${statusChip(u)}<div data-acc="${esc(u.id)}"></div></td><td data-last="${esc(u.id)}">—</td>
+            <td class="r"><div class="row wrap" style="justify-content:flex-end;gap:4px">${act(u)}</div></td></tr>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Użytkownicy")}</h2><p>${th("Konta pracowników (logowanie e-mailem służbowym), role, magazyn domyślny i dostępne magazyny, statusy. Nowego pracownika dodaje się zaproszeniem e-mail. Konto z historią dezaktywuje się — historia zostaje.")}</p></div>
+          <div class="actions">${manage ? `<button class="btn primary" type="button" id="user-add">${ic("plus", 15)} ${th("Dodaj użytkownika")}</button>` : `<span class="badge">${th("tylko podgląd")}</span>`}<a class="btn" href="#/role">${ic("shield", 15)} ${th("Role i uprawnienia")}</a></div></div>
+        ${reqs.length && manage ? `<div class="card mb4 queue-card" id="reg-requests"><div class="card-h"><h3>${ic("user", 16)} ${th("Zgłoszenia rejestracji")}</h3><span class="sub">${esc(t("konta oczekujące na nadanie roli i magazynu"))}</span></div><div class="tbl-wrap"><table class="tbl" id="reg-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("E-mail")}</th><th>${th("Telefon")}</th><th>${th("Zgłoszono")}</th><th></th></tr></thead><tbody>
+          ${reqs.map(u => `<tr data-reg="${esc(u.id)}"><td><b>${esc(u.name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(u.phone || "—")}</td><td>${esc(Dates.ts(u.registeredAt))}</td><td class="r nowrap"><button class="btn sm primary" type="button" data-uapprove="${esc(u.id)}">${ic("check", 13)} ${th("Nadaj rolę i aktywuj")}</button> <button class="btn sm danger" type="button" data-udel="${esc(u.id)}">${ic("x", 13)} ${th("Odrzuć")}</button></td></tr>`).join("")}</tbody></table></div></div>` : ""}
         <div class="card"><div class="toolbar">
           <div class="field"><label for="uf-wh">${th("Magazyn")}</label><select class="ctrl" id="uf-wh"><option value="">${th("Wszystkie")}</option>${S.warehouses.map(w => `<option value="${esc(w.id)}" ${f.wh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
           <div class="field"><label for="uf-role">${th("Rola")}</label><select class="ctrl" id="uf-role"><option value="">${th("Wszystkie")}</option>${Object.entries(R.ROLES).map(([k, v]) => `<option value="${k}" ${f.role === k ? "selected" : ""}>${esc(t(v.label))}</option>`).join("")}</select></div>
+          <div class="field"><label for="uf-status">${th("Status")}</label><select class="ctrl" id="uf-status"><option value="">${th("Wszystkie")}</option>${Object.entries(R.USER_STATUS).map(([k, v]) => `<option value="${k}" ${f.status === k ? "selected" : ""}>${esc(t(v))}</option>`).join("")}</select></div>
           ${searchInput("uf-q", f.q, t("nazwisko, e-mail, telefon…"))}</div>
-          <div class="tbl-wrap"><table class="tbl" id="users-table"><thead><tr><th>${th("Użytkownik")}</th><th>${th("E-mail")}</th><th>${th("Rola")}</th><th>${th("Magazyn")}</th><th>${th("Status")}</th><th>${th("Hasło")}</th><th>${th("Ostatnie logowanie")}</th><th></th></tr></thead>
-          <tbody id="users-body">${list.map(row).join("") || `<tr><td colspan="8" class="empty">${th("Brak wpisów.")}</td></tr>`}</tbody></table></div></div>
-        <div class="card mt4"><div class="card-h"><h3>${th("Role")}</h3></div><div class="card-b"><div class="role-grid">${Object.entries(R.ROLES).map(([k, v]) => `<div class="role-card"><span class="badge role-${k}">${esc(t(v.label))}</span><p>${esc(t(R.ROLE_INFO[k]))}</p><small class="dim">${esc(tp("{n} osoba|{n} osoby|{n} osób", S.users.filter(u => u.role === k && !u.pending && u.active !== false).length))}</small></div>`).join("")}</div></div></div>
-        <div class="card mt4"><div class="card-h"><h3>${th("Macierz uprawnień")}</h3><span class="sub">${th("uprawnienia sprawdzane w silniku przy każdej operacji")}</span></div><div class="tbl-wrap"><table class="tbl" id="perm-table"><thead><tr><th>${th("Uprawnienie")}</th>${Object.values(R.ROLES).map(r => `<th class="c">${esc(t(r.label))}</th>`).join("")}</tr></thead><tbody>
-          ${Object.keys(R.PERMS).map(p => `<tr><td><span class="mono">${esc(p)}</span><br><small class="dim">${esc(t(R.PERMS[p]))}</small></td>${Object.keys(R.ROLES).map(k => `<td class="c">${R.can({ role: k }, p) ? `<span class="badge ok">${ic("check", 12)}</span>` : "—"}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>
-        <div class="card mt4"><div class="card-h"><h3>${th("Dziennik logowań")}</h3><span class="sub">${th("ostatnie 100 zdarzeń")}</span></div><div id="login-log"><div class="empty">…</div></div></div>`;
+          <div class="tbl-wrap"><table class="tbl" id="users-table"><thead><tr><th>${th("Użytkownik")}</th><th>${th("E-mail")}</th><th>${th("Rola")}</th><th>${th("Magazyn")}</th><th>${th("Status")}</th><th>${th("Ostatnie logowanie")}</th><th class="r">${th("Akcje")}</th></tr></thead>
+          <tbody id="users-body">${list.map(row).join("") || `<tr><td colspan="7" class="empty">${th("Brak wpisów.")}</td></tr>`}</tbody></table></div></div>
+        <p class="help mt3">${esc(srv ? t("Tryb FIRMOWY: zaproszenia, reset hasła i potwierdzenie adresu wysyła serwer (e-mail). Link zaproszenia jest ważny 72 h, resetu — 1 h; każdy działa jednorazowo.") : t("Tryb OFFLINE: bez poczty — administrator ustawia hasło tymczasowe, użytkownik zmienia je przy pierwszym logowaniu."))}</p>`;
     },
-    async bind(page) {
-      $("#user-add", page).onclick = () => Users.edit(null);
+    async bind(page, params) {
+      const add = $("#user-add", page); if (add) add.onclick = () => Users.edit(null);
       const f = App.tabs.users;
       const on = (sel, k) => { const el = $(sel, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
-      on("#uf-wh", "wh"); on("#uf-role", "role");
+      on("#uf-wh", "wh"); on("#uf-role", "role"); on("#uf-status", "status");
       bindSearch(page, "#uf-q", f, "q", this);
       $$("[data-uapprove]", page).forEach(b => b.onclick = () => Users.edit(b.dataset.uapprove, { approve: true }));
       $$("[data-udel]", page).forEach(b => b.onclick = () => Users.remove(b.dataset.udel));
       $$("[data-uedit]", page).forEach(b => b.onclick = () => Users.edit(b.dataset.uedit));
+      $$("[data-ustat]", page).forEach(b => b.onclick = () => { const [id, st] = b.dataset.ustat.split("|"); Users.setStatus(id, st); });
+      $$("[data-uresend]", page).forEach(b => b.onclick = () => Users.resend(b.dataset.uresend));
+      $$("[data-ulink]", page).forEach(b => b.onclick = () => Users.resetLink(b.dataset.ulink));
       $$("[data-upw]", page).forEach(b => b.onclick = () => Users.resetPassword(b.dataset.upw));
       $$("[data-unlock]", page).forEach(b => b.onclick = async () => { const r = await Store.backend.unlock(b.dataset.unlock); if (r && r.ok) { Toast.ok(t("Konto odblokowane")); App.render(); } else Toast.err(t("Nie odblokowano"), r && r.error); });
+      if (params && params.id && this._opened !== params.id) { this._opened = params.id; Users.edit(params.id); }
+      if (!params || !params.id) this._opened = null;
       const acc = await Users.accounts();
       for (const u of Store.state.users) {
         const a = acc[u.id] || { hasPassword: false }, cell = $(`[data-acc="${u.id}"]`, page), last = $(`[data-last="${u.id}"]`, page);
         if (!cell) continue;
-        const locked = a.lockedUntil && Date.parse(a.lockedUntil) > Date.now();
-        cell.innerHTML = !a.hasPassword ? `<span class="badge warn">${th("brak hasła")}</span>` : locked ? `<span class="badge err">${th("zablokowane")}</span>` : a.mustChange ? `<span class="badge info">${th("do zmiany")}</span>` : a.demo ? `<span class="badge">${th("demonstracyjne")}</span>` : `<span class="badge ok">${th("ustawione")}</span>`;
+        const locked = a.lockedUntil && Date.parse(a.lockedUntil) > Date.now(), st = R.statusOf(u);
+        const tag = st === "INVITED" ? (a.invite ? (a.invite.expired ? `<span class="badge warn">${th("zaproszenie wygasło")}</span>` : `<small class="dim">${esc(t("zaproszenie ważne do {d}", { d: Dates.ts(a.invite.expiresAt) }))}</small>`) : Store.mode === "server" && !u.selfRegistered ? `<span class="badge warn">${th("zaproszenie niewysłane")}</span>` : "")
+          : !a.hasPassword && App.can("users.manage") ? `<span class="badge warn">${th("brak hasła")}</span>` : locked ? `<span class="badge err">${th("zablokowane")}</span>` : a.mustChange ? `<small class="dim">${th("hasło do zmiany")}</small>` : a.demo ? `<small class="dim">${th("hasło demonstracyjne")}</small>` : "";
+        cell.innerHTML = tag;
         if (last) last.textContent = a.lastLogin ? Dates.ts(a.lastLogin) : "—";
         const ub = $(`[data-unlock="${u.id}"]`, page); if (ub) ub.classList.toggle("hidden", !locked);
       }
-      const log = (await Store.backend.loginLog()).slice(0, 100);
-      const box = $("#login-log", page);
-      if (box) box.innerHTML = log.length ? `<div class="tbl-wrap"><table class="tbl dense" id="login-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("E-mail")}</th><th>${th("Wynik")}</th><th>${th("Szczegóły")}</th>${Store.mode === "server" ? `<th>${th("Adres")}</th>` : ""}</tr></thead><tbody>
-        ${log.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.login || (R.byId(Store.state.users, x.userId) || {}).login || "")}</td><td>${x.ok ? `<span class="badge ok">${th("OK")}</span>` : `<span class="badge err">${th("odrzucone")}</span>`}</td><td>${esc(t(x.reason || ""))}</td>${Store.mode === "server" ? `<td class="mono">${esc(x.ip || "")}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wpisów.")}</div>`;
+    }
+  };
+
+  /* ================================================================== */
+  /* Role i uprawnienia                                                   */
+  /* ================================================================== */
+  const PERM_GROUPS = [
+    [N_("Operacje"), ["receipts.create", "issues.create", "production.create", "mm.create", "op.approve"]],
+    [N_("Korekty i anulowania"), ["documents.cancel", "documents.correct", "purchases.correct", "sales.correct", "production.correct", "inventory.correct"]],
+    [N_("Inwentaryzacja"), ["inv.open", "inv.count", "inv.close"]],
+    [N_("Kartoteki"), ["fleet.edit", "master.edit", "warehouses.edit"]],
+    [N_("Odczyt i raporty"), ["report.view", "reports.export", "history.read", "audit.read"]],
+    [N_("Administracja"), ["users.read", "users.manage", "roles.assign", "settings.edit", "data.backup", "data.import"]]
+  ];
+  Views.role = {
+    html() {
+      const S = Store.state, edit = App.can("roles.assign");
+      const cnt = k => S.users.filter(u => u.role === k && R.statusOf(u) === "ACTIVE").length;
+      const card = ([k, v]) => {
+        const perms = R.permsOf(k), custom = Array.isArray((S.rolePerms || {})[k]), locked = k === "admin" || !edit;
+        return `<div class="card" data-role-card="${k}"><div class="card-h"><h3>${roleChip(k)} <span class="mono small">${esc(v.code)}</span></h3><span class="sub">${esc(v.global ? t("wszystkie magazyny") : t("przydzielone magazyny"))} · ${esc(tp("{n} osoba|{n} osoby|{n} osób", cnt(k)))}${custom ? " · " + esc(t("zmienione przez administratora")) : ""}</span></div>
+          <div class="card-b"><p class="muted">${esc(t(R.ROLE_INFO[k]))}</p>
+          ${k === "admin" ? `<div class="info-line">${ic("shield", 15)}<span>${th("ADMINISTRATOR ma zawsze pełne uprawnienia. Rolę nadaje i odbiera wyłącznie administrator; ostatniego aktywnego administratora nie można zdegradować ani dezaktywować.")}</span></div>`
+          : `<div class="perm-groups">${PERM_GROUPS.map(([g, list]) => `<fieldset class="perm-group"><legend>${esc(t(g))}</legend>${list.map(p => `<label class="inline-opt" title="${esc(p)}"><input type="checkbox" data-perm="${k}|${p}" ${perms.includes(p) ? "checked" : ""} ${locked ? "disabled" : ""}> ${esc(t(R.PERMS[p]))}</label>`).join("")}</fieldset>`).join("")}</div>
+          ${edit ? `<div class="row wrap mt3"><button class="btn primary sm" type="button" data-rsave="${k}">${ic("check", 13)} ${th("Zapisz uprawnienia")}</button>${custom ? `<button class="btn sm" type="button" data-rreset="${k}">${th("Przywróć domyślne")}</button>` : ""}</div>` : ""}`}</div></div>`;
+      };
+      return `<div class="page-head"><div class="titles"><h2>${th("Role i uprawnienia")}</h2><p>${th("Uprawnienia są sprawdzane na serwerze przy każdej komendzie — ukrycie przycisku nie jest zabezpieczeniem. Zmiana zestawu uprawnień roli obowiązuje od razu dla wszystkich jej użytkowników i trafia do dziennika audytu.")}</p></div>
+          <div class="actions"><a class="btn" href="#/uzytkownicy">${ic("users", 15)} ${th("Użytkownicy")}</a></div></div>
+        <div class="grid g2" id="roles-grid">${Object.entries(R.ROLES).map(card).join("")}</div>
+        <div class="card mt4" id="permissions"><div class="card-h"><h3>${th("Macierz uprawnień")}</h3><span class="sub">${th("stan bieżący (z uwzględnieniem zmian administratora)")}</span></div><div class="tbl-wrap"><table class="tbl" id="perm-table"><thead><tr><th>${th("Uprawnienie")}</th>${Object.values(R.ROLES).map(r => `<th class="c">${esc(t(r.label))}<br><small class="dim mono">${esc(r.code)}</small></th>`).join("")}</tr></thead><tbody>
+          ${Object.keys(R.PERMS).map(p => `<tr><td><span class="mono">${esc(p)}</span><br><small class="dim">${esc(t(R.PERMS[p]))}</small></td>${Object.keys(R.ROLES).map(k => `<td class="c">${R.can({ role: k }, p) ? `<span class="badge ok">${ic("check", 12)}</span>` : "—"}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>`;
+    },
+    bind(page) {
+      $$("[data-rsave]", page).forEach(b => b.onclick = async () => {
+        const role = b.dataset.rsave, perms = $$(`[data-perm^="${role}|"]`, page).filter(x => x.checked).map(x => x.dataset.perm.split("|")[1]);
+        const res = await Store.exec("roles.save", { role, perms }, N_("Administracja — role"));
+        if (!res.ok) return Toast.err(t("Nie zapisano"), res.error);
+        Toast.ok(res.unchanged ? t("Bez zmian") : t("Zapisano uprawnienia roli {r}", { r: R.ROLES[role].code })); App.render();
+      });
+      $$("[data-rreset]", page).forEach(b => b.onclick = async () => {
+        const res = await Store.exec("roles.reset", { role: b.dataset.rreset }, N_("Administracja — role"));
+        if (!res.ok) return Toast.err(t("Nie zapisano"), res.error);
+        Toast.ok(t("Przywrócono domyślne uprawnienia")); App.render();
+      });
+    }
+  };
+
+  /* ================================================================== */
+  /* Dziennik audytu (administrator, audytor)                             */
+  /* ================================================================== */
+  Views.audyt = {
+    extra: null,
+    f(params) {
+      const f = App.tabs.audit || (App.tabs.audit = { tab: "events", from: Dates.addDays(App.today(), -30), to: "", code: "", user: "", wh: "", q: "", limit: 300 });
+      if (params && params.user && f._u !== params.user) { f.user = params.user; f._u = params.user; f.from = "2000-01-01"; }
+      return f;
+    },
+    rows() {
+      const S = Store.state, f = this.f(), q = f.q.trim().toLowerCase();
+      return S.audit.filter(a => (!f.from || a.ts.slice(0, 10) >= f.from) && (!f.to || a.ts.slice(0, 10) <= f.to) && (!f.code || a.code === f.code) && (!f.user || a.userId === f.user || a.entityId === f.user) && (!f.wh || a.whId === f.wh) &&
+        (!q || [a.code, R.auditText(a), a.source, a.opNo, a.userName, a.ip, a.ua, a.reason].join(" ").toLowerCase().includes(q))).slice().sort((a, b) => a.ts < b.ts ? 1 : -1);
+    },
+    html(params) {
+      const S = Store.state, f = this.f(params), srv = Store.mode === "server";
+      const codes = [...new Set(S.audit.map(a => a.code).filter(Boolean))].sort();
+      const tabs = [["events", t("Zdarzenia")], ["logins", t("Logowania")]].concat(srv ? [["mail", t("Wiadomości e-mail")]] : []);
+      const sel = (id, label, list, v) => `<div class="field"><label for="${id}">${esc(label)}</label><select class="ctrl" id="${id}">${list.map(([k, l]) => `<option value="${esc(k)}" ${String(v) === String(k) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>`;
+      let body = "";
+      if (f.tab === "events") {
+        const rows = this.rows(), shown = rows.slice(0, f.limit);
+        body = `<div class="toolbar">
+            <div class="field"><label for="au-from">${th("Od")}</label><input class="ctrl" type="date" id="au-from" value="${esc(f.from)}"></div>
+            <div class="field"><label for="au-to">${th("Do")}</label><input class="ctrl" type="date" id="au-to" value="${esc(f.to)}"></div>
+            ${sel("au-code", t("Zdarzenie"), [["", t("Wszystkie")]].concat(codes.map(c => [c, c])), f.code)}
+            ${sel("au-user", t("Użytkownik"), [["", t("Wszyscy")], ["system", t("System")]].concat(S.users.map(u => [u.id, u.name])), f.user)}
+            ${sel("au-wh", t("Magazyn"), [["", t("Wszystkie")]].concat(S.warehouses.map(w => [w.id, w.name])), f.wh)}
+            ${searchInput("au-q", f.q, t("kod, akcja, IP, przeglądarka…"))}
+            ${App.can("reports.export") || App.can("audit.read") ? `<button class="btn" type="button" id="au-csv">${ic("dl", 15)} CSV</button>` : ""}</div>
+          ${shown.length ? `<div class="tbl-wrap"><table class="tbl dense" id="audit-admin-table"><thead><tr><th>${th("Czas")}</th><th>${th("Kto")}</th><th>${th("Zdarzenie")}</th><th>${th("Akcja")}</th><th>${th("Obiekt")}</th><th>${th("Magazyn")}</th><th>${th("Adres IP")}</th><th>${th("Przeglądarka")}</th><th>${th("Przed / po")}</th></tr></thead><tbody>
+            ${shown.map(a => `<tr><td class="nowrap">${esc(Dates.ts(a.ts, true))}</td><td>${esc(a.userName === "System" ? t("System") : a.userName)}</td><td>${a.code ? `<span class="badge mono">${esc(a.code)}</span>` : `<small class="dim">${esc(a.entity || "")}</small>`}</td><td>${esc(R.auditText(a))}${a.reason ? `<br><small class="dim">${esc(t("powód: {r}", { r: R.trReason(a.reason) }))}</small>` : ""}</td><td class="mono small">${esc(a.opNo || a.entityId || "")}</td><td>${esc(a.whId ? App.whName(a.whId) : "—")}</td><td class="mono small">${esc(a.ip || "—")}</td><td class="small" title="${esc(a.ua || "")}">${esc(String(a.ua || "—").slice(0, 40))}</td>
+              <td>${a.before || a.after ? `<details class="audit"><summary>${th("pokaż")}</summary><div class="grid g2 mt2"><div><small class="dim">${th("Przed")}</small><pre class="json">${esc(JSON.stringify(a.before, null, 1))}</pre></div><div><small class="dim">${th("Po")}</small><pre class="json">${esc(JSON.stringify(a.after, null, 1))}</pre></div></div></details>` : ""}</td></tr>`).join("")}</tbody></table></div>
+            <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} wpis|{n} wpisy|{n} wpisów", rows.length))}</span>${rows.length > shown.length ? `<button class="btn sm" type="button" id="au-more">${th("Pokaż więcej")}</button>` : ""}</div>` : `<div class="empty">${th("Brak wpisów dla filtrów.")}</div>`}`;
+      } else body = `<div id="au-extra"><div class="empty">…</div></div>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Dziennik audytu")}</h2><p>${th("Wszystkie zmiany danych i operacje administracyjne (konta, role, uprawnienia, statusy, zaproszenia, hasła) z autorem, czasem, adresem IP i przeglądarką. Wpisów nie można edytować ani usuwać.")}</p></div></div>
+        <div class="seg mb3" role="tablist">${tabs.map(([k, l]) => `<button type="button" data-autab="${k}" aria-pressed="${f.tab === k}">${esc(l)}</button>`).join("")}</div>
+        <div class="card">${body}</div>`;
+    },
+    async bind(page) {
+      const f = this.f();
+      $$("[data-autab]", page).forEach(b => b.onclick = () => { f.tab = b.dataset.autab; App.render(); });
+      const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; f.limit = 300; App.render(); }; };
+      on("#au-from", "from"); on("#au-to", "to"); on("#au-code", "code"); on("#au-user", "user"); on("#au-wh", "wh");
+      if ($("#au-q", page)) bindSearch(page, "#au-q", f, "q", this);
+      const more = $("#au-more", page); if (more) more.onclick = () => { f.limit += 500; App.render(); };
+      const csv = $("#au-csv", page);
+      if (csv) csv.onclick = () => download(`resinvest_audyt_${f.from || "start"}_${f.to || App.today()}.csv`, UI.toCSV([t("Czas"), t("Kto"), t("Zdarzenie"), t("Akcja"), t("Obiekt"), t("Magazyn"), t("Adres IP"), t("Przeglądarka"), t("Źródło")],
+        this.rows().map(a => [a.ts, a.userName, a.code || "", R.auditText(a), a.opNo || a.entityId || "", a.whId ? App.whName(a.whId) : "", a.ip || "", a.ua || "", t(a.source || "")])), "text/csv");
+      if (f.tab === "events") return;
+      const box = $("#au-extra", page);
+      let rows;
+      if (Store.mode === "server") { const r = await ServerBackend.auditExtra(); if (!r || !r.ok) { box.innerHTML = `<div class="empty">${esc((r && r.error) || t("Brak danych"))}</div>`; return; } this.extra = r; }
+      if (f.tab === "logins") {
+        rows = Store.mode === "server" ? this.extra.log : await Store.backend.loginLog();
+        box.innerHTML = rows.length ? `<div class="tbl-wrap"><table class="tbl dense" id="login-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("E-mail")}</th><th>${th("Wynik")}</th><th>${th("Szczegóły")}</th>${Store.mode === "server" ? `<th>${th("Adres IP")}</th>` : ""}</tr></thead><tbody>
+          ${rows.slice(0, 500).map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.login || (R.byId(Store.state.users, x.userId) || {}).login || "")}</td><td>${x.ok ? `<span class="badge ok">${th("OK")}</span>` : `<span class="badge err">${th("odrzucone")}</span>`}</td><td>${esc(t(x.reason || ""))}</td>${Store.mode === "server" ? `<td class="mono">${esc(x.ip || "")}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wpisów.")}</div>`;
+      } else {
+        const mc = this.extra.mailConfig || {};
+        rows = this.extra.mail || [];
+        box.innerHTML = `<div class="card-b"><dl class="money-list"><dt>${th("Transport")}</dt><dd>${esc(mc.transport || "—")}${mc.configured ? "" : " · " + esc(t("brak klucza — wysyłka nie działa"))}</dd><dt>${th("Nadawca")}</dt><dd>${esc(mc.from || "—")}</dd>${mc.outDir ? `<dt>${th("Folder wiadomości")}</dt><dd class="mono small">${esc(mc.outDir)}</dd>` : ""}</dl></div>
+          ${rows.length ? `<div class="tbl-wrap"><table class="tbl dense" id="mail-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("Szablon")}</th><th>${th("Adresat")}</th><th>${th("Wynik")}</th><th>${th("Błąd")}</th></tr></thead><tbody>
+          ${rows.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.template)}</td><td class="mono">${esc(x.to)}</td><td>${x.status === "SENT" ? `<span class="badge ok">${th("wysłano")}</span>` : `<span class="badge err">${th("błąd")}</span>`}</td><td class="small">${esc(x.error || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wysłanych wiadomości.")}</div>`}`;
+      }
     }
   };
 
@@ -9167,7 +9713,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <div class="grid g2">
           <div class="card"><div class="card-h"><h3>${th("Konto")}</h3></div><div class="card-b">
             <div class="row mb4"><span class="avatar lg">${esc(initials(u.name))}</span><div><b style="font-size:var(--t-lg)">${esc(u.name)}</b><div class="dim">${esc(u.login)} · ${esc(App.roleLabel(u.role))}</div></div></div>
-            <dl class="money-list"><dt>${th("Magazyn")}</dt><dd>${esc(App.whName(u.whId))}</dd><dt>${th("E-mail")}</dt><dd>${esc(u.email || "—")}</dd><dt>${th("Tryb pracy")}</dt><dd>${esc(Store.mode === "server" ? t("serwer (wielostanowiskowy)") : t("lokalny (ta przeglądarka)"))}</dd><dt>${th("Wylogowanie po bezczynności")}</dt><dd>${esc(t("{n} min", { n: AuthLib.POLICY.idleMinutes }))}</dd></dl>
+            <dl class="money-list"><dt>${th("Rola")}</dt><dd>${esc(App.roleLabel(u.role))} <span class="mono small dim">${esc((R.ROLES[u.role] || {}).code || "")}</span></dd><dt>${th("Magazyn domyślny")}</dt><dd>${esc(App.whName(u.whId))}</dd><dt>${th("Dostępne magazyny")}</dt><dd>${esc(whList(u))}</dd><dt>${th("E-mail")}</dt><dd>${esc(u.email || "—")}</dd><dt>${th("Tryb pracy")}</dt><dd><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(Store.mode === "server" ? t("serwer (wielostanowiskowy)") : t("lokalny (ta przeglądarka)"))}</dd><dt>${th("Wylogowanie po bezczynności")}</dt><dd>${esc(t("{n} min", { n: AuthLib.POLICY.idleMinutes }))}</dd></dl>
             <div class="row wrap mt4"><button class="btn" type="button" id="pf-pw">${ic("key", 15)} ${th("Zmień hasło")}</button><button class="btn danger" type="button" id="pf-logout">${ic("logout", 15)} ${th("Wyloguj")}</button></div></div></div>
           <div class="card"><div class="card-h"><h3>${th("Wygląd i język")}</h3></div><div class="card-b">
             <div class="set-list">
@@ -9198,14 +9744,21 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const intro = root.Intro, today = ssGet("riw.today", "");
       const size = Store.backend.sizeBytes();
       return `<div class="page-head"><div class="titles"><h2>${th("Administracja")}</h2><p>${th("Kopie zapasowe, import danych, preferencje programu i informacje o systemie. Konta i hasła — moduł Użytkownicy.")}</p></div>
-          ${App.can("users.manage") ? `<div class="actions"><a class="btn" href="#/uzytkownicy">${ic("users", 15)} ${th("Użytkownicy i uprawnienia")}</a></div>` : ""}</div>
+          ${App.can("users.read") ? `<div class="actions"><a class="btn" href="#/uzytkownicy">${ic("users", 15)} ${th("Użytkownicy")}</a></div>` : ""}</div>
         <div class="grid g2">
           <div class="card"><div class="card-h"><h3>${th("Kopia zapasowa i import")}</h3></div><div class="card-b stack">
             <p class="muted">${th("Pełna kopia danych (operacje, dokumenty, korekty, anulowania, księga, inwentaryzacja, flota, kartoteki, audyt) w pliku JSON. Hasła nie trafiają do kopii. Wczytanie kopii zastępuje bieżące dane po kontroli struktury i migracji do bieżącej wersji.")}</p>
             <div class="row wrap"><button class="btn primary" type="button" id="bk-export" ${App.can("data.backup") ? "" : "disabled"}>${ic("dl", 15)} ${th("Pobierz kopię (JSON)")}</button>
               <button class="btn" type="button" id="bk-import" ${App.can("data.import") ? "" : "disabled"}>${ic("up", 15)} ${th("Wczytaj kopię")}</button>
               <input type="file" id="bk-file" accept="application/json,.json" class="hidden"></div>
-            <p class="help">${esc(t("Wymagana rola: Kierownik lub Administrator. Rozmiar danych: {kb} kB (rewizja {rev}, schemat {s}).", { kb: fmt(size / 1024, 1), rev: S.rev, s: S.schema }))}</p></div></div>
+            <p class="help">${esc(t("Wymagana rola: Administrator. Rozmiar danych: {kb} kB (rewizja {rev}, schemat {s}).", { kb: fmt(size / 1024, 1), rev: S.rev, s: S.schema }))}</p></div></div>
+          ${App.can("settings.edit") ? `<div class="card" id="access-card"><div class="card-h"><h3>${th("Konfiguracja dostępu")}</h3></div><div class="card-b stack">
+            <label class="inline-opt"><input type="checkbox" id="cfg-approval" ${S.config.requireApproval ? "checked" : ""}> ${th("Obieg zatwierdzania operacji")}</label>
+            <p class="help">${th("Wyłączony (domyślnie): osoba z uprawnieniem do wprowadzania zatwierdza operację sama. Włączony: operacje osób bez uprawnienia „op.approve” czekają na zatwierdzenie kierownika magazynu.")}</p>
+            <label class="inline-opt"><input type="checkbox" id="cfg-selfreg" ${S.config.allowSelfRegistration ? "checked" : ""}> ${th("Samodzielna rejestracja z ekranu logowania")}</label>
+            <p class="help">${th("Wyłączona (zalecane): konta zakłada wyłącznie administrator — zaproszeniem e-mail. Włączona: zgłoszenie czeka na nadanie roli i magazynu przez administratora.")}</p>
+            <p class="help">${esc(t("Dozwolone domeny e-mail: {d} (config/app.config.json).", { d: (S.config.companyDomains || []).map(d => "@" + d).join(", ") }))}</p>
+            <div><a class="btn sm" href="#/role">${ic("shield", 13)} ${th("Role i uprawnienia")}</a> <a class="btn sm" href="#/audyt">${ic("clock", 13)} ${th("Dziennik audytu")}</a></div></div></div>` : ""}
           ${srv ? `<div class="card"><div class="card-h"><h3>${th("Kopie serwera (SQLite)")}</h3><span class="spacer"></span><button class="btn sm" type="button" id="srv-bk" ${App.can("data.backup") ? "" : "disabled"}>${ic("db", 13)} ${th("Utwórz kopię teraz")}</button></div><div id="srv-bk-list"><div class="empty">…</div></div></div>` : ""}
           ${App.can("users.manage") ? `<div class="card" id="clean-card"><div class="card-h"><h3>${th("Start pracy na czysto")}</h3></div><div class="card-b stack">
             <p class="muted">${th("Usuwa operacje, dokumenty, księgę, wersje robocze i okresy inwentaryzacji — zostają magazyny, produkty, kontrahenci, flota i konta użytkowników. Użyj przed rozpoczęciem pracy na prawdziwych danych (po szkoleniu na danych przykładowych). Przed wyczyszczeniem pobierz kopię.")}</p>
@@ -9224,7 +9777,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         </div>
         <div class="card mt4"><div class="card-h"><h3>${th("O programie")}</h3></div><div class="card-b">
           <dl class="money-list" style="max-width:720px"><dt>${th("Wersja")}</dt><dd>${esc(R.VERSION)} · ${esc(t("schemat {s}", { s: R.SCHEMA }))}</dd>
-          <dt>${th("Tryb pracy")}</dt><dd>${esc(srv ? t("serwer — dane w bazie SQLite, wielu użytkowników") : Store.memoryOnly ? t("lokalny — tylko pamięć (zapis zablokowany)") : t("lokalny — dane w tej przeglądarce"))}</dd>
+          <dt>${th("Tryb pracy")}</dt><dd><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(srv ? t("serwer — dane w bazie SQLite, wielu użytkowników") : Store.memoryOnly ? t("lokalny — tylko pamięć (zapis zablokowany)") : t("lokalny — dane w tej przeglądarce"))}</dd>
           ${srv && ServerBackend.info ? `<dt>${th("Serwer")}</dt><dd>${esc(ServerBackend.info.version || "")} · ${esc(ServerBackend.info.host || location.host)}</dd>` : ""}
           <dt>${th("Przeliczniki")}</dt><dd>1 m³ = ${fmtQ(S.config.m3_mp)} MP · 1 MP = ${fmt(S.config.mp_t, 2)} t · 1 t = ${fmt(S.config.t_gj, 1)} GJ</dd><dt>${th("Cena za rąbanie")}</dt><dd>${esc(t("{m} zł/MP (domyślnie)", { m: fmt(S.config.chipRateDefault) }))}</dd>
           <dt>${th("Blokada zapisu między kartami")}</dt><dd>${esc(srv ? t("transakcje bazy danych na serwerze") : root.navigator && navigator.locks ? t("Web Locks — aktywna") : t("niedostępna w tej przeglądarce"))}</dd><dt>PDF</dt><dd>${th("generator wbudowany, czcionka ResInvestDocSans (OFL)")}</dd></dl>
@@ -9235,6 +9788,13 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       $("#pf-intro", page).onchange = e => intro && intro.setEnabled(e.target.checked);
       $("#pf-music", page).onchange = e => intro && intro.setMusic(e.target.checked);
       $("#pf-play", page).onclick = () => intro && intro.play({ force: true });
+      const setCfg = async (key, val) => {
+        const res = await Store.exec("settings.save", { settings: { [key]: val } }, N_("Administracja"));
+        if (!res.ok) { Toast.err(t("Nie zapisano"), res.error); } else Toast.ok(t("Zapisano konfigurację"));
+        App.render();
+      };
+      const ca = $("#cfg-approval", page); if (ca) ca.onchange = e => setCfg("requireApproval", e.target.checked);
+      const cs = $("#cfg-selfreg", page); if (cs) cs.onchange = e => setCfg("allowSelfRegistration", e.target.checked);
       $("#bk-export", page).onclick = async () => {
         download(`resinvest_kopia_${App.today()}.json`, JSON.stringify(Store.state, null, 1), "application/json");
         await Store.exec("data.backupLogged", { format: "json" }, N_("Administracja"));

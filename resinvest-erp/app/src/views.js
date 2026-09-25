@@ -190,8 +190,8 @@
       add(t("Miejsce"), esc(op.place)); add(t("Dokument zewnętrzny"), esc(op.extDoc)); add(t("Uwagi"), esc(op.notes));
       add(t("Wynik operacji"), `<b>${money(op.totals.result)}</b>`);
 
-      const canCorr = op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && (App.user().whId === op.whId || App.user().role === "admin");
-      const canCancel = op.status !== "CANCELLED" && App.can("documents.cancel") && (App.user().whId === op.whId || App.user().role === "admin");
+      const canCorr = op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && R.canAccessWh(App.user(), op.whId);
+      const canCancel = op.status !== "CANCELLED" && App.can("documents.cancel") && R.canAccessWh(App.user(), op.whId);
       const lastCorr = op.corrections[op.corrections.length - 1];
       const corrRows = op.corrections.map(c => `<tr><td class="mono nowrap"><a href="#" data-doc="${esc(c.no)}">${esc(c.no)}</a></td><td class="nowrap">${esc(Dates.pl(c.date))}</td><td>${esc(c.userName)}</td><td>${esc(R.trReason(c.reason))}${c.reverses ? `<br><small class="dim">${esc(t("odwraca {no}", { no: c.reverses }))}</small>` : ""}</td>
           <td>${c.changes.map(x => `${esc(t(x.label))}: ${esc(x.beforeText)} → <b>${esc(x.afterText)}</b>`).join("<br>") || "—"}</td>
@@ -985,7 +985,7 @@
     html() {
       const S = Store.state;
       const tab = App.tabs.fleet || "vehicles";
-      const fwh = App.tabs.fleetWh === undefined ? (App.user().role === "admin" ? "" : App.user().whId) : App.tabs.fleetWh;
+      const fwh = App.tabs.fleetWh === undefined ? (R.whAccess(App.user()) === null ? "" : App.user().whId) : App.tabs.fleetWh;
       const inWh = x => !fwh || x.whId === fwh || !x.whId;
       const whCell = x => `<td>${x.whId ? esc(App.whName(x.whId)) : `<span class="dim">${th("wspólny")}</span>`}</td>`;
       const drv = id => (R.byId(S.fleet.drivers, id) || {}).name || "—";

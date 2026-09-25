@@ -263,7 +263,7 @@
       return Promise.resolve(run());
     },
     async login(login, pw) { const r = await this.auth.login(Store.state, login, pw); if (r.ok) Store.userId = r.userId; return r; },
-    async resume() { const s = this.auth.session(); if (s && R.byId(Store.state.users, s.userId) && R.byId(Store.state.users, s.userId).active !== false) { Store.userId = s.userId; return { ok: true, mustChange: this.auth.info(s.userId).mustChange }; } return { ok: false }; },
+    async resume() { const s = this.auth.session(); if (s && R.byId(Store.state.users, s.userId) && R.statusOf(R.byId(Store.state.users, s.userId)) === "ACTIVE") { Store.userId = s.userId; return { ok: true, mustChange: this.auth.info(s.userId).mustChange }; } return { ok: false }; },
     async logout(reason) { this.auth.logout(reason || "user"); Store.userId = null; },
     async afterPasswordChange() {},
     touch() { this.auth.touch(); },
@@ -345,6 +345,11 @@
     async loginLog() { const r = await this.api("GET", "/api/auth/log"); return r && r.ok ? r.log : []; },
     async createUser(rec, pw) { const r = await this.api("POST", "/api/users", { rec, password: pw }); if (r && r.state) Store.state = r.state; return r && r.res ? r.res : r; },
     async register(rec, pw) { const r = await this.api("POST", "/api/auth/register", { rec, password: pw }); return r || { ok: false, error: t("Nieprawidłowa odpowiedź serwera") }; },
+    /** Zaproszenie e-mail (konto INVITED); wynik: { res, mail }. */
+    async invite(rec) { const r = await this.api("POST", "/api/users/invite", { rec }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    async resendInvite(userId) { const r = await this.api("POST", "/api/users/resend", { userId }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    async sendResetLink(userId) { const r = await this.api("POST", "/api/users/reset-link", { userId }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    auditExtra() { return this.api("GET", "/api/audit/extra"); },
     removeUser(id) { return this.exec("user.remove", { id }, N_("Administracja — użytkownicy")); },
     backups() { return this.api("GET", "/api/backups"); },
     backupNow() { return this.api("POST", "/api/backups", {}); },
@@ -403,11 +408,17 @@
     { id: "kontrahenci", label: N_("Kontrahenci"), icon: "users" },
     { id: "magazyny", label: N_("Magazyny"), icon: "building" },
     { group: N_("System") },
-    { id: "uzytkownicy", label: N_("Użytkownicy"), icon: "key", perm: "users.manage" },
-    { id: "administracja", label: N_("Administracja"), icon: "shield" },
+    { id: "uzytkownicy", label: N_("Użytkownicy"), icon: "key", perm: "users.read" },
+    { id: "role", label: N_("Role i uprawnienia"), icon: "shield", perm: "users.read" },
+    { id: "audyt", label: N_("Dziennik audytu"), icon: "clock", perm: "audit.read" },
+    { id: "administracja", label: N_("Administracja"), icon: "building" },
     { id: "profil", label: N_("Mój profil"), icon: "user" }
   ];
   const HIDDEN_ROUTES = { nowa: { label: N_("Nowa operacja"), parent: "operacje" }, korekta: { label: N_("Korekta dokumentu"), parent: "operacje" } };
+  /** Adresy administracyjne (zgodne ze specyfikacją) → widoki programu. */
+  const ROUTE_ALIAS = { "admin/users": "uzytkownicy", "admin/roles": "role", "admin/permissions": "role", "admin/audit": "audyt", "account": "profil" };
+  /** Ekrany dostępne bez zalogowania (linki z wiadomości e-mail). */
+  const PUBLIC_ROUTES = ["login", "forgot-password", "reset-password", "invite/accept", "confirm-email"];
 
   /* ------------------------------------------------------------------ */
   /* Aplikacja                                                           */
@@ -422,11 +433,15 @@
     user() { return Store.state && Store.userId ? R.byId(Store.state.users, Store.userId) : (Store.userId && Store.pendingUser && Store.pendingUser.id === Store.userId ? Store.pendingUser : null); },
     wh() { const u = this.user(); return u ? R.byId(Store.state.warehouses, u.whId) : null; },
     ctx(source) { return { user: this.user(), today: this.today(), source }; },
-    can(p) { return R.can(this.user(), p); },
+    can(p) { R.applyRoles(Store.state); return R.can(this.user(), p); },
+    /** Magazyny, do których zalogowany użytkownik ma dostęp (role globalne — wszystkie aktywne). */
+    myWarehouses() { const u = this.user(), acc = R.whAccess(u); return Store.state.warehouses.filter(w => w.active !== false && (acc === null || acc.includes(w.id))); },
     product(id) { return R.byId(Store.state.products, id); },
     partner(id) { return R.byId(Store.state.partners, id); },
     whName(id) { return (R.byId(Store.state.warehouses, id) || {}).name || "—"; },
-    roleLabel(role) { return t((R.ROLES[role] || R.ROLES.podglad).label); },
+    roleLabel(role) { return t((R.ROLES[role] || R.ROLES.obserwator).label); },
+    /** Tryb pracy wg specyfikacji: OFFLINE (jedno stanowisko, przeglądarka) / FIRMOWY (serwer). */
+    modeLabel() { return Store.mode === "server" ? t("FIRMOWY") : t("OFFLINE"); },
     qtyNative(q, productId, dec = 3) {
       const p = this.product(productId);
       return fmtQ(q, dec) + " " + Units.label(p ? p.unit : "");
@@ -454,17 +469,20 @@
       else if (r.migrated) setTimeout(() => Toast.info(t("Przeniesiono dane z Demo 2.x"), t("Dane zostały zmigrowane do wersji 3.0. Zaloguj się kontem z danych przykładowych.")), 600);
       if (Store.memoryOnly) setTimeout(() => Toast.warn(t("Tryb bez zapisu"), t("Przeglądarka blokuje localStorage — zmiany znikną po zamknięciu karty.")), 400);
       document.body.classList.toggle("no-tutorial", lsGet("riw.tutorial", "1") === "0");
-      root.addEventListener("hashchange", () => { if (Store.userId) this.render(); });
+      root.addEventListener("hashchange", () => { if (Store.userId) this.render(); else Auth.routePublic(); });
       root.addEventListener("storage", e => this.onStorage(e));
       ["mousedown", "keydown", "touchstart", "wheel"].forEach(ev => root.addEventListener(ev, () => { if (Store.userId) Store.backend.touch(); }, { passive: true }));
       DBG.app = App; DBG.store = Store; DBG.R = R; DBG.I18N = I18N;
       DBG.loginAs = async (login, pw) => { if (Store.userId) await this.logout(true); const res = await Store.backend.login(login, pw || AuthLib.DEMO_PASSWORD); if (res.ok) await this.afterLogin(res); return res; };
       if (r.setup) return Auth.setupScreen();
+      const pub = Auth.publicPath();
+      if (pub && pub !== "login") return Auth.routePublic();
       const again = await Store.backend.resume();
-      if (again.ok) return this.afterLogin(again);
+      if (again.ok) { if (pub) location.hash = "#/pulpit"; return this.afterLogin(again); }
       Auth.loginScreen();
     },
     async afterLogin(res) {
+      if (Auth.publicPath()) history.replaceState(null, "", location.pathname + location.search + "#/pulpit");
       const u = this.user();
       Prefs.fromUser(u);
       if (res && res.mustChange) return Auth.forceChange();
@@ -484,14 +502,17 @@
       clearInterval(this.idleTimer);
       if (root.RIWForm) { root.RIWForm.draft = null; root.RIWForm.mode = "new"; }
       await Store.backend.logout("user");
-      if (!silent) { Prefs.fromUser(null); Auth.loginScreen({ info: t("Wylogowano.") }); }
+      // czyszczenie stanu użytkownika i wrażliwej pamięci podręcznej; powrót na ekran logowania
+      this.tabs = {}; ssSet(DRAFT_KEY, null);
+      if (!silent) { Prefs.fromUser(null); history.replaceState(null, "", location.pathname + location.search + "#/login"); Auth.loginScreen({ info: t("Wylogowano.") }); }
     },
     sessionLost(idle) {
       if (!Store.userId) return;
       clearInterval(this.idleTimer);
       Store.backend.logout(idle ? "timeout" : "user");
-      Store.userId = null;
+      Store.userId = null; this.tabs = {};
       $$(".scrim").forEach(x => x.remove());
+      history.replaceState(null, "", location.pathname + location.search + "#/login");
       Auth.loginScreen({ info: idle ? t("Wylogowano po {n} min bezczynności.", { n: AuthLib.POLICY.idleMinutes }) : t("Sesja wygasła — zaloguj się ponownie.") });
     },
     onStorage(e) {
@@ -501,7 +522,7 @@
           const s = LocalBackend.read(); if (!s) return;
           Store.state = s;
           const u = this.user();
-          if (!u || u.active === false) return this.sessionLost();
+          if (!u || R.statusOf(u) !== "ACTIVE") return this.sessionLost();
           Toast.info(t("Dane zmienione w innej karcie"), t("Stany i dokumenty odświeżono."));
           this.onExternalChange();
         } catch (x) {}
@@ -561,16 +582,16 @@
       if (!u) return;
       $("#user-btn").innerHTML = `<span class="avatar">${esc(initials(u.name))}</span><span class="who"><b>${esc(u.name)}</b><small>${esc(this.roleLabel(u.role))}</small></span>`;
       $("#user-btn").setAttribute("aria-label", t("Konto: {n}", { n: u.name }));
-      const canSwitch = u.role === "admin" && Store.state.warehouses.filter(w => w.active !== false).length > 1;
+      const canSwitch = this.myWarehouses().length > 1;
       $("#wh-chip").innerHTML = `<span class="dot"></span><small>${esc(t("Magazyn:"))}</small><b>${esc(wh ? wh.name : "—")}</b>${canSwitch ? ic("chevDown", 14) : ""}`;
-      $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn aktywny wynika z zalogowanego użytkownika");
+      $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn przydzielony przez administratora");
       $("#wh-chip").classList.toggle("switchable", canSwitch);
       $("#lang-btn").innerHTML = `<span class="lbl">${esc(I18N.info().short)}</span>`;
       $("#lang-btn").title = t("Język") + ": " + I18N.info().label;
       const th = THEME_LIST.find(x => x.id === Prefs.theme);
       $("#theme-btn").innerHTML = ic(th.icon, 17); $("#theme-btn").title = t("Motyw") + ": " + t(th.label) + " (Ctrl+D)";
       const srv = Store.mode === "server", on = srv ? ServerBackend.online : true;
-      $("#sb-foot").innerHTML = `<span class="conn-dot ${srv ? (on ? "" : "off") : "local"}"></span><span>${esc(srv ? (on ? t("Serwer · połączono") : t("Serwer · brak połączenia")) : Store.memoryOnly ? t("Tryb lokalny · bez zapisu") : t("Tryb lokalny · dane w tej przeglądarce"))}</span>`;
+      $("#sb-foot").innerHTML = `<span class="conn-dot ${srv ? (on ? "" : "off") : "local"}"></span><span><b class="mode-tag">${esc(this.modeLabel())}</b> ${esc(srv ? (on ? t("Serwer · połączono") : t("Serwer · brak połączenia")) : Store.memoryOnly ? t("Tryb lokalny · bez zapisu") : t("Tryb lokalny · dane w tej przeglądarce"))}</span>`;
     },
     rerenderAll() {
       if (!Store.userId) { Auth.rerender(); return; }
@@ -579,21 +600,23 @@
     userMenu(btn) {
       const u = this.user();
       Dropdown.open(btn, `<div class="dd-head"><span class="avatar lg">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><small>${esc(u.login)} · ${esc(this.roleLabel(u.role))}</small><small>${esc(this.whName(u.whId))}</small></div></div>
-        <a class="dd-item" href="#/profil" data-go><span class="ic">${ic("user", 16)}</span>${esc(t("Mój profil i ustawienia"))}</a>
-        <button class="dd-item" type="button" data-pw><span class="ic">${ic("key", 16)}</span>${esc(t("Zmień hasło"))}</button>
-        ${this.can("users.manage") ? `<a class="dd-item" href="#/uzytkownicy" data-go><span class="ic">${ic("users", 16)}</span>${esc(t("Użytkownicy i uprawnienia"))}</a>` : ""}
+        <a class="dd-item" href="#/profil" data-go><span class="ic">${ic("user", 16)}</span>${esc(t("Moje konto"))}</a>
+        <button class="dd-item" type="button" data-pw><span class="ic">${ic("key", 16)}</span>${esc(t("Zmiana hasła"))}</button>
+        ${this.myWarehouses().length > 1 ? `<button class="dd-item" type="button" data-whsw><span class="ic">${ic("building", 16)}</span>${esc(t("Magazyn"))}: ${esc(this.whName(u.whId))}</button>` : ""}
+        ${this.can("users.read") ? `<a class="dd-item" href="#/uzytkownicy" data-go><span class="ic">${ic("users", 16)}</span>${esc(t("Użytkownicy"))}</a>` : ""}
         <div class="dd-sep"></div>
         <button class="dd-item danger" type="button" data-logout id="logout-btn"><span class="ic">${ic("logout", 16)}</span>${esc(t("Wyloguj"))}</button>`, el => {
         $$("[data-go]", el).forEach(a => a.onclick = () => Dropdown.close());
         $("[data-pw]", el).onclick = () => { Dropdown.close(); Auth.changePasswordDialog(); };
+        const sw = $("[data-whsw]", el); if (sw) sw.onclick = () => { Dropdown.close(); this.whMenu($("#wh-chip")); };
         $("[data-logout]", el).onclick = () => this.logout();
       });
     },
-    /** Administrator: przełączenie magazynu roboczego (pozostałe role mają magazyn przydzielony). */
+    /** Przełączenie magazynu roboczego — tylko magazyny przydzielone (role globalne: wszystkie). */
     whMenu(btn) {
-      const u = this.user();
-      if (u.role !== "admin") return;
-      Dropdown.open(btn, `<div class="dd-label">${esc(t("Magazyn roboczy"))}</div>` + Store.state.warehouses.filter(w => w.active !== false).map(w => `<button class="dd-item" type="button" data-wh="${esc(w.id)}"><span class="ic">${ic("building", 16)}</span>${esc(w.name)}${w.id === u.whId ? `<span class="chk">${ic("check", 15)}</span>` : ""}</button>`).join(""),
+      const u = this.user(), list = this.myWarehouses();
+      if (list.length < 2) return;
+      Dropdown.open(btn, `<div class="dd-label">${esc(t("Magazyn roboczy"))}</div>` + list.map(w => `<button class="dd-item" type="button" data-wh="${esc(w.id)}"><span class="ic">${ic("building", 16)}</span>${esc(w.name)}${w.id === u.whId ? `<span class="chk">${ic("check", 15)}</span>` : ""}</button>`).join(""),
         el => $$("[data-wh]", el).forEach(b => b.onclick = async () => {
           Dropdown.close();
           const r = await Store.exec("me.warehouse", { whId: b.dataset.wh }, N_("Zmiana magazynu roboczego"));
@@ -613,15 +636,19 @@
 
     parseHash() {
       const h = (location.hash || "#/pulpit").replace(/^#\/?/, "");
-      const [path, q] = h.split("?");
+      let [path, q] = h.split("?");
       const params = {};
       (q || "").split("&").filter(Boolean).forEach(kv => { const [k, v] = kv.split("="); params[decodeURIComponent(k)] = decodeURIComponent(v || ""); });
+      const um = /^admin\/users\/([\w-]+)$/.exec(path);
+      if (um) { path = "uzytkownicy"; params.id = um[1]; } else if (ROUTE_ALIAS[path]) path = ROUTE_ALIAS[path];
+      if (PUBLIC_ROUTES.includes(path)) path = "pulpit";
       const item = NAV.find(n => n.id === path);
       const route = (item && (!item.perm || this.can(item.perm))) || HIDDEN_ROUTES[path] ? path : "pulpit";
       return { route, params };
     },
     render(opts = {}) {
       if (!Store.userId || !$("#page")) return;
+      R.applyRoles(Store.state);
       const { route, params } = this.parseHash();
       const changed = route !== this.route;
       this.route = route; this.params = params;
@@ -653,7 +680,7 @@
         if (pend) return `<span class="cnt warn" title="${esc(t("Do zatwierdzenia"))}">${pend}</span>`;
         const n = S.drafts.filter(d => d.userId === u.id).length; return n ? `<span class="cnt" title="${esc(t("Wersje robocze"))}">${n}</span>` : "";
       }
-      if (id === "uzytkownicy") { const n = S.users.filter(x => x.pending).length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
+      if (id === "uzytkownicy" && this.can("users.manage")) { const n = S.users.filter(x => x.selfRegistered && R.statusOf(x) === "INVITED").length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
       return "";
     },
     go(route) { if (location.hash !== "#/" + route) location.hash = "#/" + route; else this.render(); }
@@ -676,7 +703,104 @@
 
   const Auth = {
     screen: null, opts: {},
-    rerender() { if (this.screen === "login") this.loginScreen(this.opts); else if (this.screen === "setup") this.setupScreen(); else if (this.screen === "force") this.forceChange(); },
+    rerender() {
+      if (this.screen === "login") this.loginScreen(this.opts); else if (this.screen === "setup") this.setupScreen(); else if (this.screen === "force") this.forceChange();
+      else if (this.screen === "forgot") this.forgotScreen(this.opts); else if (this.screen === "token") this.tokenScreen(this.opts.kind, this.opts.token, this.opts);
+    },
+    /** Ścieżka ekranu publicznego z adresu (#/login, #/forgot-password, #/invite/accept?token=…) albo null. */
+    publicPath() { const p = (location.hash || "").replace(/^#\/?/, "").split("?")[0]; return PUBLIC_ROUTES.includes(p) ? p : null; },
+    /** Ekrany bez logowania — wywoływane przy starcie i przy zmianie adresu, gdy nikt nie jest zalogowany. */
+    routePublic() {
+      if (Store.userId) return;
+      const p = this.publicPath(), q = new URLSearchParams((location.hash.split("?")[1] || ""));
+      if (p === "forgot-password") return this.forgotScreen();
+      const kind = { "invite/accept": "invite", "reset-password": "reset", "confirm-email": "confirm" }[p];
+      if (kind) {
+        const token = q.get("token") || "";
+        // token nie zostaje w adresie ani w historii przeglądarki
+        history.replaceState(null, "", location.pathname + location.search + "#/" + p);
+        return this.tokenScreen(kind, token || (this.opts && this.opts.kind === kind ? this.opts.token : ""));
+      }
+      if (this.screen !== "login") this.loginScreen();
+    },
+    selfRegistration() { return Store.mode === "server" ? !!(ServerBackend.info && ServerBackend.info.selfRegistration) : !!(Store.state && Store.state.config.allowSelfRegistration); },
+    /** Okno ekranu publicznego (wspólny układ z ekranem logowania). */
+    frame(id, title, lead, inner) {
+      document.getElementById("app").innerHTML = `<div class="auth" id="${id}">${this.side()}
+        <section class="auth-form">${this.tools()}
+          <div class="auth-box"><h3>${esc(title)}</h3>${lead ? `<p class="lead">${esc(lead)}</p>` : ""}${inner}
+            <p class="auth-foot">ResInvest ERP ${esc(R.VERSION)} · ${esc(App.modeLabel())}</p>${this.credit()}</div></section></div>`;
+      const scope = $("#" + id); this.bindTools(scope); bindEyes(scope); return scope;
+    },
+    /** „Nie pamiętam hasła” — link e-mail (tryb FIRMOWY); w trybie OFFLINE hasło nadaje administrator. */
+    forgotScreen(opts = {}) {
+      this.screen = "forgot"; this.opts = opts;
+      document.title = t("Nie pamiętam hasła") + " · ResInvest ERP";
+      if (Store.mode !== "server") {
+        this.frame("forgot-screen", t("Nie pamiętam hasła"), "", `<div class="info-line">${ic("alert", 15)}<span>${esc(t("W trybie OFFLINE nowe hasło tymczasowe nadaje administrator w module Użytkownicy."))}</span></div>
+          <a class="btn block mt4" href="#/login">${esc(t("Wróć do logowania"))}</a>`);
+        return;
+      }
+      const scope = this.frame("forgot-screen", t("Nie pamiętam hasła"), t("Podaj e-mail służbowy. Jeśli konto istnieje i jest aktywne, wyślemy link do ustawienia nowego hasła (ważny 1 godzinę)."),
+        opts.sent ? `<div class="info-line ok mt4">${ic("check", 15)}<span id="fp-info">${esc(opts.sent)}</span></div><a class="btn primary block mt4" href="#/login">${esc(t("Wróć do logowania"))}</a>`
+          : `<form id="fp-form" novalidate><div class="field"><label for="fp-email">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="fp-email" type="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.email || lsGet("riw.lastLogin", ""))}"></div>
+            <div class="auth-err hidden" id="fp-err" role="alert"></div>
+            <button class="btn primary lg block" type="submit" id="fp-submit">${ic("key", 16)} ${esc(t("Wyślij link"))}</button>
+            <a class="btn ghost block mt2" href="#/login">${esc(t("Wróć do logowania"))}</a></form>`);
+      const f = $("#fp-form", scope); if (!f) return;
+      f.onsubmit = async e => {
+        e.preventDefault();
+        const err = $("#fp-err"), email = $("#fp-email").value.trim();
+        const em = R.validateCompanyEmail(email, ((Store.state && Store.state.config) || root.RIW_CONFIG || {}).companyDomains || ["resinvest.group"]);
+        if (!em.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(em.error)}</span>`; err.classList.remove("hidden"); return; }
+        $("#fp-submit").disabled = true;
+        const r = await ServerBackend.api("POST", "/api/auth/forgot", { email: em.email });
+        $("#fp-submit").disabled = false;
+        if (!r || !r.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc((r && r.error) || t("Nieprawidłowa odpowiedź serwera"))}</span>`; err.classList.remove("hidden"); return; }
+        this.forgotScreen({ sent: r.message });
+      };
+      $("#fp-email").focus();
+    },
+    /** Link z e-maila: aktywacja zaproszenia (hasło), reset hasła, potwierdzenie adresu. */
+    async tokenScreen(kind, token, opts = {}) {
+      this.screen = "token"; this.opts = Object.assign({}, opts, { kind, token });
+      const T = { invite: [N_("Aktywacja konta"), N_("Ustaw hasło i aktywuj konto")], reset: [N_("Ustaw nowe hasło"), N_("Zapisz nowe hasło")], confirm: [N_("Potwierdzenie adresu e-mail"), ""] }[kind];
+      document.title = t(T[0]) + " · ResInvest ERP";
+      const bad = msg => this.frame("token-screen", t(T[0]), "", `<div class="auth-err" role="alert">${ic("alert", 15)}<span id="tk-err">${esc(msg)}</span></div>
+        ${kind === "reset" ? `<a class="btn primary block mt4" href="#/forgot-password">${esc(t("Wyślij nowy link"))}</a>` : ""}<a class="btn ghost block mt2" href="#/login">${esc(t("Wróć do logowania"))}</a>`);
+      if (Store.mode !== "server") return bad(t("Linki z wiadomości e-mail działają w trybie FIRMOWYM (ResInvest ERP Serwer)."));
+      if (!token) return bad(t("Link jest nieprawidłowy."));
+      if (!opts.info) {
+        this.frame("token-screen", t(T[0]), t("Sprawdzanie linku…"), "");
+        const info = kind === "confirm" ? await ServerBackend.api("POST", "/api/auth/confirm", { token }) : await ServerBackend.api("POST", "/api/auth/token", { kind, token });
+        if (!info || !info.ok) return bad((info && info.error) || t("Link jest nieprawidłowy."));
+        if (kind === "confirm") { history.replaceState(null, "", location.pathname + location.search + "#/login"); return this.loginScreen({ login: info.email, ok: true, info: t("Adres e-mail {e} potwierdzony. Możesz się zalogować.", { e: info.email }) }); }
+        this.opts.info = info;
+      }
+      const info = this.opts.info;
+      const scope = this.frame("token-screen", t(T[0]), kind === "invite" ? t("{n}, ustaw hasło do konta {e}. Link działa jednorazowo.", { n: info.firstName || info.name, e: info.email }) : t("Konto: {e}. Link działa jednorazowo.", { e: info.email }),
+        `<form id="tk-form" novalidate><input type="email" autocomplete="username" value="${esc(info.email)}" class="hidden" readonly>
+          ${pwField("tk-pass", t("Nowe hasło"), "new-password")}${pwMeter("tk-meter")}${pwField("tk-pass2", t("Powtórz hasło"), "new-password")}
+          <p class="help">${esc(t("Hasło musi mieć: {x}", { x: [t("co najmniej {n} znaków", { n: AuthLib.POLICY.minLength }), t("litery i cyfry")].join(", ") }))}</p>
+          <div class="auth-err hidden" id="tk-err" role="alert"></div>
+          <button class="btn primary lg block" type="submit" id="tk-submit">${ic("check", 16)} ${esc(t(T[1]))}</button></form>`);
+      bindMeter($("#tk-pass"), $("#tk-meter"));
+      $("#tk-form", scope).onsubmit = async e => {
+        e.preventDefault();
+        const err = $("#tk-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
+        const pw = $("#tk-pass").value, pw2 = $("#tk-pass2").value;
+        if (pw !== pw2) return fail(t("Hasła nie są takie same"));
+        const pe = AuthLib.passwordError(pw, info.email); if (pe) return fail(pe);
+        $("#tk-submit").disabled = true;
+        const r = await ServerBackend.api("POST", kind === "invite" ? "/api/invite/accept" : "/api/auth/reset", { token, password: pw, password2: pw2 });
+        $("#tk-submit").disabled = false;
+        if (!r || !r.ok) return fail((r && r.error) || t("Nieprawidłowa odpowiedź serwera"));
+        this.opts = {};
+        history.replaceState(null, "", location.pathname + location.search + "#/login");
+        this.loginScreen({ login: info.email, ok: true, info: kind === "invite" ? t("Konto aktywne. Zaloguj się ustawionym hasłem.") : t("Hasło zmienione. Zaloguj się nowym hasłem.") });
+      };
+      $("#tk-pass").focus();
+    },
     tools() {
       return `<div class="auth-tools">
         <div class="seg" role="group" aria-label="${esc(t("Język"))}">${Object.values(I18N.LANGS).map(L => `<button type="button" data-auth-lang="${L.code}" aria-pressed="${L.code === I18N.lang}" title="${esc(L.label)}">${L.short}</button>`).join("")}</div>
@@ -696,19 +820,21 @@
     credit() { return `<p class="credit">${esc(t("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"))} · © 2026</p>`; },
     loginScreen(opts = {}) {
       this.screen = "login"; this.opts = opts;
-      const reg = opts.tab === "register";
+      if (this.publicPath() && this.publicPath() !== "login") history.replaceState(null, "", location.pathname + location.search + "#/login");
+      const reg = opts.tab === "register" && this.selfRegistration();
       document.title = (reg ? t("Rejestracja") : t("Logowanie")) + " · ResInvest ERP";
       const local = Store.mode === "local";
       const domains = ((Store.state && Store.state.config && Store.state.config.companyDomains) || ["resinvest.group"]).map(d => "@" + d).join(", ");
       const demo = local && Store.state ? Store.state.users.filter(u => AuthLib.DEMO_LOGINS.includes(u.login) && u.active !== false && AuthLib.LocalAuth.info(u.id).demo) : [];
-      const tabs = `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
+      const tabs = !this.selfRegistration() ? "" : `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
       const loginForm = `<form id="login-form" novalidate autocomplete="on">
-              <div class="field"><label for="lg-login">${esc(t("E-mail firmowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
+              <div class="field"><label for="lg-login">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
               ${pwField("lg-pass", t("Hasło"), "current-password")}
               <div class="caps hidden" id="lg-caps">${esc(t("Włączony Caps Lock"))}</div>
               <div class="auth-err hidden" id="lg-err" role="alert"></div>
-              <button class="btn primary lg block" type="submit" id="lg-submit">${ic("lock", 16)} ${esc(t("Zaloguj"))}</button>
-              <p class="help mt2">${esc(t("Nie pamiętasz hasła? Nowe hasło tymczasowe nadaje administrator ({e}).", { e: R.Seed ? R.Seed.ADMIN_EMAIL : "" }))}</p>
+              <button class="btn primary lg block" type="submit" id="lg-submit">${ic("lock", 16)} ${esc(t("Zaloguj się"))}</button>
+              ${local ? `<p class="help mt2">${esc(t("Nie pamiętasz hasła? W trybie OFFLINE nowe hasło tymczasowe nadaje administrator ({e}).", { e: R.Seed ? R.Seed.ADMIN_EMAIL : "" }))}</p>`
+                : `<a class="btn ghost block mt2" href="#/forgot-password" id="lg-forgot">${esc(t("Nie pamiętam hasła"))}</a>`}
             </form>`;
       const regForm = `<form id="reg-form" novalidate autocomplete="on">
               <p class="help">${esc(t("Rejestracja wyłącznie adresem firmowym ({d}). Konto aktywuje administrator — nadaje rolę i magazyn.", { d: domains }))}</p>
@@ -724,7 +850,7 @@
         <section class="auth-form">${this.tools()}
           <div class="auth-box">
             <h3>${esc(reg ? t("Załóż konto") : t("Zaloguj się"))}</h3>
-            <p class="lead">${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
+            <p class="lead"><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
             ${tabs}
             ${opts.info ? `<div class="info-line mt4 ${opts.ok ? "ok" : ""}">${ic(opts.ok ? "check" : "alert", 15)}<span id="auth-info">${esc(opts.info)}</span></div>` : ""}
             ${reg ? regForm : loginForm}
@@ -746,7 +872,11 @@
         const btn = $("#lg-submit");
         btn.disabled = true; err.classList.add("hidden");
         let res;
-        try { res = await Store.backend.login(login.value.trim().toLowerCase(), pass.value); }
+        const em = R.validateCompanyEmail(login.value, ((Store.state && Store.state.config) || root.RIW_CONFIG || {}).companyDomains || ["resinvest.group"]);
+        if (!pass.value) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(t("Podaj e-mail służbowy i hasło"))}</span>`; err.classList.remove("hidden"); return; }
+        if (!em.ok) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(em.error)}</span>`; err.classList.remove("hidden"); login.focus(); return; }
+        login.value = em.email;
+        try { res = await Store.backend.login(em.email, pass.value); }
         catch (x) { res = { ok: false, error: t("Nie udało się zalogować: {m}", { m: x.message }) }; }
         btn.disabled = false;
         if (!res.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(res.error)}</span>`; err.classList.remove("hidden"); pass.select(); return; }
@@ -785,7 +915,7 @@
         <section class="auth-form">${this.tools()}
           <div class="auth-box" style="max-width:440px">
             <h3>${esc(t("Pierwsze uruchomienie serwera"))}</h3>
-            <p class="lead">${esc(t("Utwórz konto administratora. Pozostałych użytkowników dodasz w module Użytkownicy albo zatwierdzisz ich rejestrację."))}</p>
+            <p class="lead">${esc(t("Utwórz konto administratora. Pozostałych użytkowników zaprosisz e-mailem w module Użytkownicy."))}</p>
             <form id="setup-form" novalidate>
               <div class="field"><label for="su-name">${esc(t("Imię i nazwisko administratora"))}</label><input class="ctrl" id="su-name" autocomplete="name"></div>
               <div class="field"><label for="su-login">${esc(t("E-mail firmowy administratora"))}</label><input class="ctrl" id="su-login" type="email" value="${esc(R.Seed.ADMIN_EMAIL)}" autocapitalize="off" spellcheck="false" autocomplete="username"></div>
