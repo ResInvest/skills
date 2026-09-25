@@ -11,9 +11,10 @@
    ========================================================================= */
 (function (root) {
   "use strict";
-  const PREF_MUSIC = "riw.demo.music";
-  const PREF_INTRO = "riw.demo.intro";
+  const PREF_MUSIC = "riw.music";
+  const PREF_INTRO = "riw.intro";
   const DBG = root.RIW_DEBUG = root.RIW_DEBUG || {};
+  const t = s => (root.RIW_I18N ? root.RIW_I18N.t(s) : s);
 
   const ICON_ON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
   const ICON_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>';
@@ -98,17 +99,17 @@
         const el = document.createElement("div");
         el.className = "splash";
         el.setAttribute("role", "dialog");
-        el.setAttribute("aria-label", "Ekran powitalny ResInvest ERP");
+        el.setAttribute("aria-label", t("Ekran powitalny ResInvest ERP"));
         el.innerHTML = `
           <video playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
           <div class="splash-brand" aria-hidden="true">
             <div class="mark">RI</div>
             <h2>ResInvest Commodities</h2>
-            <p>ERP · obrót i magazynowanie biomasy drzewnej</p>
+            <p>${t("ERP · obrót i magazynowanie biomasy drzewnej")}</p>
           </div>
           <div class="splash-ctl">
             <button type="button" class="splash-btn" data-music></button>
-            <button type="button" class="splash-btn" data-skip>Pomiń intro <span aria-hidden="true">→</span></button>
+            <button type="button" class="splash-btn" data-skip>${t("Pomiń intro")} <span aria-hidden="true">→</span></button>
           </div>
           <p class="splash-note hidden" data-note role="status"></p>
           <div class="splash-bar" aria-hidden="true"><i data-bar></i></div>`;
@@ -124,11 +125,11 @@
         const showNote = txt => { note.textContent = txt || ""; note.classList.toggle("hidden", !txt); };
         const renderBtn = () => {
           const on = this.musicOn();
-          musicBtn.innerHTML = (on ? ICON_OFF : ICON_ON) + `<span>${on ? "Wycisz" : "Włącz muzykę"}</span>`;
+          musicBtn.innerHTML = (on ? ICON_OFF : ICON_ON) + `<span>${on ? t("Wycisz") : t("Włącz muzykę")}</span>`;
           musicBtn.setAttribute("aria-pressed", String(!on));
-          musicBtn.setAttribute("aria-label", on ? "Wycisz muzykę" : "Włącz muzykę");
+          musicBtn.setAttribute("aria-label", on ? t("Wycisz muzykę") : t("Włącz muzykę"));
         };
-        const BLOCKED_TXT = "Przeglądarka zablokowała automatyczny dźwięk. Kliknij w dowolnym miejscu lub naciśnij klawisz, aby włączyć muzykę.";
+        const BLOCKED_TXT = t("Przeglądarka zablokowała automatyczny dźwięk. Kliknij w dowolnym miejscu lub naciśnij klawisz, aby włączyć muzykę.");
 
         const onGesture = e => {
           if (e.type === "keydown" && (e.key === "Escape" || e.key === "Enter")) return;

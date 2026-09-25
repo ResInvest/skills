@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="pearl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="description" content="ResInvest ERP 3.0 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
+<meta name="generator" content="ResInvest ERP build @@VERSION@@ · @@BUILT@@">
+<title>ResInvest ERP</title>
+<script>
+/* Motyw przed pierwszym malowaniem — bez „mignięcia” jasnego tła w motywie ciemnym. */
+try { var th = localStorage.getItem("riw.theme"); if (th === "graphite" || th === "azure") document.documentElement.setAttribute("data-theme", th); } catch (e) {}
+</script>
+<style>
+/*@@STYLES@@*/
+</style>
+</head>
+<body>
+<div id="app"></div>
+<noscript><p style="padding:24px;font:16px sans-serif">ResInvest ERP wymaga włączonej obsługi JavaScript. · ResInvest ERP requires JavaScript.</p></noscript>
+<script>
+/* Film intro (H.264 + AAC) osadzony przez tools/build.mjs — nie edytować ręcznie. */
+var INTRO_SRC = "@@INTRO_MEDIA@@";
+</script>
+<script>
+/* Konfiguracja z config/app.config.json */
+var RIW_CONFIG = @@CONFIG@@;
+</script>
+<script>
+/* Czcionki PDF (ResInvestDocSans — podzbiór Liberation Sans, SIL OFL 1.1) */
+var RIW_FONTS = @@FONTS@@;
+</script>
+<!--@@SCRIPTS@@-->
+<script>
+"use strict";
+/* Start: intro (muzyka możliwie natychmiast), równolegle aplikacja — logowanie lub pulpit. */
+try { Intro.play(); } catch (e) { console.error(e); }
+App.init().catch(function (e) { console.error(e); document.getElementById("app").innerHTML = '<p style="padding:24px">' + String(e && e.message || e) + '</p>'; });
+</script>
+</body>
+</html>

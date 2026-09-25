@@ -1,16 +1,22 @@
 {
-  "name": "resinvest-erp-demo",
-  "version": "2.6.0-demo",
+  "name": "resinvest-erp",
+  "version": "3.0.0",
   "private": true,
-  "description": "ResInvest ERP — Demo v2.1 — operacje, MM, korekty i anulowania, historia, raporty okresowe, kwit produkcji dnia, druk i PDF: jeden plik HTML",
+  "description": "ResInvest ERP 3.0 — obrót i magazynowanie biomasy drzewnej: logowanie, praca wielostanowiskowa (serwer Node.js + SQLite), PL/CS/EN, motywy Perła/Grafit/Azure, dokumenty, korekty, inwentaryzacja, raporty, druk i PDF",
   "license": "SEE LICENSE IN LICENSE",
+  "type": "commonjs",
   "scripts": {
-    "build": "node tools/build-demo.mjs",
+    "build": "node tools/build.mjs",
     "sample-data": "node tools/export-sample-data.mjs",
-    "check": "node --check demo/src/engine.js && node --check demo/src/seed.js && node --check demo/src/intro.js && node --check demo/src/app.js && node --check demo/src/views.js && node --check demo/src/pdf.js && node --check tools/build-demo.mjs",
-    "test:unit": "node --test tests/engine.test.mjs tests/pdf.test.mjs",
+    "i18n": "node tools/i18n-extract.mjs",
+    "server": "node --disable-warning=ExperimentalWarning server/riw-server.mjs",
+    "server:check": "node --disable-warning=ExperimentalWarning server/riw-server.mjs --check",
+    "server:backup": "node --disable-warning=ExperimentalWarning server/riw-server.mjs --backup-now",
+    "check": "node --check app/src/i18n.js && node --check app/src/engine.js && node --check app/src/service.js && node --check app/src/seed.js && node --check app/src/auth.js && node --check app/src/pdf.js && node --check app/src/intro.js && node --check app/src/core.js && node --check app/src/form.js && node --check app/src/views.js && node --check app/src/dashboard.js && node --check app/src/admin.js && node --check server/core.mjs && node --check server/riw-server.mjs",
+    "test:unit": "node --test tests/engine.test.mjs tests/pdf.test.mjs tests/platform.test.mjs",
+    "test:server": "node --test tests/server.test.mjs",
     "test:e2e": "node tests/e2e.cjs",
-    "test": "npm run check && npm run build && npm run test:unit && npm run test:e2e"
+    "test": "npm run check && npm run i18n && npm run build && npm run test:unit && npm run test:server && npm run test:e2e"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=22.13" }
 }

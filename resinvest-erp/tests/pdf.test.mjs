@@ -7,7 +7,8 @@ import { loadPdfFonts } from "../tools/pdf-fonts.mjs";
 
 const require = createRequire(import.meta.url);
 globalThis.RIW_FONTS = loadPdfFonts();
-const P = require("../demo/src/pdf.js");
+require("../app/src/i18n.js");
+const P = require("../app/src/pdf.js");
 const latin = u8 => Buffer.from(u8).toString("latin1");
 
 const model = rows => ({ title: "Raport miesięczny — WRZESIEŃ 2026", subtitle: "zażółć gęślą jaźń", number: "RAP/001/09/2026", orientation: "landscape",

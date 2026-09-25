@@ -1,10 +1,10 @@
-/* Czcionki PDF dla builda i testów: metryki z demo/assets/fonts/metrics.json + plik TTF skompresowany zlib (FlateDecode). */
+/* Czcionki PDF dla builda i testów: metryki z app/assets/fonts/metrics.json + plik TTF skompresowany zlib (FlateDecode). */
 import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "demo", "assets", "fonts");
+const DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "app", "assets", "fonts");
 export function loadPdfFonts() {
   const m = JSON.parse(readFileSync(join(DIR, "metrics.json"), "utf8"));
   const out = {};

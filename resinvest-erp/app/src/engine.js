@@ -1,6 +1,6 @@
 /* =========================================================================
-   ResInvest ERP — Demo v2 (2.1)
-   Warstwa E: silnik domenowy (bez DOM — uruchamiany także w Node do testów)
+   ResInvest ERP 3.0 (FAZA 2)
+   Warstwa E: silnik domenowy (bez DOM — uruchamiany w przeglądarce, na serwerze i w testach)
 
    Zasady:
    * księga w JEDNOSTCE MAGAZYNOWEJ PRODUKTU (drewno m³, zrębka MP, PKS/łupina t),
@@ -10,13 +10,22 @@
    * każda operacja: pełna walidacja → symulacja sald → zapis atomowy,
    * dokument zatwierdzony nigdy nie jest usuwany ani zmieniany po cichu:
      anulowanie i korekta tworzą nowe zapisy księgi z powiązaniem i audytem,
-   * transport nie tworzy zapisów w księdze — tylko koszt i karta TR.
+   * transport nie tworzy zapisów w księdze — tylko koszt i karta TR,
+   * komunikaty przechodzą przez t() (i18n.js); teksty zapisywane w danych są
+     kanoniczne (PL) i tłumaczone przy wyświetlaniu.
    ========================================================================= */
 (function (root) {
   "use strict";
 
-  const VERSION = "2.6.0-demo";
-  const SCHEMA = 3;
+  const I18N = root.RIW_I18N || (typeof require === "function" ? require("./i18n.js") : null);
+  const t = (s, p) => I18N.t(s, p);
+  const tp = (s, n, p) => I18N.tp(s, n, p);
+  const N_ = s => s;
+  /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
+  const Lx = (k, p) => ({ k, p: p || {} });
+
+  const VERSION = "3.0.0";
+  const SCHEMA = 4;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -30,14 +39,14 @@
     /** Tekst wpisany / wklejony → liczba. 1000 · 1000,5 · 1 000,5 · 1.000,5 · 12.50 · NBSP · jednostki na końcu. */
     parse(input) {
       if (typeof input === "number") {
-        return Number.isFinite(input) ? { ok: true, value: input } : { ok: false, value: NaN, error: "Niepoprawna liczba" };
+        return Number.isFinite(input) ? { ok: true, value: input } : { ok: false, value: NaN, error: t("Niepoprawna liczba") };
       }
       let s = String(input == null ? "" : input).trim();
-      if (!s) return { ok: false, value: NaN, empty: true, error: "Pole jest puste" };
+      if (!s) return { ok: false, value: NaN, empty: true, error: t("Pole jest puste") };
       s = s.replace(SPACES, "").replace(/\u2212/g, "-");
       let guard = 0;
       while (UNIT_SUFFIX.test(s) && guard++ < 4) s = s.replace(UNIT_SUFFIX, "");
-      if (!/^[+-]?[\d.,]*\d[\d.,]*$/.test(s) && !/^[+-]?[.,]\d+$/.test(s)) return { ok: false, value: NaN, error: "To nie jest liczba" };
+      if (!/^[+-]?[\d.,]*\d[\d.,]*$/.test(s) && !/^[+-]?[.,]\d+$/.test(s)) return { ok: false, value: NaN, error: t("To nie jest liczba") };
       let sign = 1;
       if (s[0] === "-" || s[0] === "+") { if (s[0] === "-") sign = -1; s = s.slice(1); }
       const lastC = s.lastIndexOf(","), lastD = s.lastIndexOf(".");
@@ -50,16 +59,16 @@
       if (dec) {
         const i = s.lastIndexOf(dec);
         intPart = s.slice(0, i); frac = s.slice(i + 1);
-        if (frac.includes(",") || frac.includes(".")) return { ok: false, value: NaN, error: "Niepoprawny separator" };
+        if (frac.includes(",") || frac.includes(".")) return { ok: false, value: NaN, error: t("Niepoprawny separator") };
       }
       if (thou && intPart.includes(thou)) {
         const g = intPart.split(thou);
-        if (!(g[0].length >= 1 && g[0].length <= 3 && g.slice(1).every(x => x.length === 3))) return { ok: false, value: NaN, error: "Niepoprawne grupowanie tysięcy" };
+        if (!(g[0].length >= 1 && g[0].length <= 3 && g.slice(1).every(x => x.length === 3))) return { ok: false, value: NaN, error: t("Niepoprawne grupowanie tysięcy") };
         intPart = g.join("");
       }
-      if (!/^\d*$/.test(intPart) || !/^\d*$/.test(frac)) return { ok: false, value: NaN, error: "To nie jest liczba" };
+      if (!/^\d*$/.test(intPart) || !/^\d*$/.test(frac)) return { ok: false, value: NaN, error: t("To nie jest liczba") };
       const v = sign * Number((intPart || "0") + (frac ? "." + frac : ""));
-      if (!Number.isFinite(v)) return { ok: false, value: NaN, error: "To nie jest liczba" };
+      if (!Number.isFinite(v)) return { ok: false, value: NaN, error: t("To nie jest liczba") };
       return { ok: true, value: v };
     },
     value(input, def = 0) { const r = this.parse(input); return r.ok ? r.value : def; }
@@ -78,11 +87,15 @@
     if (!Number.isFinite(x)) return "—";
     const r = round(x, dec);
     const [i, f] = Math.abs(r).toFixed(dec).split(".");
-    return (r < 0 ? "-" : "") + i.replace(/\B(?=(\d{3})+(?!\d))/g, "\u00A0") + (f ? "," + f : "");
+    return (r < 0 ? "-" : "") + I18N.num(i, f);
   }
+  /** Ilość bez zbędnych zer po przecinku (separator zależny od języka). */
   function fmtQ(n, maxDec = 3) {
-    let s = fmt(round(n, maxDec), maxDec);
-    if (s.includes(",")) s = s.replace(/0+$/, "").replace(/,$/, "");
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "—";
+    const r = round(x, maxDec);
+    const [i, f] = Math.abs(r).toFixed(maxDec).split(".");
+    const s = (r < 0 ? "-" : "") + I18N.num(i, (f || "").replace(/0+$/, ""));
     return s === "-0" ? "0" : s;
   }
   function money(n, cur = "zł") { return fmt(n, 2) + "\u00A0" + cur; }
@@ -105,23 +118,29 @@
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     },
-    pl(d) { return d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : ""; },
+    /** Data do wyświetlenia (dd.mm.rrrr; w języku angielskim dd/mm/rrrr). */
+    pl(d) { return d ? I18N.date(d) : ""; },
+    /** Znacznik czasu ISO → data w formacie języka + godzina (hh:mm lub hh:mm:ss). */
+    ts(iso, sec) { const v = String(iso || ""); return v ? `${I18N.date(v.slice(0, 10))} ${v.slice(11, sec ? 19 : 16)}`.trim() : ""; },
+    MONTHS: [N_("styczeń"), N_("luty"), N_("marzec"), N_("kwiecień"), N_("maj"), N_("czerwiec"), N_("lipiec"), N_("sierpień"), N_("wrzesień"), N_("październik"), N_("listopad"), N_("grudzień")],
+    MONTHS_SHORT: [N_("sty"), N_("lut"), N_("mar"), N_("kwi"), N_("maj."), N_("cze"), N_("lip"), N_("sie"), N_("wrz"), N_("paź"), N_("lis"), N_("gru")],
     label(ym) {
-      const M = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
       const [y, m] = ym.split("-").map(Number);
-      return `${M[m - 1]} ${y}`;
+      return `${t(this.MONTHS[m - 1])} ${y}`;
     },
+    short(ym) { const [y, m] = ym.split("-").map(Number); return `${t(this.MONTHS_SHORT[m - 1])} ${String(y).slice(2)}`; },
+    addMonths(ym, n) { const [y, m] = ym.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); },
     /** Zakres raportu: dzień / tydzień (pon–niedz) / miesiąc / rok / zakres własny. */
     range(spec, today) {
-      const t = today || this.localToday();
-      if (spec.mode === "day") { const d = spec.date || t; return { mode: "day", from: d, to: d, label: `dzień ${this.pl(d)}` }; }
-      if (spec.mode === "week") { const s = this.weekStart(spec.date || t); const e = this.addDays(s, 6); return { mode: "week", from: s, to: e, label: `tydzień ${this.pl(s)} – ${this.pl(e)}` }; }
+      const td = today || this.localToday();
+      if (spec.mode === "day") { const d = spec.date || td; return { mode: "day", from: d, to: d, label: t("dzień {d}", { d: this.pl(d) }) }; }
+      if (spec.mode === "week") { const s = this.weekStart(spec.date || td); const e = this.addDays(s, 6); return { mode: "week", from: s, to: e, label: t("tydzień {a} – {b}", { a: this.pl(s), b: this.pl(e) }) }; }
       if (spec.mode === "custom") {
-        const from = spec.from || t, to = spec.to || t;
+        const from = spec.from || td, to = spec.to || td;
         return { mode: "custom", from: from <= to ? from : to, to: from <= to ? to : from, label: `${this.pl(from)} – ${this.pl(to)}` };
       }
-      if (spec.mode === "year") { const y = String(spec.year || t.slice(0, 4)); return { mode: "year", year: y, from: `${y}-01-01`, to: `${y}-12-31`, label: `ROK ${y}` }; }
-      const ym = spec.ym || this.ym(t);
+      if (spec.mode === "year") { const y = String(spec.year || td.slice(0, 4)); return { mode: "year", year: y, from: `${y}-01-01`, to: `${y}-12-31`, label: t("ROK {y}", { y }) }; }
+      const ym = spec.ym || this.ym(td);
       return { mode: "month", ym, from: this.monthStart(ym), to: this.monthEnd(ym), label: this.label(ym).toUpperCase() };
     }
   };
@@ -149,14 +168,14 @@
       const x = Number(q);
       if (from === to) return rq(x);
       const ok = this.allowed(p);
-      if (!ok.includes(from) || !ok.includes(to)) throw new Error(`Brak przelicznika ${this.label(from)} → ${this.label(to)} dla „${p ? p.name : "?"}”`);
+      if (!ok.includes(from) || !ok.includes(to)) throw new Error(t("Brak przelicznika {a} → {b} dla „{p}”", { a: this.label(from), b: this.label(to), p: p ? p.name : "?" }));
       const m = this.massPerUnit(p, cfg);
-      const toBase = u => { if (u === p.unit) return x; if (u === "t") return x / m; if (p.unit === "m3" && u === "MP") return x / cfg.m3_mp; throw new Error("Brak przelicznika"); };
+      const toBase = u => { if (u === p.unit) return x; if (u === "t") return x / m; if (p.unit === "m3" && u === "MP") return x / cfg.m3_mp; throw new Error(t("Brak przelicznika")); };
       const b = toBase(from);
       if (to === p.unit) return rq(b);
       if (to === "t") return rq(b * m);
       if (p.unit === "m3" && to === "MP") return rq(b * cfg.m3_mp);
-      throw new Error("Brak przelicznika");
+      throw new Error(t("Brak przelicznika"));
     },
     mass(q, p, cfg) { return rq(Number(q) * this.massPerUnit(p, cfg)); },
     energy(t, cfg) { return rq(Number(t) * cfg.t_gj); },
@@ -167,13 +186,13 @@
      * Obecnie jedyny zdefiniowany: drewno (m³) → zrębka (MP), 1 m³ = 4 MP.
      */
     prodFactor(raw, out, cfg) {
-      if (!raw || !out) return { error: "Wybierz surowiec i produkt wyjściowy" };
-      if (raw.id === out.id) return { error: "Surowiec i produkt wyjściowy muszą być różnymi produktami" };
+      if (!raw || !out) return { error: t("Wybierz surowiec i produkt wyjściowy") };
+      if (raw.id === out.id) return { error: t("Surowiec i produkt wyjściowy muszą być różnymi produktami") };
       if (raw.unit === "m3" && out.unit === "MP") {
-        if (!(Number.isFinite(cfg.m3_mp) && cfg.m3_mp > 0)) return { error: "Nie można zatwierdzić produkcji. Brak prawidłowego przelicznika jednostek (m³ → MP)." };
+        if (!(Number.isFinite(cfg.m3_mp) && cfg.m3_mp > 0)) return { error: t("Nie można zatwierdzić produkcji. Brak prawidłowego przelicznika jednostek (m³ → MP).") };
         return { factor: cfg.m3_mp, from: "m3", to: "MP" };
       }
-      return { error: `Brak przelicznika ${this.label(raw.unit)} → ${this.label(out.unit)} dla wybranego produktu (${raw.name} → ${out.name}).` };
+      return { error: t("Brak przelicznika {a} → {b} dla wybranego produktu ({r} → {o}).", { a: this.label(raw.unit), b: this.label(out.unit), r: raw.name, o: out.name }) };
     }
   };
 
@@ -181,17 +200,18 @@
   /* Słowniki, uprawnienia, statusy                                      */
   /* ------------------------------------------------------------------ */
   const PERMS = {
-    "op.create": "Tworzenie operacji", "documents.cancel": "Anulowanie dokumentów", "documents.correct": "Korekty dokumentów",
-    "inventory.correct": "Korekty stanów / MM", "production.correct": "Korekty produkcji", "sales.correct": "Korekty sprzedaży",
-    "purchases.correct": "Korekty zakupów", "inv.open": "Otwarcie okresu inwentaryzacji", "inv.count": "Spis z natury",
-    "inv.close": "Zamknięcie okresu", "fleet.edit": "Edycja floty", "data.backup": "Kopia zapasowa", "data.import": "Import kopii",
-    "report.view": "Raporty i historia"
+    "op.create": N_("Tworzenie operacji"), "documents.cancel": N_("Anulowanie dokumentów"), "documents.correct": N_("Korekty dokumentów"),
+    "inventory.correct": N_("Korekty stanów / MM"), "production.correct": N_("Korekty produkcji"), "sales.correct": N_("Korekty sprzedaży"),
+    "purchases.correct": N_("Korekty zakupów"), "inv.open": N_("Otwarcie okresu inwentaryzacji"), "inv.count": N_("Spis z natury"),
+    "inv.close": N_("Zamknięcie okresu"), "fleet.edit": N_("Edycja floty"), "master.edit": N_("Edycja kartotek (produkty, kontrahenci, magazyny)"),
+    "users.manage": N_("Zarządzanie użytkownikami i hasłami"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii"),
+    "report.view": N_("Raporty i historia")
   };
   const ROLES = {
-    admin: { label: "Administrator", perms: ["*"] },
-    kierownik: { label: "Kierownik", perms: ["op.create", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "data.backup", "data.import", "report.view"] },
-    magazynier: { label: "Magazynier", perms: ["op.create", "inv.open", "inv.count", "report.view"] },
-    podglad: { label: "Podgląd", perms: ["report.view"] }
+    admin: { label: N_("Administrator"), perms: ["*"] },
+    kierownik: { label: N_("Kierownik"), perms: ["op.create", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "data.backup", "data.import", "report.view"] },
+    magazynier: { label: N_("Magazynier"), perms: ["op.create", "inv.open", "inv.count", "report.view"] },
+    podglad: { label: N_("Podgląd"), perms: ["report.view"] }
   };
   function can(user, perm) {
     if (!user || user.active === false) return false;
@@ -199,43 +219,50 @@
     return p.includes("*") || p.includes(perm);
   }
   const OP_TYPES = {
-    ZAKUP: { label: "Zakup", flow: "dostawca → magazyn", correctPerm: "purchases.correct" },
-    SPRZEDAZ: { label: "Sprzedaż", flow: "magazyn → odbiorca (WZ)", correctPerm: "sales.correct" },
-    PRODUKCJA: { label: "Produkcja na magazyn", flow: "surowiec ze stanu → produkcja → produkt na stanie", correctPerm: "production.correct" },
-    MM: { label: "Przesunięcie MM", flow: "magazyn → magazyn", correctPerm: "inventory.correct" }
+    ZAKUP: { label: N_("Zakup"), flow: N_("dostawca → magazyn"), correctPerm: "purchases.correct" },
+    SPRZEDAZ: { label: N_("Sprzedaż"), flow: N_("magazyn → odbiorca (WZ)"), correctPerm: "sales.correct" },
+    PRODUKCJA: { label: N_("Produkcja na magazyn"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct" },
+    MM: { label: N_("Przesunięcie MM"), flow: N_("magazyn → magazyn"), correctPerm: "inventory.correct" }
   };
-  const STATUS = { DRAFT: "ROBOCZY", POSTED: "ZATWIERDZONY", CANCELLED: "ANULOWANY", CORRECTED: "SKORYGOWANY" };
+  const STATUS = { DRAFT: N_("ROBOCZY"), POSTED: N_("ZATWIERDZONY"), CANCELLED: N_("ANULOWANY"), CORRECTED: N_("SKORYGOWANY") };
   const KINDS = {
-    BO: { doc: "BO", label: "Bilans otwarcia" }, ZAKUP: { doc: "PZ", label: "Zakup — przyjęcie" },
-    ZUZYCIE: { doc: "RW", label: "Zużycie produkcyjne" }, PRODUKCJA: { doc: "PW", label: "Przyjęcie z produkcji" },
-    SPRZEDAZ: { doc: "WZ", label: "Sprzedaż — wydanie" }, MM: { doc: "MM", label: "Przesunięcie międzymagazynowe" },
-    INW: { doc: "IN", label: "Różnica inwentaryzacyjna" }, KOREKTA: { doc: "KOR", label: "Korekta" }, ANULOWANIE: { doc: "AN", label: "Anulowanie" }
+    BO: { doc: "BO", label: N_("Bilans otwarcia") }, ZAKUP: { doc: "PZ", label: N_("Zakup — przyjęcie") },
+    ZUZYCIE: { doc: "RW", label: N_("Zużycie produkcyjne") }, PRODUKCJA: { doc: "PW", label: N_("Przyjęcie z produkcji") },
+    SPRZEDAZ: { doc: "WZ", label: N_("Sprzedaż — wydanie") }, MM: { doc: "MM", label: N_("Przesunięcie międzymagazynowe") },
+    INW: { doc: "IN", label: N_("Różnica inwentaryzacyjna") }, KOREKTA: { doc: "KOR", label: N_("Korekta") }, ANULOWANIE: { doc: "AN", label: N_("Anulowanie") }
   };
-  const CATS = { ZAKUP: "Zakup", PRODUKCJA: "Produkcja", ZUZYCIE: "Zużycie", SPRZEDAZ: "Sprzedaż", MM: "MM", INW: "Inwentaryzacja", BO: "Bilans otwarcia" };
+  const CATS = { ZAKUP: N_("Zakup"), PRODUKCJA: N_("Produkcja"), ZUZYCIE: N_("Zużycie"), SPRZEDAZ: N_("Sprzedaż"), MM: "MM", INW: N_("Inwentaryzacja"), BO: N_("Bilans otwarcia") };
   const DOC_LABEL = {
-    PZ: "Przyjęcie zewnętrzne (zakup)", RW: "Rozchód wewnętrzny (zużycie)", PW: "Przyjęcie wewnętrzne (produkcja)",
-    WZ: "Wydanie zewnętrzne (sprzedaż)", MM: "Przesunięcie międzymagazynowe", TR: "Karta transportu",
-    KOR: "Korekta dokumentu", AN: "Anulowanie dokumentu", IN: "Inwentaryzacja", BO: "Bilans otwarcia"
+    PZ: N_("Przyjęcie zewnętrzne (zakup)"), RW: N_("Rozchód wewnętrzny (zużycie)"), PW: N_("Przyjęcie wewnętrzne (produkcja)"),
+    WZ: N_("Wydanie zewnętrzne (sprzedaż)"), MM: N_("Przesunięcie międzymagazynowe"), TR: N_("Karta transportu"),
+    KOR: N_("Korekta dokumentu"), AN: N_("Anulowanie dokumentu"), IN: N_("Inwentaryzacja"), BO: N_("Bilans otwarcia")
   };
-  const BASIS = { DEKL: "Deklaracja", KZR: "KZR" };
+  const BASIS = { DEKL: N_("Deklaracja"), KZR: "KZR" };
   /** Grupy dostawców: firma branży drzewnej → domyślnie KZR; nadleśnictwo → domyślnie Deklaracja + leśnictwo. */
   const SUPPLIER_KINDS = {
-    firma: { label: "Firma branży drzewnej / przedsiębiorstwo drzewne", basis: "KZR" },
-    nadlesnictwo: { label: "Nadleśnictwo", basis: "DEKL" }
+    firma: { label: N_("Firma branży drzewnej / przedsiębiorstwo drzewne"), basis: "KZR" },
+    nadlesnictwo: { label: N_("Nadleśnictwo"), basis: "DEKL" }
   };
   const partnerKind = p => !p ? null : SUPPLIER_KINDS[p.kind] ? p.kind : /^nadle[sś]nictwo/i.test(p.name || "") ? "nadlesnictwo" : "firma";
   const ndlName = p => String((p && p.name) || "").replace(/^nadle[sś]nictwo\s+/i, "").trim();
   const MAX_RUNS = 50;
   const PROD_TYPES = {
-    lesna: { label: "Zrębka produkcyjna leśna", productId: "pr_zr_lesna" },
-    inwestycyjna: { label: "Zrębka produkcyjna inwestycyjna", productId: "pr_zr_inw", sourceType: "Wycinka inwestycyjna" }
+    lesna: { label: N_("Zrębka produkcyjna leśna"), productId: "pr_zr_lesna" },
+    inwestycyjna: { label: N_("Zrębka produkcyjna inwestycyjna"), productId: "pr_zr_inw", sourceType: N_("Wycinka inwestycyjna") }
   };
-  const DIFF_REASONS = { wilgotnosc: "Wilgotność / osiadanie", jakosc: "Jakość surowca", straty: "Straty przy rębaniu", pomiar: "Różnica pomiaru", inna: "Inna przyczyna" };
-  const CORRECTION_REASONS = ["błędnie wpisana ilość", "błędna cena", "błędna jednostka", "błędny kontrahent", "błędny magazyn", "błędne zużycie surowca", "błędny transport", "pomyłka operatora", "korekta dokumentu zewnętrznego", "inny"];
-  const TRANSPORT_MODES = { none: "Brak transportu", own: "Transport własny", external: "Transport zewnętrzny", mixed: "Transport własny + zewnętrzny", train: "Pociąg" };
-  const VEHICLE_TYPES = { ruchoma_podloga: "Ruchoma podłoga", ciezarowy: "Samochód ciężarowy", wywrotka: "Wywrotka" };
-  const ASSET_STATUS = { aktywny: "Aktywny", serwis: "W serwisie", wycofany: "Wycofany" };
-  const INV_STATUS = { OTWARTA: "OTWARTA", ZAMKNIETA: "ZAMKNIĘTA" };
+  const DIFF_REASONS = { wilgotnosc: N_("Wilgotność / osiadanie"), jakosc: N_("Jakość surowca"), straty: N_("Straty przy rębaniu"), pomiar: N_("Różnica pomiaru"), inna: N_("Inna przyczyna") };
+  const CORRECTION_REASONS = [N_("błędnie wpisana ilość"), N_("błędna cena"), N_("błędna jednostka"), N_("błędny kontrahent"), N_("błędny magazyn"), N_("błędne zużycie surowca"), N_("błędny transport"), N_("pomyłka operatora"), N_("korekta dokumentu zewnętrznego"), N_("inny")];
+  const TRANSPORT_MODES = { none: N_("Brak transportu"), own: N_("Transport własny"), external: N_("Transport zewnętrzny"), mixed: N_("Transport własny + zewnętrzny"), train: N_("Pociąg") };
+  const VEHICLE_TYPES = { ruchoma_podloga: N_("Ruchoma podłoga"), ciezarowy: N_("Samochód ciężarowy"), wywrotka: N_("Wywrotka") };
+  const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
+  const INV_STATUS = { OTWARTA: N_("OTWARTA"), ZAMKNIETA: N_("ZAMKNIĘTA") };
+  const PRODUCT_CATS = { drewno: N_("Drewno"), zrebka: N_("Zrębka"), agro: N_("Produkt tonowy") };
+  const PARTNER_ROLES = { supplier: N_("Dostawca"), buyer: N_("Odbiorca"), both: N_("Dostawca i odbiorca") };
+  /** Rozpoznanie tekstu zapisanego jako „powód — opis”: kategoria kanoniczna jest tłumaczona. */
+  function trReason(r) {
+    const s = String(r == null ? "" : r), i = s.indexOf(" — ");
+    return i < 0 ? t(s) : t(s.slice(0, i)) + s.slice(i);
+  }
 
   /* ------------------------------------------------------------------ */
   /* Narzędzia                                                           */
@@ -259,16 +286,47 @@
   }
   function validateStateShape(s) {
     const e = [];
-    if (!s || typeof s !== "object") return ["Brak danych"];
-    if (s.schema !== SCHEMA) e.push(`Nieobsługiwana wersja schematu: ${s.schema} (oczekiwano ${SCHEMA})`);
-    for (const k of ["warehouses", "users", "products", "partners", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(`Brak kolekcji „${k}”`);
-    if (!s.fleet || !["vehicles", "drivers", "chippers", "operators"].every(k => Array.isArray(s.fleet[k]))) e.push("Brak kartotek floty");
-    if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push("Brak przeliczników");
-    if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push("Produkt bez jednostki magazynowej");
+    if (!s || typeof s !== "object") return [t("Brak danych")];
+    if (s.schema !== SCHEMA) e.push(t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: s.schema, b: SCHEMA }));
+    for (const k of ["warehouses", "users", "products", "partners", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
+    if (!s.fleet || !["vehicles", "drivers", "chippers", "operators"].every(k => Array.isArray(s.fleet[k]))) e.push(t("Brak kartotek floty"));
+    if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push(t("Brak przeliczników"));
+    if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push(t("Produkt bez jednostki magazynowej"));
+    if (Array.isArray(s.users) && s.users.some(u => !u.id || !u.login)) e.push(t("Użytkownik bez identyfikatora lub loginu"));
     if (Array.isArray(s.ledger)) for (const l of s.ledger) {
-      if (!Number.isFinite(l.qty) || !l.productId || !l.whId || !Dates.isISO(l.date) || !l.cat) { e.push("Uszkodzony zapis księgi: " + (l.id || "?")); break; }
+      if (!Number.isFinite(l.qty) || !l.productId || !l.whId || !Dates.isISO(l.date) || !l.cat) { e.push(t("Uszkodzony zapis księgi: {id}", { id: l.id || "?" })); break; }
     }
     return e;
+  }
+  /** Login z imienia i nazwiska / identyfikatora: małe litery bez polskich znaków, np. „a.gorska”. */
+  function loginFrom(name, fallback) {
+    const base = String(name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+    const l = base.length >= 2 ? `${base[0][0]}.${base[base.length - 1]}` : (base[0] || String(fallback || "user").replace(/^u_/, ""));
+    return l.slice(0, 32);
+  }
+  /**
+   * Migracja danych do bieżącego schematu (kopie zapasowe i dane z wcześniejszych wersji).
+   * 3 → 4: użytkownicy dostają login, język i motyw; kartoteki — flagę „aktywny”.
+   * Zwraca { state, from, to, notes } albo { error }. Nie modyfikuje wejścia.
+   */
+  function migrate(input) {
+    if (!input || typeof input !== "object") return { error: t("Brak danych") };
+    const s = clone(input), notes = [], from = s.schema;
+    if (s.schema === 3) {
+      const used = new Set();
+      for (const u of s.users || []) {
+        let l = u.login || loginFrom(u.name, u.id), i = 2;
+        while (used.has(l)) l = `${l.replace(/\d+$/, "")}${i++}`;
+        used.add(l); u.login = l;
+        if (!u.lang) u.lang = "";
+        if (!u.theme) u.theme = "";
+      }
+      for (const k of ["products", "partners", "warehouses"]) for (const x of s[k] || []) if (x.active === undefined) x.active = true;
+      s.schema = 4; s.version = VERSION;
+      notes.push(t("Schemat 3 → 4: loginy użytkowników, preferencje języka i motywu"));
+    }
+    if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
+    return { state: s, from, to: SCHEMA, notes };
   }
 
   /* ------------------------------------------------------------------ */
@@ -352,38 +410,38 @@
   /* ------------------------------------------------------------------ */
   function planOperation(state, draft, ctx) {
     const cfg = state.config;
-    const errors = {}, warnings = [];
-    const err = (k, m) => { if (!errors[k]) errors[k] = m; };
+    const errors = {}, warnings = [], codes = {};
+    const err = (k, m, code) => { if (!errors[k]) { errors[k] = m; if (code) codes[k] = code; } };
     const user = ctx && ctx.user;
     const today = (ctx && ctx.today) || Dates.localToday();
     const num = (key, raw, { required = true, min = null, gt = null, integer = false, label = "" } = {}) => {
       const r = NumParse.parse(raw);
-      if (r.empty) { if (required) err(key, label ? `Podaj ${label}` : "Pole wymagane"); return null; }
-      if (!r.ok) { err(key, `${r.error} — wpisz np. 1 000,5`); return null; }
-      if (integer && !Number.isInteger(r.value)) { err(key, "Wpisz liczbę całkowitą"); return null; }
-      if (gt !== null && !(r.value > gt)) { err(key, label ? `Podaj ${label} większą od 0` : "Wartość musi być większa od 0"); return null; }
-      if (min !== null && r.value < min) { err(key, `Wartość nie może być ujemna`); return null; }
+      if (r.empty) { if (required) err(key, label ? t("Podaj {x}", { x: t(label) }) : t("Pole wymagane")); return null; }
+      if (!r.ok) { err(key, t("{e} — wpisz np. {x}", { e: r.error, x: fmt(1000.5, 1) })); return null; }
+      if (integer && !Number.isInteger(r.value)) { err(key, t("Wpisz liczbę całkowitą")); return null; }
+      if (gt !== null && !(r.value > gt)) { err(key, label ? t("Podaj {x} większą od 0", { x: t(label) }) : t("Wartość musi być większa od 0")); return null; }
+      if (min !== null && r.value < min) { err(key, t("Wartość nie może być ujemna")); return null; }
       return r.value;
     };
     const prodOf = id => byId(state.products, id);
     const partyName = id => (byId(state.partners, id) || {}).name || "";
     const U = u => Units.label(u);
 
-    if (!user) err("_user", "Brak zalogowanego użytkownika");
-    else if (!can(user, "op.create")) err("_user", "Twoja rola nie pozwala tworzyć operacji");
+    if (!user) err("_user", t("Brak zalogowanego użytkownika"));
+    else if (!can(user, "op.create")) err("_user", t("Twoja rola nie pozwala tworzyć operacji"));
     const wh = user ? byId(state.warehouses, user.whId) : null;
-    if (user && !wh) err("_wh", "Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu");
+    if (user && !wh) err("_wh", t("Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu"));
     const whId = wh ? wh.id : null;
     const stockAt = (w, pid) => (w && pid ? Stock.balance(state, w, pid) : 0);
     const stockOf = pid => stockAt(whId, pid);
 
     const type = OP_TYPES[draft.type] ? draft.type : null;
-    if (!type) err("type", "Wybierz rodzaj operacji");
+    if (!type) err("type", t("Wybierz rodzaj operacji"));
     const date = str(draft.date);
-    if (!Dates.isISO(date)) err("date", "Podaj datę w formacie RRRR-MM-DD");
+    if (!Dates.isISO(date)) err("date", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (!(ctx && ctx.correction)) {
-      if (date > today) err("date", "Data operacji nie może być z przyszłości");
-      else if (whId && isLocked(state, whId, date)) err("date", `Okres ${lockedMonth(state, whId)} jest zamknięty — zmiany tylko przez korektę z bieżącą datą`);
+      if (date > today) err("date", t("Data operacji nie może być z przyszłości"));
+      else if (whId && isLocked(state, whId, date)) err("date", t("Okres {ym} jest zamknięty — zmiany tylko przez korektę z bieżącą datą", { ym: lockedMonth(state, whId) }), "LOCKED");
     }
 
     const postings = [], documents = [];
@@ -397,11 +455,11 @@
        mode "direct": surowiec z lasu (nie ze stanu), produkcja podana, zużycie informacyjne              */
     function planProduction(mode, rawProduct, consumeGiven) {
       const pt = PROD_TYPES[R_.type];
-      if (mode !== "stock" && !pt) err("production.type", "Wybierz rodzaj produkcji");
+      if (mode !== "stock" && !pt) err("production.type", t("Wybierz rodzaj produkcji"));
       const outId = R_.outProductId || (pt ? pt.productId : "");
       const outProduct = prodOf(outId);
-      if (!outId) err("production.outProductId", "Wybierz produkt wyjściowy");
-      else if (!outProduct) err("production.outProductId", "Nieznany produkt wyjściowy");
+      if (!outId) err("production.outProductId", t("Wybierz produkt wyjściowy"));
+      else if (!outProduct) err("production.outProductId", t("Nieznany produkt wyjściowy"));
       let factor = null;
       if (rawProduct && outProduct) {
         const f = Units.prodFactor(rawProduct, outProduct, cfg);
@@ -412,30 +470,30 @@
         consume = consumeGiven;
         if (factor && consume !== null) maxOut = rq(consume * factor);
         if (str(R_.outQty) === "") outQty = maxOut || 0;
-        else { const o = num("production.outQty", R_.outQty, { gt: 0, label: "ilość produkcji" }); outQty = o === null ? 0 : rq(o); }
-        if (maxOut !== null && outQty > maxOut + EPS) err("production.outQty", `Wynik produkcji ${fmtQ(outQty)} ${U(outProduct.unit)} przekracza zużyty surowiec (${fmtQ(maxOut)} ${U(outProduct.unit)})`);
-        if (maxOut !== null && outQty > 0 && outQty < maxOut - EPS && !DIFF_REASONS[R_.diffReason]) err("production.diffReason", `Wynik niższy od zużycia o ${fmtQ(maxOut - outQty)} ${U(outProduct.unit)} — wskaż przyczynę`);
+        else { const o = num("production.outQty", R_.outQty, { gt: 0, label: N_("ilość produkcji") }); outQty = o === null ? 0 : rq(o); }
+        if (maxOut !== null && outQty > maxOut + EPS) err("production.outQty", t("Wynik produkcji {a} {u} przekracza zużyty surowiec ({b} {u})", { a: fmtQ(outQty), b: fmtQ(maxOut), u: U(outProduct.unit) }));
+        if (maxOut !== null && outQty > 0 && outQty < maxOut - EPS && !DIFF_REASONS[R_.diffReason]) err("production.diffReason", t("Wynik niższy od zużycia o {a} {u} — wskaż przyczynę", { a: fmtQ(maxOut - outQty), u: U(outProduct.unit) }));
       } else {
-        const o = num("production.outQty", R_.outQty, { gt: 0, label: "ilość produkcji" });
+        const o = num("production.outQty", R_.outQty, { gt: 0, label: N_("ilość produkcji") });
         outQty = o === null ? 0 : rq(o);
         if (factor && outQty > 0) consume = rq(outQty / factor);           // pełna precyzja — bez zaokrąglania przed walidacją
-        if (factor && outQty > 0 && !(consume > 0)) err("production.outQty", "Obliczone zużycie surowca musi być większe od 0");
+        if (factor && outQty > 0 && !(consume > 0)) err("production.outQty", t("Obliczone zużycie surowca musi być większe od 0"));
       }
       if (mode !== "stock") {
         if (R_.type === "lesna") {
-          if (!str(R_.ndl)) err("production.ndl", "Podaj nadleśnictwo");
-          if (!str(R_.lesnictwo)) err("production.lesnictwo", "Podaj leśnictwo");
-        } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", "Podaj miejsce wycinki / inwestycję");
+          if (!str(R_.ndl)) err("production.ndl", t("Podaj nadleśnictwo"));
+          if (!str(R_.lesnictwo)) err("production.lesnictwo", t("Podaj leśnictwo"));
+        } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", t("Podaj miejsce wycinki / inwestycję"));
       }
       const ch = byId(state.fleet.chippers, R_.chipperId);
       if (R_.chipperId) {
-        if (!ch) err("production.chipperId", "Nieznany rębak");
-        else if (ch.status !== "aktywny") err("production.chipperId", `Rębak ma status „${ASSET_STATUS[ch.status] || ch.status}”`);
-        if (!byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", "Wybierz operatora rębaka");
+        if (!ch) err("production.chipperId", t("Nieznany rębak"));
+        else if (ch.status !== "aktywny") err("production.chipperId", t("Rębak ma status „{s}”", { s: t(ASSET_STATUS[ch.status] || ch.status) }));
+        if (!byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", t("Wybierz operatora rębaka"));
       }
       let chipRate = 0, chippingCost = 0;
       if (outProduct && outProduct.unit === "MP") {
-        chipRate = str(R_.chipRate) === "" ? cfg.chipRateDefault : num("production.chipRate", R_.chipRate, { min: 0, label: "cenę za rąbanie" });
+        chipRate = str(R_.chipRate) === "" ? cfg.chipRateDefault : num("production.chipRate", R_.chipRate, { min: 0, label: N_("cenę za rąbanie") });
         chippingCost = chipRate !== null ? round(outQty * chipRate, 2) : 0;
       }
       totals.chippingCost = chippingCost;
@@ -463,17 +521,17 @@
     /** Sprzedaż wyniku produkcji (łańcuch zakupu / sprzedaż bezpośrednia). */
     function planSaleOfOutput(outProduct, outQty, direct) {
       const buyer = byId(state.partners, S.buyerId);
-      if (!S.buyerId) err("sale.buyerId", "Wybierz odbiorcę");
-      else if (!buyer || !["buyer", "both"].includes(buyer.role) || buyer.active === false) err("sale.buyerId", "Nieznany lub nieaktywny odbiorca");
+      if (!S.buyerId) err("sale.buyerId", t("Wybierz odbiorcę"));
+      else if (!buyer || !["buyer", "both"].includes(buyer.role) || buyer.active === false) err("sale.buyerId", t("Nieznany lub nieaktywny odbiorca"));
       let saleQ = outQty;
-      if (str(S.qtyMP) !== "") { const q = num("sale.qtyMP", S.qtyMP, { gt: 0, label: "ilość sprzedaży" }); saleQ = q === null ? 0 : rq(q); }
-      if (outProduct && saleQ > outQty + EPS) err("sale.qtyMP", `Nie można sprzedać ${fmtQ(saleQ)} ${U(outProduct.unit)} z produkcji ${fmtQ(outQty)} ${U(outProduct.unit)}`);
-      if (!["MP", "t"].includes(S.priceUnit)) err("sale.priceUnit", "Wybierz jednostkę ceny");
-      const price = num("sale.price", S.price, { min: 0, label: "cenę sprzedaży" });
-      if (price === 0) warnings.push("Cena sprzedaży wynosi 0 zł.");
+      if (str(S.qtyMP) !== "") { const q = num("sale.qtyMP", S.qtyMP, { gt: 0, label: N_("ilość sprzedaży") }); saleQ = q === null ? 0 : rq(q); }
+      if (outProduct && saleQ > outQty + EPS) err("sale.qtyMP", t("Nie można sprzedać {a} {u} z produkcji {b} {u}", { a: fmtQ(saleQ), b: fmtQ(outQty), u: U(outProduct.unit) }));
+      if (!["MP", "t"].includes(S.priceUnit)) err("sale.priceUnit", t("Wybierz jednostkę ceny"));
+      const price = num("sale.price", S.price, { min: 0, label: N_("cenę sprzedaży") });
+      if (price === 0) warnings.push(t("Cena sprzedaży wynosi 0 zł."));
       const weightT = outProduct ? Units.mass(saleQ, outProduct, cfg) : 0;
       totals.revenue = price !== null ? round((S.priceUnit === "t" ? weightT : saleQ) * price, 2) : 0;
-      if (direct && outQty - saleQ > EPS) warnings.push(`Nie cała produkcja jest sprzedana — pozostałe ${fmtQ(outQty - saleQ)} ${outProduct ? U(outProduct.unit) : ""} zostanie przyjęte na stan magazynu.`);
+      if (direct && outQty - saleQ > EPS) warnings.push(t("Nie cała produkcja jest sprzedana — pozostałe {a} {u} zostanie przyjęte na stan magazynu.", { a: fmtQ(outQty - saleQ), u: outProduct ? U(outProduct.unit) : "" }));
       norm.sale = { direct, fromStock: false, buyerId: S.buyerId, productId: outProduct ? outProduct.id : "", qty: saleQ, unit: outProduct ? outProduct.unit : "MP", stockQty: saleQ, price, priceUnit: S.priceUnit, revenue: totals.revenue, weightT };
       return saleQ;
     }
@@ -489,35 +547,35 @@
         supplier = state.partners.find(p => str(p.name).toLowerCase() === typed.toLowerCase()) || null;
         if (!supplier) newSupplier = { name: typed, kind: SUPPLIER_KINDS[P.supplierKind] ? P.supplierKind : "firma" };
       }
-      if (!supplier && !newSupplier) err("purchase.supplierName", "Wpisz nazwę dostawcy albo wybierz z listy");
-      else if (newSupplier && typed.length < 3) err("purchase.supplierName", "Nazwa dostawcy musi mieć co najmniej 3 znaki");
-      else if (supplier && !["supplier", "both"].includes(supplier.role)) err("purchase.supplierName", `„${supplier.name}” jest w kartotece jako odbiorca, nie dostawca`);
-      else if (supplier && supplier.active === false) err("purchase.supplierName", `Dostawca „${supplier.name}” jest nieaktywny`);
+      if (!supplier && !newSupplier) err("purchase.supplierName", t("Wpisz nazwę dostawcy albo wybierz z listy"));
+      else if (newSupplier && typed.length < 3) err("purchase.supplierName", t("Nazwa dostawcy musi mieć co najmniej 3 znaki"));
+      else if (supplier && !["supplier", "both"].includes(supplier.role)) err("purchase.supplierName", t("„{n}” jest w kartotece jako odbiorca, nie dostawca", { n: supplier.name }));
+      else if (supplier && supplier.active === false) err("purchase.supplierName", t("Dostawca „{n}” jest nieaktywny", { n: supplier.name }));
       const sObj = supplier || newSupplier;
       const sKind = supplier ? partnerKind(supplier) : newSupplier ? newSupplier.kind : null;
-      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierName", `Dostawca „${supplier.name}” nie należy do grupy „${SUPPLIER_KINDS[P.supplierKind].label}”`);
-      if (sKind === "nadlesnictwo" && !str(P.lesnictwo)) err("purchase.lesnictwo", "Podaj leśnictwo (wpisz nowe albo wybierz z listy)");
+      if (supplier && P.supplierKind && SUPPLIER_KINDS[P.supplierKind] && P.supplierKind !== sKind) err("purchase.supplierName", t("Dostawca „{n}” nie należy do grupy „{g}”", { n: supplier.name, g: t(SUPPLIER_KINDS[P.supplierKind].label) }));
+      if (sKind === "nadlesnictwo" && !str(P.lesnictwo)) err("purchase.lesnictwo", t("Podaj leśnictwo (wpisz nowe albo wybierz z listy)"));
       // drewno z nadleśnictwa: pochodzenie produkcji uzupełnia się z zakupu
       if (sKind === "nadlesnictwo") { if (!str(R_.ndl)) R_.ndl = ndlName(sObj); if (!str(R_.lesnictwo)) R_.lesnictwo = str(P.lesnictwo); }
-      if (!BASIS[P.basis]) err("purchase.basis", "Wybierz podstawę: Deklaracja albo KZR");
+      if (!BASIS[P.basis]) err("purchase.basis", t("Wybierz podstawę: Deklaracja albo KZR"));
       const product = prodOf(P.productId);
-      if (!P.productId) err("purchase.productId", "Wybierz produkt / surowiec");
-      else if (!product || product.active === false) err("purchase.productId", "Nieznany produkt");
+      if (!P.productId) err("purchase.productId", t("Wybierz produkt / surowiec"));
+      else if (!product || product.active === false) err("purchase.productId", t("Nieznany produkt"));
       const unitOk = product && Units.allowed(product).includes(P.unit);
-      if (product && !unitOk) err("purchase.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(U).join(", ")}`);
-      const qty = num("purchase.qty", P.qty, { gt: 0, label: "ilość" });
-      const price = num("purchase.price", P.price, { min: 0, label: "cenę" });
-      if (price === 0) warnings.push("Cena zakupu wynosi 0 zł — upewnij się, że to zamierzone.");
+      if (product && !unitOk) err("purchase.unit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(U).join(", ") }));
+      const qty = num("purchase.qty", P.qty, { gt: 0, label: N_("ilość") });
+      const price = num("purchase.price", P.price, { min: 0, label: N_("cenę") });
+      if (price === 0) warnings.push(t("Cena zakupu wynosi 0 zł — upewnij się, że to zamierzone."));
       const stockQty = qty !== null && unitOk ? Units.convert(qty, P.unit, product.unit, product, cfg) : 0;
       const autoWeight = product ? Units.mass(stockQty, product, cfg) : 0;
       let weightT = autoWeight;
       if (P.weightMode === "manual") {
-        const w = num("purchase.weightManual", P.weightManual, { gt: 0, label: "wagę rzeczywistą" });
+        const w = num("purchase.weightManual", P.weightManual, { gt: 0, label: N_("wagę rzeczywistą") });
         if (w !== null) {
           weightT = rq(w);
-          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(`Waga rzeczywista ${fmtQ(weightT)} t różni się o ponad 25% od orientacyjnej ${fmtQ(autoWeight)} t — sprawdź kwit wagowy.`);
+          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(t("Waga rzeczywista {a} t różni się o ponad 25% od orientacyjnej {b} t — sprawdź kwit wagowy.", { a: fmtQ(weightT), b: fmtQ(autoWeight) }));
         }
-      } else if (P.weightMode !== "auto") err("purchase.weightMode", "Wybierz sposób ustalenia wagi");
+      } else if (P.weightMode !== "auto") err("purchase.weightMode", t("Wybierz sposób ustalenia wagi"));
       totals.purchaseCost = qty !== null && price !== null ? round(qty * price, 2) : 0;
       norm.purchase = { supplierId: supplier ? supplier.id : "", supplierName: sObj ? sObj.name : "", newSupplier, supplierKind: sKind, lesnictwo: sKind === "nadlesnictwo" ? str(P.lesnictwo) : "", basis: P.basis, productId: P.productId, qty, unit: P.unit, stockQty, stockUnit: product ? product.unit : null, price, cost: totals.purchaseCost, weightMode: P.weightMode, weightT, autoWeight };
       if (product && stockQty > 0) {
@@ -525,16 +583,16 @@
         documents.push({ type: "PZ", kind: "ZAKUP", productId: product.id, qty, unit: P.unit, stockQty, stockUnit: product.unit, weightT, weightMode: P.weightMode, value: totals.purchaseCost, partnerId: supplier ? supplier.id : "", partner: sObj ? sObj.name : "", basis: P.basis, stock: "+" });
       }
       if (R_.enabled) {
-        if (product && product.cat !== "drewno") err("production.enabled", "Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)");
+        if (product && product.cat !== "drewno") err("production.enabled", t("Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)"));
         let consume = null;
         if (product && product.cat === "drewno") {
           let cq = qty;
-          if (str(R_.consumeQty) !== "") cq = num("production.consumeQty", R_.consumeQty, { gt: 0, label: "zużycie" });
+          if (str(R_.consumeQty) !== "") cq = num("production.consumeQty", R_.consumeQty, { gt: 0, label: N_("zużycie") });
           if (cq !== null && unitOk) {
             consume = Units.convert(cq, P.unit, product.unit, product, cfg);
             const avail = rq(stockOf(product.id) + stockQty);
             norm.available = { stock: stockOf(product.id), purchase: stockQty, total: avail, unit: product.unit };
-            if (consume > avail + EPS) err("production.consumeQty", `Brak wystarczającej ilości surowca. Dostępne: ${fmtQ(avail)} ${U(product.unit)}. Wymagane: ${fmtQ(consume)} ${U(product.unit)}. Brakuje: ${fmtQ(consume - avail)} ${U(product.unit)}.`);
+            if (consume > avail + EPS) err("production.consumeQty", t("Brak wystarczającej ilości surowca. Dostępne: {a} {u}. Wymagane: {b} {u}. Brakuje: {c} {u}.", { a: fmtQ(avail), b: fmtQ(consume), c: fmtQ(consume - avail), u: U(product.unit) }), "STOCK");
           }
         }
         const { outProduct, outQty } = planProduction("chain", product && product.cat === "drewno" ? product : null, consume);
@@ -553,23 +611,23 @@
             documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
           }
         }
-      } else if (S.enabled) err("sale.enabled", "W zakupie sprzedaż korzysta z wyniku produkcji — zaznacz produkcję albo użyj operacji „Sprzedaż” (WZ z magazynu)");
+      } else if (S.enabled) err("sale.enabled", t("W zakupie sprzedaż korzysta z wyniku produkcji — zaznacz produkcję albo użyj operacji „Sprzedaż” (WZ z magazynu)"));
     } else if (type === "SPRZEDAZ" && !S.direct) {
       /* ===================== B. SPRZEDAŻ Z MAGAZYNU (WZ) ===================== */
       const product = prodOf(S.productId);
-      if (!S.productId) err("sale.productId", "Wybierz produkt z magazynu");
-      else if (!product) err("sale.productId", "Nieznany produkt");
+      if (!S.productId) err("sale.productId", t("Wybierz produkt z magazynu"));
+      else if (!product) err("sale.productId", t("Nieznany produkt"));
       const unitOk = product && Units.allowed(product).includes(S.unit);
-      if (product && !unitOk) err("sale.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(U).join(", ")}`);
-      const qty = num("sale.qty", S.qty, { gt: 0, label: "ilość" });
+      if (product && !unitOk) err("sale.unit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(U).join(", ") }));
+      const qty = num("sale.qty", S.qty, { gt: 0, label: N_("ilość") });
       const stockQty = qty !== null && unitOk ? Units.convert(qty, S.unit, product.unit, product, cfg) : 0;
       const onStock = product ? stockOf(product.id) : 0;
-      if (product && qty !== null && stockQty > onStock + EPS) err("sale.qty", `Nie można sprzedać ${fmtQ(stockQty)} ${U(product.unit)}. Dostępny stan: ${fmtQ(onStock)} ${U(product.unit)}.`);
+      if (product && qty !== null && stockQty > onStock + EPS) err("sale.qty", t("Nie można sprzedać {a} {u}. Dostępny stan: {b} {u}.", { a: fmtQ(stockQty), b: fmtQ(onStock), u: U(product.unit) }), "STOCK");
       const buyer = byId(state.partners, S.buyerId);
-      if (!S.buyerId) err("sale.buyerId", "Wybierz odbiorcę");
-      else if (!buyer || !["buyer", "both"].includes(buyer.role) || buyer.active === false) err("sale.buyerId", "Nieznany lub nieaktywny odbiorca");
-      const price = num("sale.price", S.price, { min: 0, label: "cenę sprzedaży" });
-      if (price === 0) warnings.push("Cena sprzedaży wynosi 0 zł.");
+      if (!S.buyerId) err("sale.buyerId", t("Wybierz odbiorcę"));
+      else if (!buyer || !["buyer", "both"].includes(buyer.role) || buyer.active === false) err("sale.buyerId", t("Nieznany lub nieaktywny odbiorca"));
+      const price = num("sale.price", S.price, { min: 0, label: N_("cenę sprzedaży") });
+      if (price === 0) warnings.push(t("Cena sprzedaży wynosi 0 zł."));
       totals.revenue = qty !== null && price !== null ? round(qty * price, 2) : 0;
       const weightT = product ? Units.mass(stockQty, product, cfg) : 0;
       norm.sale = { direct: false, fromStock: true, buyerId: S.buyerId, productId: S.productId, qty, unit: S.unit, stockQty, stockUnit: product ? product.unit : null, onStock, after: rq(onStock - stockQty), price, priceUnit: S.unit, revenue: totals.revenue, weightT };
@@ -580,8 +638,8 @@
     } else if (type === "SPRZEDAZ" && S.direct) {
       /* ============ D. PRODUKCJA + SPRZEDAŻ BEZPOŚREDNIA (las → odbiorca) ============ */
       const rawP = prodOf(R_.rawProductId);
-      if (!R_.rawProductId) err("production.rawProductId", "Wybierz surowiec wejściowy (np. drewno z lasu)");
-      else if (!rawP) err("production.rawProductId", "Nieznany surowiec");
+      if (!R_.rawProductId) err("production.rawProductId", t("Wybierz surowiec wejściowy (np. drewno z lasu)"));
+      else if (!rawP) err("production.rawProductId", t("Nieznany surowiec"));
       const rawCost = str(R_.rawCost) === "" ? 0 : num("production.rawCost", R_.rawCost, { min: 0 });
       totals.rawCost = rawCost || 0;
       const { outProduct, outQty, consume } = planProduction("direct", rawP, null);
@@ -589,22 +647,22 @@
       const saleQ = planSaleOfOutput(outProduct, outQty, true);
       if (outProduct && outQty > 0) {
         push("PRODUKCJA", outProduct.id, outQty, { direct: true });
-        documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: Object.assign(prodMeta(), { direct: "tak — produkcja w lesie", rawInfo: rawP && consume !== null ? `${fmtQ(consume)} ${U(rawP.unit)} ${rawP.name} (nie ze stanu)` : "" }) });
+        documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: Object.assign(prodMeta(), { direct: N_("tak — produkcja w lesie"), rawInfo: rawP && consume !== null ? Lx("{q} {u} {p} (nie ze stanu)", { q: rq(consume), u: U(rawP.unit), p: rawP.name }) : "" }) });
       }
       if (outProduct && saleQ > 0) {
         push("SPRZEDAZ", outProduct.id, -saleQ, { direct: true });
-        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−", meta: { direct: "sprzedaż bezpośrednia po produkcji / prosto z lasu" } });
+        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−", meta: { direct: N_("sprzedaż bezpośrednia po produkcji / prosto z lasu") } });
       }
     } else if (type === "PRODUKCJA") {
       /* ================= C. PRODUKCJA NA MAGAZYN (surowiec ze stanu) ================= */
       const rawP = prodOf(R_.rawProductId);
-      if (!R_.rawProductId) err("production.rawProductId", "Wybierz surowiec");
-      else if (!rawP) err("production.rawProductId", "Nieznany surowiec");
+      if (!R_.rawProductId) err("production.rawProductId", t("Wybierz surowiec"));
+      else if (!rawP) err("production.rawProductId", t("Nieznany surowiec"));
       const { outProduct, outQty, consume } = planProduction("stock", rawP, null);
       const onStock = rawP ? stockOf(rawP.id) : 0;
       if (rawP) norm.available = { stock: onStock, purchase: 0, total: onStock, unit: rawP.unit };
       if (rawP && consume !== null && consume > onStock + EPS) {
-        err("production.outQty", `Brak wystarczającej ilości surowca. Dostępne: ${fmtQ(onStock)} ${U(rawP.unit)}. Wymagane: ${fmtQ(consume)} ${U(rawP.unit)}. Brakuje: ${fmtQ(consume - onStock)} ${U(rawP.unit)}.`);
+        err("production.outQty", t("Brak wystarczającej ilości surowca. Dostępne: {a} {u}. Wymagane: {b} {u}. Brakuje: {c} {u}.", { a: fmtQ(onStock), b: fmtQ(consume), c: fmtQ(consume - onStock), u: U(rawP.unit) }), "STOCK");
       }
       if (rawP && consume > 0) {
         push("ZUZYCIE", rawP.id, -consume);
@@ -617,19 +675,20 @@
     } else if (type === "MM") {
       /* ================= E. MM — przesunięcie międzymagazynowe ================= */
       const product = prodOf(M.productId);
-      if (!M.productId) err("mm.productId", "Wybierz produkt");
-      else if (!product) err("mm.productId", "Nieznany produkt");
+      if (!M.productId) err("mm.productId", t("Wybierz produkt"));
+      else if (!product) err("mm.productId", t("Nieznany produkt"));
       const unitOk = product && Units.allowed(product).includes(M.unit);
-      if (product && !unitOk) err("mm.unit", `Dla „${product.name}” dozwolone: ${Units.allowed(product).map(U).join(", ")}`);
+      if (product && !unitOk) err("mm.unit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(U).join(", ") }));
       const toWh = byId(state.warehouses, M.toWhId);
-      if (!M.toWhId) err("mm.toWhId", "Wybierz magazyn docelowy przesunięcia");
-      else if (!toWh) err("mm.toWhId", "Nieznany magazyn");
-      else if (toWh.id === whId) err("mm.toWhId", "Magazyn docelowy musi być inny niż magazyn źródłowy");
-      if (toWh && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", `W magazynie ${toWh.name} okres ${lockedMonth(state, toWh.id)} jest zamknięty`);
-      const qty = num("mm.qty", M.qty, { gt: 0, label: "ilość" });
+      if (!M.toWhId) err("mm.toWhId", t("Wybierz magazyn docelowy przesunięcia"));
+      else if (!toWh) err("mm.toWhId", t("Nieznany magazyn"));
+      else if (toWh.id === whId) err("mm.toWhId", t("Magazyn docelowy musi być inny niż magazyn źródłowy"));
+      else if (toWh.active === false) err("mm.toWhId", t("Magazyn docelowy jest nieaktywny"));
+      if (toWh && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: toWh.name, ym: lockedMonth(state, toWh.id) }), "LOCKED");
+      const qty = num("mm.qty", M.qty, { gt: 0, label: N_("ilość") });
       const stockQty = qty !== null && unitOk ? Units.convert(qty, M.unit, product.unit, product, cfg) : 0;
       const onStock = product ? stockOf(product.id) : 0;
-      if (product && qty !== null && stockQty > onStock + EPS) err("mm.qty", `Nie można przesunąć ${fmtQ(stockQty)} ${U(product.unit)}. Dostępny stan: ${fmtQ(onStock)} ${U(product.unit)}.`);
+      if (product && qty !== null && stockQty > onStock + EPS) err("mm.qty", t("Nie można przesunąć {a} {u}. Dostępny stan: {b} {u}.", { a: fmtQ(stockQty), b: fmtQ(onStock), u: U(product.unit) }), "STOCK");
       norm.mm = { productId: M.productId, qty, unit: M.unit, stockQty, stockUnit: product ? product.unit : null, toWhId: toWh ? toWh.id : "", toWhName: toWh ? toWh.name : "", fromWhName: wh ? wh.name : "", onStock };
       if (product && toWh && toWh.id !== whId && stockQty > 0) {
         push("MM", product.id, -stockQty);
@@ -643,10 +702,10 @@
     let transport = { mode: "none", place: "", cost: 0 };
     if (type !== "PRODUKCJA") {
       const place = str(T.place);
-      if (!place) err("transport.place", "Podaj miejsce transportu / dostawy");
+      if (!place) err("transport.place", t("Podaj miejsce transportu / dostawy"));
       const mode = T.mode || "none";
       transport = { mode, place, cost: 0 };
-      if (!TRANSPORT_MODES[mode]) err("transport.mode", "Nieznany tryb transportu");
+      if (!TRANSPORT_MODES[mode]) err("transport.mode", t("Nieznany tryb transportu"));
       /** Towar przewożony w operacji (jednostka magazynowa produktu). */
       const shipped = () => {
         if (norm.sale && norm.sale.productId) return { productId: norm.sale.productId, qty: norm.sale.stockQty || 0, unit: (prodOf(norm.sale.productId) || {}).unit };
@@ -663,8 +722,8 @@
       const forest = !!(X_ && X_.mode !== "stock" && X_.type === "lesna");
       const waybill = (r, K, i) => {
         const no = str(r.kwit);
-        if (forest && !no) err(K(i, "kwit"), `Podaj numer kwitu wywozowego (kurs ${i + 1})`);
-        const m3 = str(r.kwitM3) === "" ? null : num(K(i, "kwitM3"), r.kwitM3, { gt: 0, label: "ilość m³ z kwitu" });
+        if (forest && !no) err(K(i, "kwit"), t("Podaj numer kwitu wywozowego (kurs {n})", { n: i + 1 }));
+        const m3 = str(r.kwitM3) === "" ? null : num(K(i, "kwitM3"), r.kwitM3, { gt: 0, label: N_("ilość m³ z kwitu") });
         return { no, m3: m3 === null ? null : rq(m3) };
       };
       const ownPart = () => {
@@ -676,8 +735,8 @@
         const K = (i, f) => legacy ? `transport.own.${f}` : `transport.own.runs.${i}.${f}`;
         let count = 1;
         if (!legacy) {
-          const n = num("transport.own.runCount", O.runCount, { gt: 0, integer: true, label: "liczbę kursów" });
-          if (n !== null && n > MAX_RUNS) err("transport.own.runCount", `Maksymalnie ${MAX_RUNS} kursów w jednej operacji`);
+          const n = num("transport.own.runCount", O.runCount, { gt: 0, integer: true, label: N_("liczbę kursów") });
+          if (n !== null && n > MAX_RUNS) err("transport.own.runCount", t("Maksymalnie {n} kursów w jednej operacji", { n: MAX_RUNS }));
           count = n && n <= MAX_RUNS ? n : 0;
         }
         const src = legacy ? [O] : O.runs;
@@ -686,23 +745,23 @@
         for (let i = 0; i < count; i++) {
           const r = src[i] || {};
           const v = byId(state.fleet.vehicles, r.vehicleId);
-          if (!r.vehicleId) err(K(i, "vehicleId"), "Wybierz pojazd z floty");
-          else if (!v) err(K(i, "vehicleId"), "Nieznany pojazd");
-          else if (v.status !== "aktywny") err(K(i, "vehicleId"), `Pojazd ma status „${ASSET_STATUS[v.status] || v.status}” — wybierz aktywny`);
+          if (!r.vehicleId) err(K(i, "vehicleId"), t("Wybierz pojazd z floty"));
+          else if (!v) err(K(i, "vehicleId"), t("Nieznany pojazd"));
+          else if (v.status !== "aktywny") err(K(i, "vehicleId"), t("Pojazd ma status „{s}” — wybierz aktywny", { s: t(ASSET_STATUS[v.status] || v.status) }));
           const driverId = r.driverId || (v && v.driverId) || "";
           const d = byId(state.fleet.drivers, driverId);
-          if (!driverId) err(K(i, "driverId"), "Pojazd nie ma kierowcy domyślnego — wybierz kierowcę");
-          else if (!d) err(K(i, "driverId"), "Nieznany kierowca");
-          const km = num(K(i, "km"), r.km, { gt: 0, label: "liczbę km" });
-          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          if (!driverId) err(K(i, "driverId"), t("Pojazd nie ma kierowcy domyślnego — wybierz kierowcę"));
+          else if (!d) err(K(i, "driverId"), t("Nieznany kierowca"));
+          const km = num(K(i, "km"), r.km, { gt: 0, label: N_("liczbę km") });
+          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: N_("stawkę za km") });
           // ilość w kursie: przy jednym kursie domyślnie cała ilość operacji, przy wielu — wymagana
           const kw = waybill(r, K, i);
           let q = null;
-          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: N_("ilość w kursie") });
           else if (kw.m3 !== null && sp.unit === "MP") q = rq(kw.m3 * cfg.m3_mp);          // m³ z kwitu × 4 = MP na aucie
-          else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
+          else if (count > 1) err(K(i, "qty"), sp.unit ? t("Podaj ilość przewożoną w kursie {n} ({u})", { n: i + 1, u: Units.label(sp.unit) }) : t("Podaj ilość przewożoną w kursie {n}", { n: i + 1 }));
           else q = sp.qty || null;
-          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
+          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: N_("wagę rzeczywistą") });
           runs.push({ no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
             driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
@@ -716,7 +775,7 @@
           driverId: f.driverId || "", driverName: [...new Set(runs.map(r => r.driverName).filter(Boolean))].join(", "), defaultDriverId: f.defaultDriverId || "",
           driverOverridden: runs.some(r => r.driverOverridden), rate: f.rate || 0
         });
-        if (runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
+        if (runs.length && weighed.length < runs.length) warnings.push(t("Brak wagi rzeczywistej dla {a} z {b} kursów.", { a: runs.length - weighed.length, b: runs.length }));
         part.runs.forEach(r => { r.kind = "own"; });
         return part;
       };
@@ -727,36 +786,36 @@
            Koszt kursu = fracht kursu (jeśli podany) albo km × stawka; „wliczony w cenę” → 0 zł.
            Dane ≤ 2.3 (jeden kurs bez listy: reg, km, freight) = jeden kurs z frachtem. */
         const X = T.external || {};
-        if (!str(X.company)) err("transport.external.company", "Podaj firmę transportową");
+        if (!str(X.company)) err("transport.external.company", t("Podaj firmę transportową"));
         const included = !!X.includedInPrice;
         const legacy = !Array.isArray(X.runs);
         const K = (i, f) => legacy ? `transport.external.${f === "freight" || f === "km" || f === "reg" ? f : "runs.0." + f}` : `transport.external.runs.${i}.${f}`;
         let count = 1;
         if (!legacy) {
-          const n = num("transport.external.runCount", X.runCount, { gt: 0, integer: true, label: "liczbę kursów" });
-          if (n !== null && n > MAX_RUNS) err("transport.external.runCount", `Maksymalnie ${MAX_RUNS} kursów w jednej operacji`);
+          const n = num("transport.external.runCount", X.runCount, { gt: 0, integer: true, label: N_("liczbę kursów") });
+          if (n !== null && n > MAX_RUNS) err("transport.external.runCount", t("Maksymalnie {n} kursów w jednej operacji", { n: MAX_RUNS }));
           count = n && n <= MAX_RUNS ? n : 0;
         }
         const src = legacy ? [{ reg: X.reg, driver: "", km: X.km, rate: "", freight: included ? "" : (str(X.freight) === "" ? "0" : X.freight), qty: "", weightT: "" }] : X.runs;
-        if (legacy && !included && str(X.freight) === "") err("transport.external.freight", "Podaj kwotę frachtu");
+        if (legacy && !included && str(X.freight) === "") err("transport.external.freight", t("Podaj kwotę frachtu"));
         const sp = shipped();
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = src[i] || {};
-          if (!str(r.reg)) err(K(i, "reg"), "Podaj numer rejestracyjny pojazdu przewoźnika");
-          const freight = str(r.freight) === "" ? null : num(K(i, "freight"), r.freight, { min: 0, label: "fracht kursu" });
+          if (!str(r.reg)) err(K(i, "reg"), t("Podaj numer rejestracyjny pojazdu przewoźnika"));
+          const freight = str(r.freight) === "" ? null : num(K(i, "freight"), r.freight, { min: 0, label: N_("fracht kursu") });
           const needKm = !included && freight === null && !legacy;
-          const km = str(r.km) === "" ? (needKm ? (err(K(i, "km"), "Podaj liczbę km (albo fracht kursu)"), null) : 0) : num(K(i, "km"), r.km, { min: 0, label: "liczbę km" });
-          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: "stawkę za km" });
+          const km = str(r.km) === "" ? (needKm ? (err(K(i, "km"), t("Podaj liczbę km (albo fracht kursu)")), null) : 0) : num(K(i, "km"), r.km, { min: 0, label: N_("liczbę km") });
+          const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: N_("stawkę za km") });
           const kw = waybill(r, K, i);
           let q = null;
-          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: "ilość w kursie" });
+          if (str(r.qty) !== "") q = num(K(i, "qty"), r.qty, { gt: 0, label: N_("ilość w kursie") });
           else if (kw.m3 !== null && sp.unit === "MP") q = rq(kw.m3 * cfg.m3_mp);          // m³ z kwitu × 4 = MP na aucie
-          else if (count > 1) err(K(i, "qty"), `Podaj ilość przewożoną w kursie ${i + 1}${sp.unit ? ` (${Units.label(sp.unit)})` : ""}`);
+          else if (count > 1) err(K(i, "qty"), sp.unit ? t("Podaj ilość przewożoną w kursie {n} ({u})", { n: i + 1, u: Units.label(sp.unit) }) : t("Podaj ilość przewożoną w kursie {n}", { n: i + 1 }));
           else q = sp.qty || null;
-          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: "wagę rzeczywistą" });
+          const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: N_("wagę rzeczywistą") });
           const cost = included ? 0 : freight !== null ? round(freight, 2) : km !== null && rate !== null ? round(km * rate, 2) : 0;
-          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? "wliczony w cenę" : freight !== null ? "fracht" : "km × stawka", qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
+          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? N_("wliczony w cenę") : freight !== null ? N_("fracht") : N_("km × stawka"), qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
@@ -766,7 +825,7 @@
           reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "), driverName: [...new Set(runs.map(r => r.driver).filter(Boolean))].join(", "),
           km: rq(runs.reduce((a, r) => a + r.km, 0)), freight: round(runs.reduce((a, r) => a + (r.freight || 0), 0), 2), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2)
         });
-        if (!legacy && runs.length && weighed.length < runs.length) warnings.push(`Brak wagi rzeczywistej dla ${runs.length - weighed.length} z ${runs.length} kursów.`);
+        if (!legacy && runs.length && weighed.length < runs.length) warnings.push(t("Brak wagi rzeczywistej dla {a} z {b} kursów.", { a: runs.length - weighed.length, b: runs.length }));
         part.runs.forEach(r => { r.kind = "external"; r.company = part.company; });
         return part;
       };
@@ -792,35 +851,35 @@
         transport.limitQty = sp.qty || 0;
         transport.remainingQty = rq((sp.qty || 0) - transport.totalQty);
         // suma kursów nie może przekroczyć ilości operacji (np. produkcji)
-        if (sp.qty > 0 && transport.totalQty > sp.qty + EPS) err("transport.runs", `Suma kursów ${fmtQ(transport.totalQty)} ${U} przekracza ilość ${X_ && X_.outQty ? "z produkcji" : "operacji"} ${fmtQ(sp.qty)} ${U} (o ${fmtQ(transport.totalQty - sp.qty)} ${U}).`);
-        else if (transport.runs.length > 1 && sp.qty > 0 && sp.qty - transport.totalQty > EPS) warnings.push(`Suma kursów ${fmtQ(transport.totalQty)} ${U} — do rozwiezienia pozostało ${fmtQ(sp.qty - transport.totalQty)} ${U} z ${fmtQ(sp.qty)} ${U}. Transport nie zmienia stanu magazynowego.`);
+        if (sp.qty > 0 && transport.totalQty > sp.qty + EPS) err("transport.runs", (X_ && X_.outQty ? t("Suma kursów {a} {u} przekracza ilość z produkcji {b} {u} (o {c} {u}).", { a: fmtQ(transport.totalQty), b: fmtQ(sp.qty), c: fmtQ(transport.totalQty - sp.qty), u: U }) : t("Suma kursów {a} {u} przekracza ilość operacji {b} {u} (o {c} {u}).", { a: fmtQ(transport.totalQty), b: fmtQ(sp.qty), c: fmtQ(transport.totalQty - sp.qty), u: U })));
+        else if (transport.runs.length > 1 && sp.qty > 0 && sp.qty - transport.totalQty > EPS) warnings.push(t("Suma kursów {a} {u} — do rozwiezienia pozostało {b} {u} z {c} {u}. Transport nie zmienia stanu magazynowego.", { a: fmtQ(transport.totalQty), b: fmtQ(sp.qty - transport.totalQty), c: fmtQ(sp.qty), u: U }));
         const consumed = X_ && X_.consumeQty !== null && X_.consumeUnit === "m3" ? X_.consumeQty : null;
-        if (consumed !== null && transport.totalM3 !== null && transport.totalM3 > consumed + EPS) err("transport.runs", `Suma m³ z kwitów ${fmtQ(transport.totalM3)} m³ przekracza drewno zużyte w produkcji ${fmtQ(consumed)} m³.`);
+        if (consumed !== null && transport.totalM3 !== null && transport.totalM3 > consumed + EPS) err("transport.runs", t("Suma m³ z kwitów {a} m³ przekracza drewno zużyte w produkcji {b} m³.", { a: fmtQ(transport.totalM3), b: fmtQ(consumed) }));
       }
       // produkcja leśna bez kursów (brak transportu / pociąg): kwit wpisywany przy produkcji
       if (forest) {
         const hasRuns = !!(transport.runs && transport.runs.length);
         const runKw = hasRuns ? transport.runs.map(r => r.kwit).filter(Boolean) : [];
-        if (!hasRuns && !str(R_.kwit)) err("production.kwit", "Podaj numer kwitu wywozowego (bez kursów transportu kwit wpisuje się przy produkcji)");
+        if (!hasRuns && !str(R_.kwit)) err("production.kwit", t("Podaj numer kwitu wywozowego (bez kursów transportu kwit wpisuje się przy produkcji)"));
         X_.kwit = hasRuns ? runKw.join(", ") : str(R_.kwit);
         documents.forEach(d => { if (d.type === "PW" && d.meta) d.meta.kwit = X_.kwit; });
       }
       if (mode === "train") {
         const Tr = T.train || {};
-        const n = num("transport.train.wagonCount", Tr.wagonCount, { gt: 0, integer: true, label: "liczbę wagonów" });
-        if (n !== null && n > cfg.maxWagons) err("transport.train.wagonCount", `Maksymalnie ${cfg.maxWagons} wagonów w jednym składzie`);
+        const n = num("transport.train.wagonCount", Tr.wagonCount, { gt: 0, integer: true, label: N_("liczbę wagonów") });
+        if (n !== null && n > cfg.maxWagons) err("transport.train.wagonCount", t("Maksymalnie {n} wagonów w jednym składzie", { n: cfg.maxWagons }));
         const count = n && n <= cfg.maxWagons ? n : 0;
         const capUnit = Tr.capUnit === "MP" ? "MP" : "t";
         const capacity = str(Tr.capacity) === "" ? null : num("transport.train.capacity", Tr.capacity, { gt: 0 });
         const capT = capacity === null ? null : capUnit === "t" ? capacity : rq(capacity * cfg.mp_t);
         const tonMode = Tr.tonMode === "each" ? "each" : "same";
         const tons = [];
-        if (tonMode === "same") { const t = num("transport.train.sameT", Tr.sameT, { gt: 0, label: "tonaż wagonu" }); for (let i = 0; i < count; i++) tons.push(t || 0); }
-        else for (let i = 0; i < count; i++) tons.push(num(`transport.train.wagonT.${i}`, (Tr.wagonT || [])[i], { gt: 0, label: `tonaż wagonu ${i + 1}` }) || 0);
+        if (tonMode === "same") { const t = num("transport.train.sameT", Tr.sameT, { gt: 0, label: N_("tonaż wagonu") }); for (let i = 0; i < count; i++) tons.push(t || 0); }
+        else for (let i = 0; i < count; i++) tons.push(num(`transport.train.wagonT.${i}`, (Tr.wagonT || [])[i], { gt: 0, label: t("tonaż wagonu {n}", { n: i + 1 }) }) || 0);
         const totalT = rq(tons.reduce((a, b) => a + b, 0));
-        if (capT) tons.forEach((t, i) => { if (t > capT + EPS) warnings.push(`Wagon ${i + 1}: ${fmtQ(t)} t przekracza ładowność ${fmtQ(capacity)} ${capUnit}${capUnit === "MP" ? ` ≈ ${fmtQ(capT)} t` : ""}`); });
-        if (!["MP", "m3", "t"].includes(Tr.priceUnit)) err("transport.train.priceUnit", "Wybierz jednostkę ceny");
-        const tprice = num("transport.train.price", Tr.price, { min: 0, label: "cenę frachtu" });
+        if (capT) tons.forEach((tn, i) => { if (tn > capT + EPS) warnings.push(capUnit === "MP" ? t("Wagon {n}: {a} t przekracza ładowność {b} {u} ≈ {c} t", { n: i + 1, a: fmtQ(tn), b: fmtQ(capacity), u: capUnit, c: fmtQ(capT) }) : t("Wagon {n}: {a} t przekracza ładowność {b} {u}", { n: i + 1, a: fmtQ(tn), b: fmtQ(capacity), u: capUnit })); });
+        if (!["MP", "m3", "t"].includes(Tr.priceUnit)) err("transport.train.priceUnit", t("Wybierz jednostkę ceny"));
+        const tprice = num("transport.train.price", Tr.price, { min: 0, label: N_("cenę frachtu") });
         const totalMP = rq(totalT / cfg.mp_t);
         const basisQty = Tr.priceUnit === "t" ? totalT : Tr.priceUnit === "MP" ? totalMP : rq(totalMP / cfg.m3_mp);
         Object.assign(transport, {
@@ -830,7 +889,7 @@
           tonMode, wagonT: tons, totalT, totalMP, price: tprice || 0, priceUnit: Tr.priceUnit, basisQty,
           cost: tprice !== null ? round(basisQty * tprice, 2) : 0
         });
-        if (totalT > 0 && shippedT > 0 && Math.abs(totalT - shippedT) / shippedT > 0.05) warnings.push(`Tonaż składu ${fmtQ(totalT)} t różni się od orientacyjnej masy ładunku ${fmtQ(shippedT)} t. Transport nie zmienia stanu magazynowego.`);
+        if (totalT > 0 && shippedT > 0 && Math.abs(totalT - shippedT) / shippedT > 0.05) warnings.push(t("Tonaż składu {a} t różni się od orientacyjnej masy ładunku {b} t. Transport nie zmienia stanu magazynowego.", { a: fmtQ(totalT), b: fmtQ(shippedT) }));
       }
       if (mode !== "none") documents.push({ type: "TR", kind: "TRANSPORT", productId: null, qty: null, unit: null, value: transport.cost, stock: "brak", transport: clone(transport) });
     } else {
@@ -852,14 +911,14 @@
       const after = rq(before + p.qty);
       p.before = before; p.after = after;
       const pr = prodOf(p.productId);
-      if (after < -EPS) err("_stock", `Krok ${p.step} (${KINDS[p.kind].label}) daje stan ujemny: ${fmtQ(after)} ${U(pr ? pr.unit : "")} w magazynie ${(byId(state.warehouses, p.whId) || {}).name || p.whId}`);
+      if (after < -EPS) err("_stock", t("Krok {n} ({k}) daje stan ujemny: {a} {u} w magazynie {w}", { n: p.step, k: t(KINDS[p.kind].label), a: fmtQ(after), u: U(pr ? pr.unit : ""), w: (byId(state.warehouses, p.whId) || {}).name || p.whId }), "STOCK");
       sim.set(k, after);
     }
     for (const [k, after] of sim) { const [w, pid] = k.split("|"); balances.push({ whId: w, productId: pid, before: stockAt(w, pid), after }); }
     totals.result = round(totals.revenue - totals.purchaseCost - totals.rawCost - totals.chippingCost - totals.transportCost, 2);
 
     const errorList = Object.keys(errors).map(k => ({ field: k, msg: errors[k] }));
-    return { ok: errorList.length === 0, errors, errorList, warnings, whId, date, type, norm, postings, balances, documents, totals, user: user ? { id: user.id, name: user.name } : null };
+    return { ok: errorList.length === 0, errors, errorCodes: codes, errorList, warnings, whId, date, type, norm, postings, balances, documents, totals, user: user ? { id: user.id, name: user.name } : null };
   }
 
   /* ------------------------------------------------------------------ */
@@ -871,10 +930,16 @@
     return `${type}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
   }
   function nextLedgerSeq(state) { let m = 0; for (const l of state.ledger) if (l.seq > m) m = l.seq; return m + 1; }
+  /** Wpis audytu. `act` = {k, p} (tłumaczony przy wyświetlaniu); `action` = postać kanoniczna (PL) do CSV i wyszukiwania. */
   function audit(state, ctx, rec) {
     const user = ctx && ctx.user;
-    state.audit.push(Object.assign({ id: uid("a"), ts: nowIso(ctx), userId: user ? user.id : "system", userName: user ? user.name : "System", whId: user ? user.whId : null, source: (ctx && ctx.source) || "Aplikacja" }, rec));
+    const r = Object.assign({ id: uid("a"), ts: nowIso(ctx), userId: user ? user.id : "system", userName: user ? user.name : "System", whId: user ? user.whId : null, source: (ctx && ctx.source) || N_("Aplikacja") }, rec);
+    if (r.act && !r.action) r.action = I18N.canon(r.act);
+    state.audit.push(r);
+    return r;
   }
+  /** Tekst akcji audytu w bieżącym języku. */
+  const auditText = a => a.act ? I18N.tr(a.act) : t(a.action || "");
   const snap = (state, keys) => { const o = {}; for (const k of keys) { const [w, p] = k.split("|"); o[k] = Stock.balance(state, w, p); } return o; };
   const netKey = e => `${e.whId}|${e.productId}|${e.cat}|${e.direct ? 1 : 0}`;
   function ledgerEntry(state, seq, ctx, e) {
@@ -886,7 +951,7 @@
   /* Zapis operacji — atomowo                                            */
   /* ------------------------------------------------------------------ */
   function commitOperation(state, draft, ctx) {
-    if (!draft || !draft.idemKey) return { ok: false, error: "Brak klucza idempotencji formularza" };
+    if (!draft || !draft.idemKey) return { ok: false, error: t("Brak klucza idempotencji formularza") };
     const dup = state.operations.find(o => o.idemKey === draft.idemKey);
     if (dup) return { ok: true, duplicate: true, op: dup };
     const plan = planOperation(state, draft, ctx);
@@ -912,7 +977,7 @@
       n.purchase.supplierId = ns.id; n.purchase.newSupplier = null;
       docs.forEach(d => { if (d.type === "PZ") d.partnerId = ns.id; });
       input.purchase.supplierId = ns.id; input.purchase.supplierName = ns.name;
-      audit(state, ctx, { entity: "partner", entityId: ns.id, opNo: ns.name, event: "partner", action: `Nowy dostawca (${SUPPLIER_KINDS[ns.kind].label}) — dodany przy zakupie`, before: null, after: { nazwa: ns.name, grupa: SUPPLIER_KINDS[ns.kind].label }, source: (ctx && ctx.source) || "Formularz „Nowa operacja”" });
+      audit(state, ctx, { entity: "partner", entityId: ns.id, opNo: ns.name, event: "partner", act: Lx("Nowy dostawca ({g}) — dodany przy zakupie", { g: { t: SUPPLIER_KINDS[ns.kind].label } }), before: null, after: { nazwa: ns.name, grupa: SUPPLIER_KINDS[ns.kind].label }, source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”") });
     }
     const op = {
       id: opId, idemKey: draft.idemKey, type: plan.type, no: mainNo,
@@ -933,9 +998,9 @@
     if (draft.draftId) state.drafts = state.drafts.filter(d => d.id !== draft.draftId);
     state.rev += 1;
     audit(state, ctx, {
-      entity: "operation", entityId: op.id, opNo: op.no, event: "create", action: `Utworzenie i zatwierdzenie: ${OP_TYPES[op.type].label}${op.direct ? " (bezpośrednia)" : ""}`,
+      entity: "operation", entityId: op.id, opNo: op.no, event: "create", act: op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
       before: { stan: before }, after: { stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals },
-      source: (ctx && ctx.source) || "Formularz „Nowa operacja”"
+      source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”")
     });
     return { ok: true, op, plan };
   }
@@ -944,22 +1009,22 @@
   /* Wersje robocze (DRAFT) — bez wpływu na stan i bez numeru            */
   /* ------------------------------------------------------------------ */
   function saveDraft(state, draft, ctx) {
-    if (!can(ctx && ctx.user, "op.create")) return { ok: false, error: "Twoja rola nie pozwala tworzyć operacji" };
+    if (!can(ctx && ctx.user, "op.create")) return { ok: false, error: t("Twoja rola nie pozwala tworzyć operacji"), code: "FORBIDDEN" };
     const id = draft.draftId || uid("dr");
     const rec = { id, status: "DRAFT", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: ctx.user.id, userName: ctx.user.name, whId: ctx.user.whId, savedAt: nowIso(ctx) };
     const i = state.drafts.findIndex(d => d.id === id);
     const before = i >= 0 ? { zapisano: state.drafts[i].savedAt } : null;
     if (i >= 0) state.drafts[i] = rec; else state.drafts.push(rec);
     state.rev += 1;
-    audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft", action: `${before ? "Aktualizacja" : "Zapis"} wersji roboczej: ${OP_TYPES[draft.type] ? OP_TYPES[draft.type].label : ""}`, before, after: { status: "ROBOCZY" }, source: (ctx && ctx.source) || "Formularz „Nowa operacja”" });
+    audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft", act: Lx(before ? N_("Aktualizacja wersji roboczej: {type}") : N_("Zapis wersji roboczej: {type}"), { type: { t: OP_TYPES[draft.type] ? OP_TYPES[draft.type].label : "" } }), before, after: { status: "ROBOCZY" }, source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”") });
     return { ok: true, id };
   }
   function deleteDraft(state, id, ctx) {
     const d = byId(state.drafts, id);
-    if (!d) return { ok: false, error: "Nie znaleziono wersji roboczej" };
-    if (d.userId !== (ctx.user && ctx.user.id) && !can(ctx.user, "documents.cancel")) return { ok: false, error: "Wersję roboczą usuwa jej autor lub kierownik" };
+    if (!d) return { ok: false, error: t("Nie znaleziono wersji roboczej") };
+    if (d.userId !== (ctx.user && ctx.user.id) && !can(ctx.user, "documents.cancel")) return { ok: false, error: t("Wersję roboczą usuwa jej autor lub kierownik"), code: "FORBIDDEN" };
     state.drafts = state.drafts.filter(x => x.id !== id); state.rev += 1;
-    audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft-delete", action: "Usunięcie wersji roboczej (niezatwierdzona — bez wpływu na stan)", before: { status: "ROBOCZY" }, after: null, source: (ctx && ctx.source) || "Rejestr operacji" });
+    audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft-delete", action: N_("Usunięcie wersji roboczej (niezatwierdzona — bez wpływu na stan)"), before: { status: "ROBOCZY" }, after: null, source: (ctx && ctx.source) || N_("Rejestr operacji") });
     return { ok: true };
   }
 
@@ -969,13 +1034,13 @@
   function planCancel(state, opId, ctx) {
     const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
     const op = byId(state.operations, opId);
-    if (!op) return { ok: false, error: "Nie znaleziono operacji" };
-    if (op.status === "CANCELLED") return { ok: false, error: `Dokument ${op.no} jest już anulowany` };
-    if (!can(user, "documents.cancel")) return { ok: false, error: "Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator" };
-    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: "Anulowanie wykonuje się w magazynie operacji" };
+    if (!op) return { ok: false, error: t("Nie znaleziono operacji") };
+    if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest już anulowany", { no: op.no }) };
+    if (!can(user, "documents.cancel")) return { ok: false, error: t("Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
+    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: t("Anulowanie wykonuje się w magazynie operacji"), code: "FORBIDDEN" };
     const entries = state.ledger.filter(l => l.opId === op.id);
     const whs = [...new Set(entries.map(e => e.whId))];
-    for (const w of whs) if (isLocked(state, w, today)) return { ok: false, error: "Bieżący okres jest zamknięty — anulowanie niemożliwe" };
+    for (const w of whs) if (isLocked(state, w, today)) return { ok: false, error: t("Bieżący okres jest zamknięty — anulowanie niemożliwe"), code: "LOCKED" };
     const net = new Map();
     for (const e of entries) { const k = netKey(e); const c = net.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); net.set(k, c); }
     const reversal = [...net.values()].filter(x => Math.abs(x.qty) > EPS).map(x => Object.assign({}, x, { qty: -x.qty }));
@@ -996,17 +1061,17 @@
         if (bal < min - EPS) { min = bal; minAt = r; }
         if (opNet > EPS && r.seq > firstSeq && r.qty < 0 && r.opId && r.opId !== op.id) {
           const d = byId(state.operations, r.opId);
-          if (d && d.status !== "CANCELLED") dependents.set(d.id, { id: d.id, no: d.no, date: d.date, type: OP_TYPES[d.type].label, docNo: r.docNo });
+          if (d && d.status !== "CANCELLED") dependents.set(d.id, { id: d.id, no: d.no, date: d.date, type: OP_TYPES[d.type].label, opType: d.type, docNo: r.docNo });
         }
       }
       if (min < -EPS) {
         const pr = byId(state.products, pid);
-        problems.push(`${pr.name} (${(byId(state.warehouses, w) || {}).name}): bez tego dokumentu stan spadłby do ${fmtQ(min)} ${Units.label(pr.unit)} (${minAt.docNo || ""} z ${Dates.pl(minAt.date)})`);
+        problems.push(t("{p} ({w}): bez tego dokumentu stan spadłby do {q} {u} ({doc} z {d})", { p: pr.name, w: (byId(state.warehouses, w) || {}).name, q: fmtQ(min), u: Units.label(pr.unit), doc: minAt.docNo || "", d: Dates.pl(minAt.date) }));
       }
     }
     const deps = [...dependents.values()];
     if (problems.length) {
-      return { ok: false, blocked: true, dependents: deps, error: `Nie można bezpośrednio anulować dokumentu ${op.no}. Towar z tego dokumentu został wykorzystany w późniejszych operacjach${deps.length ? ` (${deps.map(d => d.no).join(", ")})` : ""}. Najpierw należy wykonać korektę lub anulowanie operacji zależnych. ${problems.join("; ")}` };
+      return { ok: false, blocked: true, code: "BLOCKED", dependents: deps, error: t("Nie można bezpośrednio anulować dokumentu {no}. Towar z tego dokumentu został wykorzystany w późniejszych operacjach{deps}. Najpierw należy wykonać korektę lub anulowanie operacji zależnych. {why}", { no: op.no, deps: deps.length ? ` (${deps.map(d => d.no).join(", ")})` : "", why: problems.join("; ") }) };
     }
     const rev = reversal.map(r => { const b = Stock.balance(state, r.whId, r.productId); return Object.assign({}, r, { before: b }); });
     const sim = new Map();
@@ -1015,10 +1080,10 @@
     return { ok: true, op, reversal: rev, dependents: deps, needAck: deps.length > 0, valueDelta };
   }
   function cancelOperation(state, opId, ctx, reason, opts = {}) {
-    if (!str(reason)) return { ok: false, error: "Podaj przyczynę anulowania" };
+    if (!str(reason)) return { ok: false, error: t("Podaj przyczynę anulowania") };
     const pc = planCancel(state, opId, ctx);
     if (!pc.ok) return pc;
-    if (pc.needAck && !opts.ack) return { ok: false, needAck: true, dependents: pc.dependents, error: `Po dokumencie wykonano operacje na tym samym towarze (${pc.dependents.map(d => d.no).join(", ")}). Potwierdź, że anulowanie jest zamierzone.` };
+    if (pc.needAck && !opts.ack) return { ok: false, needAck: true, code: "NEED_ACK", dependents: pc.dependents, error: t("Po dokumencie wykonano operacje na tym samym towarze ({list}). Potwierdź, że anulowanie jest zamierzone.", { list: pc.dependents.map(d => d.no).join(", ") }) };
     const op = pc.op, today = (ctx && ctx.today) || Dates.localToday();
     const keys = [...new Set(pc.reversal.map(r => `${r.whId}|${r.productId}`))];
     const before = snap(state, keys);
@@ -1030,7 +1095,7 @@
     op.cancel = { no, date: today, ts: nowIso(ctx), reason: str(reason), userId: ctx.user.id, userName: ctx.user.name, ack: !!opts.ack, dependents: pc.dependents, effect: pc.reversal.map(r => ({ whId: r.whId, productId: r.productId, qty: r.qty, before: r.before, after: r.after })) };
     op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "cancel", no }, pc.valueDelta));
     state.rev += 1;
-    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: "cancel", action: "Anulowanie dokumentu", before: { status: STATUS[prevStatus], stan: before }, after: { status: STATUS.CANCELLED, dokument: no, stan: snap(state, keys) }, reason: str(reason), source: (ctx && ctx.source) || "Anulowanie" });
+    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: "cancel", action: N_("Anulowanie dokumentu"), before: { status: STATUS[prevStatus], stan: before }, after: { status: STATUS.CANCELLED, dokument: no, stan: snap(state, keys) }, reason: str(reason), source: (ctx && ctx.source) || N_("Anulowanie") });
     return { ok: true, no, op };
   }
 
@@ -1038,32 +1103,32 @@
   /* KOREKTA — nowy dokument z różnicą; pełna walidacja jak zwykła operacja */
   /* ------------------------------------------------------------------ */
   const CORR_FIELDS = [
-    ["purchase.qty", "Ilość zakupu", o => o.purchase && o.purchase.qty, o => o.purchase && Units.label(o.purchase.unit)],
-    ["purchase.price", "Cena zakupu", o => o.purchase && o.purchase.price, () => "zł"],
-    ["purchase.supplierId", "Dostawca", o => o.purchase && o.purchase.supplierId],
-    ["sale.qty", "Ilość sprzedaży", o => o.sale && o.sale.qty, o => o.sale && Units.label(o.sale.unit)],
-    ["sale.price", "Cena sprzedaży", o => o.sale && o.sale.price, () => "zł"],
-    ["sale.buyerId", "Odbiorca", o => o.sale && o.sale.buyerId],
-    ["production.outQty", "Produkcja", o => o.production && o.production.outQty, o => o.production && Units.label(o.production.outUnit)],
-    ["production.consumeQty", "Zużycie surowca", o => o.production && o.production.consumeQty, o => o.production && Units.label(o.production.consumeUnit)],
-    ["production.chipRate", "Cena za rąbanie", o => o.production && o.production.chipRate, () => "zł/MP"],
-    ["mm.qty", "Ilość MM", o => o.mm && o.mm.qty, o => o.mm && Units.label(o.mm.unit)],
-    ["transport.place", "Miejsce dostawy", o => o.transport && o.transport.place],
-    ["transport.reg", "Nr rejestracyjny", o => o.transport && o.transport.reg],
-    ["transport.driverName", "Kierowca", o => o.transport && o.transport.driverName],
-    ["transport.cost", "Koszt transportu", o => o.transport && o.transport.cost, () => "zł"],
-    ["notes", "Uwagi", o => o.notes],
-    ["extDoc", "Nr dokumentu zewnętrznego", o => o.extDoc]
+    ["purchase.qty", N_("Ilość zakupu"), o => o.purchase && o.purchase.qty, o => o.purchase && Units.label(o.purchase.unit)],
+    ["purchase.price", N_("Cena zakupu"), o => o.purchase && o.purchase.price, () => "zł"],
+    ["purchase.supplierId", N_("Dostawca"), o => o.purchase && o.purchase.supplierId],
+    ["sale.qty", N_("Ilość sprzedaży"), o => o.sale && o.sale.qty, o => o.sale && Units.label(o.sale.unit)],
+    ["sale.price", N_("Cena sprzedaży"), o => o.sale && o.sale.price, () => "zł"],
+    ["sale.buyerId", N_("Odbiorca"), o => o.sale && o.sale.buyerId],
+    ["production.outQty", N_("Produkcja"), o => o.production && o.production.outQty, o => o.production && Units.label(o.production.outUnit)],
+    ["production.consumeQty", N_("Zużycie surowca"), o => o.production && o.production.consumeQty, o => o.production && Units.label(o.production.consumeUnit)],
+    ["production.chipRate", N_("Cena za rąbanie"), o => o.production && o.production.chipRate, () => "zł/MP"],
+    ["mm.qty", N_("Ilość MM"), o => o.mm && o.mm.qty, o => o.mm && Units.label(o.mm.unit)],
+    ["transport.place", N_("Miejsce dostawy"), o => o.transport && o.transport.place],
+    ["transport.reg", N_("Nr rejestracyjny"), o => o.transport && o.transport.reg],
+    ["transport.driverName", N_("Kierowca"), o => o.transport && o.transport.driverName],
+    ["transport.cost", N_("Koszt transportu"), o => o.transport && o.transport.cost, () => "zł"],
+    ["notes", N_("Uwagi"), o => o.notes],
+    ["extDoc", N_("Nr dokumentu zewnętrznego"), o => o.extDoc]
   ];
   function planCorrection(state, opId, newDraft, ctx) {
     const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
     const op = byId(state.operations, opId);
-    if (!op) return { ok: false, error: "Nie znaleziono operacji" };
-    if (op.status === "CANCELLED") return { ok: false, error: `Dokument ${op.no} jest anulowany — nie można go korygować. Wprowadź nową operację.` };
-    if (!can(user, "documents.correct")) return { ok: false, error: "Brak uprawnienia „documents.correct”" };
-    if (!can(user, OP_TYPES[op.type].correctPerm)) return { ok: false, error: `Brak uprawnienia „${OP_TYPES[op.type].correctPerm}”` };
-    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: "Korektę wykonuje się w magazynie operacji" };
-    if (newDraft.type !== op.type || !!(newDraft.sale && newDraft.sale.direct) !== !!op.direct) return { ok: false, error: "Korekta nie może zmienić rodzaju operacji — anuluj i wprowadź nową" };
+    if (!op) return { ok: false, error: t("Nie znaleziono operacji") };
+    if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest anulowany — nie można go korygować. Wprowadź nową operację.", { no: op.no }) };
+    if (!can(user, "documents.correct")) return { ok: false, error: t("Brak uprawnienia „{p}”", { p: "documents.correct" }), code: "FORBIDDEN" };
+    if (!can(user, OP_TYPES[op.type].correctPerm)) return { ok: false, error: t("Brak uprawnienia „{p}”", { p: OP_TYPES[op.type].correctPerm }), code: "FORBIDDEN" };
+    if (user.whId !== op.whId && user.role !== "admin") return { ok: false, error: t("Korektę wykonuje się w magazynie operacji"), code: "FORBIDDEN" };
+    if (newDraft.type !== op.type || !!(newDraft.sale && newDraft.sale.direct) !== !!op.direct) return { ok: false, error: t("Korekta nie może zmienić rodzaju operacji — anuluj i wprowadź nową") };
     const d = Object.assign(clone(newDraft), { date: op.date, idemKey: "corr" });
     // stan „bez tej operacji” — nowa wersja przechodzi te same zabezpieczenia co zwykła operacja
     const view = Object.assign({}, state, { ledger: state.ledger.filter(l => l.opId !== op.id) });
@@ -1078,13 +1143,13 @@
       const q = rq((b ? b.qty : 0) - (a ? a.qty : 0));
       if (Math.abs(q) > EPS) deltas.push({ whId: base.whId, productId: base.productId, cat: base.cat, direct: base.direct, qty: q });
     }
-    for (const w of new Set(deltas.map(x => x.whId))) if (isLocked(state, w, today)) return { ok: false, error: "Bieżący okres jest zamknięty — korekta niemożliwa" };
+    for (const w of new Set(deltas.map(x => x.whId))) if (isLocked(state, w, today)) return { ok: false, error: t("Bieżący okres jest zamknięty — korekta niemożliwa"), code: "LOCKED" };
     const sim = new Map();
     for (const x of deltas.slice().sort((a, b) => b.qty - a.qty)) {   // najpierw przychody, potem rozchody
       const k = `${x.whId}|${x.productId}`;
       x.before = sim.has(k) ? sim.get(k) : Stock.balance(state, x.whId, x.productId);
       x.after = rq(x.before + x.qty); sim.set(k, x.after);
-      if (x.after < -EPS) { const pr = byId(state.products, x.productId); return { ok: false, error: `Korekta niemożliwa: stan „${pr.name}” spadłby do ${fmtQ(x.after)} ${Units.label(pr.unit)}. Dostępny stan: ${fmtQ(x.before)} ${Units.label(pr.unit)}.` }; }
+      if (x.after < -EPS) { const pr = byId(state.products, x.productId); return { ok: false, code: "STOCK", error: t("Korekta niemożliwa: stan „{p}” spadłby do {a} {u}. Dostępny stan: {b} {u}.", { p: pr.name, a: fmtQ(x.after), b: fmtQ(x.before), u: Units.label(pr.unit) }) }; }
     }
     const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: p.norm.mm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
     const partner = id => (byId(state.partners, id) || {}).name || id || "";
@@ -1100,17 +1165,17 @@
     }
     const valueDelta = {}; let valueChanged = false;
     for (const k of Object.keys(p.totals)) { valueDelta[k] = round(p.totals[k] - (op.totals[k] || 0), 2); if (Math.abs(valueDelta[k]) > 0.004) valueChanged = true; }
-    if (!changes.length && !deltas.length && !valueChanged) return { ok: false, error: "Korekta nie zawiera żadnej zmiany" };
+    if (!changes.length && !deltas.length && !valueChanged) return { ok: false, code: "NO_CHANGE", error: t("Korekta nie zawiera żadnej zmiany") };
     return { ok: true, op, plan: p, nextOp, deltas, changes, valueDelta, valueChanged, descriptiveOnly: !deltas.length && !valueChanged, totalsBefore: op.totals, totalsAfter: p.totals };
   }
   function correctOperation(state, opId, newDraft, reason, ctx, opts = {}) {
-    if (!str(reason)) return { ok: false, error: "Podaj powód korekty — pole nie może być puste" };
+    if (!str(reason)) return { ok: false, error: t("Podaj powód korekty — pole nie może być puste") };
     const op0 = byId(state.operations, opId);
     if (op0 && opts.corrKey && op0.corrections.some(c => c.corrKey === opts.corrKey)) return { ok: true, duplicate: true, op: op0 };
     if (op0 && opts.reverses) {
       const last = op0.corrections[op0.corrections.length - 1];
-      if (!last || last.no !== opts.reverses) return { ok: false, error: `Odwrócić można tylko ostatnią korektę dokumentu (${last ? last.no : "brak korekt"}). Wcześniejsze korekty odwraca się po kolei.` };
-      if (last.reverses) return { ok: false, error: `Korekta ${last.no} sama jest odwróceniem — wprowadź nową korektę.` };
+      if (!last || last.no !== opts.reverses) return { ok: false, error: t("Odwrócić można tylko ostatnią korektę dokumentu ({no}). Wcześniejsze korekty odwraca się po kolei.", { no: last ? last.no : t("brak korekt") }) };
+      if (last.reverses) return { ok: false, error: t("Korekta {no} sama jest odwróceniem — wprowadź nową korektę.", { no: last.no }) };
     }
     const pc = planCorrection(state, opId, newDraft, ctx);
     if (!pc.ok) return pc;
@@ -1128,18 +1193,18 @@
     Object.assign(op, pc.nextOp, { place: pc.nextOp.transport.place, totals: pc.plan.totals, status: "CORRECTED" });
     if (pc.valueChanged) op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "correct", no }, pc.valueDelta));
     state.rev += 1;
-    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: opts.reverses ? "correction-reverse" : "correction", action: opts.reverses ? `Odwrócenie korekty ${opts.reverses}` : (pc.descriptiveOnly ? "Korekta danych opisowych" : "Korekta dokumentu"),
+    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: opts.reverses ? "correction-reverse" : "correction", act: opts.reverses ? Lx("Odwrócenie korekty {no}", { no: opts.reverses }) : Lx(pc.descriptiveOnly ? N_("Korekta danych opisowych") : N_("Korekta dokumentu")),
       before: { status: STATUS[prevStatus], stan: before, wartosci: pc.changes.map(c => `${c.label}: ${c.beforeText}`) },
-      after: { status: STATUS.CORRECTED, dokument: no, stan: snap(state, keys), wartosci: pc.changes.map(c => `${c.label}: ${c.afterText}`) }, reason: str(reason), source: (ctx && ctx.source) || "Korekta" });
+      after: { status: STATUS.CORRECTED, dokument: no, stan: snap(state, keys), wartosci: pc.changes.map(c => `${c.label}: ${c.afterText}`) }, reason: str(reason), source: (ctx && ctx.source) || N_("Korekta") });
     return { ok: true, no, op, correction: rec };
   }
 
   /** Odwrócenie ostatniej korekty = nowa korekta przywracająca dane sprzed niej (korekt się nie usuwa). */
   function reverseCorrection(state, opId, corrNo, reason, ctx) {
     const op = byId(state.operations, opId);
-    if (!op) return { ok: false, error: "Nie znaleziono operacji" };
+    if (!op) return { ok: false, error: t("Nie znaleziono operacji") };
     const c = op.corrections.find(x => x.no === corrNo);
-    if (!c) return { ok: false, error: "Nie znaleziono korekty" };
+    if (!c) return { ok: false, error: t("Nie znaleziono korekty") };
     return correctOperation(state, opId, Object.assign(clone(c.inputBefore), { type: op.type }), reason, ctx, { reverses: corrNo });
   }
 
@@ -1149,7 +1214,7 @@
     const kind = info.kind === "KWIT" ? "KP" : info.kind === "DOC" ? "WYD" : "RAP";
     const no = nextNo(state, kind, today);
     state.rev += 1;
-    audit(state, ctx, { entity: "report", entityId: no, opNo: no, event: "print", action: `${info.format === "pdf" ? "Wygenerowanie PDF" : "Wydruk"}: ${info.title}`, before: null, after: { zakres: info.range || "", magazyn: info.wh || "", format: info.format }, source: (ctx && ctx.source) || "Raporty" });
+    audit(state, ctx, { entity: "report", entityId: no, opNo: no, event: "print", act: Lx(info.format === "pdf" ? N_("Wygenerowanie PDF: {title}") : N_("Wydruk: {title}"), { title: String(info.title || "").slice(0, 200) }), before: null, after: { zakres: info.range || "", magazyn: info.wh || "", format: info.format }, source: (ctx && ctx.source) || N_("Raporty") });
     return { ok: true, no };
   }
 
@@ -1159,7 +1224,7 @@
     let seq = nextLedgerSeq(state);
     for (const ln of lines) state.ledger.push(ledgerEntry(state, seq++, ctx, { opId: null, step: 1, date, whId, productId: ln.productId, kind: "BO", cat: "BO", qty: ln.qty, docNo: no }));
     state.rev += 1;
-    audit(state, ctx, { entity: "ledger", entityId: no, opNo: no, event: "create", action: "Bilans otwarcia", before: null, after: { magazyn: whId, pozycje: lines.length }, source: (ctx && ctx.source) || "Migracja" });
+    audit(state, ctx, { entity: "ledger", entityId: no, opNo: no, event: "create", action: N_("Bilans otwarcia"), before: null, after: { magazyn: whId, pozycje: lines.length }, source: (ctx && ctx.source) || N_("Migracja") });
     return no;
   }
 
@@ -1171,23 +1236,23 @@
     cutoff(ym, today) { const end = Dates.monthEnd(ym); return end < today ? end : today; },
     open(state, ym, ctx) {
       const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
-      if (!can(user, "inv.open")) return { ok: false, error: "Twoja rola nie pozwala otwierać okresów" };
-      if (!Dates.isYM(ym)) return { ok: false, error: "Podaj miesiąc w formacie RRRR-MM" };
-      if (ym > Dates.ym(today)) return { ok: false, error: "Nie można otworzyć okresu z przyszłości" };
-      if (this.find(state, user.whId, ym)) return { ok: false, error: `Okres ${ym} już istnieje` };
+      if (!can(user, "inv.open")) return { ok: false, error: t("Twoja rola nie pozwala otwierać okresów"), code: "FORBIDDEN" };
+      if (!Dates.isYM(ym)) return { ok: false, error: t("Podaj miesiąc w formacie RRRR-MM") };
+      if (ym > Dates.ym(today)) return { ok: false, error: t("Nie można otworzyć okresu z przyszłości") };
+      if (this.find(state, user.whId, ym)) return { ok: false, error: t("Okres {ym} już istnieje", { ym }) };
       const locked = lockedMonth(state, user.whId);
-      if (locked && ym <= locked) return { ok: false, error: `Miesiące do ${locked} włącznie są już zamknięte` };
+      if (locked && ym <= locked) return { ok: false, error: t("Miesiące do {ym} włącznie są już zamknięte", { ym: locked }) };
       const p = { id: uid("inv"), whId: user.whId, ym, status: "OTWARTA", openedAt: nowIso(ctx), openedBy: user.name, generatedAt: null, closedAt: null, closedBy: null, auto: false, docNo: null, lines: [] };
       state.inventory.push(p); state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: "Otwarcie okresu inwentaryzacji", before: null, after: { okres: ym, status: "OTWARTA" }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: N_("Otwarcie okresu inwentaryzacji"), before: null, after: { okres: ym, status: "OTWARTA" }, source: (ctx && ctx.source) || N_("Moduł Inwentaryzacja") });
       return { ok: true, period: p };
     },
     generate(state, ym, ctx) {
       const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
-      if (!can(user, "inv.count")) return { ok: false, error: "Brak uprawnień" };
+      if (!can(user, "inv.count")) return { ok: false, error: t("Brak uprawnień"), code: "FORBIDDEN" };
       const p = this.find(state, user.whId, ym);
-      if (!p) return { ok: false, error: "Najpierw otwórz okres" };
-      if (p.status !== "OTWARTA") return { ok: false, error: "Okres jest zamknięty — tylko do odczytu" };
+      if (!p) return { ok: false, error: t("Najpierw otwórz okres") };
+      if (p.status !== "OTWARTA") return { ok: false, error: t("Okres jest zamknięty — tylko do odczytu") };
       const cut = this.cutoff(ym, today), book = Stock.byProduct(state, user.whId, cut), prev = new Map(p.lines.map(l => [l.productId, l]));
       const lines = [];
       for (const pr of state.products) {
@@ -1197,39 +1262,39 @@
       }
       const before = { pozycje: p.lines.length };
       p.lines = lines; p.generatedAt = nowIso(ctx); p.cutoff = cut; state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: "Wygenerowanie listy spisowej", before, after: { pozycje: lines.length, stan_na: cut }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: N_("Wygenerowanie listy spisowej"), before, after: { pozycje: lines.length, stan_na: cut }, source: (ctx && ctx.source) || N_("Moduł Inwentaryzacja") });
       return { ok: true, period: p };
     },
     setCount(state, ym, productId, text, ctx) {
       const user = ctx && ctx.user;
-      if (!can(user, "inv.count")) return { ok: false, error: "Brak uprawnień" };
+      if (!can(user, "inv.count")) return { ok: false, error: t("Brak uprawnień"), code: "FORBIDDEN" };
       const p = this.find(state, user.whId, ym);
-      if (!p) return { ok: false, error: "Brak okresu" };
-      if (p.status !== "OTWARTA") return { ok: false, error: "Okres jest zamknięty — tylko do odczytu" };
+      if (!p) return { ok: false, error: t("Brak okresu") };
+      if (p.status !== "OTWARTA") return { ok: false, error: t("Okres jest zamknięty — tylko do odczytu") };
       const line = p.lines.find(l => l.productId === productId);
-      if (!line) return { ok: false, error: "Brak pozycji na liście" };
+      if (!line) return { ok: false, error: t("Brak pozycji na liście") };
       const before = { spis: line.countQty };
       if (str(text) === "") { line.countQty = null; line.countText = ""; }
       else {
         const r = NumParse.parse(text);
         if (!r.ok) return { ok: false, error: r.error };
-        if (r.value < 0) return { ok: false, error: "Stan ze spisu nie może być ujemny" };
+        if (r.value < 0) return { ok: false, error: t("Stan ze spisu nie może być ujemny") };
         line.countQty = rq(r.value); line.countText = str(text);
       }
       state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: "Wpis stanu ze spisu", before, after: { produkt: productId, spis: line.countQty, jednostka: line.unit }, source: (ctx && ctx.source) || "Moduł Inwentaryzacja" });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: N_("Wpis stanu ze spisu"), before, after: { produkt: productId, spis: line.countQty, jednostka: line.unit }, source: (ctx && ctx.source) || N_("Moduł Inwentaryzacja") });
       return { ok: true, line };
     },
     close(state, ym, ctx, opts = {}) {
       const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
       const whId = opts.whId || (user && user.whId);
-      if (!opts.auto && !can(user, "inv.close")) return { ok: false, error: "Zamknięcie okresu wymaga roli Kierownik lub Administrator" };
+      if (!opts.auto && !can(user, "inv.close")) return { ok: false, error: t("Zamknięcie okresu wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
       const p = this.find(state, whId, ym);
-      if (!p) return { ok: false, error: "Brak okresu" };
-      if (p.status !== "OTWARTA") return { ok: false, error: "Okres jest już zamknięty" };
-      if (!p.lines.length && !opts.auto) return { ok: false, error: "Wygeneruj listę spisową przed zamknięciem" };
+      if (!p) return { ok: false, error: t("Brak okresu") };
+      if (p.status !== "OTWARTA") return { ok: false, error: t("Okres jest już zamknięty") };
+      if (!p.lines.length && !opts.auto) return { ok: false, error: t("Wygeneruj listę spisową przed zamknięciem") };
       const missing = p.lines.filter(l => l.countQty === null);
-      if (missing.length && !opts.auto) return { ok: false, error: `Brak stanu ze spisu dla ${missing.length} pozycji` };
+      if (missing.length && !opts.auto) return { ok: false, error: t("Brak stanu ze spisu dla {n} pozycji", { n: missing.length }) };
       const cut = this.cutoff(ym, today), book = Stock.byProduct(state, whId, cut), diffs = [];
       for (const l of p.lines) {
         l.bookQty = rq(book.get(l.productId) || 0);
@@ -1237,7 +1302,7 @@
         l.diff = rq(l.countQty - l.bookQty);
         if (Math.abs(l.diff) > EPS) diffs.push({ productId: l.productId, qty: l.diff });
       }
-      for (const d of diffs) if (Stock.balance(state, whId, d.productId) + d.qty < -EPS) return { ok: false, error: `Różnica dla „${(byId(state.products, d.productId) || {}).name}” dałaby dziś stan ujemny — sprawdź operacje po ${cut}` };
+      for (const d of diffs) if (Stock.balance(state, whId, d.productId) + d.qty < -EPS) return { ok: false, error: t("Różnica dla „{p}” dałaby dziś stan ujemny — sprawdź operacje po {d}", { p: (byId(state.products, d.productId) || {}).name, d: cut }) };
       let docNo = null;
       if (diffs.length) {
         docNo = nextNo(state, "IN", cut);
@@ -1245,9 +1310,9 @@
         const c = Object.assign({}, ctx, { user: user || { name: "System" } });
         for (const d of diffs) state.ledger.push(ledgerEntry(state, seq++, c, { opId: null, invId: p.id, step: 1, date: cut, whId, productId: d.productId, kind: "INW", cat: "INW", qty: d.qty, docNo }));
       }
-      p.status = "ZAMKNIETA"; p.closedAt = nowIso(ctx); p.closedBy = opts.auto ? "System (przełom miesiąca)" : user.name; p.auto = !!opts.auto; p.docNo = docNo; p.cutoff = cut;
+      p.status = "ZAMKNIETA"; p.closedAt = nowIso(ctx); p.closedBy = opts.auto ? N_("System (przełom miesiąca)") : user.name; p.auto = !!opts.auto; p.docNo = docNo; p.cutoff = cut;
       state.rev += 1;
-      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: opts.auto ? "Automatyczne zamknięcie okresu" : "Zamknięcie miesiąca / okresu inwentaryzacji", before: { status: "OTWARTA" }, after: { status: "ZAMKNIĘTA", dokument: docNo, roznice: diffs.length, przyjeto_stan_ksiegowy: missing.length }, source: opts.auto ? "Automat: początek kolejnego miesiąca" : ((ctx && ctx.source) || "Moduł Inwentaryzacja") });
+      audit(state, ctx, { entity: "inventory", entityId: p.id, opNo: ym, event: "inv", action: opts.auto ? N_("Automatyczne zamknięcie okresu") : N_("Zamknięcie miesiąca / okresu inwentaryzacji"), before: { status: "OTWARTA" }, after: { status: "ZAMKNIĘTA", dokument: docNo, roznice: diffs.length, przyjeto_stan_ksiegowy: missing.length }, source: opts.auto ? N_("Automat: początek kolejnego miesiąca") : ((ctx && ctx.source) || N_("Moduł Inwentaryzacja")) });
       return { ok: true, period: p, docNo, diffs };
     },
     autoClose(state, ctx) {
@@ -1267,33 +1332,33 @@
   /* ------------------------------------------------------------------ */
   const Fleet = {
     KINDS: {
-      vehicles: { label: "Pojazd", fields: ["name", "reg", "type", "status", "driverId"] },
-      drivers: { label: "Kierowca", fields: ["name", "phone"] },
-      chippers: { label: "Rębak", fields: ["name", "status", "operatorId"] },
-      operators: { label: "Operator rębaka", fields: ["name", "phone"] }
+      vehicles: { label: N_("Pojazd"), fields: ["name", "reg", "type", "status", "driverId"] },
+      drivers: { label: N_("Kierowca"), fields: ["name", "phone"] },
+      chippers: { label: N_("Rębak"), fields: ["name", "status", "operatorId"] },
+      operators: { label: N_("Operator rębaka"), fields: ["name", "phone"] }
     },
     validate(state, kind, rec) {
       const e = {}, list = state.fleet[kind];
-      if (!str(rec.name)) e.name = "Podaj nazwę";
+      if (!str(rec.name)) e.name = t("Podaj nazwę");
       if (kind === "vehicles") {
         const reg = str(rec.reg).toUpperCase().replace(/\s+/g, " ");
-        if (!reg) e.reg = "Podaj numer rejestracyjny";
-        else if (!/^[A-Z0-9 ]{4,10}$/.test(reg)) e.reg = "Numer rejestracyjny: litery i cyfry, 4–10 znaków (np. SGL 4T821)";
-        else if (list.some(v => v.id !== rec.id && v.reg.replace(/\s/g, "") === reg.replace(/\s/g, ""))) e.reg = "Taki numer rejestracyjny już istnieje";
-        if (!VEHICLE_TYPES[rec.type]) e.type = "Wybierz typ pojazdu";
-        if (!ASSET_STATUS[rec.status]) e.status = "Wybierz status";
-        if (!byId(state.fleet.drivers, rec.driverId)) e.driverId = "Wybierz kierowcę domyślnego";
+        if (!reg) e.reg = t("Podaj numer rejestracyjny");
+        else if (!/^[A-Z0-9 ]{4,10}$/.test(reg)) e.reg = t("Numer rejestracyjny: litery i cyfry, 4–10 znaków (np. SGL 4T821)");
+        else if (list.some(v => v.id !== rec.id && v.reg.replace(/\s/g, "") === reg.replace(/\s/g, ""))) e.reg = t("Taki numer rejestracyjny już istnieje");
+        if (!VEHICLE_TYPES[rec.type]) e.type = t("Wybierz typ pojazdu");
+        if (!ASSET_STATUS[rec.status]) e.status = t("Wybierz status");
+        if (!byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Wybierz kierowcę domyślnego");
       }
       if (kind === "chippers") {
-        if (!ASSET_STATUS[rec.status]) e.status = "Wybierz status";
-        if (!byId(state.fleet.operators, rec.operatorId)) e.operatorId = "Wybierz operatora domyślnego";
+        if (!ASSET_STATUS[rec.status]) e.status = t("Wybierz status");
+        if (!byId(state.fleet.operators, rec.operatorId)) e.operatorId = t("Wybierz operatora domyślnego");
       }
-      if ((kind === "drivers" || kind === "operators") && list.some(x => x.id !== rec.id && x.name.toLowerCase() === str(rec.name).toLowerCase())) e.name = "Taka osoba już istnieje";
+      if ((kind === "drivers" || kind === "operators") && list.some(x => x.id !== rec.id && x.name.toLowerCase() === str(rec.name).toLowerCase())) e.name = t("Taka osoba już istnieje");
       return e;
     },
     save(state, kind, rec, ctx) {
-      if (!this.KINDS[kind]) return { ok: false, error: "Nieznana kartoteka" };
-      if (!can(ctx && ctx.user, "fleet.edit")) return { ok: false, error: "Edycja floty wymaga roli Kierownik lub Administrator" };
+      if (!this.KINDS[kind]) return { ok: false, error: t("Nieznana kartoteka") };
+      if (!can(ctx && ctx.user, "fleet.edit")) return { ok: false, error: t("Edycja floty wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
       const e = this.validate(state, kind, rec);
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
       const list = state.fleet[kind], clean = { id: rec.id || uid(kind.slice(0, 2)) };
@@ -1301,18 +1366,165 @@
       const idx = list.findIndex(x => x.id === clean.id), before = idx >= 0 ? clone(list[idx]) : null;
       if (idx >= 0) list[idx] = Object.assign({}, list[idx], clean); else list.push(clean);
       state.rev += 1;
-      audit(state, ctx, { entity: "fleet", entityId: clean.id, opNo: clean.name, event: "fleet", action: `${before ? "Zmiana" : "Dodanie"}: ${this.KINDS[kind].label}`, before, after: clean, source: (ctx && ctx.source) || "Moduł Flota" });
+      audit(state, ctx, { entity: "fleet", entityId: clean.id, opNo: clean.name, event: "fleet", act: Lx(before ? N_("Zmiana: {k}") : N_("Dodanie: {k}"), { k: { t: this.KINDS[kind].label } }), before, after: clean, source: (ctx && ctx.source) || N_("Moduł Flota") });
       return { ok: true, rec: clean };
     },
     remove(state, kind, id, ctx) {
-      if (!can(ctx && ctx.user, "fleet.edit")) return { ok: false, error: "Brak uprawnień" };
+      if (!this.KINDS[kind]) return { ok: false, error: t("Nieznana kartoteka") };
+      if (!can(ctx && ctx.user, "fleet.edit")) return { ok: false, error: t("Brak uprawnień"), code: "FORBIDDEN" };
       const list = state.fleet[kind], rec = byId(list, id);
-      if (!rec) return { ok: false, error: "Nie znaleziono" };
-      if (kind === "drivers" && state.fleet.vehicles.some(v => v.driverId === id)) return { ok: false, error: "Kierowca jest domyślny dla pojazdu — najpierw zmień przypisanie" };
-      if (kind === "operators" && state.fleet.chippers.some(c => c.operatorId === id)) return { ok: false, error: "Operator jest domyślny dla rębaka — najpierw zmień przypisanie" };
-      if (kind === "vehicles" || kind === "chippers") return { ok: false, error: "Pojazdów i rębaków nie usuwa się — ustaw status „Wycofany” (historia kursów zostaje)" };
+      if (!rec) return { ok: false, error: t("Nie znaleziono") };
+      if (kind === "drivers" && state.fleet.vehicles.some(v => v.driverId === id)) return { ok: false, error: t("Kierowca jest domyślny dla pojazdu — najpierw zmień przypisanie") };
+      if (kind === "operators" && state.fleet.chippers.some(c => c.operatorId === id)) return { ok: false, error: t("Operator jest domyślny dla rębaka — najpierw zmień przypisanie") };
+      if (kind === "vehicles" || kind === "chippers") return { ok: false, error: t("Pojazdów i rębaków nie usuwa się — ustaw status „Wycofany” (historia kursów zostaje)") };
       state.fleet[kind] = list.filter(x => x.id !== id); state.rev += 1;
-      audit(state, ctx, { entity: "fleet", entityId: id, opNo: rec.name, event: "fleet", action: `Usunięcie: ${this.KINDS[kind].label}`, before: rec, after: null, source: (ctx && ctx.source) || "Moduł Flota" });
+      audit(state, ctx, { entity: "fleet", entityId: id, opNo: rec.name, event: "fleet", act: Lx("Usunięcie: {k}", { k: { t: this.KINDS[kind].label } }), before: rec, after: null, source: (ctx && ctx.source) || N_("Moduł Flota") });
+      return { ok: true };
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Kartoteki: produkty, kontrahenci, magazyny                          */
+  /*   Rekordów użytych w dokumentach nie usuwa się — tylko dezaktywacja. */
+  /* ------------------------------------------------------------------ */
+  const CAT_UNIT = { drewno: "m3", zrebka: "MP", agro: "t" };
+  /** Kontrola sumy NIP (10 cyfr, wagi 6-5-7-2-3-4-5-6-7). Pusty NIP jest dozwolony. */
+  function nipValid(v) {
+    const d = String(v || "").replace(/[\s-]/g, "");
+    if (!d) return true;
+    if (!/^\d{10}$/.test(d)) return false;
+    const w = [6, 5, 7, 2, 3, 4, 5, 6, 7];
+    const sum = w.reduce((a, x, i) => a + x * Number(d[i]), 0);
+    return sum % 11 === Number(d[9]);
+  }
+  const Master = {
+    KINDS: {
+      products: { label: N_("Produkt"), prefix: "pr", fields: ["code", "name", "cat", "unit", "tPerUnit", "active"] },
+      partners: { label: N_("Kontrahent"), prefix: "pa", fields: ["name", "role", "kind", "city", "address", "nip", "phone", "email", "lesnictwa", "active"] },
+      warehouses: { label: N_("Magazyn"), prefix: "wh", fields: ["code", "name", "address", "active"] }
+    },
+    usedProduct(state, id) { return state.ledger.some(l => l.productId === id) || state.operations.some(o => JSON.stringify(o.input || {}).includes(`"${id}"`)); },
+    validate(state, kind, rec) {
+      const e = {}, list = state[kind], same = (a, b) => str(a).toLowerCase() === str(b).toLowerCase();
+      const other = x => x.id !== rec.id;
+      if (!str(rec.name) || str(rec.name).length < 2) e.name = t("Podaj nazwę (co najmniej 2 znaki)");
+      else if (list.some(x => other(x) && same(x.name, rec.name))) e.name = t("Taka nazwa już istnieje");
+      if (kind === "products" || kind === "warehouses") {
+        const code = str(rec.code).toUpperCase();
+        if (!/^[A-Z0-9][A-Z0-9-]{1,11}$/.test(code)) e.code = t("Kod: 2–12 znaków (litery, cyfry, myślnik)");
+        else if (list.some(x => other(x) && same(x.code, code))) e.code = t("Taki kod już istnieje");
+      }
+      if (kind === "products") {
+        if (!PRODUCT_CATS[rec.cat]) e.cat = t("Wybierz kategorię");
+        else if (rec.unit !== CAT_UNIT[rec.cat]) e.unit = t("Dla kategorii „{c}” jednostką magazynową jest {u}", { c: t(PRODUCT_CATS[rec.cat]), u: Units.label(CAT_UNIT[rec.cat]) });
+        const prev = byId(list, rec.id);
+        if (prev && prev.unit !== rec.unit && this.usedProduct(state, rec.id)) e.unit = t("Produkt ma ruchy w księdze — jednostki magazynowej nie można zmienić");
+        if (str(rec.tPerUnit) !== "" && rec.tPerUnit !== null && rec.tPerUnit !== undefined) {
+          const r = NumParse.parse(rec.tPerUnit);
+          if (!r.ok || !(r.value > 0) || r.value > 5) e.tPerUnit = t("Masa jednostki: liczba większa od 0 (t)");
+        }
+      }
+      if (kind === "partners") {
+        if (!PARTNER_ROLES[rec.role]) e.role = t("Wybierz rolę kontrahenta");
+        if (rec.role !== "buyer" && !SUPPLIER_KINDS[rec.kind]) e.kind = t("Wybierz grupę dostawcy");
+        if (!nipValid(rec.nip)) e.nip = t("Niepoprawny NIP (10 cyfr z sumą kontrolną)");
+        if (str(rec.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(rec.email))) e.email = t("Niepoprawny adres e-mail");
+      }
+      if (kind === "warehouses" && rec.active === false) {
+        const prev = byId(list, rec.id);
+        if (prev) {
+          const stock = Stock.byProduct(state, prev.id);
+          if ([...stock.values()].some(q => Math.abs(q) > EPS)) e.active = t("Magazyn ma niezerowe stany — nie można go dezaktywować");
+          else if (state.users.some(u => u.whId === prev.id && u.active !== false)) e.active = t("Do magazynu są przypisani aktywni użytkownicy — najpierw zmień ich magazyn");
+        }
+      }
+      if (kind === "products" && rec.active === false) {
+        const prev = byId(list, rec.id);
+        if (prev && [...Stock.byProduct(state, null).entries()].some(([pid, q]) => pid === prev.id && Math.abs(q) > EPS)) e.active = t("Produkt ma niezerowy stan — nie można go dezaktywować");
+      }
+      return e;
+    },
+    save(state, kind, rec, ctx) {
+      const K = this.KINDS[kind];
+      if (!K) return { ok: false, error: t("Nieznana kartoteka") };
+      if (!can(ctx && ctx.user, "master.edit")) return { ok: false, error: t("Edycja kartotek wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
+      const prev = rec.id ? byId(state[kind], rec.id) : null;
+      if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono") };
+      const r = Object.assign({}, prev || {}, rec);
+      r.active = rec.active === undefined ? (prev ? prev.active !== false : true) : !!rec.active && rec.active !== "false";
+      if (kind === "products") { r.code = str(r.code).toUpperCase(); if (!r.unit) r.unit = CAT_UNIT[r.cat]; }
+      if (kind === "warehouses") r.code = str(r.code).toUpperCase();
+      if (kind === "partners") {
+        if (r.role === "buyer") delete r.kind;
+        r.nip = str(r.nip).replace(/[\s-]/g, "");
+        r.lesnictwa = (Array.isArray(r.lesnictwa) ? r.lesnictwa : str(r.lesnictwa).split(/[,;\n]/)).map(str).filter(Boolean);
+        if (r.kind !== "nadlesnictwo") delete r.lesnictwa;
+      }
+      const e = this.validate(state, kind, r);
+      if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
+      const clean = { id: prev ? prev.id : uid(K.prefix) };
+      for (const f of K.fields) if (r[f] !== undefined) clean[f] = typeof r[f] === "string" ? str(r[f]) : r[f];
+      if (kind === "products") clean.tPerUnit = str(r.tPerUnit) === "" || r.tPerUnit == null ? undefined : rq(NumParse.value(r.tPerUnit, 0));
+      if (prev && prev.createdBy) clean.createdBy = prev.createdBy;
+      if (prev && prev.createdAt) clean.createdAt = prev.createdAt; else if (!prev) { clean.createdAt = nowIso(ctx); clean.createdBy = ctx.user.name; }
+      const list = state[kind], idx = list.findIndex(x => x.id === clean.id);
+      if (idx >= 0) list[idx] = clean; else list.push(clean);
+      state.rev += 1;
+      audit(state, ctx, { entity: "master", entityId: clean.id, opNo: clean.name, event: "master", act: Lx(prev ? N_("Zmiana: {k}") : N_("Dodanie: {k}"), { k: { t: K.label } }), before: prev ? clone(prev) : null, after: clean, source: (ctx && ctx.source) || N_("Kartoteki") });
+      return { ok: true, rec: clean };
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Użytkownicy — profil w danych (hasła przechowuje osobno moduł Auth)  */
+  /* ------------------------------------------------------------------ */
+  const THEMES = { pearl: N_("Perła (jasny)"), graphite: N_("Grafit (ciemny)"), azure: N_("Graphite Azure") };
+  const Users = {
+    validate(state, rec) {
+      const e = {};
+      if (!str(rec.name) || str(rec.name).length < 3) e.name = t("Podaj imię i nazwisko (co najmniej 3 znaki)");
+      const login = str(rec.login).toLowerCase();
+      if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(login)) e.login = t("Login: 3–32 znaki — małe litery, cyfry, kropka, myślnik");
+      else if (state.users.some(u => u.id !== rec.id && str(u.login).toLowerCase() === login)) e.login = t("Taki login już istnieje");
+      if (!ROLES[rec.role]) e.role = t("Wybierz rolę");
+      const wh = byId(state.warehouses, rec.whId);
+      if (!wh) e.whId = t("Wybierz magazyn");
+      else if (wh.active === false) e.whId = t("Magazyn jest nieaktywny");
+      if (rec.lang && !I18N.has(rec.lang)) e.lang = t("Nieznany język");
+      if (rec.theme && !THEMES[rec.theme]) e.theme = t("Nieznany motyw");
+      if (str(rec.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(rec.email))) e.email = t("Niepoprawny adres e-mail");
+      return e;
+    },
+    /** Liczba aktywnych administratorów po zmianie (zabezpieczenie przed zablokowaniem systemu). */
+    adminsAfter(state, rec) { return state.users.map(u => u.id === rec.id ? rec : u).filter(u => u.role === "admin" && u.active !== false).length; },
+    save(state, rec, ctx) {
+      if (!can(ctx && ctx.user, "users.manage")) return { ok: false, error: t("Zarządzanie użytkownikami wymaga roli Administrator"), code: "FORBIDDEN" };
+      const prev = rec.id ? byId(state.users, rec.id) : null;
+      if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono użytkownika") };
+      const r = Object.assign({ lang: "", theme: "", email: "" }, prev || {}, rec);
+      r.login = str(r.login).toLowerCase(); r.name = str(r.name); r.active = r.active !== false && r.active !== "false";
+      const e = this.validate(state, r);
+      if (prev && prev.id === ctx.user.id && !r.active) e.active = t("Nie możesz dezaktywować własnego konta");
+      if (prev && prev.id === ctx.user.id && r.role !== prev.role) e.role = t("Nie możesz zmienić własnej roli");
+      if (this.adminsAfter(state, Object.assign({ id: r.id || "__new" }, r)) === 0) e.role = t("W systemie musi pozostać co najmniej jeden aktywny administrator");
+      if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
+      const clean = { id: prev ? prev.id : uid("u"), name: r.name, login: r.login, role: r.role, whId: r.whId, active: r.active, lang: r.lang || "", theme: r.theme || "", email: str(r.email), createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
+      const idx = state.users.findIndex(u => u.id === clean.id);
+      if (idx >= 0) state.users[idx] = clean; else state.users.push(clean);
+      state.rev += 1;
+      audit(state, ctx, { entity: "user", entityId: clean.id, opNo: clean.login, event: "user", act: Lx(prev ? N_("Zmiana konta użytkownika {l}") : N_("Utworzenie konta użytkownika {l}"), { l: clean.login }), before: prev ? clone(prev) : null, after: clean, source: (ctx && ctx.source) || N_("Administracja") });
+      return { ok: true, rec: clean, created: !prev };
+    },
+    /** Preferencje własne (język, motyw) — każdy zalogowany użytkownik. */
+    setPrefs(state, prefs, ctx) {
+      const u = ctx && ctx.user && byId(state.users, ctx.user.id);
+      if (!u) return { ok: false, error: t("Brak zalogowanego użytkownika") };
+      const next = { lang: prefs.lang === undefined ? u.lang : prefs.lang, theme: prefs.theme === undefined ? u.theme : prefs.theme };
+      if (next.lang && !I18N.has(next.lang)) return { ok: false, error: t("Nieznany język") };
+      if (next.theme && !THEMES[next.theme]) return { ok: false, error: t("Nieznany motyw") };
+      if (next.lang === u.lang && next.theme === u.theme) return { ok: true, unchanged: true };
+      u.lang = next.lang || ""; u.theme = next.theme || "";
+      state.rev += 1;
       return { ok: true };
     }
   };
@@ -1322,8 +1534,8 @@
   /* ------------------------------------------------------------------ */
   const REPORT_COLS = ["ZAKUP", "PRODUKCJA", "ZUZYCIE", "SPRZEDAZ", "BEZP", "MM", "INNE"];
   const HISTORY_TYPES = {
-    ZAKUP: "Zakup", PRZYJECIE: "Przyjęcie (PW)", ZUZYCIE: "Zużycie", SPRZEDAZ_BEZP: "Sprzedaż bezpośrednia", WZ: "WZ",
-    MM: "MM", TRANSPORT: "Transport", KOREKTA: "Korekta", ANULOWANIE: "Anulowanie", INW: "Inwentaryzacja", BO: "Bilans otwarcia"
+    ZAKUP: N_("Zakup"), PRZYJECIE: N_("Przyjęcie (PW)"), ZUZYCIE: N_("Zużycie"), SPRZEDAZ_BEZP: N_("Sprzedaż bezpośrednia"), WZ: N_("WZ"),
+    MM: N_("MM"), TRANSPORT: N_("Transport"), KOREKTA: N_("Korekta"), ANULOWANIE: N_("Anulowanie"), INW: N_("Inwentaryzacja"), BO: N_("Bilans otwarcia")
   };
   const opPartner = op => op ? (op.purchase ? op.purchase.supplierId : op.sale ? op.sale.buyerId : "") : "";
   const opPartners = op => op ? [op.purchase && op.purchase.supplierId, op.sale && op.sale.buyerId].filter(Boolean) : [];
@@ -1339,26 +1551,26 @@
         const k = `${l.whId}|${l.productId}`, before = run.get(k) || 0, after = rq(before + l.qty);
         run.set(k, after);
         const op = l.opId ? byId(state.operations, l.opId) : null;
-        let t = l.kind === "ZAKUP" ? "ZAKUP" : l.kind === "PRODUKCJA" ? (l.direct ? "SPRZEDAZ_BEZP" : "PRZYJECIE") : l.kind === "ZUZYCIE" ? "ZUZYCIE"
+        const ty = l.kind === "ZAKUP" ? "ZAKUP" : l.kind === "PRODUKCJA" ? (l.direct ? "SPRZEDAZ_BEZP" : "PRZYJECIE") : l.kind === "ZUZYCIE" ? "ZUZYCIE"
           : l.kind === "SPRZEDAZ" ? (l.direct ? "SPRZEDAZ_BEZP" : "WZ") : l.kind;
         const p = pr(l.productId);
         const partnerId = !op ? "" : l.cat === "SPRZEDAZ" && op.sale ? op.sale.buyerId : l.cat === "ZAKUP" && op.purchase ? op.purchase.supplierId : opPartner(op);
-        const mmSide = l.cat === "MM" ? (l.qty > 0 ? `z: ${wh(op && op.whId)}` : `do: ${wh(op && op.toWhId)}`) : "";
+        const mmSide = l.cat === "MM" ? (l.qty > 0 ? t("z: {w}", { w: wh(op && op.whId) }) : t("do: {w}", { w: wh(op && op.toWhId) })) : "";
         rows.push({
-          id: l.id, seq: l.seq, date: l.date, time: (l.ts || "").slice(11, 16), user: l.userName || (op ? op.userName : "System"),
-          type: t, typeLabel: t === "SPRZEDAZ_BEZP" ? (l.kind === "PRODUKCJA" ? "Sprzedaż bezp. — przyjęcie PW" : "Sprzedaż bezp. — wydanie WZ") : HISTORY_TYPES[t], cat: l.cat, docNo: l.docNo, whId: l.whId, whName: wh(l.whId),
+          id: l.id, seq: l.seq, date: l.date, time: (l.ts || "").slice(11, 16), user: l.userName || (op ? op.userName : t("System")),
+          type: ty, typeLabel: ty === "SPRZEDAZ_BEZP" ? (l.kind === "PRODUKCJA" ? t("Sprzedaż bezp. — przyjęcie PW") : t("Sprzedaż bezp. — wydanie WZ")) : t(HISTORY_TYPES[ty]), cat: l.cat, docNo: l.docNo, whId: l.whId, whName: wh(l.whId),
           productId: l.productId, productName: p ? p.name : l.productId, qty: Math.abs(l.qty), change: l.qty, unit: p ? p.unit : "",
           before, after, partnerId, partner: partnerId ? ((byId(state.partners, partnerId) || {}).name || "") : mmSide,
           related: l.refDoc ? `${l.refDoc}` : (op && op.no !== l.docNo ? op.no : ""), opId: l.opId, opNo: op ? op.no : "",
-          partnerIds: opPartners(op), notes: l.kind === "KOREKTA" ? ((op && (op.corrections.find(c => c.no === l.docNo) || {}).reason) || "") : l.kind === "ANULOWANIE" ? ((op && op.cancel && op.cancel.reason) || "") : (op ? op.notes : ""),
+          partnerIds: opPartners(op), notes: l.kind === "KOREKTA" ? trReason((op && (op.corrections.find(c => c.no === l.docNo) || {}).reason) || "") : l.kind === "ANULOWANIE" ? trReason((op && op.cancel && op.cancel.reason) || "") : (op ? op.notes : ""),
           status: op ? op.status : "POSTED", userId: op ? (l.kind === "KOREKTA" ? ((op.corrections.find(c => c.no === l.docNo) || {}).userId) : l.kind === "ANULOWANIE" ? (op.cancel || {}).userId : op.userId) : null
         });
       }
       for (const op of state.operations) {
         const tr = op.documents.find(d => d.type === "TR");
         if (!tr) continue;
-        const t = op.transport;
-        rows.push({ id: "tr_" + op.id, seq: 1e12 + state.operations.indexOf(op), date: op.date, time: (op.createdAt || "").slice(11, 16), user: op.userName, type: "TRANSPORT", typeLabel: HISTORY_TYPES.TRANSPORT, cat: "TRANSPORT", docNo: tr.no, whId: op.whId, whName: wh(op.whId), productId: null, productName: TRANSPORT_MODES[t.mode], qty: null, change: null, unit: "", before: null, after: null, partnerId: opPartner(op), partnerIds: opPartners(op), partner: t.company || t.carrier || t.driverName || "", related: op.no, opId: op.id, opNo: op.no, notes: `${fmtQ(t.km || 0)} km · ${money(t.cost)}${t.mode === "train" ? ` · ${t.wagonCount} wag. · ${fmtQ(t.totalT)} t` : ""}`, status: op.status, userId: op.userId });
+        const T = op.transport;
+        rows.push({ id: "tr_" + op.id, seq: 1e12 + state.operations.indexOf(op), date: op.date, time: (op.createdAt || "").slice(11, 16), user: op.userName, type: "TRANSPORT", typeLabel: t(HISTORY_TYPES.TRANSPORT), cat: "TRANSPORT", docNo: tr.no, whId: op.whId, whName: wh(op.whId), productId: null, productName: t(TRANSPORT_MODES[T.mode]), qty: null, change: null, unit: "", before: null, after: null, partnerId: opPartner(op), partnerIds: opPartners(op), partner: T.company || T.carrier || T.driverName || "", related: op.no, opId: op.id, opNo: op.no, notes: `${fmtQ(T.km || 0)} km · ${money(T.cost)}${T.mode === "train" ? " · " + t("{n} wag.", { n: T.wagonCount }) + ` · ${fmtQ(T.totalT)} t` : ""}`, status: op.status, userId: op.userId });
       }
       const q = str(f.q).toLowerCase();
       return rows.filter(r =>
@@ -1464,18 +1676,18 @@
           const m = new Map();
           const addC = (n, cost, km) => { const c = m.get(n) || { name: n, count: 0, cost: 0, km: 0 }; c.count++; c.cost = round(c.cost + cost, 2); c.km = rq(c.km + (km || 0)); m.set(n, c); };
           for (const op of trOps) {
-            const t = op.transport;
-            if (t.mode === "own" || t.mode === "external" || t.mode === "mixed") for (const r of (t.runs || [t])) addC((r.kind || t.mode) === "own" ? `Transport własny (${r.reg})` : (r.company || t.company), r.cost, r.km);
-            else addC(`${t.carrier || "Pociąg"} (kolej)`, t.cost, t.km);
+            const T = op.transport;
+            if (T.mode === "own" || T.mode === "external" || T.mode === "mixed") for (const r of (T.runs || [T])) addC((r.kind || T.mode) === "own" ? t("Transport własny ({reg})", { reg: r.reg }) : (r.company || T.company), r.cost, r.km);
+            else addC(t("{c} (kolej)", { c: T.carrier || t("Pociąg") }), T.cost, T.km);
           }
           return [...m.values()];
         })(),
-        rows: trOps.map(op => ({ opId: op.id, no: (op.documents.find(d => d.type === "TR") || {}).no, date: op.date, mode: TRANSPORT_MODES[op.transport.mode], place: op.transport.place, km: op.transport.km || 0, wagons: op.transport.wagonCount || 0, totalT: op.transport.totalT || 0, cost: op.transport.cost }))
+        rows: trOps.map(op => ({ opId: op.id, no: (op.documents.find(d => d.type === "TR") || {}).no, date: op.date, mode: t(TRANSPORT_MODES[op.transport.mode]), place: op.transport.place, km: op.transport.km || 0, wagons: op.transport.wagonCount || 0, totalT: op.transport.totalT || 0, cost: op.transport.cost }))
       };
       const corrections = [], cancellations = [];
       for (const op of ops) {
-        for (const c of op.corrections) if (inR(c.date)) corrections.push({ opId: op.id, no: c.no, orig: op.no, date: c.date, reason: c.reason, user: c.userName, changes: c.changes, deltas: c.deltas, valueDelta: c.valueDelta, totalsBefore: c.totalsBefore, totalsAfter: c.totalsAfter, descriptiveOnly: c.descriptiveOnly });
-        if (op.cancel && inR(op.cancel.date)) cancellations.push({ opId: op.id, no: op.cancel.no, orig: op.no, date: op.cancel.date, reason: op.cancel.reason, user: op.cancel.userName, effect: op.cancel.effect });
+        for (const c of op.corrections) if (inR(c.date)) corrections.push({ opId: op.id, no: c.no, orig: op.no, date: c.date, reason: trReason(c.reason), user: c.userName, changes: c.changes, deltas: c.deltas, valueDelta: c.valueDelta, totalsBefore: c.totalsBefore, totalsAfter: c.totalsAfter, descriptiveOnly: c.descriptiveOnly });
+        if (op.cancel && inR(op.cancel.date)) cancellations.push({ opId: op.id, no: op.cancel.no, orig: op.no, date: op.cancel.date, reason: trReason(op.cancel.reason), user: op.cancel.userName, effect: op.cancel.effect });
       }
       /* wycena orientacyjna: średnia ważona cena zakupu (efektywna) do końca okresu */
       const valuation = recon.map(r => {
@@ -1511,7 +1723,7 @@
         let value = 0;
         const key = cat === "ZAKUP" ? "purchaseCost" : cat === "SPRZEDAZ" ? "revenue" : cat === "PRODUKCJA" ? "chippingCost" : null;
         if (key) for (const id of opIds) for (const e of byId(state.operations, id).valueEvents) if (inR(e.date)) value += e[key] || 0;
-        return { cat, label: CATS[cat], count: liveOps.size, byUnit, value: key ? round(value, 2) : null, valueLabel: key === "purchaseCost" ? "wartość zakupu" : key === "revenue" ? "przychód" : key === "chippingCost" ? "koszt rąbania" : "", opIds: [...opIds] };
+        return { cat, label: t(CATS[cat]), count: liveOps.size, byUnit, value: key ? round(value, 2) : null, valueLabel: key === "purchaseCost" ? t("wartość zakupu") : key === "revenue" ? t("przychód") : key === "chippingCost" ? t("koszt rąbania") : "", opIds: [...opIds] };
       });
     },
 
@@ -1525,7 +1737,7 @@
         const pw = op.documents.find(d => d.type === "PW");
         rows.push({
           opId: op.id, docNo: pw ? pw.no : op.no, opNo: op.no, date: op.date, whName: (byId(state.warehouses, op.whId) || {}).name,
-          mode: x.mode === "stock" ? "na magazyn" : x.mode === "direct" ? "bezpośrednia (las)" : "z zakupu",
+          mode: x.mode === "stock" ? t("na magazyn") : x.mode === "direct" ? t("bezpośrednia (las)") : t("z zakupu"),
           operator: x.operatorName || op.userName, chipper: x.chipperName || "",
           raw: raw ? raw.name : "—", consume: x.mode === "direct" ? x.rawQty : x.consumeQty, consumeUnit: raw ? raw.unit : "", consumeFromStock: x.mode !== "direct",
           product: out ? out.name : "—", outQty: x.outQty, outUnit: out ? out.unit : "",
@@ -1542,8 +1754,9 @@
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
-    planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Reports
+    planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Master, Users, Reports, audit
   };
   root.RIW = RIW;
   if (typeof module !== "undefined" && module.exports) module.exports = RIW;

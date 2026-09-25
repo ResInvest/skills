@@ -1,6 +1,19 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.6 (2.6.0) — prototyp funkcjonalnie kompletny, gotowy do oceny** (Production v1 nie rozpoczęta)
+Ostatnia aktualizacja: 2026-09-24 · etap: **ResInvest ERP 3.0.0 (faza 2) — program z logowaniem, serwerem wielostanowiskowym, PL/CS/EN i trzema motywami**
+
+## Wykonane — 3.0.0 (faza 2)
+
+- [x] Restrukturyzacja: `demo/` → `app/`, jeden plik `ResInvest_ERP.html` dla trybu lokalnego i serwera; warstwa usług `RIW.Service` (komendy, uprawnienia, „wszystko albo nic”)
+- [x] Logowanie: ekran logowania, pierwsze uruchomienie serwera, wymuszona zmiana hasła, zmiana hasła w profilu, blokady, limit prób IP, wylogowanie po bezczynności, dziennik logowań
+- [x] Moduł Użytkownicy: konta, role, magazyn, dezaktywacja, reset hasła, odblokowanie, macierz uprawnień
+- [x] ResInvest ERP Serwer: Node.js + SQLite (WAL, transakcje), dziennik append-only z łańcuchem SHA-256, sesje HttpOnly, CSRF, CSP, SSE, kopie codzienne, `--check`, `--restore`, `--reset-password`, HTTPS
+- [x] Nowy pulpit: sekcja powitalna, szybkie akcje, 8 wskaźników z porównaniem miesiąc do miesiąca, wykres 6 miesięcy z tabelą, obroty, kafle stanów, aktywność, „Do załatwienia”
+- [x] Języki PL/CS/EN — 1 542 teksty, 0 braków (test pokrycia); formaty liczb i dat wg języka; PDF w języku użytkownika
+- [x] Motywy Perła / Grafit / Graphite Azure (tokeny CSS, palety wykresów zwalidowane)
+- [x] Kartoteki z edycją: produkty, kontrahenci (NIP), magazyny; schemat danych 4 z migracją
+- [x] Instalator Windows 3.0 (program + serwer + Node.js, PL/CS/EN), skrypty .cmd, dokumentacja, dane przykładowe
+- [x] Testy: silnik 68, PDF 4, platforma 19, serwer 8, E2E 147 — wszystkie zaliczone
 
 ## Wykonane — Demo v2.6
 
@@ -37,22 +50,25 @@ Ostatnia aktualizacja: 2026-09-23 · etap: **Demo v2.6 (2.6.0) — prototyp funk
 - [x] Menu §20: Operacje, Przyjęcia, Wydania/WZ, Produkcja, Kwit, MM, Transport, Stany, Dokumenty, Historia, Raporty, Inwentaryzacja, Flota, Produkty, Kontrahenci, Magazyny, Administracja
 - [x] Dane przykładowe z MM, korektą i anulowaniem; instalator 2.1.0; dokumentacja; TASKS.md
 
-## Testy
+## Testy (3.0.0)
 
 | Zestaw | Wynik |
 |---|---|
-| `npm run check` | OK |
-| `npm run test:unit` (silnik + PDF) | 72/72 |
-| `npm run test:e2e` z `PDF_PYTHON` (pypdf) — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 147/147, konsola bez błędów |
+| `npm run check`, `npm run i18n` | OK · CS/EN: 0 braków, 0 błędnych parametrów |
+| `node --test tests/engine.test.mjs tests/pdf.test.mjs tests/platform.test.mjs` | 91/91 |
+| `node --test tests/server.test.mjs` (HTTP + SQLite, restart serwera) | 8/8 |
+| `node tests/e2e.cjs` — Chromium: desktop 1440 px, telefon 390 px, 2 karty, 2 profile autoplay | 147/147, konsola bez błędów |
+| Skan interfejsu EN i CS (wszystkie moduły, szczegóły dokumentu) | 0 brakujących tłumaczeń; polskie pozostają tylko dane (nazwy produktów, firm, osób) |
 
 ## Znane problemy / ograniczenia
 
-- GJ liczone z masy dokładnej (6 611 GJ dla 817 m³), przykład w poleceniu używa masy zaokrąglonej (6 613 GJ).
+- GJ liczone z masy dokładnej (6 611 GJ dla 817 m³), przykład w poleceniu używa masy zaokrąglonej (6 613 GJ) — do decyzji firmy.
 - Masa drewna 0,952 t/m³ (z przykładu 817 m³ ≈ 778 t) — do potwierdzenia przez firmę.
-- Znacznik czasu audytu = czas rzeczywisty, data operacji = data systemowa demo.
+- Instalator nie był kompilowany w tej sesji (brak Windows / Inno Setup) — skrypt i plik .iss gotowe; NIEPOTWIERDZONE na Windows.
 - Film intro nie jest odtwarzany w testowym Chromium (brak H.264) — NIEPOTWIERDZONE w Chrome/Edge.
-- Instalator nie był kompilowany w tej sesji (brak Windows / Inno Setup).
+- Serwer trzyma stan jako dokument JSON (+ dziennik) — wystarczające dla skali firmy; przy setkach tysięcy operacji rozbicie na tabele.
 
 ## Następny krok
 
-Akceptacja Demo v2.1 → Production v1 według `docs/RESINVEST_CHANGE_PLAN.md` („Architektura Production v1”).
+Wdrożenie pilotażowe serwera w sieci firmy (instalator 3.0.0), przeniesienie danych kopią JSON, szkolenie na kontach demonstracyjnych.
+Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z sumą kontrolną, wiele magazynów na użytkownika.

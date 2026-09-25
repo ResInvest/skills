@@ -7,19 +7,20 @@
 (function (root) {
   "use strict";
   const RIW = root.RIW;
+  const N_ = s => s;
 
   function base() {
     const s = RIW.emptyState(root.RIW_CONFIG || null);
     s.warehouses = [
-      { id: "wh_zab", code: "ZAB", name: "RiC Zabrze", address: "ul. Gwarecka 16, 41-800 Zabrze" },
-      { id: "wh_pys", code: "PYS", name: "RiC Pyskowice", address: "ul. Wyszyńskiego, 44-120 Pyskowice" }
+      { id: "wh_zab", code: "ZAB", name: "RiC Zabrze", address: "ul. Gwarecka 16, 41-800 Zabrze", active: true },
+      { id: "wh_pys", code: "PYS", name: "RiC Pyskowice", address: "ul. Wyszyńskiego, 44-120 Pyskowice", active: true }
     ];
     s.users = [
-      { id: "u_admin", name: "Mateusz Roesner", role: "admin", whId: "wh_zab", active: true },
-      { id: "u_kier", name: "Anna Górska", role: "kierownik", whId: "wh_zab", active: true },
-      { id: "u_mag", name: "Adrian Wojciechowski", role: "magazynier", whId: "wh_zab", active: true },
-      { id: "u_pys", name: "Paweł Kaczmarek", role: "magazynier", whId: "wh_pys", active: true },
-      { id: "u_view", name: "Beata Nowak", role: "podglad", whId: "wh_zab", active: true }
+      { id: "u_admin", login: "admin", name: "Mateusz Roesner", role: "admin", whId: "wh_zab", active: true, lang: "", theme: "", email: "" },
+      { id: "u_kier", login: "kierownik", name: "Anna Górska", role: "kierownik", whId: "wh_zab", active: true, lang: "", theme: "", email: "" },
+      { id: "u_mag", login: "magazynier", name: "Adrian Wojciechowski", role: "magazynier", whId: "wh_zab", active: true, lang: "", theme: "", email: "" },
+      { id: "u_pys", login: "pyskowice", name: "Paweł Kaczmarek", role: "magazynier", whId: "wh_pys", active: true, lang: "", theme: "", email: "" },
+      { id: "u_view", login: "podglad", name: "Beata Nowak", role: "podglad", whId: "wh_zab", active: true, lang: "", theme: "", email: "" }
     ];
     s.products = [
       { id: "pr_drewno", code: "DRW-O", name: "Drewno opałowe", cat: "drewno", unit: "m3", active: true },
@@ -101,7 +102,7 @@
   function build(today) {
     const s = base();
     const user = id => s.users.find(u => u.id === id);
-    const ctx = (uid, date) => ({ user: user(uid), today: date, now: date + "T08:00:00.000Z", source: "Dane przykładowe" });
+    const ctx = (uid, date) => ({ user: user(uid), today: date, now: date + "T08:00:00.000Z", source: N_("Dane przykładowe") });
 
     // ilości w jednostce magazynowej produktu: drewno m³, zrębka MP, PKS / łupina t
     RIW.openingBalance(s, "wh_zab", "2026-08-01", [
@@ -210,5 +211,21 @@
     return s;
   }
 
-  RIW.Seed = { build, draftOf };
+  /**
+   * Czysty start (instalacja bez danych przykładowych): katalog produktów, jeden magazyn,
+   * administrator. Pozostałe kartoteki uzupełnia się w programie.
+   */
+  function minimal(opts = {}) {
+    const s = RIW.emptyState(root.RIW_CONFIG || null);
+    const b = base();
+    s.products = b.products;
+    s.warehouses = [{ id: "wh_main", code: String(opts.whCode || "MAG").toUpperCase(), name: opts.whName || "Magazyn główny", address: opts.whAddress || "", active: true }];
+    s.users = [{ id: "u_admin", login: String(opts.login || "admin").toLowerCase(), name: opts.name || "Administrator", role: "admin", whId: "wh_main", active: true, lang: opts.lang || "", theme: "", email: opts.email || "" }];
+    s.carriers = [];
+    s.meta.createdAt = new Date().toISOString();
+    s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());
+    return s;
+  }
+
+  RIW.Seed = { build, draftOf, minimal };
 })(typeof globalThis !== "undefined" ? globalThis : this);

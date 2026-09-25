@@ -193,3 +193,68 @@ Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodny
 3. Sprzedaż bezpośrednia z niesprzedaną resztą — reszta trafia na stan (z ostrzeżeniem). Alternatywa: blokada. Do decyzji.
 4. Korekta daty dokumentu i zmiana magazynu — obecnie tylko przez anulowanie i nowy dokument.
 5. Metoda wyceny magazynu (średnia / FIFO) i czy koszt rąbania/transportu wchodzi do wartości zapasu.
+
+---
+
+## FAZA 2 — zrealizowana (ResInvest ERP 3.0.0)
+
+### Zakres (polecenie)
+„Podrasuj i popraw graficznie pulpit główny, zbuduj kompletny program z systemem logowania, z kompletnymi językami
+(PL/CS/EN) i motywami jasnym, ciemnym i azure — jak w 1.3.0.”
+
+### Architektura
+
+```
+            ┌──────────────── ResInvest_ERP.html (jeden plik) ────────────────┐
+            │ i18n + słowniki → engine (silnik) → service (komendy) → UI       │
+            │                         ▲                                        │
+            │           Store.exec(cmd, args) — jedyna ścieżka zmian           │
+            └───────────────┬───────────────────────────────┬──────────────────┘
+          tryb lokalny      │                               │  tryb serwera (/api/health → "resinvest-erp")
+  LocalBackend: localStorage│                               │ ServerBackend: fetch /api/cmd, SSE /api/events
+  + Web Locks, LocalAuth    │                               ▼
+  (PBKDF2, sesja karty)     │                 server/riw-server.mjs (HTTP/HTTPS, CSRF, CSP, sesje, limity)
+                            │                 server/core.mjs: Store (node:sqlite, WAL, synchronous=FULL)
+                            │                   tabele: meta · state (JSON + sha256) · journal (append-only,
+                            │                   łańcuch sha256) · accounts (scrypt) · sessions (skrót tokenu)
+                            │                   · login_log;  ten sam engine.js + service.js co w przeglądarce
+```
+
+### Decyzje
+
+| Decyzja | Uzasadnienie |
+|---|---|
+| Jeden plik HTML dla obu trybów; wykrycie serwera przez `/api/health` | jedna wersja interfejsu do utrzymania; tryb lokalny zostaje do szkoleń i pracy jednoosobowej |
+| Warstwa usług `RIW.Service` wspólna dla przeglądarki i serwera | reguły biznesowe i uprawnienia wykonywane identycznie; serwer nie ufa przeglądarce (użytkownik z sesji) |
+| Komenda na kopii stanu, zapis tylko przy `ok` i zmianie rewizji | „wszystko albo nic” w obu trybach; na serwerze jedna transakcja: stan + rewizja + dziennik |
+| Stan jako dokument JSON + dziennik zmian (nie tabele relacyjne) | brak podwójnej implementacji logiki (silnik jest w JS); wydajność wystarczająca dla skali firmy; rozbicie na tabele możliwe bez zmiany API komend |
+| Node.js ≥ 22.13 z wbudowanym `node:sqlite` | zero zależności npm, instalator dołącza jeden `node.exe` |
+| Hasła: serwer scrypt (N=32768), lokalnie PBKDF2-SHA256 (Web Crypto + zapas w JS) | standardowe funkcje wyprowadzania kluczy; hasła nigdy w stanie ani w kopii JSON |
+| Sesja: losowy token 256 bit, w bazie tylko skrót; ciasteczko HttpOnly, SameSite=Strict; bezczynność 30 min, maks. 12 h | odporność na kradzież z bazy i XSS; wygasanie |
+| CSRF: nagłówek `X-RIW: 1` + zgodność `Origin` | wymusza preflight dla obcych stron |
+| i18n: tekst polski jest kluczem; teksty zapisane w danych kanonicznie po polsku (`{k, p}`), tłumaczone przy wyświetlaniu | audyt i dokumenty czytelne w każdym języku, bez migracji danych przy dodaniu języka |
+| Słowniki `i18n.dNN.js` (pary CS/EN) + `tools/i18n-extract.mjs` + test pokrycia | brak tłumaczenia = błąd testu, nie „cichy” polski tekst |
+| Motywy przez tokeny CSS (`[data-theme]`), palety wykresów zwalidowane (CVD, kontrast) | spójność 3 motywów; czytelność wykresów dla osób z daltonizmem |
+| Schemat danych 4 (loginy, preferencje, flagi `active`) z migracją 3 → 4 | zgodność z kopiami i danymi Demo 2.x |
+
+### Pliki
+
+| Plik | Rola |
+|---|---|
+| `app/src/i18n.js`, `i18n.d01–d10.js` | tłumaczenia, liczba mnoga, formaty liczb i dat |
+| `app/src/service.js` | komendy (operacje, korekty, anulowania, inwentaryzacja, flota, kartoteki, użytkownicy, preferencje, import/reset) |
+| `app/src/auth.js` | hasła, polityka haseł, logowanie lokalne, blokady, dziennik logowań |
+| `app/src/core.js` | Store/backendy, logowanie i ekrany uwierzytelniania, nawigacja, motywy, języki |
+| `app/src/form.js`, `views.js`, `dashboard.js`, `admin.js` | formularz operacji, moduły, nowy pulpit, kartoteki / użytkownicy / administracja |
+| `server/core.mjs`, `server/riw-server.mjs` | serwer (SQLite, sesje, API, kopie, CLI) |
+| `config/server.config.json` | konfiguracja środowiska serwera |
+| `installer/ResInvestERP.iss`, `build-installer.ps1`, `scripts/*.cmd` | instalator Windows z serwerem i Node.js |
+| `tests/platform.test.mjs`, `tests/server.test.mjs` | nowe testy platformy i serwera |
+
+### Ryzyka i pytania
+
+* Jednoczesna edycja: serwer serializuje komendy (jeden proces, transakcje), a przeglądarki dostają nowy stan przez SSE;
+  formularz w toku nie jest nadpisywany — przy zatwierdzeniu silnik ponownie sprawdza stany (brak ujemnych stanów).
+* Wielkość stanu JSON: przy ~100 tys. operacji rozważyć tabele relacyjne i przyrostowe przesyłanie zmian (API bez zmian).
+* HTTPS: w sieci lokalnej opcjonalny; przy dostępie z internetu wymagany (`tls.cert/key`) + reverse proxy.
+* Do decyzji firmy (bez zmian od fazy 1): masa drewna 0,952 t/m³, sposób liczenia GJ, docelowa metoda wyceny.

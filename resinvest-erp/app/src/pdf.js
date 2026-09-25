@@ -67,6 +67,7 @@
       this.fonts = { R: new Font("R", fonts.regular), B: new Font("B", fonts.bold) };
       [this.W, this.H] = SIZES[opts.orientation === "landscape" ? "landscape" : "portrait"];
       this.info = { title: opts.title || "", author: opts.author || "", subject: opts.subject || "" };
+      this.locale = /^[a-z]{2}-[A-Z]{2}$/.test(opts.locale || "") ? opts.locale : "pl-PL";
       this.pages = [];
       this.addPage();
     }
@@ -122,11 +123,11 @@
         const cId = add({ str: `<< /Length ${content.length} >>\nstream\n${content}\nendstream` });
         kids.push(add({ str: `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${num(this.W)} ${num(this.H)}] /Resources << /Font << /FR ${fontIds.R} 0 R /FB ${fontIds.B} 0 R >> >> /Contents ${cId} 0 R >>` }));
       }
-      objs[catalog - 1] = { str: `<< /Type /Catalog /Pages ${pagesId} 0 R /Lang (pl-PL) >>` };
+      objs[catalog - 1] = { str: `<< /Type /Catalog /Pages ${pagesId} 0 R /Lang (${this.locale || "pl-PL"}) >>` };
       objs[pagesId - 1] = { str: `<< /Type /Pages /Kids [${kids.map(k => k + " 0 R").join(" ")}] /Count ${kids.length} >>` };
       const now = new Date(), pad = n => String(n).padStart(2, "0");
       const d = `D:${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
-      const infoId = add({ str: `<< /Title ${utf16hex(this.info.title)} /Author ${utf16hex(this.info.author)} /Subject ${utf16hex(this.info.subject)} /Producer ${utf16hex("ResInvest ERP — generator PDF demonstratora")} /CreationDate (${d}) >>` });
+      const infoId = add({ str: `<< /Title ${utf16hex(this.info.title)} /Author ${utf16hex(this.info.author)} /Subject ${utf16hex(this.info.subject)} /Producer ${utf16hex("ResInvest ERP — generator PDF")} /CreationDate (${d}) >>` });
 
       const chunks = [], offsets = [];
       let len = 0;
@@ -164,18 +165,32 @@
   function latin1(s) { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 0xFF; return u; }
 
   /* ------------------------------------------------------------------ */
+  /* Teksty stałe dokumentu w bieżącym języku (i18n.js)                   */
+  /* ------------------------------------------------------------------ */
+  function labels() {
+    const I = root.RIW_I18N, t = (s, p) => I ? I.t(s, p) : s.replace(/\{(\w+)\}/g, (m, k) => p && p[k] !== undefined ? p[k] : m);
+    return {
+      tagline: t("ResInvest Commodities · biomasa"), no: t("Nr {no}"), generated: t("Wygenerowano: {d}"), by: t("przez: {u}"), page: t("Strona {a} z {b}"),
+      empty: t("Brak danych w wybranym okresie."), alarm: [t("NIESPÓJNY"), t("BRAK WYCENY"), t("ANULOWANY")], locale: I ? I.info().locale : "pl-PL", lang: I ? I.lang : "pl"
+    };
+  }
+  const fillL = (s, p) => s.replace(/\{(\w+)\}/g, (m, k) => p[k] !== undefined ? p[k] : m);
+  const alarmOf = L => v => typeof v === "string" && L.alarm.some(x => v.startsWith(x));
+
+  /* ------------------------------------------------------------------ */
   /* Układ dokumentu firmowego (nagłówek, stopka, bloki)                 */
   /* ------------------------------------------------------------------ */
   function render(model) {
-    const doc = new Doc({ orientation: model.orientation, title: model.title, author: model.generatedBy || "", subject: model.subtitle || "" });
+    const L = model.labels || labels();
+    const doc = new Doc({ orientation: model.orientation, title: model.title, author: model.generatedBy || "", subject: model.subtitle || "", locale: L.locale });
     const M = 14 * MM, W = doc.W, H = doc.H, CW = W - 2 * M, TOP = 30 * MM, BOTTOM = H - 16 * MM;
     let y = 0;
     const header = () => {
       doc.rect(M, 10 * MM, 9 * MM, 9 * MM, { fill: C.brand });
       doc.text(M + 4.5 * MM, 16.2 * MM, "RI", { font: "B", size: 11, color: C.white, align: "center" });
       doc.text(M + 12 * MM, 13.6 * MM, model.system || "ResInvest ERP", { font: "B", size: 11, color: C.brand });
-      doc.text(M + 12 * MM, 18.2 * MM, "ResInvest Commodities · biomasa", { size: 7.5, color: C.muted });
-      doc.text(W - M, 13.6 * MM, model.number ? `Nr ${model.number}` : "", { font: "B", size: 9, align: "right" });
+      doc.text(M + 12 * MM, 18.2 * MM, L.tagline, { size: 7.5, color: C.muted });
+      doc.text(W - M, 13.6 * MM, model.number ? fillL(L.no, { no: model.number }) : "", { font: "B", size: 9, align: "right" });
       doc.text(W - M, 18.2 * MM, model.headerRight || "", { size: 7.5, color: C.muted, align: "right" });
       doc.line(M, 22 * MM, W - M, 22 * MM, { color: C.brand, width: 1.2 });
       y = TOP;
@@ -240,7 +255,7 @@
         }
         y += 2 * MM; continue;
       }
-      if (b.type === "table") { y = table(doc, b, M, CW, y, BOTTOM, newPage, () => y); continue; }
+      if (b.type === "table") { y = table(doc, b, M, CW, y, BOTTOM, newPage, L); continue; }
       if (b.type === "signatures") {
         need(26 * MM);
         y += 14 * MM;
@@ -254,14 +269,15 @@
     doc.pages.forEach((p, i) => {
       doc.page = p;
       doc.line(M, H - 11 * MM, W - M, H - 11 * MM, { color: C.line });
-      const left = [model.generatedAt ? `Wygenerowano: ${model.generatedAt}` : "", model.generatedBy ? `przez: ${model.generatedBy}` : "", model.footerNote || ""].filter(Boolean).join(" · ");
+      const left = [model.generatedAt ? fillL(L.generated, { d: model.generatedAt }) : "", model.generatedBy ? fillL(L.by, { u: model.generatedBy }) : "", model.footerNote || ""].filter(Boolean).join(" · ");
       doc.text(M, H - 7 * MM, left, { size: 7, color: C.muted, maxWidth: CW - 30 * MM });
-      doc.text(W - M, H - 7 * MM, `Strona ${i + 1} z ${total}`, { size: 7, color: C.muted, align: "right" });
+      doc.text(W - M, H - 7 * MM, fillL(L.page, { a: i + 1, b: total }), { size: 7, color: C.muted, align: "right" });
     });
     return doc.output();
   }
 
-  function table(doc, b, M, CW, y0, BOTTOM, newPage, getY) {
+  function table(doc, b, M, CW, y0, BOTTOM, newPage, L) {
+    const isAlarm = alarmOf(L);
     const MMu = MM, size = b.size || 7.8, pad = 1.6 * MMu, lh = size * 1.28;
     const tw = b.columns.reduce((a, c) => a + (c.w || 1), 0);
     const cols = b.columns.map(c => Object.assign({}, c, { width: CW * (c.w || 1) / tw }));
@@ -278,7 +294,7 @@
     if (y + 20 * MMu > BOTTOM) { newPage(); y = 30 * MMu; }
     drawHead();
     const all = b.rows.map(r => ({ cells: r, bold: false })).concat(b.foot ? [{ cells: b.foot, bold: true, foot: true }] : []);
-    if (!b.rows.length) all.unshift({ cells: [b.empty || "Brak danych w wybranym okresie."], span: true });
+    if (!b.rows.length) all.unshift({ cells: [b.empty || L.empty], span: true });
     all.forEach((row, ri) => {
       const isBold = row.bold || (b.bold && b.bold.includes(ri));
       const lines = row.span ? [[String(row.cells[0])]] : cols.map((c, i) => doc.wrap(row.cells[i] == null ? "" : String(row.cells[i]), isBold ? "B" : "R", size, c.width - 2 * pad));
@@ -289,7 +305,7 @@
       let x = M;
       if (row.span) doc.text(M + pad, y + pad + 0.78 * lh, lines[0][0], { size, color: C.muted });
       else cols.forEach((c, i) => {
-        const red = row.cells[i] && typeof row.cells[i] === "string" && /^(NIESPÓJNY|BRAK|ANULOWANY)/.test(row.cells[i]);
+        const red = isAlarm(row.cells[i]);
         lines[i].forEach((l, j) => doc.text(c.align === "right" ? x + c.width - pad : x + pad, y + pad + (j + 0.78) * lh, l, { font: isBold ? "B" : "R", size, align: c.align === "right" ? "right" : "left", color: red ? C.err : C.ink }));
         x += c.width;
       });
@@ -305,6 +321,7 @@
   /* ------------------------------------------------------------------ */
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   function toHTML(model) {
+    const L = model.labels || labels(), isAlarm = alarmOf(L);
     const parts = [];
     for (const b of model.blocks || []) {
       if (b.type === "h") parts.push(`<h2>${esc(b.text)}</h2>`);
@@ -312,7 +329,7 @@
       else if (b.type === "space") parts.push(`<div style="height:${(b.h || 4)}mm"></div>`);
       else if (b.type === "kpis") parts.push(`<div class="kpis">${b.items.map(([k, v, s]) => `<div class="kpi"><small>${esc(k)}</small><b>${esc(v)}</b>${s ? `<small>${esc(s)}</small>` : ""}</div>`).join("")}</div>`);
       else if (b.type === "kv") parts.push(`<table class="kv">${b.rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table>`);
-      else if (b.type === "table") parts.push(`<table class="t"><thead><tr>${b.columns.map(c => `<th class="${c.align === "right" ? "r" : ""}">${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${b.rows.length ? b.rows.map((r, i) => `<tr class="${b.bold && b.bold.includes(i) ? "b" : ""}">${r.map((v, j) => `<td class="${b.columns[j].align === "right" ? "r" : ""}${/^(NIESPÓJNY|BRAK|ANULOWANY)/.test(String(v)) ? " err" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${b.columns.length}" class="muted">${esc(b.empty || "Brak danych w wybranym okresie.")}</td></tr>`}</tbody>${b.foot ? `<tfoot><tr>${b.foot.map((v, j) => `<td class="${b.columns[j].align === "right" ? "r" : ""}">${esc(v)}</td>`).join("")}</tr></tfoot>` : ""}</table>${b.note ? `<p class="muted small">${esc(b.note)}</p>` : ""}`);
+      else if (b.type === "table") parts.push(`<table class="t"><thead><tr>${b.columns.map(c => `<th class="${c.align === "right" ? "r" : ""}">${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${b.rows.length ? b.rows.map((r, i) => `<tr class="${b.bold && b.bold.includes(i) ? "b" : ""}">${r.map((v, j) => `<td class="${b.columns[j].align === "right" ? "r" : ""}${isAlarm(String(v)) ? " err" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${b.columns.length}" class="muted">${esc(b.empty || L.empty)}</td></tr>`}</tbody>${b.foot ? `<tfoot><tr>${b.foot.map((v, j) => `<td class="${b.columns[j].align === "right" ? "r" : ""}">${esc(v)}</td>`).join("")}</tr></tfoot>` : ""}</table>${b.note ? `<p class="muted small">${esc(b.note)}</p>` : ""}`);
       else if (b.type === "signatures") parts.push(`<div class="sig">${b.labels.map(l => `<div><span></span><small>${esc(l)}</small></div>`).join("")}</div>`);
     }
     const css = `@page{size:A4 ${model.orientation === "landscape" ? "landscape" : "portrait"};margin:14mm}
@@ -330,15 +347,15 @@
       .sig{display:flex;gap:30px;margin-top:40px}.sig div{flex:1;text-align:center}.sig span{display:block;border-top:1px solid #17211c;margin-bottom:3px}
       .ft{margin-top:16px;border-top:1px solid #ccd6d1;padding-top:4px;color:#5c6b64;font-size:8.5px}
       thead{display:table-header-group}tr{break-inside:avoid}`;
-    return `<!DOCTYPE html><html lang="pl"><head><meta charset="utf-8"><title>${esc(model.title)}${model.number ? " " + esc(model.number) : ""}</title><style>${css}<\/style></head><body>
-      <div class="hd"><div class="mk">RI</div><div><b>${esc(model.system || "ResInvest ERP")}</b><div class="muted small">ResInvest Commodities · biomasa</div></div><div class="r">${model.number ? `<b>Nr ${esc(model.number)}</b>` : ""}<div class="muted small">${esc(model.headerRight || "")}</div></div></div>
+    return `<!DOCTYPE html><html lang="${esc(L.lang)}"><head><meta charset="utf-8"><title>${esc(model.title)}${model.number ? " " + esc(model.number) : ""}</title><style>${css}<\/style></head><body>
+      <div class="hd"><div class="mk">RI</div><div><b>${esc(model.system || "ResInvest ERP")}</b><div class="muted small">${esc(L.tagline)}</div></div><div class="r">${model.number ? `<b>${esc(fillL(L.no, { no: model.number }))}</b>` : ""}<div class="muted small">${esc(model.headerRight || "")}</div></div></div>
       <h1>${esc(model.title)}</h1>${model.subtitle ? `<div class="muted">${esc(model.subtitle)}</div>` : ""}
       ${model.meta && model.meta.length ? `<div class="meta">${model.meta.map(([k, v]) => `<div><span>${esc(k)}:</span> <b>${esc(v)}</b></div>`).join("")}</div>` : ""}
       ${parts.join("\n")}
-      <div class="ft">${esc([model.generatedAt ? `Wygenerowano: ${model.generatedAt}` : "", model.generatedBy ? `przez: ${model.generatedBy}` : "", model.footerNote || ""].filter(Boolean).join(" · "))}</div>
+      <div class="ft">${esc([model.generatedAt ? fillL(L.generated, { d: model.generatedAt }) : "", model.generatedBy ? fillL(L.by, { u: model.generatedBy }) : "", model.footerNote || ""].filter(Boolean).join(" · "))}</div>
       <\/body><\/html>`;
   }
 
-  root.RIW_PDF = { Doc, render, toHTML, MM };
+  root.RIW_PDF = { Doc, render, toHTML, labels, MM };
   if (typeof module !== "undefined" && module.exports) module.exports = root.RIW_PDF;
 })(typeof globalThis !== "undefined" ? globalThis : this);

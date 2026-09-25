@@ -1,4 +1,4 @@
-/* Testy E2E Demo v2.1 (Playwright + Chromium).
+/* Testy E2E ResInvest ERP 3.0 (Playwright + Chromium) — tryb lokalny z logowaniem, interfejs PL.
    Uruchomienie z katalogu resinvest-erp:
      NODE_PATH=$(npm root -g) node tests/e2e.cjs
    Zmienne: SHOTS=<katalog> — zrzuty ekranu; PDF_PYTHON=<python z pypdf> — pełna kontrola tekstu PDF
@@ -10,7 +10,7 @@ const os = require("os");
 const { execFileSync } = require("child_process");
 const { chromium } = require("playwright");
 
-const FILE = "file://" + path.resolve(__dirname, "..", "ResInvest_ERP_demo.html");
+const FILE = "file://" + path.resolve(__dirname, "..", "ResInvest_ERP.html");
 const SHOTS = process.env.SHOTS || "";
 const TODAY = "2026-09-23";
 const results = [], consoleErrors = [];
@@ -20,11 +20,11 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "riw-e2e-"));
 
 function watch(page, label) {
   page.on("console", m => { if (m.type() === "error") consoleErrors.push(`${label}: ${m.text()}`); });
-  page.on("pageerror", e => consoleErrors.push(`${label}: ${e.message}`));
+  page.on("pageerror", e => { consoleErrors.push(`${label}: ${e.message}`); if (process.env.E2E_STACK) console.log("STACK", e.stack); });
 }
 async function newCtx(browser, opts = {}) {
-  const ctx = await browser.newContext(Object.assign({ viewport: { width: 1440, height: 900 }, acceptDownloads: true }, opts));
-  await ctx.addInitScript(d => { try { if (!sessionStorage.getItem("riw.demo.today")) sessionStorage.setItem("riw.demo.today", d); } catch (e) {} }, TODAY);
+  const ctx = await browser.newContext(Object.assign({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: "pl-PL" }, opts));
+  await ctx.addInitScript(d => { try { if (!sessionStorage.getItem("riw.today")) sessionStorage.setItem("riw.today", d); if (!localStorage.getItem("riw.lang")) localStorage.setItem("riw.lang", "pl"); } catch (e) {} }, TODAY);
   return ctx;
 }
 async function boot(page) {
@@ -32,7 +32,15 @@ async function boot(page) {
   await page.waitForSelector(".splash", { timeout: 5000 }).catch(() => {});
   await page.keyboard.press("Escape");
   await page.waitForSelector(".splash", { state: "detached", timeout: 5000 });
+  await page.waitForSelector("#login-form", { timeout: 5000 });
+  await login(page, "kierownik");
+}
+/** Logowanie kontem demonstracyjnym (hasło demo1234) — zastępuje przełącznik użytkownika z wersji Demo. */
+async function login(page, loginName) {
+  const r = await page.evaluate(l => RIW_DEBUG.loginAs(l), loginName);
+  if (!r || !r.ok) throw new Error("Logowanie nieudane: " + loginName + " " + JSON.stringify(r));
   await page.waitForSelector("#nav .nav-item");
+  await page.waitForTimeout(150);
 }
 const go = (page, route) => page.evaluate(r => { location.hash = "#/" + r; }, route).then(() => page.waitForTimeout(150));
 const preset = async (page, p) => { await go(page, "pulpit"); await go(page, "nowa?preset=" + p); await page.waitForSelector("#opf"); };
@@ -43,7 +51,8 @@ const out = async (page, key) => nb(await page.textContent(`[data-out="${key}"]`
 const msg = async (page, key) => nb(await page.textContent(`[data-msg="${key}"]`));
 const tick = (page, id) => page.click(`label.opt:has(#${id})`);
 const fillTab = async (page, sel, v) => { await page.fill(sel, v); await page.press(sel, "Tab"); await page.waitForTimeout(60); };
-const setUser = async (page, uid) => { await page.selectOption("#user-sel", uid); await page.waitForTimeout(150); };
+const LOGINS = { u_admin: "admin", u_kier: "kierownik", u_mag: "magazynier", u_pys: "pyskowice", u_view: "podglad" };
+const setUser = (page, uid) => login(page, LOGINS[uid]);
 const allExist = async (page, sels) => { for (const s of sels) if (!(await page.$(s))) return false; return true; };
 const closeModals = async page => { for (let i = 0; i < 4 && await page.$(".scrim"); i++) { await page.keyboard.press("Escape"); await page.waitForTimeout(80); } };
 /** Zatwierdzenie z oknem podsumowania; zwraca liczbę nowych operacji. */
@@ -97,7 +106,7 @@ async function fillForestDirect(page) {
 
     /* ------------- pulpit ------------- */
     check("§13 Pulpit: KPI stanów z ≈ t i ≈ GJ", nb(await page.textContent("#kpi-wood .k-v")).replace(/ /g, "") === "817m³" && nb(await page.textContent("#kpi-wood")).includes("≈ 778 t · ≈ 6 611 GJ"), nb(await page.textContent("#kpi-wood")));
-    check("§14 Pulpit: stany graficznie wg produktu (paski + linia 30 dni)", (await page.$$("#dash-stock .stock-row .hbar-fill")).length >= 5 && (await page.$$("#dash-stock svg.spark")).length >= 5);
+    check("§14 Pulpit: kafle stanów wg produktu (wskaźnik + linia 30 dni)", (await page.$$("#dash-stock .stile .meter i")).length >= 5 && (await page.$$("#dash-stock .stile svg")).length >= 5);
     check("§15 Pulpit: OBROTY WEDŁUG TYPU OPERACJI — 5 typów", nb(await page.textContent("#dash-turnover h3")) === "OBROTY WEDŁUG TYPU OPERACJI" && (await page.$$("#turn-chart .hbar-row")).length === 5);
     await page.selectOption("#dash-mode", "custom"); await page.waitForTimeout(150);
     await page.fill("#dash-from", "2026-09-15"); await page.press("#dash-from", "Tab"); await page.waitForTimeout(150);
@@ -221,15 +230,13 @@ async function fillForestDirect(page) {
     await closeModals(page);
 
     /* ------------- §32.4: blokada anulowania przy zależnościach ------------- */
-    const dep = await page.evaluate(() => {
+    await setUser(page, "u_pys");
+    const dep = await page.evaluate(async () => {
       const R = RIW_DEBUG.R, S = RIW_DEBUG.store;
-      return S.transact(s => {
-        const c = { user: R.byId(s.users, "u_pys"), today: "2026-09-23", source: "test" };
-        const d1 = R.Seed.draftOf("2026-09-23", { purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "100", unit: "m3", price: "230" }, transport: { mode: "none", place: "RiC Pyskowice" } });
-        const a = R.commitOperation(s, d1, c);
-        const b = R.commitOperation(s, R.Seed.draftOf("2026-09-23", { type: "PRODUKCJA", production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "480" } }), c);
-        return { ok: a.ok && b.ok, buy: a.op.id, use: b.op.id };
-      });
+      const d1 = R.Seed.draftOf("2026-09-23", { purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "100", unit: "m3", price: "230" }, transport: { mode: "none", place: "RiC Pyskowice" } });
+      const a = await S.exec("op.commit", { draft: d1 }, "test");
+      const b = await S.exec("op.commit", { draft: R.Seed.draftOf("2026-09-23", { type: "PRODUKCJA", production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "480" } }) }, "test");
+      return { ok: a.ok && b.ok, buy: a.op && a.op.id, use: b.op && b.op.id };
     });
     await setUser(page, "u_admin");
     await openOp(page, dep.buy);
@@ -327,11 +334,14 @@ async function fillForestDirect(page) {
     const pdfD = await downloadPdf(page, "#doc-preview [data-pdf]", "dok.pdf");
     check("Dokument: PDF pojedynczego dokumentu", pdfD.structural);
     await closeModals(page);
-    for (const [r, sel] of [["przyjecia", "#docs-table"], ["wz", "#docs-table"], ["mm", "#docs-table"], ["produkcja", "#prod-table"], ["transport", "#tr-table"], ["produkty", "#products-table"], ["kontrahenci", "#partners-table"], ["magazyny", "[data-wh]"], ["administracja", "#perm-table"]]) {
+    for (const [r, sel] of [["przyjecia", "#docs-table"], ["wz", "#docs-table"], ["mm", "#docs-table"], ["produkcja", "#prod-table"], ["transport", "#tr-table"], ["produkty", "#products-table"], ["kontrahenci", "#partners-table"], ["magazyny", "[data-wh]"], ["administracja", "#bk-export"], ["profil", "#pf-pw"]]) {
       await go(page, r);
       check(`Moduł „${r}” działa`, !!(await page.$(sel)));
     }
+    check("Użytkownicy: moduł niedostępny dla Kierownika (tylko Administrator)", !(await page.$$eval("#nav .nav-item", l => l.map(x => x.getAttribute("href") || "").join(" "))).includes("uzytkownicy"));
+    await setUser(page, "u_admin"); await go(page, "uzytkownicy"); await page.waitForSelector("#perm-table");
     check("Administracja: uprawnienia documents.cancel / documents.correct w macierzy", nb(await page.textContent("#perm-table")).includes("documents.cancel") && nb(await page.textContent("#perm-table")).includes("production.correct"));
+    await setUser(page, "u_kier");
     /* ------------- 2.2: grupa dostawcy, leśnictwo, kursy transportu własnego ------------- */
     await preset(page, "zakup");
     check("2.2 Dostawca: dwie grupy (firma / nadleśnictwo), domyślnie firma → KZR", !!(await page.$("#f-skind-firma")) && !!(await page.$("#f-skind-nadlesnictwo")) && (await page.inputValue("#f-purchase-basis")) === "KZR" && !(await page.$("#f-purchase-lesnictwo")));
@@ -507,14 +517,14 @@ async function fillForestDirect(page) {
     await p.goto(FILE); await p.waitForTimeout(700);
     check("Intro: muzyka domyślnie włączona i gra", await p.evaluate(() => RIW_DEBUG.intro.music && RIW_DEBUG.intro.audible));
     await p.click(".splash [data-music]");
-    check("Intro: „Wycisz” działa", await p.evaluate(() => !RIW_DEBUG.intro.audible && localStorage.getItem("riw.demo.music") === "0"));
+    check("Intro: „Wycisz” działa", await p.evaluate(() => !RIW_DEBUG.intro.audible && localStorage.getItem("riw.music") === "0"));
     await p.click(".splash [data-skip]"); await p.waitForSelector(".splash", { state: "detached" });
     check("Intro: „Pomiń intro”", (await p.evaluate(() => RIW_DEBUG.intro.result)) === "skip");
     await b1.close();
     const b2 = await chromium.launch({ args: ["--autoplay-policy=document-user-activation-required"] });
     const q = await b2.newPage(); watch(q, "intro-blocked");
     await q.goto(FILE); await q.waitForTimeout(800);
-    check("Intro (blokada autoplay): komunikat, aplikacja działa pod spodem", await q.evaluate(() => RIW_DEBUG.intro.blocked) && !!(await q.$("#nav .nav-item")));
+    check("Intro (blokada autoplay): komunikat, aplikacja działa pod spodem", await q.evaluate(() => RIW_DEBUG.intro.blocked) && !!(await q.$("#login-form, #nav .nav-item")));
     await q.mouse.click(400, 400); await q.waitForTimeout(500);
     check("Intro (blokada autoplay): pierwsze kliknięcie włącza muzykę", await q.evaluate(() => RIW_DEBUG.intro.audible));
     await b2.close();

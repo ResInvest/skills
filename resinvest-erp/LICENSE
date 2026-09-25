@@ -1,9 +1,10 @@
-ResInvest ERP — demonstrator
+ResInvest ERP 3.0
 Copyright (c) 2026 ResInvest Commodities. Wszelkie prawa zastrzeżone.
 
-Oprogramowanie, dokumentacja i materiały towarzyszące (w tym film intro) stanowią
-własność ResInvest Commodities. Licencja jest udzielana wyłącznie do wewnętrznego
-użytku ResInvest Commodities w celu oceny i testowania funkcjonalności.
+Oprogramowanie (program ResInvest ERP, ResInvest ERP Serwer, instalator), dokumentacja
+i materiały towarzyszące (w tym film intro) stanowią własność ResInvest Commodities.
+Licencja jest udzielana wyłącznie do wewnętrznego użytku ResInvest Commodities
+i podmiotów przez nią wskazanych na piśmie, na dowolnej liczbie stanowisk w ich sieci.
 
 Bez uprzedniej pisemnej zgody właściciela zabrania się:
   1. kopiowania, modyfikowania, łączenia z innym oprogramowaniem lub tworzenia
@@ -13,8 +14,14 @@ Bez uprzedniej pisemnej zgody właściciela zabrania się:
 
 Oprogramowanie jest dostarczane „TAKIE, JAKIE JEST”, bez jakichkolwiek gwarancji,
 wyraźnych lub dorozumianych, w tym gwarancji przydatności handlowej i przydatności
-do określonego celu. Demonstrator nie jest systemem produkcyjnym: dane są
-przechowywane w przeglądarce użytkownika. W żadnym wypadku właściciel nie ponosi
-odpowiedzialności za szkody wynikające z użycia oprogramowania.
+do określonego celu. Użytkownik odpowiada za regularne kopie zapasowe danych
+(program wykonuje je automatycznie w trybie serwera) i za zabezpieczenie komputera
+serwera. W żadnym wypadku właściciel nie ponosi odpowiedzialności za szkody
+wynikające z użycia oprogramowania.
 
-Demonstrator nie zawiera bibliotek stron trzecich.
+Składniki stron trzecich:
+  * czcionka ResInvestDocSans — podzbiór Liberation Sans, SIL Open Font License 1.1
+    (docs/LICENSE-czcionki-OFL.txt);
+  * Node.js (dołączany przez instalator serwera jako runtime\node.exe) — licencja MIT
+    i licencje składników wymienione w runtime\LICENSE-node.txt.
+Program nie zawiera innych bibliotek stron trzecich.

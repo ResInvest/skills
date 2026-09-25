@@ -1,4 +1,25 @@
-# TASKS — ResInvest ERP Demo v2 (domknięcie przed Production v1)
+# TASKS — ResInvest ERP
+
+## 3.0.0 — FAZA 2 (logowanie, serwer, pulpit, języki, motywy)
+
+| Wymaganie | Status | Dowód |
+|---|---|---|
+| Pulpit główny poprawiony graficznie (sekcja powitalna, szybkie akcje, wskaźniki z trendem, wykres 6 mies., obroty, kafle stanów, aktywność, do załatwienia) | DONE | E2E §13–§15, zrzuty 1440 / 390 px, 3 motywy |
+| System logowania — tryb lokalny (PBKDF2, blokada, bezczynność, zmiana hasła) | DONE | `tests/platform.test.mjs` (LocalAuth), E2E (logowanie kontami demo) |
+| System logowania — serwer (scrypt, sesje HttpOnly, CSRF, blokada, limit IP, wymuszona zmiana) | DONE | `tests/server.test.mjs` |
+| Użytkownicy i uprawnienia (Administrator), ostatni administrator chroniony | DONE | platform + server + E2E (macierz tylko dla Administratora) |
+| Praca wielostanowiskowa: SQLite, transakcje, dziennik z łańcuchem skrótów, SSE | DONE | server test (komendy, idempotencja, autor z sesji, restart, `--check`) |
+| Kopie zapasowe (codzienne, przy starcie, ręczne), przywracanie, kontrola spójności | DONE | server test (kopia + `--check`) |
+| Języki PL / CS / EN — kompletne (interfejs, silnik, serwer, audyt, PDF) | DONE | `npm run i18n` 0 braków; test pokrycia; skan EN/CS |
+| Motywy Perła / Grafit / Graphite Azure | DONE | E2E (jasny motyw), zrzuty 3 motywów |
+| Kartoteki z edycją (produkty, kontrahenci z NIP, magazyny) | DONE | platform test (NIP, unikalny kod) |
+| Migracja schematu 3 → 4 i danych Demo 2.x | DONE | platform test (migracja), E2E |
+| Instalator Windows z serwerem i Node.js (PL/CS/EN) | DONE (kod) · kompilacja NIEPOTWIERDZONA | `installer/ResInvestERP.iss`, `build-installer.ps1` |
+| README, LICENSE, konfiguracja środowiska, dane przykładowe | DONE | `README.md`, `LICENSE`, `config/*.json`, `data/sample_data.json` |
+
+---
+
+# Demo v2 (domknięcie przed Production v1) — historia
 
 Status: `TODO` · `IN PROGRESS` · `DONE` (= zaimplementowane **i** sprawdzone testem) · `BLOCKED` · `PRODUKCJA` (celowo na etap pełnego ERP)
 
@@ -111,9 +132,10 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 | Temat | Uwagi |
 |---|---|
 | Baza PostgreSQL, księga append-only, transakcje z blokadą sald, numeracja w transakcji | `docs/RESINVEST_CHANGE_PLAN.md` → „Architektura Production v1” |
-| Logowanie, uprawnienia po stronie serwera, wiele magazynów na użytkownika | — |
+| Logowanie, uprawnienia po stronie serwera | DONE w 3.0.0 |
+| Wiele magazynów na użytkownika | kolejna faza |
 | Wycena magazynu (średnia ruchoma / FIFO), koszty rąbania i transportu w wartości zapasu | wymaga decyzji biznesowej |
 | Korekta daty / magazynu dokumentu | obecnie: anulowanie + nowy dokument |
-| Edycja kartotek produktów i kontrahentów | w demo tylko podgląd |
+| Edycja kartotek produktów i kontrahentów | DONE w 3.0.0 |
 | Archiwum wygenerowanych PDF z sumą kontrolną | w demo: numer + wpis audytu |
 | Migracja danych 1.3.0 | bilans otwarcia + archiwum dokumentów |

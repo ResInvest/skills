@@ -6,9 +6,10 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
-globalThis.RIW_CONFIG = JSON.parse(readFileSync(new URL("../config/demo.config.json", import.meta.url), "utf8"));
-const R = require("../demo/src/engine.js");
-require("../demo/src/seed.js");
+globalThis.RIW_CONFIG = JSON.parse(readFileSync(new URL("../config/app.config.json", import.meta.url), "utf8"));
+require("../app/src/i18n.js");
+const R = require("../app/src/engine.js");
+require("../app/src/seed.js");
 
 const TODAY = "2026-09-23";
 const fresh = () => R.Seed.build(TODAY);

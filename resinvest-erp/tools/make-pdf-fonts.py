@@ -2,9 +2,9 @@
 """Przygotowuje czcionki do generatora PDF demonstratora (uruchamiane rzadko, wynik jest w repozytorium).
 
 Źródło: Liberation Sans 2.x (SIL Open Font License 1.1, pakiet fonts-liberation).
-Wynik:  demo/assets/fonts/ResInvestDocSans-{Regular,Bold}.ttf  — podzbiór znaków (łacina + polskie znaki
+Wynik:  app/assets/fonts/ResInvestDocSans-{Regular,Bold}.ttf  — podzbiór znaków (łacina + polskie znaki
         + typografia), zmieniona nazwa rodziny zgodnie z OFL (zastrzeżona nazwa „Liberation” nie jest używana),
-        demo/assets/fonts/metrics.json — mapa Unicode → glif i szerokości (dla tools/build-demo.mjs i testów).
+        app/assets/fonts/metrics.json — mapa Unicode → glif i szerokości (dla tools/build-demo.mjs i testów).
 
 Wymaga: pip install fonttools
 Użycie: python3 tools/make-pdf-fonts.py [/katalog/z/LiberationSans-*.ttf]
@@ -14,7 +14,7 @@ from fontTools import subset
 from fontTools.ttLib import TTFont
 
 SRC_DIR = sys.argv[1] if len(sys.argv) > 1 else "/usr/share/fonts/truetype/liberation"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "demo", "assets", "fonts")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app", "assets", "fonts")
 FAMILY = "ResInvestDocSans"
 CODEPOINTS = list(range(0x20, 0x7F)) + list(range(0xA0, 0x180)) + [
     0x2013, 0x2014, 0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E, 0x2022, 0x2026, 0x2030,

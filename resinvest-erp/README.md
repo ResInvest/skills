@@ -1,51 +1,102 @@
-# ResInvest ERP — Demo v2.6 (2.6.0)
+# ResInvest ERP 3.0 (3.0.0)
 
-Samodzielny plik **`ResInvest_ERP_demo.html`** — funkcjonalnie kompletny prototyp logiki ResInvest ERP
-(obrót i magazyn biomasy). Otwiera się dwuklikiem: bez serwera, bez internetu, bez bibliotek z CDN.
+System ERP do **obrotu i magazynowania biomasy drzewnej**: zakupy, produkcja zrębki, sprzedaż, przesunięcia MM,
+transport (flota własna, przewoźnicy, kolej), inwentaryzacja z zamknięciem miesiąca, korekty i anulowania,
+historia każdej zmiany, raporty dzienne / tygodniowe / miesięczne / roczne, druk i PDF.
 
-> Demo zapisuje dane w `localStorage` przeglądarki **wyłącznie do celów pokazowych**. To nie jest Production v1 —
-> wdrożenie produkcyjne wymaga bazy danych z transakcjami i serwera (patrz `docs/RESINVEST_CHANGE_PLAN.md`, „Architektura Production v1”).
+Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
-## Nowe w 2.6
+| Tryb | Dla kogo | Dane | Logowanie |
+|---|---|---|---|
+| **Serwer** (zalecany do pracy) | wiele stanowisk w sieci firmy, także telefon / tablet | baza **SQLite** na serwerze (transakcje, dziennik zmian z łańcuchem skrótów SHA-256, kopie codzienne) | konta na serwerze, hasła **scrypt**, sesja w ciasteczku HttpOnly, blokada po 5 próbach |
+| **Lokalny** | jedno stanowisko, szkolenie, pokaz | przeglądarka (`localStorage`), kopia JSON na żądanie | konta lokalne, hasła **PBKDF2-SHA256**, wylogowanie po bezczynności |
 
-* **Kwity wywozowe w kursach:** przy produkcji leśnej (z nadleśnictwa) numer kwitu nie jest już wpisywany w sekcji produkcji — każdy kurs (własny i zewnętrzny) ma pola: nr kwitu wywozowego, m³ z kwitu, MP na aucie, tony z kwitu. Po wpisaniu m³ system mnoży × 4 i wstawia MP na aucie. Suma kursów nie może przekroczyć ilości z produkcji (MP) ani zużytego drewna (m³) — zatwierdzenie jest wtedy zablokowane; podsumowanie pokazuje „pozostało do rozwiezienia”. Bez kursów (brak transportu / pociąg) kwit wpisuje się przy produkcji jak dotąd. Kwity trafiają na PW, kartę TR i PDF.
+Program nie korzysta z internetu ani bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML.
 
-## Nowe w 2.5
+## Nowe w 3.0 (faza 2)
 
-* **Transport własny + zewnętrzny w jednej operacji:** w „Miejsce i transport” można zaznaczyć oba rodzaje naraz (pociąg — osobno), np. przy jednej produkcji 3 kursy flotą własną i 2 kursy firmą zewnętrzną. Każda część ma własną liczbę kursów i rubryki; wspólne podsumowanie pokazuje wszystkie kursy (z kolumną przewoźnika), łączną ilość MP, tony, km i koszt oraz podział kosztu flota własna / firma zewnętrzna. Karta TR, PDF, raporty i moduł Flota rozróżniają kursy.
+* **System logowania** — ekran logowania (PL / CS / EN, wybór motywu), pierwsze uruchomienie serwera z kontem administratora,
+  wymuszona zmiana hasła tymczasowego, zmiana hasła w profilu, blokada konta po 5 nieudanych próbach na 15 min
+  (odblokowanie przez administratora), limit prób z jednego adresu IP, wylogowanie po 30 min bezczynności,
+  dziennik logowań. Autor każdej operacji pochodzi **wyłącznie z sesji** — nie z danych przesłanych przez przeglądarkę.
+* **Moduł Użytkownicy** (Administrator) — zakładanie kont z hasłem startowym, role, przypisanie do magazynu,
+  dezaktywacja (bez usuwania — historia zostaje), reset hasła, odblokowanie, macierz uprawnień, dziennik logowań.
+  Ochrona: nie można odebrać sobie roli ani dezaktywować ostatniego administratora.
+* **ResInvest ERP Serwer** — praca wielostanowiskowa: Node.js + SQLite (WAL, `synchronous=FULL`), każda zmiana
+  w jednej transakcji, dziennik zmian tylko do dopisywania (wyzwalacze blokują UPDATE/DELETE) z łańcuchem skrótów,
+  odświeżanie na żywo u innych użytkowników (SSE), kopie codzienne + przy starcie (30 dni), kontrola spójności,
+  przywracanie kopii, reset hasła z konsoli, HTTPS (opcjonalnie), ochrona CSRF, nagłówki bezpieczeństwa (CSP).
+* **Nowy pulpit** — sekcja powitalna z wynikiem miesiąca, szybkie akcje, 8 wskaźników z porównaniem do poprzedniego
+  miesiąca i liniami trendu, wykres sprzedaży i zakupów z 6 miesięcy (z tabelą), obroty według typu operacji,
+  kafle stanów z linią 30 dni, ostatnia aktywność, lista „Do załatwienia” (niezamknięte okresy, wersje robocze,
+  pozycje bez wyceny).
+* **Języki PL · CS · EN — kompletne** (1 542 teksty): interfejs, komunikaty silnika i serwera, podpowiedzi formularza,
+  dziennik audytu, raporty, wydruki i PDF. Liczby i daty wg języka (1 234,50 · 1,234.50; 23.09.2026 · 23/09/2026).
+  Język i motyw zapisują się w profilu użytkownika.
+* **Motywy Perła (jasny) · Grafit (ciemny) · Graphite Azure** — jak w 1.3.0; wszystkie kolory przez tokeny,
+  palety wykresów sprawdzone pod kątem daltonizmu i kontrastu. Skrót: Ctrl+D.
+* **Kartoteki z edycją** — Produkty (jednostka magazynowa zablokowana po pierwszym ruchu), Kontrahenci (NIP z sumą
+  kontrolną), Magazyny (dezaktywacja tylko przy zerowych stanach).
+* **Warstwa usług** — jedna ścieżka zmian danych (`Store.exec` → komendy `RIW.Service`) wspólna dla przeglądarki
+  i serwera; komenda pracuje na kopii stanu i zapisuje wynik tylko przy powodzeniu („wszystko albo nic”).
+* Schemat danych 4 (migracja 3 → 4 automatyczna; dane z Demo 2.x przenoszone przy pierwszym uruchomieniu).
 
-## Nowe w 2.4
+## Instalacja (Windows)
 
-* **Transport zewnętrzny — liczba kursów:** firma przewozowa + np. 4 kursy → 4 rubryki: nr rejestracyjny auta przewoźnika, kierowca, km, stawka (domyślna), ilość MP w kursie, waga rzeczywista t, opcjonalnie fracht kursu z faktury (zastępuje km × stawka). Podsumowanie: łączna ilość, tony, km i koszt; „wliczony w cenę” = 0 zł przy zachowanej ewidencji kursów. Dane z wcześniejszych wersji (jeden kurs z frachtem) działają bez zmian.
+Uruchom **`ResInvestERP_Setup_3.0.0.exe`** (budowanie — niżej) i wybierz:
 
-## Nowe w 2.3
+* **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
+  tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
+  *ResInvest ERP Serwer — uruchom*, *ResInvest ERP (serwer) — otwórz w przeglądarce*, *Kopia zapasowa bazy teraz*,
+  *Kontrola spójności bazy*, *Folder danych serwera*, *Instrukcja*. Opcjonalnie: autostart serwera przy logowaniu
+  do Windows i reguła zapory dla portu 8080 (dostęp z sieci lokalnej).
+* **Tylko program** — sam plik HTML (tryb lokalny), bez serwera.
 
-* **Dostawca i nadleśnictwo wpisywane ręcznie:** pole tekstowe z podpowiedziami z kartoteki. Nazwa zgodna z kartoteką (bez względu na wielkość liter) wskazuje istniejącego kontrahenta i ustawia jego grupę oraz podstawę; nowa nazwa jest oznaczana „nowy dostawca” i przy zatwierdzeniu operacji dopisuje się do kartoteki Kontrahenci (z grupą firma / nadleśnictwo i wpisem w audycie). Leśnictwo — jak dotąd: z listy lub wpisane.
+Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie usuwa** danych serwera ani pliku
+`config\server.config.json`.
 
-## Nowe w 2.2
+### Pierwsze uruchomienie serwera
 
-* **Dostawca w dwóch grupach:** *Firma branży drzewnej / przedsiębiorstwo drzewne* (podstawa domyślnie **KZR**) albo *Nadleśnictwo* (podstawa domyślnie **Deklaracja** + pole **Leśnictwo** — wybór z zapisanych lub wpis nowego). Podstawę można zmienić ręcznie. Przy produkcji z drewna z nadleśnictwa nadleśnictwo i leśnictwo uzupełniają się same.
-* **Transport własny — liczba kursów:** po wpisaniu np. 4 pojawiają się 4 rubryki (pojazd z floty, kierowca domyślny — można zmienić, km, stawka domyślna, ilość MP w kursie, waga rzeczywista t). Podsumowanie: łączna ilość, tony, km i koszt. Przykład: 4 × 100 MP = 400 MP z produkcji na magazyn Zabrze.
-* Poprawka: opisy wyliczeń pod polami (np. „0 km × 5,00 zł/km”) nie powielają się przy kolejnych przeliczeniach.
+1. Menu Start → *ResInvest ERP Serwer — uruchom* (okno konsoli musi pozostać otwarte; przy autostarcie działa zminimalizowane).
+2. Przeglądarka otworzy `http://localhost:8080/` → ekran **Pierwsze uruchomienie**: imię i nazwisko administratora,
+   login, hasło (min. 8 znaków, litery i cyfry), nazwa magazynu głównego; opcjonalnie dane przykładowe do nauki.
+3. W module **Użytkownicy** załóż konta pracowników (hasło startowe — użytkownik zmieni je przy pierwszym logowaniu).
+4. Inne komputery / telefony w sieci: `http://<adres-serwera>:8080/` (adres IP pokazuje konsola serwera).
 
-## Co umie Demo v2.1
+### Tryb lokalny (bez serwera)
+
+Otwórz `ResInvest_ERP.html` w Chrome / Edge / Firefox. Dane przykładowe zawierają konta demonstracyjne
+(hasło **`demo1234`** — zmień je w *Mój profil* przed pracą na prawdziwych danych):
+
+| Login | Osoba | Rola | Magazyn | Może |
+|---|---|---|---|---|
+| `admin` | Mateusz Roesner | Administrator | RiC Zabrze | wszystko, w tym użytkownicy i hasła |
+| `kierownik` | Anna Górska | Kierownik | RiC Zabrze | operacje, korekty, anulowania, zamknięcie okresu, kartoteki, kopie |
+| `magazynier` | Adrian Wojciechowski | Magazynier | RiC Zabrze | operacje, wersje robocze, spis — bez korekt i anulowań |
+| `pyskowice` | Paweł Kaczmarek | Magazynier | RiC Pyskowice | jw. w Pyskowicach |
+| `podglad` | Beata Nowak | Podgląd | RiC Zabrze | tylko odczyt i raporty |
+
+Dane przykładowe: bilans otwarcia 01.08.2026 (Zabrze: drewno 817 m³, zrębka leśna 8 173 MP, PKS i łupina po 728 t),
+operacje każdego rodzaju, MM Zabrze → Pyskowice, korekta WZ i anulowany zakup; plik `data/sample_data.json`
+(kopia do wczytania w *Administracja → Wczytaj kopię*).
+
+## Funkcje
 
 | Obszar | Zawartość |
 |---|---|
-| **Operacje** | Zakup (PZ, opcjonalnie łańcuch produkcja + sprzedaż) · Sprzedaż z magazynu (WZ) · Produkcja na magazyn (RW + PW) · Produkcja + sprzedaż bezpośrednia (PW + WZ, stan bez zmian) · Przesunięcie MM |
-| **Produkcja na magazyn** | podajesz ilość produkcji (MP) → system liczy zużycie surowca (MP ÷ 4 = m³); blokada braku surowca („Dostępne / Wymagane / Brakuje”), surowiec ≠ produkt, kontrola przelicznika, pełna precyzja (6 miejsc) przed walidacją, **bez transportu** |
-| **Zatwierdzanie** | podsumowanie przed zatwierdzeniem (stan przed/po, zużycie, masa, GJ, koszty, dokumenty); zapis atomowy; ochrona przed podwójnym kliknięciem i podwójnym zapisem |
-| **Statusy** | ROBOCZY (wersja robocza bez numeru i wpływu na stan) · ZATWIERDZONY · SKORYGOWANY · ANULOWANY — kolumna „Status” w rejestrach |
-| **Anulowanie** | nigdy nie usuwa dokumentu; dokument AN odwraca skutki; przyczyna wymagana; analiza zależności w czasie — blokada, gdy towar został wykorzystany później; potwierdzenie przy operacjach zależnych |
-| **Korekty** | dokument KOR („KOREKTA dokumentu nr …”): ilościowe w obie strony, produkcji (ze zmianą zużycia), sprzedaży bezpośredniej, wartościowe (ceny, cena za rąbanie), opisowe; powód z listy + opis; podgląd oryginał / korekta / różnica / wpływ na stan; odwrócenie korekty nową korektą |
-| **Historia** | rejestr ruchów: data, godzina, użytkownik, typ, dokument, magazyn, produkt, ilość, jednostka, stan przed / zmiana / stan po, kontrahent, powiązana operacja, uwagi, status; filtry: dzień/tydzień/miesiąc/rok/zakres, magazyn, produkt, typ, użytkownik, kontrahent, status; dziennik audytu |
-| **Raporty** | okres: dzień / tydzień / miesiąc / rok / zakres własny; magazyn lub wszystkie; filtr produktu i kontrahenta; widok biznesowy (netto) i audytowy; bilans stan pocz. + przyjęcia + produkcja − zużycie − sprzedaż ± MM = stan końc. z kontrolą spójności; zakupy, produkcja i koszt rąbania, zużycie, sprzedaż, MM, transport, korekty, anulowania, wycena („brak wyceny”), status zamknięcia okresu; drill-down do operacji źródłowych; CSV |
-| **Druk i PDF** | DRUKUJ (okno wydruku) i GENERUJ PDF (prawdziwy PDF: tekst wektorowy, osadzona czcionka z polskimi znakami, logo, numer raportu, magazyn, okres, data, użytkownik, tabele, podsumowania, pola podpisu, „Strona X z Y”) — dla raportów, historii, kwitu i pojedynczych dokumentów; każde wygenerowanie zapisane w audycie |
-| **Kwit produkcji dnia** | data, magazyn, operator, surowiec, zużycie, produkt, MP, m³, t, GJ, cena i koszt rąbania, uwagi, nr dokumentu; druk i PDF |
-| **Pulpit** | KPI (stany z ≈ t i ≈ GJ, wartość stanu, zakup, sprzedaż, produkcja, zużycie, operacje, transport), stany graficznie z linią 30 dni, **OBROTY WEDŁUG TYPU OPERACJI** z zakresem dzień/tydzień/miesiąc/rok/własny; jednostek się nie sumuje |
-| **Pozostałe** | Przyjęcia, Wydania/WZ, MM, Transport, Stany, Dokumenty, Inwentaryzacja i zamknięcie miesiąca, Flota, Produkty, Kontrahenci, Magazyny, Administracja (role, macierz uprawnień, kopie, import) |
+| **Operacje** | Zakup (PZ, opcjonalnie łańcuch produkcja + sprzedaż) · Sprzedaż z magazynu (WZ) · Produkcja na magazyn (RW + PW) · Produkcja + sprzedaż bezpośrednia (PW + WZ) · Przesunięcie MM; transport własny / zewnętrzny / mieszany / kolej z kursami, kwitami wywozowymi i kosztami |
+| **Zatwierdzanie** | podsumowanie przed zatwierdzeniem (stan przed / po, zużycie, masa, GJ, koszty, dokumenty); zapis atomowy; ochrona przed podwójnym kliknięciem i podwójnym zapisem (klucz idempotencji) |
+| **Statusy** | ROBOCZY · ZATWIERDZONY · SKORYGOWANY · ANULOWANY |
+| **Korekty i anulowania** | dokument KOR (ilościowe, produkcji, sprzedaży bezpośredniej, wartościowe, opisowe; podgląd oryginał / korekta / różnica / wpływ na stan; odwrócenie korekty) · dokument AN (nigdy nie usuwa dokumentu; analiza zależności w czasie; wymagana przyczyna) |
+| **Historia** | rejestr ruchów ze stanem przed / zmianą / stanem po; dziennik audytu (kto, kiedy, co, powód, źródło); filtry: dzień / tydzień / miesiąc / rok / zakres, magazyn, produkt, typ, użytkownik, kontrahent, status |
+| **Raporty** | dzienny / tygodniowy / miesięczny / roczny / zakres własny; magazyn lub wszystkie; widok biznesowy i audytowy; bilans stanów z kontrolą spójności z księgą; zakupy, produkcja, sprzedaż, MM, transport, korekty, anulowania, wycena; zestawienie miesięcy roku; drill-down do operacji; CSV |
+| **Druk i PDF** | okno wydruku i prawdziwy PDF (osadzona czcionka z polskimi i czeskimi znakami, numer, strony „X z Y”, pola podpisu) — w języku użytkownika; każde wygenerowanie w audycie |
+| **Inwentaryzacja** | okres miesięczny OTWARTA → ZAMKNIĘTA, lista spisowa, różnice dokumentem IN, blokada okresu; automatyczna kontrola przełomu miesiąca |
+| **Import / eksport** | kopia JSON (pełny stan, bez haseł), import z kontrolą struktury i migracją, CSV stanów / historii / bilansu, kopie SQLite serwera |
+| **Kartoteki** | Produkty, Kontrahenci, Magazyny, Flota (pojazdy, kierowcy, rębaki, operatorzy) |
+| **Bezpieczeństwo** | role i macierz uprawnień sprawdzane w silniku przy każdej komendzie (na serwerze — po stronie serwera), hasła z solą, blokady, sesje, CSRF, CSP, dziennik zmian z łańcuchem skrótów |
 
-## Przeliczniki (centralnie w silniku i `config/demo.config.json`)
+## Przeliczniki (`config/app.config.json`)
 
 | Przelicznik | Wartość |
 |---|---|
@@ -55,95 +106,110 @@ Samodzielny plik **`ResInvest_ERP_demo.html`** — funkcjonalnie kompletny proto
 | 1 t biomasy | 8,5 GJ (orientacyjnie) |
 | PKS, łupina nerkowca | tylko t |
 
-Masa i energia są orientacyjne i nie zmieniają ilości na stanie. GJ liczone z masy dokładnej: 817 m³ → 777,784 t → 6 611 GJ
-(przykład w poleceniu — 6 613 GJ — liczy z masy zaokrąglonej do 778 t; różnica < 0,02 %).
+Masa i energia są orientacyjne i nie zmieniają ilości na stanie. Jednostek różnych produktów się nie sumuje.
+Symbol **MP** (metr przestrzenny zrębki) jest taki sam we wszystkich językach — tak jak na dokumentach.
 
-## Szybki start
+## Serwer — konfiguracja i obsługa
 
-| Sposób | Kroki |
-|---|---|
-| Plik | Otwórz `ResInvest_ERP_demo.html` w Chrome / Edge / Firefox |
-| Instalator Windows | `ResInvestERP_Demo_Setup_2.6.0.exe` (budowanie: niżej) → skrót „ResInvest ERP — demonstrator” |
+Plik `config/server.config.json` (w instalacji: `C:\Program Files\ResInvest ERP\config\`):
 
-Użytkownika (a więc magazyn aktywny i uprawnienia) zmienia się w prawym górnym rogu:
+| Klucz | Znaczenie | Domyślnie |
+|---|---|---|
+| `port`, `host` | adres nasłuchu; `0.0.0.0` = sieć lokalna, `127.0.0.1` = tylko ten komputer | 8080, 0.0.0.0 |
+| `dataDir` | baza, kopie, logi (instalator ustawia `%ProgramData%\ResInvestERP` przez `RIW_DATA`) | `data-server` |
+| `session.idleMinutes` / `absoluteHours` | wylogowanie po bezczynności / maksymalny czas sesji | 30 / 12 |
+| `security.maxFailed` / `lockMinutes` / `ipAttemptsPer15Min` | blokada konta i limit prób z adresu IP | 5 / 15 / 40 |
+| `backup.hour` / `keepDays` / `dir` | godzina kopii codziennej, przechowywanie, folder | 2 / 30 / `<dataDir>/backups` |
+| `tls.cert` / `tls.key` | pliki PEM — włączają HTTPS (zalecane poza siecią lokalną) | — |
 
-| Użytkownik | Rola | Magazyn | Może |
-|---|---|---|---|
-| Mateusz Roesner | Administrator | RiC Zabrze | wszystko, także korekty/anulowania w innych magazynach |
-| Anna Górska *(domyślny)* | Kierownik | RiC Zabrze | operacje, `documents.cancel`, `documents.correct`, `*.correct`, zamknięcie okresu, flota, kopie |
-| Adrian Wojciechowski | Magazynier | RiC Zabrze | operacje, wersje robocze, spis — **bez** anulowania i korekt |
-| Paweł Kaczmarek | Magazynier | RiC Pyskowice | jw. w Pyskowicach |
-| Beata Nowak | Podgląd | RiC Zabrze | tylko odczyt, raporty |
+Zmienne środowiskowe: `RIW_PORT`, `RIW_HOST`, `RIW_DATA`, `RIW_TODAY` (tylko testy).
 
-Dane przykładowe: bilans otwarcia 01.08.2026 (Zabrze: drewno 817 m³, zrębka leśna 8 173 MP, PKS i łupina po 728 t),
-operacje każdego rodzaju, MM Zabrze → Pyskowice, korekta WZ (100 → 90 MP) i anulowany zakup. Zabrze po danych przykładowych:
-drewno **817 m³**, zrębka leśna **8 293 MP**, PKS **728 t**.
+```bash
+npm run server                          # uruchomienie (Node.js ≥ 22.13)
+node server/riw-server.mjs --open       # … i otwarcie przeglądarki
+node server/riw-server.mjs --backup-now # kopia bazy teraz (działa także przy pracującym serwerze)
+node server/riw-server.mjs --check      # kontrola spójności bazy i łańcucha skrótów dziennika
+node server/riw-server.mjs --restore <plik.sqlite>      # przywrócenie kopii (serwer zatrzymany)
+node server/riw-server.mjs --reset-password <login>     # hasło tymczasowe (serwer zatrzymany)
+```
+
+Folder danych: `resinvest.sqlite` (baza), `backups/` (kopie `VACUUM INTO`), `logs/` (dzienne logi serwera).
+Przywrócenie zachowuje bieżącą bazę jako kopię bezpieczeństwa przed podmianą.
 
 ## Struktura projektu
 
 ```
 resinvest-erp/
-├── ResInvest_ERP_demo.html        ← wynik budowania (jeden plik, ~2,5 MB z filmem intro)
-├── demo/src/
-│   ├── engine.js                  ← silnik domenowy (bez DOM, testowany w Node): walidacja, księga, anulowanie, korekty, raporty
-│   ├── seed.js                    ← dane przykładowe (księgowane przez silnik)
-│   ├── pdf.js                     ← generator PDF + HTML do druku (jeden model treści)
-│   ├── app.js                     ← rdzeń interfejsu: nawigacja, zapis, formularz operacji / korekty
-│   ├── views.js                   ← ekrany modułów, szczegóły dokumentu, anulowanie, raporty, kwit, wykresy
-│   ├── intro.js · styles.css · index.template.html
-├── demo/assets/intro.mp4
-├── demo/assets/fonts/             ← ResInvestDocSans (podzbiór Liberation Sans, SIL OFL 1.1) + metrics.json + LICENSE-OFL.txt
-├── config/demo.config.json        ← konfiguracja środowiska (przeliczniki, stawki)
-├── data/sample_data.json          ← przykładowe dane testowe (kopia do wczytania)
-├── tools/build-demo.mjs · tools/pdf-fonts.mjs · tools/make-pdf-fonts.py · tools/export-sample-data.mjs
-├── installer/                     ← instalator Windows (Inno Setup 6)
-├── tests/engine.test.mjs          ← testy silnika (§22, §31.16, §32.23, testy 11–42)
-├── tests/pdf.test.mjs             ← testy generatora PDF
-├── tests/e2e.cjs                  ← scenariusze w przeglądarce (Playwright)
-├── tests/resinvest_demo_scenarios.md
-├── docs/RESINVEST_CHANGE_PLAN.md  ← rozpoznanie, decyzje, architektura Production v1
-├── docs/RESINVEST_UI_SUGGESTIONS.md
-├── TASKS.md                       ← wymagania → status → dowód
-└── progress.md
+├── ResInvest_ERP.html             ← wynik budowania: jeden plik (tryb lokalny i interfejs serwera)
+├── app/src/
+│   ├── i18n.js · i18n.d01–d10.js  ← tłumaczenia (tekst PL = klucz; słowniki CS/EN), formaty liczb i dat
+│   ├── engine.js                  ← silnik domenowy (bez DOM): walidacja, księga, korekty, anulowania, raporty, migracje
+│   ├── service.js                 ← komendy zmieniające dane (wspólne: przeglądarka i serwer), uprawnienia
+│   ├── seed.js                    ← dane przykładowe i minimalne (pierwsze uruchomienie)
+│   ├── auth.js                    ← hasła (PBKDF2), polityka haseł, logowanie w trybie lokalnym
+│   ├── pdf.js                     ← generator PDF + HTML do druku
+│   ├── core.js                    ← rdzeń interfejsu: magazyn danych, logowanie, nawigacja, motywy, języki
+│   ├── form.js                    ← formularz „Nowa operacja” i korekty
+│   ├── views.js · dashboard.js · admin.js  ← ekrany modułów, pulpit, kartoteki / użytkownicy / administracja
+│   └── intro.js · styles.css · index.template.html
+├── app/assets/                    ← film intro, czcionki PDF (SIL OFL 1.1)
+├── server/core.mjs · riw-server.mjs ← ResInvest ERP Serwer (SQLite, sesje, API, kopie)
+├── config/app.config.json         ← przeliczniki i wartości domyślne
+├── config/server.config.json      ← konfiguracja serwera (środowisko)
+├── data/sample_data.json          ← przykładowe dane testowe
+├── tools/                         ← build.mjs, i18n-extract.mjs, export-sample-data.mjs, czcionki PDF
+├── installer/                     ← instalator Windows (Inno Setup 6), skrypty uruchomieniowe .cmd
+├── tests/                         ← engine, pdf, platform, server (node:test) · e2e.cjs (Playwright) · scenariusze
+├── docs/                          ← plan zmian i architektura, sugestie UI
+├── TASKS.md · progress.md
+└── LICENSE
 ```
 
 ## Budowanie i testy
 
-Wymagany Node.js ≥ 18.
+Wymagany **Node.js ≥ 22.13** (moduł `node:sqlite`).
 
 ```bash
 cd resinvest-erp
-npm run check        # kontrola składni źródeł
-npm run build        # → ResInvest_ERP_demo.html (wstrzykuje konfigurację, czcionki PDF i film intro)
-npm run test:unit    # 72 testy: silnik + generator PDF
+npm run check         # kontrola składni
+npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
+npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
+npm run test:unit     # silnik (68), PDF (4), platforma: i18n, hasła, logowanie, usługi, migracja (19)
+npm run test:server   # serwer: setup, logowanie, CSRF, komendy, blokady, kopie, restart (8)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e     # 147 kontroli w przeglądarce
-# pełna kontrola tekstu PDF (polskie znaki) — Python z pypdf:
-PDF_PYTHON=/ścieżka/do/python npm run test:e2e
+npm run test:e2e      # 147 kontroli w przeglądarce (logowanie kontami demonstracyjnymi)
 ```
-
-Czcionek PDF nie trzeba generować — są w repozytorium. Odtworzenie: `pip install fonttools && python3 tools/make-pdf-fonts.py`.
 
 ### Instalator Windows
 
-Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php).
+Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php) i dostępu do nodejs.org (pobranie `node.exe`, weryfikacja SHA-256).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Demo_Setup_2.6.0.exe
+# → installer\Output\ResInvestERP_Setup_3.0.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
-## Kopie zapasowe i dane
+## Kopie zapasowe i bezpieczeństwo danych
 
-* *Administracja → Pobierz kopię (JSON)* — pełny stan (operacje, dokumenty, korekty, anulowania, księga, inwentaryzacja, flota, audyt).
-* *Wczytaj kopię* — kontrola struktury (schemat 3) przed zastąpieniem danych; import zapisywany w audycie.
-* Uszkodzone dane są zachowywane pod kluczem `riw.demo.state.v3.uszkodzone.<czas>`, a program startuje na danych przykładowych.
-* Dane z wersji 2.0 (`riw.demo.state.v2`) i 1.x pozostają nienaruszone pod starymi kluczami; 2.1 startuje na danych przykładowych.
+* **Serwer:** kopia przy każdym starcie i codziennie o `backup.hour`; przechowywanie `keepDays` dni; kopia ręczna
+  (menu Start / *Administracja → Utwórz kopię teraz*). Każda zmiana danych to jedna transakcja SQLite: stan, rewizja
+  i wpis dziennika zapisują się razem albo wcale. `--check` sprawdza sumy kontrolne stanu i łańcuch dziennika.
+* **Tryb lokalny:** *Administracja → Pobierz kopię (JSON)*; zapis chroniony blokadą między kartami (Web Locks);
+  uszkodzone dane są zachowywane pod kluczem `riw.v3.state.uszkodzone.<czas>`.
+* **Import kopii** (oba tryby): kontrola struktury, migracja do schematu 4, zachowanie zalogowanego administratora;
+  hasła nigdy nie trafiają do kopii JSON.
 
-## Ograniczenia demonstratora
+## Migracja z Demo 2.x
 
-* Dane żyją w jednej przeglądarce; wieloużytkowość jest symulowana przełącznikiem użytkownika, blokada zapisu (Web Locks) działa między kartami tej samej przeglądarki.
-* Brak logowania hasłem i serwerowej kontroli uprawnień — uprawnienia sprawdza silnik w przeglądarce.
-* Wycena orientacyjna (średnia cena zakupu); pełna wycena magazynowa — etap produkcyjny.
-* Znacznik czasu audytu to czas rzeczywisty komputera, a data operacji — data systemowa demo (ustawiana w Administracji).
-* Przeglądarki bez kodeka H.264/AAC pokazują planszę firmową z muzyką syntezowaną zamiast filmu intro.
+Przy pierwszym uruchomieniu 3.0 w tej samej przeglądarce dane Demo 2.x (`riw.demo.state.v3`) są przenoszone do 3.0
+(schemat 4, loginy tworzone z nazwisk). Konta demonstracyjne otrzymują hasło `demo1234`. Na serwer dane przenosi się
+kopią JSON: *Administracja → Pobierz kopię* w trybie lokalnym → *Wczytaj kopię* na serwerze.
+
+## Ograniczenia i dalszy rozwój
+
+* Wycena stanu orientacyjna (średnia cena zakupu); pełna wycena magazynowa (FIFO / średnia ruchoma) — kolejna faza.
+* Serwer przechowuje stan jako dokument JSON w jednej tabeli (+ dziennik zmian); przy bardzo dużej liczbie operacji
+  (setki tysięcy) planowane jest rozbicie na tabele relacyjne — interfejs komend `RIW.Service` pozostaje bez zmian.
+* Tryb lokalny chroni dostęp w obrębie programu, ale dane w przeglądarce może odczytać osoba z dostępem do konta
+  Windows — do pracy na danych firmy używaj serwera.
+* Przeglądarki bez kodeka H.264/AAC pokazują w intro planszę firmową z muzyką syntezowaną.

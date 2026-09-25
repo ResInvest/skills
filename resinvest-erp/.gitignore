@@ -1,0 +1,6 @@
+# dane serwera (baza SQLite, kopie, logi) — nigdy w repozytorium
+data-server/
+# środowisko Node.js pobierane przy budowie instalatora
+installer/runtime/
+installer/Output/
+node_modules/

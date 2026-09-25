@@ -1,0 +1,155 @@
+/* Test integracyjny ResInvest ERP Serwer (HTTP + SQLite) — uruchamia serwer na wolnym porcie
+   z tymczasowym katalogiem danych.  Uruchomienie:  node --test tests/server.test.mjs  (Node ≥ 22.13) */
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createServer } from "node:net";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+globalThis.RIW_CONFIG = {};
+require("../app/src/i18n.js");
+const R = require("../app/src/engine.js");
+require("../app/src/seed.js");
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const SERVER = join(ROOT, "server", "riw-server.mjs");
+const DATA = mkdtempSync(join(tmpdir(), "riw-srv-"));
+let proc, BASE;
+
+const freePort = () => new Promise(res => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
+const startServer = async (extra = []) => {
+  const port = await freePort();
+  BASE = `http://127.0.0.1:${port}`;
+  proc = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", SERVER, "--port", String(port), "--data", DATA, ...extra], { env: Object.assign({}, process.env, { RIW_TODAY: "2026-09-23", RIW_HOST: "127.0.0.1" }), stdio: "pipe" });
+  for (let i = 0; i < 100; i++) { try { const r = await fetch(BASE + "/api/health"); if (r.ok) return; } catch (e) {} await new Promise(r => setTimeout(r, 100)); }
+  throw new Error("Serwer nie wystartował");
+};
+const stopServer = () => new Promise(res => { if (!proc || proc.exitCode !== null) return res(); proc.once("exit", res); proc.kill("SIGTERM"); });
+
+/** Klient z ciasteczkiem sesji. */
+function client() {
+  let cookie = "";
+  const call = async (method, path, body, headers = {}) => {
+    const h = Object.assign({ "Content-Type": "application/json", "X-RIW": "1", "Accept-Language": "pl" }, cookie ? { Cookie: cookie } : {}, headers);
+    const r = await fetch(BASE + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+    const sc = r.headers.get("set-cookie"); if (sc) cookie = sc.split(";")[0].endsWith("=") ? "" : sc.split(";")[0];
+    const text = await r.text(); let json = null; try { json = JSON.parse(text); } catch (e) {}
+    return { status: r.status, json, headers: r.headers };
+  };
+  return { get: (p, h) => call("GET", p, undefined, h), post: (p, b, h) => call("POST", p, b, h), get cookie() { return cookie; } };
+}
+
+before(async () => { await startServer(); });
+after(async () => { await stopServer(); rmSync(DATA, { recursive: true, force: true }); });
+
+test("Serwer: zdrowie, konfiguracja pierwszego uruchomienia, nagłówki bezpieczeństwa", async () => {
+  const h = await client().get("/api/health");
+  assert.equal(h.json.app, "resinvest-erp");
+  assert.equal(h.json.setup, true);
+  assert.match(h.headers.get("content-security-policy") || "", /default-src/);
+  assert.equal(h.headers.get("x-content-type-options"), "nosniff");
+  const html = await fetch(BASE + "/");
+  assert.equal(html.status, 200);
+  assert.match(await html.text(), /ResInvest ERP/);
+});
+
+test("Serwer: ochrona CSRF — bez nagłówka aplikacji i z obcego pochodzenia żądanie odrzucone", async () => {
+  const c = client();
+  assert.equal((await c.post("/api/setup", {}, { "X-RIW": "" })).status, 403);
+  assert.equal((await c.post("/api/setup", {}, { Origin: "http://evil.example" })).status, 403);
+});
+
+test("Serwer: setup → logowanie → komenda → stan; sesja HttpOnly; drugi setup zablokowany", async () => {
+  const c = client();
+  assert.equal((await c.post("/api/setup", { name: "Anna Admin", login: "anna", password: "krotkie", sample: true })).status, 400);
+  const s = await c.post("/api/setup", { name: "Anna Admin", login: "anna", password: "Biomasa2026", sample: true });
+  assert.equal(s.status, 200, JSON.stringify(s.json));
+  assert.equal((await c.post("/api/setup", { name: "X Y Z", login: "xyz", password: "Biomasa2026" })).status, 409);
+  assert.equal((await c.get("/api/state")).status, 401);
+  const l = await c.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  assert.equal(l.status, 200, JSON.stringify(l.json));
+  assert.match(l.headers.get("set-cookie"), /HttpOnly/i);
+  assert.match(l.headers.get("set-cookie"), /SameSite=Strict/i);
+  const st = await c.get("/api/state");
+  assert.equal(st.status, 200);
+  const rev0 = st.json.rev, n0 = st.json.state.operations.length;
+  const d = R.Seed.draftOf("2026-09-23", { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "100", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place: "RiC Zabrze" } });
+  const r = await c.post("/api/cmd", { cmd: "op.commit", args: { draft: d } });
+  assert.equal(r.json.res.ok, true, r.json.res.error);
+  assert.equal(r.json.state.operations.length, n0 + 1);
+  assert.ok(r.json.rev > rev0);
+  assert.equal(r.json.state.audit.at(-1).userId, r.json.state.users.find(u => u.login === "anna").id, "autor z sesji serwera");
+  const dup = await c.post("/api/cmd", { cmd: "op.commit", args: { draft: d } });
+  assert.equal(((await c.get("/api/state")).json.state.operations.length), n0 + 1, "idempotencja: ponowne wysłanie nie tworzy drugiej operacji");
+  assert.equal(dup.json.res.duplicate, true);
+  const d2 = R.Seed.draftOf("2026-09-23", { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "10", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place: "RiC Zabrze" } });
+  const forged = await c.post("/api/cmd", { cmd: "op.commit", args: { draft: d2, user: { id: "u_view" }, userId: "u_view" } });
+  assert.equal(forged.json.state.operations.at(-1).userId, forged.json.state.users.find(u => u.login === "anna").id, "użytkownik podany w argumentach jest ignorowany");
+});
+
+test("Serwer: język odpowiedzi wg Accept-Language / profilu", async () => {
+  const c = client();
+  await c.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  const r = await c.post("/api/cmd", { cmd: "master.save", args: { kind: "partners", rec: { name: "Firma Z", role: "buyer", nip: "1234567890" } } }, { "Accept-Language": "en" });
+  assert.equal(r.json.res.ok, false);
+  assert.match(JSON.stringify(r.json.res), /Invalid NIP|NIP tax ID/);
+});
+
+test("Serwer: użytkownik tworzony przez administratora — hasło tymczasowe wymusza zmianę", async () => {
+  const a = client();
+  await a.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  const cr = await a.post("/api/users", { rec: { name: "Jan Magazyn", login: "jan.mag", role: "magazynier", whId: "wh_zab", active: true }, password: "Tymczas2026" });
+  assert.equal(cr.json.res.ok, true, JSON.stringify(cr.json.res));
+  const j = client();
+  const l = await j.post("/api/auth/login", { login: "jan.mag", password: "Tymczas2026" });
+  assert.equal(l.json.mustChange, true);
+  assert.equal((await j.get("/api/state")).json.code, "MUST_CHANGE");
+  assert.equal((await j.post("/api/auth/password", { old: "Tymczas2026", new: "Wlasne2026x" })).status, 200);
+  assert.equal((await j.get("/api/state")).status, 200);
+  assert.equal((await j.post("/api/users", { rec: { name: "Ktoś Inny", login: "ktos", role: "admin", whId: "wh_zab" }, password: "Tymczas2026" })).status, 403, "magazynier nie zarządza kontami");
+});
+
+test("Serwer: blokada konta po 5 błędnych hasłach, odblokowanie przez administratora", async () => {
+  const x = client();
+  for (let i = 0; i < 5; i++) assert.equal((await x.post("/api/auth/login", { login: "jan.mag", password: "zle-haslo-" + i })).status, 401);
+  const locked = await x.post("/api/auth/login", { login: "jan.mag", password: "Wlasne2026x" });
+  assert.equal(locked.status, 401);
+  assert.match(locked.json.error, /zablokowane/);
+  const a = client();
+  await a.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  const jan = (await a.get("/api/state")).json.state.users.find(u => u.login === "jan.mag");
+  const acc = (await a.get("/api/users/accounts")).json.accounts[jan.id];
+  assert.ok(acc.lockedUntil, JSON.stringify(acc));
+  assert.equal((await a.post("/api/users/unlock", { userId: jan.id })).status, 200);
+  assert.equal((await x.post("/api/auth/login", { login: "jan.mag", password: "Wlasne2026x" })).status, 200);
+});
+
+test("Serwer: wylogowanie unieważnia sesję", async () => {
+  const c = client();
+  await c.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  const old = c.cookie;
+  assert.equal((await c.post("/api/auth/logout", {})).status, 200);
+  const r = await fetch(BASE + "/api/state", { headers: { Cookie: old } });
+  assert.equal(r.status, 401);
+});
+
+test("Serwer: kopia zapasowa na żądanie i kontrola spójności dziennika", async () => {
+  const a = client();
+  await a.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  const b = await a.post("/api/backups", {});
+  assert.equal(b.status, 200, JSON.stringify(b.json));
+  const list = await a.get("/api/backups");
+  assert.ok(list.json.backups.length >= 1);
+  await stopServer();
+  const chk = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", SERVER, "--data", DATA, "--check"], { encoding: "utf8", env: Object.assign({}, process.env, { RIW_TODAY: "2026-09-23" }) });
+  assert.equal(chk.status, 0, chk.stdout + chk.stderr);
+  assert.ok(readdirSync(join(DATA, "backups")).some(f => f.endsWith(".sqlite")));
+  await startServer();
+  const again = client();
+  assert.equal((await again.post("/api/auth/login", { login: "anna", password: "Biomasa2026" })).status, 200, "dane przetrwały restart");
+});
