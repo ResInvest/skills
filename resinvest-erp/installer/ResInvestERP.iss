@@ -1,5 +1,7 @@
-; =========================================================================
-;  ResInvest ERP 3.1 · instalator Windows (Inno Setup 6)
+﻿; =========================================================================
+;  ResInvest ERP 3.1 · instalator Windows (Inno Setup 7; zgodny z Inno Setup 6.3+)
+;  Kodowanie pliku: UTF-8 z BOM (wymagane dla polskich i czeskich znaków — Inno Setup 7
+;  przerywa kompilację przy bajtach niezgodnych ze stroną kodową pliku).
 ;
 ;  Budowanie (Windows, z katalogu resinvest-erp):
 ;    powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1

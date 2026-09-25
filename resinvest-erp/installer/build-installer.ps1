@@ -1,6 +1,6 @@
-# Buduje ResInvest ERP 3.1 i instalator Windows.  Uruchom z katalogu resinvest-erp:
+﻿# Buduje ResInvest ERP 3.1 i instalator Windows.  Uruchom z katalogu resinvest-erp:
 #   powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1 [-NodeVersion 22.22.2] [-SkipTests]
-# Wymagania: Node.js >= 22.13 (do budowania), Inno Setup 6 (ISCC.exe), dostęp do nodejs.org
+# Wymagania: Node.js >= 22.13 (do budowania), Inno Setup 7 lub 6 (ISCC.exe), dostęp do nodejs.org
 # (pobranie node.exe dołączanego do instalatora — suma SHA-256 sprawdzana z SHASUMS256.txt).
 param(
   [string]$NodeVersion = "22.22.2",
@@ -47,12 +47,24 @@ if (-not (Test-Path $exe) -or -not (Test-Path $stamp) -or ((Get-Content $stamp) 
 & $exe -e "const [a,b]=process.versions.node.split('.').map(Number); if(a<22||(a===22&&b<13)) process.exit(1); require('node:sqlite');"
 if ($LASTEXITCODE -ne 0) { throw "Dołączony node.exe nie obsługuje node:sqlite (wymagany Node >= 22.13)" }
 
-Write-Host "== 4/4 Kompilacja instalatora (Inno Setup 6)"
-$iscc = @(
-  "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-  "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $iscc) { throw "Nie znaleziono Inno Setup 6 (ISCC.exe). Pobierz: https://jrsoftware.org/isdl.php" }
+Write-Host "== 4/4 Kompilacja instalatora (Inno Setup 7 / 6)"
+# Kolejność: ISCC z PATH, Inno Setup 7 (64- i 32-bitowy), Inno Setup 6, wpis instalatora w rejestrze
+$cands = @()
+$onPath = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+if ($onPath) { $cands += $onPath.Source }
+$cands += @(
+  "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
+  "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
+  "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+  "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+)
+foreach ($k in @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 7_is1", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 7_is1", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1")) {
+  $loc = (Get-ItemProperty $k -ErrorAction SilentlyContinue).InstallLocation
+  if ($loc) { $cands += (Join-Path $loc "ISCC.exe") }
+}
+$iscc = $cands | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $iscc) { throw "Nie znaleziono ISCC.exe (Inno Setup 7 lub 6). Pobierz: https://jrsoftware.org/isdl.php" }
+Write-Host "Kompilator: $iscc"
 & $iscc "installer\ResInvestERP.iss"
 if ($LASTEXITCODE -ne 0) { throw "Kompilacja instalatora nieudana" }
 Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.1.0.exe"

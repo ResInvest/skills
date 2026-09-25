@@ -1,5 +1,5 @@
 @echo off
-rem ResInvest ERP Serwer — uruchomienie (dane: %%ProgramData%%\ResInvestERP, konfiguracja: config\server.config.json)
+rem ResInvest ERP Serwer - uruchomienie (dane: ProgramData\ResInvestERP, konfiguracja: config\server.config.json)
 title ResInvest ERP Serwer
 cd /d "%~dp0"
 set "RIW_DATA=%ProgramData%\ResInvestERP"
