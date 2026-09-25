@@ -308,6 +308,16 @@ test("Logowanie e-mailem firmowym: domena z konfiguracji, unikalny adres, rejest
   assert.equal((await L.login(ok.state, "ewa.nowicka@resinvest.group", "Rejestracja2026")).ok, true);
 });
 
+test("Magazyny: dodaje i zmienia tylko uprawnienie warehouses.edit (Administrator), Kierownik — pozostałe kartoteki", () => {
+  const s = fresh();
+  const w = Service.exec(s, "master.save", { kind: "warehouses", rec: { code: "TST", name: "Magazyn testowy", address: "", active: true } }, ctxOf(s, "u_kier"));
+  assert.equal(w.code, "FORBIDDEN");
+  assert.equal(Service.exec(s, "master.remove", { kind: "warehouses", id: "wh_rok" }, ctxOf(s, "u_kier")).code, "FORBIDDEN");
+  assert.equal(Service.exec(s, "master.save", { kind: "partners", rec: { name: "Firma Kierownika", role: "buyer" } }, ctxOf(s, "u_kier")).ok, true);
+  assert.equal(Service.exec(s, "master.save", { kind: "warehouses", rec: { code: "TST", name: "Magazyn testowy", address: "", active: true } }, ctxOf(s, "u_admin")).ok, true);
+  assert.equal(Service.exec(s, "master.remove", { kind: "warehouses", id: "wh_rok" }, ctxOf(s, "u_admin")).ok, false, "magazyn z przypisanymi osobami / flotą nie jest usuwany");
+});
+
 test("Administrator dodaje innych administratorów; usunięcie konta tylko bez historii", () => {
   const s = fresh(), c = ctxOf(s, "u_admin");
   const n = Service.run(s, "user.save", { rec: { name: "Druga Admin", email: "druga.admin@resinvest.group", role: "admin", whId: "wh_bra", active: true } }, c);
@@ -340,8 +350,9 @@ test("Usuwanie: nieużywany rekord tak, użyty w dokumentach — nie (dezaktywac
   assert.equal(Service.exec(R.clone(s), "fleet.remove", { kind: "vehicles", id: "ve_daf" }, c).ok, true, "pojazd bez kursów");
   assert.equal(Service.exec(R.clone(s), "master.remove", { kind: "products", id: "pr_drewno" }, c).ok, false);
   assert.equal(Service.exec(R.clone(s), "master.remove", { kind: "warehouses", id: "wh_rok" }, c).ok, false, "przypisani ludzie i flota");
-  const w = Service.run(s, "master.save", { kind: "warehouses", rec: { code: "TST", name: "RiC Test", address: "", active: true } }, c);
-  assert.equal(Service.exec(w.state, "master.remove", { kind: "warehouses", id: w.res.rec.id }, c).ok, true);
+  const ca = ctxOf(s, "u_admin");   // magazyny: uprawnienie warehouses.edit (Administrator)
+  const w = Service.run(s, "master.save", { kind: "warehouses", rec: { code: "TST", name: "RiC Test", address: "", active: true } }, ca);
+  assert.equal(Service.exec(w.state, "master.remove", { kind: "warehouses", id: w.res.rec.id }, ca).ok, true);
 });
 
 test("Administrator przełącza magazyn roboczy; start pracy na czysto zachowuje kartoteki i konta", () => {

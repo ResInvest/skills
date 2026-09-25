@@ -1,9 +1,11 @@
-# ResInvest ERP 3.1 (3.1.0) — prototyp końcowy
+# ResInvest ERP 3.2 (3.2.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
-> Wersja 3.1.0 to **prototyp końcowy przed kompilacją instalatora Windows**: pełna funkcjonalność,
-> testy automatyczne zaliczone, instalator gotowy do zbudowania na Windows (`installer\build-installer.ps1`).
+> Wersja 3.2.0 wprowadza **pełny system kont firmowych**: logowanie e-mailem `@resinvest.group` sprawdzanym
+> po stronie serwera, dodawanie pracowników **zaproszeniem e-mail** (Resend), reset hasła linkiem, role
+> ADMINISTRATOR / MANAGER / MAGAZYNIER / OBSERWATOR / AUDYTOR z edytowalnymi uprawnieniami, statusy kont,
+> **izolację danych magazynów** i dziennik audytu z adresem IP. Instalator Windows: Inno Setup 7 (`installer\build-installer.ps1`).
 
 System ERP do **obrotu i magazynowania biomasy drzewnej**: zakupy, produkcja zrębki, sprzedaż, przesunięcia MM,
 transport (flota własna, przewoźnicy, kolej), inwentaryzacja z zamknięciem miesiąca, korekty i anulowania,
@@ -13,10 +15,34 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 | Tryb | Dla kogo | Dane | Logowanie |
 |---|---|---|---|
-| **Serwer** (zalecany do pracy) | wiele stanowisk w sieci firmy, także telefon / tablet | baza **SQLite** na serwerze (transakcje, dziennik zmian z łańcuchem skrótów SHA-256, kopie codzienne) | konta na serwerze, hasła **scrypt**, sesja w ciasteczku HttpOnly, blokada po 5 próbach |
-| **Lokalny** | jedno stanowisko, szkolenie, pokaz | przeglądarka (`localStorage`), kopia JSON na żądanie | konta lokalne, hasła **PBKDF2-SHA256**, wylogowanie po bezczynności |
+| **Serwer — FIRMOWY** (zalecany do pracy) | wiele stanowisk w sieci firmy, także telefon / tablet | baza **SQLite** na serwerze (transakcje, dziennik zmian z łańcuchem skrótów SHA-256, kopie codzienne) | konta na serwerze, hasła **scrypt**, sesja w ciasteczku HttpOnly, blokada po 5 próbach |
+| **Lokalny — OFFLINE** | jedno stanowisko, szkolenie, pokaz | przeglądarka (`localStorage`), kopia JSON na żądanie | konta lokalne, hasła **PBKDF2-SHA256**, wylogowanie po bezczynności |
 
-Program nie korzysta z internetu ani bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML.
+Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
+serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.2
+
+* **Logowanie e-mailem służbowym** — domena sprawdzana **na serwerze** (`validateCompanyEmail`: dokładnie `@resinvest.group`,
+  bez subdomen i podobnych domen), komunikaty bez szczegółów technicznych („Nieprawidłowy e-mail lub hasło.”,
+  „Twoje konto jest nieaktywne.”, „Twoje konto nie zostało jeszcze aktywowane.”).
+* **Tylko zaproszenia** — *Użytkownicy → Dodaj użytkownika*: imię, nazwisko, e-mail, rola, magazyn domyślny,
+  dostępne magazyny → **Wyślij zaproszenie**; pracownik klika link, ustawia hasło, konto staje się aktywne.
+  Samodzielna rejestracja domyślnie wyłączona (można ją włączyć w *Administracji*).
+* **Nie pamiętam hasła** — link resetu (1 h, jednorazowy), zawsze ta sama odpowiedź; zmiana adresu e-mail wymaga
+  potwierdzenia linkiem; powiadomienia „hasło zmienione” i „konto dezaktywowane”. Szablony PL z marką ResInvest ERP.
+* **Poczta Resend** (API lub SMTP) konfigurowana w `server.env` (wzór `.env.example`) — klucz tylko na serwerze.
+* **Role** ADMINISTRATOR · MANAGER (Kierownik) · MAGAZYNIER · OBSERWATOR · **AUDYTOR** (nowa: odczyt wszystkich
+  magazynów i audytu) i **edytor uprawnień ról** (`#/admin/roles`); statusy kont **INVITED / ACTIVE / SUSPENDED / DISABLED**.
+* **Wiele magazynów na osobę** (magazyn domyślny + dostępne) i **izolacja danych**: serwer wysyła przeglądarce
+  tylko dane dostępnych magazynów; korekty, anulowania i zatwierdzenia tylko w dostępnych magazynach.
+* **Dziennik audytu** (`#/admin/audit`): kody zdarzeń (USER_INVITED, ROLE_CHANGED, WAREHOUSE_ACCESS_CHANGED,
+  PASSWORD_RESET_REQUESTED…), adres IP i przeglądarka, dziennik logowań, dziennik wysyłek e-mail, CSV.
+* **Obieg zatwierdzania wyłączony domyślnie** — magazynier zatwierdza operację sam; włączenie w *Administracji*.
+* Zabezpieczenia: brak zmiany własnej roli, rolę ADMINISTRATOR nadaje tylko administrator, ostatniego aktywnego
+  administratora nie można zdegradować / zawiesić / dezaktywować / usunąć; magazyny zmienia tylko Administrator.
+* Schemat danych **6** (migracja 5 → 6 automatyczna, bez utraty danych). Dokumentacja: `docs/AUTHENTICATION.md`,
+  `docs/USERS_AND_ROLES.md`, `docs/EMAIL_SETUP.md`, `docs/SECURITY.md`, `docs/SUPABASE_SETUP.md`.
 
 ## Nowe w 3.1
 
@@ -73,17 +99,17 @@ Program nie korzysta z internetu ani bibliotek zewnętrznych (CDN) — wszystko 
 
 ## Instalacja (Windows)
 
-Uruchom **`ResInvestERP_Setup_3.1.0.exe`** (budowanie — niżej) i wybierz:
+Uruchom **`ResInvestERP_Setup_3.2.0.exe`** (budowanie — niżej) i wybierz:
 
 * **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
   tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
   *ResInvest ERP Serwer — uruchom*, *ResInvest ERP (serwer) — otwórz w przeglądarce*, *Kopia zapasowa bazy teraz*,
-  *Kontrola spójności bazy*, *Folder danych serwera*, *Instrukcja*. Opcjonalnie: autostart serwera przy logowaniu
+  *Kontrola spójności bazy*, *Folder danych serwera*, *Konfiguracja poczty i adresu (server.env)*, *Instrukcja*. Opcjonalnie: autostart serwera przy logowaniu
   do Windows i reguła zapory dla portu 8080 (dostęp z sieci lokalnej).
 * **Tylko program** — sam plik HTML (tryb lokalny), bez serwera.
 
-Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie usuwa** danych serwera ani pliku
-`config\server.config.json`.
+Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie usuwa** danych serwera, pliku
+`config\server.config.json` ani `C:\ProgramData\ResInvestERP\server.env` (aktualizacja też ich nie nadpisuje).
 
 ### Pierwsze uruchomienie serwera
 
@@ -91,9 +117,12 @@ Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie us
 2. Przeglądarka otworzy `http://localhost:8080/` → ekran **Pierwsze uruchomienie**: imię i nazwisko administratora,
    e-mail firmowy (domyślnie `magazyn@resinvest.group`), hasło (min. 8 znaków, litery i cyfry); powstają magazyny
    RiC Zabrze, RiC Brąszewice i RiC Rokitki; opcjonalnie dane przykładowe do nauki.
-3. Pracownicy **rejestrują się sami** adresem firmowym, a administrator nadaje im rolę i magazyn — albo administrator
-   zakłada konta w module **Użytkownicy** (hasło startowe — użytkownik zmieni je przy pierwszym logowaniu).
-4. Inne komputery / telefony w sieci: `http://<adres-serwera>:8080/` (adres IP pokazuje konsola serwera).
+3. **Poczta:** Menu Start → *Konfiguracja poczty i adresu* → uzupełnij `APP_URL` (adres programu w sieci, np.
+   `http://192.168.1.20:8080`) i `RESEND_API_KEY`; uruchom serwer ponownie. Konfiguracja Resend i DNS (SPF, DKIM, DMARC):
+   [`docs/EMAIL_SETUP.md`](docs/EMAIL_SETUP.md). Bez klucza zaproszenia zapisują się w `C:\ProgramData\ResInvestERP\mail-outbox`.
+4. Administrator dodaje pracowników w **Użytkownicy → Dodaj użytkownika → Wyślij zaproszenie** (albo z hasłem
+   tymczasowym, gdy poczta nie jest skonfigurowana).
+5. Inne komputery / telefony w sieci: `http://<adres-serwera>:8080/` (adres IP pokazuje konsola serwera).
 
 ### Tryb lokalny (bez serwera)
 
@@ -103,20 +132,22 @@ działa w trybie „bez zapisu”). Dane przykładowe zawierają konta demonstra
 
 | E-mail (login) | Osoba | Rola | Magazyn |
 |---|---|---|---|
-| `magazyn@resinvest.group` | Mateusz Roesner | Administrator | RiC Zabrze (przełącza wszystkie) |
-| `anna.gorska@resinvest.group` | Anna Górska | Kierownik | RiC Zabrze |
+| `magazyn@resinvest.group` | Mateusz Roesner | Administrator | wszystkie (domyślny RiC Zabrze) |
+| `anna.gorska@resinvest.group` | Anna Górska | Kierownik | RiC Zabrze + RiC Brąszewice |
 | `adrian.wojciechowski@resinvest.group` | Adrian Wojciechowski | Magazynier | RiC Zabrze |
 | `tomasz.zajac@resinvest.group` | Tomasz Zając | Kierownik | RiC Brąszewice |
 | `pawel.kaczmarek@resinvest.group` | Paweł Kaczmarek | Magazynier | RiC Brąszewice |
 | `michal.lewandowski@resinvest.group` | Michał Lewandowski | Kierownik | RiC Rokitki |
 | `karolina.wisniewska@resinvest.group` | Karolina Wiśniewska | Magazynier | RiC Rokitki |
 | `beata.nowak@resinvest.group` | Beata Nowak | Obserwator | RiC Zabrze |
+| `ewa.krawczyk@resinvest.group` | Ewa Krawczyk | Audytor | wszystkie (odczyt) |
+| `jan.mazur@resinvest.group` | Jan Mazur | Magazynier — **zaproszony** (nie loguje się do aktywacji) | RiC Rokitki |
 
 Flota przykładowa: Zabrze — Scania R450, Volvo FH 500, rębak Jenz HEM 583; Brąszewice — MAN TGX (serwis),
 rębak Eschlböck Biber 92; Rokitki — DAF XF 480, rębak Albach Diamant 2000 (z kierowcami i operatorami).
 
 Dane przykładowe: bilans otwarcia 01.08.2026 (Zabrze: drewno 817 m³, zrębka leśna 8 173 MP, PKS i łupina po 728 t),
-operacje każdego rodzaju (operacje magazynierów zatwierdzone przez kierowników), MM Zabrze → Brąszewice, korekta WZ i anulowany zakup; plik `data/sample_data.json`
+operacje każdego rodzaju, MM Zabrze → Brąszewice, korekta WZ i anulowany zakup; plik `data/sample_data.json`
 (kopia do wczytania w *Administracja → Wczytaj kopię*).
 
 ## Funkcje
@@ -133,6 +164,7 @@ operacje każdego rodzaju (operacje magazynierów zatwierdzone przez kierownikó
 | **Inwentaryzacja** | okres miesięczny OTWARTA → ZAMKNIĘTA, lista spisowa, różnice dokumentem IN, blokada okresu; automatyczna kontrola przełomu miesiąca |
 | **Import / eksport** | kopia JSON (pełny stan, bez haseł), import z kontrolą struktury i migracją, CSV stanów / historii / bilansu, kopie SQLite serwera |
 | **Kartoteki** | Produkty, Kontrahenci, Magazyny, Flota (pojazdy, kierowcy, rębaki, operatorzy) |
+| **Konta i dostęp** | zaproszenia e-mail, reset hasła, statusy kont, role z edytowalnymi uprawnieniami, magazyn domyślny + dostępne, izolacja danych magazynów, dziennik audytu z IP |
 | **Bezpieczeństwo** | role i macierz uprawnień sprawdzane w silniku przy każdej komendzie (na serwerze — po stronie serwera), hasła z solą, blokady, sesje, CSRF, CSP, dziennik zmian z łańcuchem skrótów |
 
 ## Przeliczniki (`config/app.config.json`)
@@ -161,7 +193,12 @@ Plik `config/server.config.json` (w instalacji: `C:\Program Files\ResInvest ERP\
 | `backup.hour` / `keepDays` / `dir` | godzina kopii codziennej, przechowywanie, folder | 2 / 30 / `<dataDir>/backups` |
 | `tls.cert` / `tls.key` | pliki PEM — włączają HTTPS (zalecane poza siecią lokalną) | — |
 
-Zmienne środowiskowe: `RIW_PORT`, `RIW_HOST`, `RIW_DATA`, `RIW_TODAY` (tylko testy).
+Zmienne środowiskowe: `RIW_PORT`, `RIW_HOST`, `RIW_DATA`, `RIW_TODAY` (tylko testy), `RIW_CONFIG` (inna ścieżka pliku konfiguracji).
+
+**Poczta i adres linków** — plik `server.env` (wzór [`.env.example`](.env.example); w instalacji:
+`C:\ProgramData\ResInvestERP\server.env`): `APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`,
+`EMAIL_TRANSPORT` (`resend` / `smtp` / `file`), `SMTP_*`, `INVITE_HOURS` (72), `RESET_HOURS` (1), `CONFIRM_HOURS` (48).
+Plik z kluczem nie trafia do repozytorium (`.gitignore`).
 
 ```bash
 npm run server                          # uruchomienie (Node.js ≥ 22.13)
@@ -170,9 +207,11 @@ node server/riw-server.mjs --backup-now # kopia bazy teraz (działa także przy 
 node server/riw-server.mjs --check      # kontrola spójności bazy i łańcucha skrótów dziennika
 node server/riw-server.mjs --restore <plik.sqlite>      # przywrócenie kopii (serwer zatrzymany)
 node server/riw-server.mjs --reset-password <login>     # hasło tymczasowe (serwer zatrzymany)
+node server/riw-server.mjs --mail-test <adres>          # wiadomość próbna — sprawdzenie konfiguracji poczty
 ```
 
-Folder danych: `resinvest.sqlite` (baza), `backups/` (kopie `VACUUM INTO`), `logs/` (dzienne logi serwera).
+Folder danych: `resinvest.sqlite` (baza: stan, dziennik zmian, konta, sesje, tokeny e-mail, kolejka wysyłek),
+`backups/` (kopie `VACUUM INTO`), `logs/` (dzienne logi serwera), `mail-outbox/` (transport `file`), `server.env`.
 Przywrócenie zachowuje bieżącą bazę jako kopię bezpieczeństwa przed podmianą.
 
 ## Struktura projektu
@@ -181,7 +220,7 @@ Przywrócenie zachowuje bieżącą bazę jako kopię bezpieczeństwa przed podmi
 resinvest-erp/
 ├── ResInvest_ERP.html             ← wynik budowania: jeden plik (tryb lokalny i interfejs serwera)
 ├── app/src/
-│   ├── i18n.js · i18n.d01–d10.js  ← tłumaczenia (tekst PL = klucz; słowniki CS/EN), formaty liczb i dat
+│   ├── i18n.js · i18n.d01–d12.js  ← tłumaczenia (tekst PL = klucz; słowniki CS/EN), formaty liczb i dat
 │   ├── engine.js                  ← silnik domenowy (bez DOM): walidacja, księga, korekty, anulowania, raporty, migracje
 │   ├── service.js                 ← komendy zmieniające dane (wspólne: przeglądarka i serwer), uprawnienia
 │   ├── seed.js                    ← dane przykładowe i minimalne (pierwsze uruchomienie)
@@ -189,17 +228,19 @@ resinvest-erp/
 │   ├── pdf.js                     ← generator PDF + HTML do druku
 │   ├── core.js                    ← rdzeń interfejsu: magazyn danych, logowanie, nawigacja, motywy, języki
 │   ├── form.js                    ← formularz „Nowa operacja” i korekty
-│   ├── views.js · dashboard.js · admin.js  ← ekrany modułów, pulpit, kartoteki / użytkownicy / administracja
+│   ├── views.js · dashboard.js · admin.js  ← ekrany modułów, pulpit, kartoteki, użytkownicy, role, audyt, administracja
 │   └── intro.js · styles.css · index.template.html
 ├── app/assets/                    ← film intro, czcionki PDF (SIL OFL 1.1)
-├── server/core.mjs · riw-server.mjs ← ResInvest ERP Serwer (SQLite, sesje, API, kopie)
+├── server/core.mjs · riw-server.mjs ← ResInvest ERP Serwer (SQLite, sesje, tokeny, API, kopie)
+├── server/mail.mjs                ← poczta: szablony PL, Resend (API / SMTP), zapis .eml
+├── .env.example                   ← wzór zmiennych środowiskowych serwera (bez sekretów)
 ├── config/app.config.json         ← przeliczniki i wartości domyślne
 ├── config/server.config.json      ← konfiguracja serwera (środowisko)
 ├── data/sample_data.json          ← przykładowe dane testowe
 ├── tools/                         ← build.mjs, i18n-extract.mjs, export-sample-data.mjs, czcionki PDF
-├── installer/                     ← instalator Windows (Inno Setup 6), skrypty uruchomieniowe .cmd
-├── tests/                         ← engine, pdf, platform, server (node:test) · e2e.cjs (Playwright) · scenariusze
-├── docs/                          ← plan zmian i architektura, sugestie UI
+├── installer/                     ← instalator Windows (Inno Setup 7 / 6.3+), skrypty uruchomieniowe .cmd
+├── tests/                         ← engine, pdf, platform, server, auth (node:test) · e2e.cjs, e2e-server.cjs (Playwright)
+├── docs/                          ← uwierzytelnianie, użytkownicy i role, poczta, bezpieczeństwo, audyt i plan zmian
 ├── TASKS.md · progress.md
 └── LICENSE
 ```
@@ -213,19 +254,21 @@ cd resinvest-erp
 npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
-npm run test:unit     # silnik (68), PDF (4), platforma: i18n, hasła, logowanie, role, zatwierdzanie, rejestracja, magazyny (28)
-npm run test:server   # serwer: setup, logowanie, CSRF, komendy, rejestracja, zatwierdzanie, blokady, kopie, restart (9)
+npm run test:unit     # silnik (68), PDF (4), platforma: i18n, hasła, logowanie, role, statusy, magazyny, uprawnienia (29)
+npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35: zaproszenia, reset, izolacja magazynów, 403 (25)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # 164 kontrole w przeglądarce (logowanie formularzem, rejestracja, zatwierdzanie, ramka bez pamięci)
+npm run test:e2e      # przeglądarka: tryb OFFLINE (178 kontroli) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
 ```
 
 ### Instalator Windows
 
-Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php) i dostępu do nodejs.org (pobranie `node.exe`, weryfikacja SHA-256).
+Wymaga [Inno Setup 7](https://jrsoftware.org/isdl.php) (lub 6.3+) i dostępu do nodejs.org (pobranie `node.exe`,
+weryfikacja SHA-256). Skrypt odnajduje `ISCC.exe` w PATH, w `Program Files` (Inno Setup 7 i 6) i w rejestrze.
+Plik `.iss` jest zapisany w UTF-8 z BOM (polskie i czeskie znaki w Inno Setup 7).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Setup_3.1.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
+# → installer\Output\ResInvestERP_Setup_3.2.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
 ## Kopie zapasowe i bezpieczeństwo danych
@@ -235,7 +278,7 @@ powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
   i wpis dziennika zapisują się razem albo wcale. `--check` sprawdza sumy kontrolne stanu i łańcuch dziennika.
 * **Tryb lokalny:** *Administracja → Pobierz kopię (JSON)*; zapis chroniony blokadą między kartami (Web Locks);
   uszkodzone dane są zachowywane pod kluczem `riw.v3.state.uszkodzone.<czas>`.
-* **Import kopii** (oba tryby): kontrola struktury, migracja do schematu 4, zachowanie zalogowanego administratora;
+* **Import kopii** (oba tryby): kontrola struktury, migracja do bieżącego schematu (6), zachowanie zalogowanego administratora;
   hasła nigdy nie trafiają do kopii JSON.
 
 ## Migracja z Demo 2.x

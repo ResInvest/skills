@@ -1,5 +1,5 @@
 ﻿; =========================================================================
-;  ResInvest ERP 3.1 · instalator Windows (Inno Setup 7; zgodny z Inno Setup 6.3+)
+;  ResInvest ERP 3.2 · instalator Windows (Inno Setup 7; zgodny z Inno Setup 6.3+)
 ;  Kodowanie pliku: UTF-8 z BOM (wymagane dla polskich i czeskich znaków — Inno Setup 7
 ;  przerywa kompilację przy bajtach niezgodnych ze stroną kodową pliku).
 ;
@@ -7,7 +7,7 @@
 ;    powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ;  Skrypt: buduje ResInvest_ERP.html, generuje dane przykładowe, pobiera
 ;  środowisko Node.js (node.exe, weryfikacja SHA-256) do installer\runtime
-;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.1.0.exe
+;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.2.0.exe
 ;
 ;  Składniki:
 ;   * Program (tryb lokalny)   — samodzielny plik HTML; dane w przeglądarce,
@@ -16,11 +16,13 @@
 ;                                konta i sesje po stronie serwera, dziennik
 ;                                zmian z łańcuchem skrótów, kopie codzienne.
 ;                                Dane: C:\ProgramData\ResInvestERP (nie są
-;                                usuwane przy odinstalowaniu).
+;                                usuwane przy odinstalowaniu). Poczta (zaproszenia,
+;                                reset hasła): C:\ProgramData\ResInvestERP\server.env
+;                                — tworzony z .env.example tylko przy pierwszej instalacji.
 ; =========================================================================
 
 #define AppName "ResInvest ERP"
-#define AppVersion "3.1.0"
+#define AppVersion "3.2.0"
 #define AppPublisher "ResInvest Commodities"
 #define AppURL "http://localhost:8080/"
 #define ServerPort "8080"
@@ -103,6 +105,9 @@ english.LnkCheck=Database integrity check
 polish.LnkData=Folder danych serwera
 czech.LnkData=Složka dat serveru
 english.LnkData=Server data folder
+polish.LnkEnv=Konfiguracja poczty i adresu (server.env)
+czech.LnkEnv=Nastavení pošty a adresy (server.env)
+english.LnkEnv=E-mail and address settings (server.env)
 polish.LnkDocs=Instrukcja (README)
 czech.LnkDocs=Návod (README)
 english.LnkDocs=Manual (README)
@@ -144,6 +149,9 @@ Source: "..\server\*.mjs"; DestDir: "{app}\server"; Components: server; Flags: i
 Source: "..\app\src\*.js"; DestDir: "{app}\app\src"; Components: server; Flags: ignoreversion
 Source: "..\package.json"; DestDir: "{app}"; Components: server; Flags: ignoreversion
 Source: "..\config\server.config.json"; DestDir: "{app}\config"; Components: server; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "..\.env.example"; DestDir: "{app}\config"; Components: server; Flags: ignoreversion
+; plik z kluczem poczty — tylko przy pierwszej instalacji; aktualizacja nie nadpisuje, odinstalowanie nie usuwa
+Source: "..\.env.example"; DestDir: "{commonappdata}\ResInvestERP"; DestName: "server.env"; Components: server; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "runtime\node.exe"; DestDir: "{app}\runtime"; Components: server; Flags: ignoreversion
 Source: "runtime\LICENSE-node.txt"; DestDir: "{app}\runtime"; Components: server; Flags: ignoreversion skipifsourcedoesntexist
 Source: "scripts\*.cmd"; DestDir: "{app}"; Components: server; Flags: ignoreversion
@@ -158,6 +166,7 @@ Name: "{group}\{cm:LnkOpen}"; Filename: "{app}\ResInvest ERP (serwer).url"; Comp
 Name: "{group}\{cm:LnkBackup}"; Filename: "{app}\ResInvestERP-Kopia.cmd"; WorkingDir: "{app}"; Components: server
 Name: "{group}\{cm:LnkCheck}"; Filename: "{app}\ResInvestERP-Kontrola.cmd"; WorkingDir: "{app}"; Components: server
 Name: "{group}\{cm:LnkData}"; Filename: "{commonappdata}\ResInvestERP"; Components: server
+Name: "{group}\{cm:LnkEnv}"; Filename: "{sys}\notepad.exe"; Parameters: """{commonappdata}\ResInvestERP\server.env"""; Components: server
 Name: "{group}\{cm:LnkDocs}"; Filename: "{app}\README.md"; Components: app
 Name: "{group}\{uninstallexe}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; Tasks: desktopicon; Components: app and not server

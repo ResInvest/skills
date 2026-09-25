@@ -84,3 +84,16 @@ Ostatnia aktualizacja: 2026-09-25 · etap: **ResInvest ERP 3.1.0 — prototyp ko
 
 Wdrożenie pilotażowe serwera w sieci firmy (instalator 3.0.0), przeniesienie danych kopią JSON, szkolenie na kontach demonstracyjnych.
 Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z sumą kontrolną, wiele magazynów na użytkownika.
+
+
+## 3.2.0 — konta firmowe, role, izolacja magazynów (2026-09-25)
+
+| Zestaw | Wynik |
+|---|---|
+| `npm run check`, `npm run i18n` | OK · CS/EN: 0 braków, 0 błędnych parametrów, 0 nieużywanych (1 826 tekstów) |
+| `node --test tests/engine.test.mjs tests/pdf.test.mjs tests/platform.test.mjs` | 101/101 |
+| `node --test tests/server.test.mjs tests/auth.test.mjs` (HTTP + SQLite, poczta `file`) | 34/34 (w tym §34 1–20, §35 1–5) |
+| `node tests/e2e.cjs` — Chromium, tryb OFFLINE | 178/178, konsola bez błędów |
+| `node tests/e2e-server.cjs` — Chromium + serwer, zaproszenie i reset linkiem z .eml | 24/24, konsola bez błędów |
+| Wysyłka przez Resend (API/SMTP) | NIEPOTWIERDZONE — brak klucza API i dostępu do DNS w środowisku budowy |
+| Instalator 3.2.0 (Inno Setup 7) | NIEPOTWIERDZONE — kompilacja wymaga Windows |

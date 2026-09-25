@@ -1604,6 +1604,7 @@
       const K = this.KINDS[kind];
       if (!K) return { ok: false, error: t("Nieznana kartoteka") };
       if (!can(ctx && ctx.user, "master.edit")) return { ok: false, error: t("Edycja kartotek wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
+      if (kind === "warehouses" && !can(ctx.user, "warehouses.edit")) return { ok: false, error: t("Magazyny dodaje i zmienia administrator"), code: "FORBIDDEN" };
       const prev = rec.id ? byId(state[kind], rec.id) : null;
       if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono") };
       const r = Object.assign({}, prev || {}, rec);
@@ -1636,6 +1637,7 @@
     const K = this.KINDS[kind];
     if (!K) return { ok: false, error: t("Nieznana kartoteka") };
     if (!can(ctx && ctx.user, "master.edit")) return { ok: false, error: t("Edycja kartotek wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
+    if (kind === "warehouses" && !can(ctx.user, "warehouses.edit")) return { ok: false, error: t("Magazyny dodaje i zmienia administrator"), code: "FORBIDDEN" };
     const rec = byId(state[kind], id);
     if (!rec) return { ok: false, error: t("Nie znaleziono") };
     const inOps = state.operations.some(o => JSON.stringify(o).includes(`"${id}"`)) || state.drafts.some(d => JSON.stringify(d).includes(`"${id}"`));
@@ -1643,7 +1645,7 @@
     if (kind === "partners" && inOps) return { ok: false, error: t("Kontrahent występuje w dokumentach — nie można go usunąć; dezaktywuj go") };
     if (kind === "warehouses") {
       if (state.ledger.some(l => l.whId === id) || state.operations.some(o => o.whId === id || o.toWhId === id) || state.drafts.some(d => d.whId === id)) return { ok: false, error: t("Magazyn ma dokumenty lub ruchy w księdze — nie można go usunąć; dezaktywuj go") };
-      if (state.users.some(u => u.whId === id)) return { ok: false, error: t("Do magazynu są przypisani użytkownicy — najpierw przenieś ich do innego magazynu") };
+      if (state.users.some(u => u.whId === id || (u.warehouseIds || []).includes(id))) return { ok: false, error: t("Do magazynu są przypisani użytkownicy — najpierw przenieś ich do innego magazynu") };
       if (Object.values(state.fleet).some(list => list.some(x => x.whId === id))) return { ok: false, error: t("Do magazynu jest przypisana flota — najpierw zmień jej magazyn") };
       if (state.warehouses.length <= 1) return { ok: false, error: t("W systemie musi pozostać co najmniej jeden magazyn") };
     }

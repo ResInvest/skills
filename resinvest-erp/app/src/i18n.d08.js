@@ -35,7 +35,6 @@
   "Import kopii zapasowej": ["Import zálohy", "Backup imported"],
   "Przywrócenie danych przykładowych": ["Obnovení ukázkových dat", "Sample data restored"],
   "Nieznana komenda: {c}": ["Neznámý příkaz: {c}", "Unknown command: {c}"],
-  "Konto jest nieaktywne": ["Účet je neaktivní", "The account is inactive"],
   "Błąd wewnętrzny — nic nie zapisano: {m}": ["Vnitřní chyba — nic nebylo uloženo: {m}", "Internal error — nothing was saved: {m}"],
   "produkcja": ["výroba", "production"],
   "sprzedaż": ["prodej", "sale"],

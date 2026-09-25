@@ -70,8 +70,9 @@
       };
     }
   };
-  const addBtn = (kind, label) => App.can("master.edit") ? `<button class="btn primary" type="button" data-madd="${kind}">${ic("plus", 15)} ${th(label)}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`;
-  const editBtn = (kind, id) => App.can("master.edit") ? `<button class="btn sm" type="button" data-medit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm danger" type="button" data-mdel="${kind}|${esc(id)}" title="${esc(t("Usuń"))}" aria-label="${esc(t("Usuń"))}">${ic("trash", 13)}</button>` : "";
+  const masterPerm = kind => kind === "warehouses" ? "warehouses.edit" : "master.edit";
+  const addBtn = (kind, label) => App.can(masterPerm(kind)) ? `<button class="btn primary" type="button" data-madd="${kind}">${ic("plus", 15)} ${th(label)}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`;
+  const editBtn = (kind, id) => App.can(masterPerm(kind)) ? `<button class="btn sm" type="button" data-medit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm danger" type="button" data-mdel="${kind}|${esc(id)}" title="${esc(t("Usuń"))}" aria-label="${esc(t("Usuń"))}">${ic("trash", 13)}</button>` : "";
   function bindMaster(page) {
     $$("[data-madd]", page).forEach(b => b.onclick = () => Master.edit(b.dataset.madd, null));
     $$("[data-mdel]", page).forEach(b => b.onclick = async e => {

@@ -224,6 +224,9 @@ test("§34.8 ADMINISTRATOR — użytkownicy, role, uprawnienia, konfiguracja, ws
   assert.equal(rp.json.state.audit.at(-1).code, "ROLE_PERMISSIONS_CHANGED");
   assert.equal((await admin.cmd("roles.save", { role: "admin", perms: [] })).json.res.ok, false, "ADMINISTRATOR zawsze pełny");
   assert.equal((await admin.cmd("roles.reset", { role: "obserwator" })).json.res.ok, true);
+  const pw = await admin.post("/api/users/password", { userId: "u_rok", password: "Tymczas2026r" });
+  assert.equal(pw.status, 200);
+  assert.ok((await admin.state()).audit.some(x => x.code === "PASSWORD_SET_BY_ADMIN" && x.entityId === "u_rok"), "hasło nadane przez administratora w audycie");
   // administrator nadaje innemu użytkownikowi rolę ADMINISTRATOR i odbiera ją
   const st2 = await admin.state(), k = st2.users.find(u => u.id === S.invitedId);
   const up = await admin.cmd("user.save", { rec: Object.assign({}, k, { role: "admin" }) });

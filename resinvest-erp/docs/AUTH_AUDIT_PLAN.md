@@ -134,3 +134,19 @@ i nie tworzymy drugiego systemu Auth. Supabase — opcjonalnie w przyszłości j
 | 2 | **Tylko zaproszenia** — rejestracja samodzielna wyłączona (`allowSelfRegistration: false`, możliwa do włączenia w konfiguracji). |
 | 3 | **Resend** — wysyłka przez Resend (HTTP API lub SMTP `smtp.resend.com:465`), nadawca `ResInvest ERP <no-reply@resinvest.group>`. |
 | 4 | **Obieg zatwierdzania wyłączony** — magazynier zapisuje operacje bezpośrednio (`requireApproval: false`; mechanizm pozostaje w silniku do ewentualnego włączenia). |
+
+## 4. Status realizacji (3.2.0)
+
+| Konflikt / krok planu | Stan |
+|---|---|
+| K2 — `/api/state` wysyłał dane wszystkich magazynów | **usunięty**: `Service.project` (odczyt) + `canAccessWh` (zapis); testy §34.13–14, §35.3–4 |
+| statusy INVITED / ACTIVE / SUSPENDED / DISABLED | zrobione (migracja 5 → 6, `pending` → `INVITED`) |
+| wiele magazynów na użytkownika | zrobione (`warehouseIds`, przełącznik magazynu roboczego) |
+| rola AUDYTOR, kody ról, edytowalne uprawnienia | zrobione (`#/admin/roles`, `ROLE_PERMISSIONS_CHANGED`) |
+| zaproszenia, potwierdzenie adresu, reset hasła | zrobione (tokeny jednorazowe, `server/mail.mjs`, szablony PL) |
+| audyt z kodami, IP, User-Agent + widok | zrobione (`#/admin/audit`, zakładki logowań i wiadomości e-mail) |
+| obieg zatwierdzania wyłączony, rejestracja wyłączona | zrobione (konfiguracja w Administracji) |
+| dokumentacja, `.env.example`, instalator 3.2.0 | zrobione |
+| rzeczywista wysyłka przez Resend | **niezweryfikowana** — wymaga klucza API i zweryfikowanej domeny (docs/EMAIL_SETUP.md) |
+
+Szczegóły: [AUTHENTICATION.md](AUTHENTICATION.md), [USERS_AND_ROLES.md](USERS_AND_ROLES.md), [SECURITY.md](SECURITY.md).

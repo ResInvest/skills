@@ -1,5 +1,31 @@
 # TASKS — ResInvest ERP
 
+## 3.2.0 — konta firmowe, role, uprawnienia, izolacja magazynów (kryteria gotowości §44)
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| logowanie działa | DONE | `auth.test` §34.1, E2E (oba tryby) |
+| logout działa (sesja unieważniona, stan wyczyszczony, `#/login`) | DONE | `server.test`, `e2e-server` „Wylogowanie” |
+| reset hasła działa | DONE (transport `file`) | `auth.test` §34.7, `e2e-server` |
+| zaproszenie działa | DONE (transport `file`) | `auth.test` §34.5–6, `e2e-server` |
+| potwierdzenie e-mail działa (zmiana adresu) | DONE (transport `file`) | `auth.test` „Zmiana adresu e-mail” |
+| `@resinvest.group` wymuszane po stronie serwera | DONE | `auth.test` §34.4, `platform.test` |
+| `magazyn@resinvest.group` jest administratorem | DONE | seed, pierwsze uruchomienie |
+| administrator tworzy użytkowników, nadaje / odbiera role, tworzy administratorów | DONE | `auth.test` §34.8, §34.17 |
+| blokada usunięcia / degradacji ostatniego administratora | DONE | `auth.test` §34.17 / §35.5, `platform.test` |
+| role i uprawnienia działają na backendzie | DONE | `auth.test` §34.8–12, §35.1–2 |
+| dostęp do magazynów i izolacja danych | DONE | `auth.test` §34.13–14, §35.3–4, `e2e-server` |
+| audit log (kody, IP, User-Agent) | DONE | `auth.test` §34.5, E2E „Dziennik audytu” |
+| e-maile z marką ResInvest ERP (PL) | DONE | `server/mail.mjs`, `auth.test` (treść .eml) |
+| sekrety poza frontendem i Gitem | DONE | `auth.test` „Sekrety”, `.gitignore`, `.env.example` |
+| testy przechodzą | DONE | 101 + 34 + 178 + 24 (progress.md) |
+| TypeScript przechodzi | NIE DOTYCZY | projekt w JavaScript (bez TypeScript); `npm run check` — składnia OK |
+| build przechodzi | DONE | `npm run build` |
+| dokumentacja gotowa | DONE | `docs/AUTHENTICATION.md`, `USERS_AND_ROLES.md`, `EMAIL_SETUP.md`, `SECURITY.md`, `SUPABASE_SETUP.md` |
+| istniejące moduły ERP działają | DONE | `engine.test` 68/68, E2E 178/178 |
+| wysyłka przez Resend na prawdziwym koncie | NIEPOTWIERDZONE | wymaga klucza API i weryfikacji domeny (DNS) — `docs/EMAIL_SETUP.md` |
+| kompilacja instalatora 3.2.0 na Windows (Inno Setup 7) | NIEPOTWIERDZONE | wymaga Windows; `installer\build-installer.ps1` |
+
 ## 3.1.0 — prototyp końcowy
 
 | Wymaganie | Status | Dowód |

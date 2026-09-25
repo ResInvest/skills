@@ -158,6 +158,5 @@
   "Rejestr operacji": ["Registr operací", "Operations register"],
   "Nie znaleziono operacji": ["Operace nenalezena", "Operation not found"],
   "Dokument {no} jest już anulowany": ["Doklad {no} je již stornován", "Document {no} is already cancelled"],
-  "Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator": ["Chybí oprávnění „documents.cancel“ — storno vyžaduje roli Vedoucí nebo Administrátor", "Missing permission “documents.cancel” — cancellation requires the Manager or Administrator role"],
-  "Anulowanie wykonuje się w magazynie operacji": ["Storno se provádí ve skladu operace", "Cancellation is performed in the operation's warehouse"]
+  "Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator": ["Chybí oprávnění „documents.cancel“ — storno vyžaduje roli Vedoucí nebo Administrátor", "Missing permission “documents.cancel” — cancellation requires the Manager or Administrator role"]
 }); })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -404,13 +404,16 @@ async function handleApi(req, res, url) {
       if (!u) return json(req, res, 404, { ok: false, error: t("Nie znaleziono użytkownika") });
       if (u.role === "admin" && user.role !== "admin") return json(req, res, 403, { ok: false, code: "FORBIDDEN", error: t("Nie masz uprawnień do wykonania tej operacji.") });
       const pe = AuthLib.passwordError(b.password, u.login); if (pe) return json(req, res, 400, { ok: false, error: pe });
-      store.setPassword(u.id, b.password, b.mustChange !== false); store.dropUserSessions(u.id);
+      store.setPassword(u.id, b.password, b.mustChange !== false); store.dropUserSessions(u.id); store.dropTokens(u.id, "reset");
       store.logLogin(u.login, u.id, true, N_("hasło ustawione przez administratora"), ipOf(req));
+      store.auditEvent({ entityId: u.id, opNo: u.login, code: "PASSWORD_SET_BY_ADMIN", act: R.Lx(N_("Hasło tymczasowe ustawione przez administratora: {l}"), { l: u.login }), before: null, after: { zmianaWymagana: b.mustChange !== false }, source: N_("Administracja — użytkownicy") }, meta, user);
       return json(req, res, 200, { ok: true });
     }
     if (path === "/api/users/unlock" && method === "POST") {
       if (!store.account(b.userId)) return json(req, res, 404, { ok: false, error: t("Nie znaleziono konta") });
       store.db.prepare("UPDATE accounts SET failed = 0, locked_until = NULL WHERE user_id = ?").run(b.userId);
+      const ul = R.byId(store.state.users, b.userId);
+      if (ul) store.auditEvent({ entityId: ul.id, opNo: ul.login, code: "USER_UNLOCKED", act: R.Lx(N_("Odblokowanie konta po nieudanych logowaniach: {l}"), { l: ul.login }), before: null, after: null, source: N_("Administracja — użytkownicy") }, meta, user);
       return json(req, res, 200, { ok: true });
     }
   }
