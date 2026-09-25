@@ -33,13 +33,16 @@ async function boot(page) {
   await page.keyboard.press("Escape");
   await page.waitForSelector(".splash", { state: "detached", timeout: 5000 });
   await page.waitForSelector("#login-form", { timeout: 5000 });
-  await login(page, "kierownik");
+  await login(page, LOGINS.u_kier);
 }
-/** Logowanie kontem demonstracyjnym (hasło demo1234) — zastępuje przełącznik użytkownika z wersji Demo. */
-async function login(page, loginName) {
-  const r = await page.evaluate(l => RIW_DEBUG.loginAs(l), loginName);
-  if (!r || !r.ok) throw new Error("Logowanie nieudane: " + loginName + " " + JSON.stringify(r));
-  await page.waitForSelector("#nav .nav-item");
+/** Logowanie przez formularz (e-mail firmowy + hasło demo1234) — tak jak użytkownik. */
+async function login(page, email, pw = "demo1234") {
+  await closeModals(page);
+  if (await page.$("#nav")) await page.evaluate(() => RIW_DEBUG.app.logout());
+  await page.waitForSelector("#login-form");
+  await page.fill("#lg-login", email); await page.fill("#lg-pass", pw);
+  await page.click("#lg-submit");
+  await page.waitForSelector("#nav .nav-item", { timeout: 8000 });
   await page.waitForTimeout(150);
 }
 const go = (page, route) => page.evaluate(r => { location.hash = "#/" + r; }, route).then(() => page.waitForTimeout(150));
@@ -51,7 +54,7 @@ const out = async (page, key) => nb(await page.textContent(`[data-out="${key}"]`
 const msg = async (page, key) => nb(await page.textContent(`[data-msg="${key}"]`));
 const tick = (page, id) => page.click(`label.opt:has(#${id})`);
 const fillTab = async (page, sel, v) => { await page.fill(sel, v); await page.press(sel, "Tab"); await page.waitForTimeout(60); };
-const LOGINS = { u_admin: "admin", u_kier: "kierownik", u_mag: "magazynier", u_pys: "pyskowice", u_view: "podglad" };
+const LOGINS = { u_admin: "magazyn@resinvest.group", u_kier: "anna.gorska@resinvest.group", u_mag: "adrian.wojciechowski@resinvest.group", u_bra: "pawel.kaczmarek@resinvest.group", u_kbra: "tomasz.zajac@resinvest.group", u_view: "beata.nowak@resinvest.group" };
 const setUser = (page, uid) => login(page, LOGINS[uid]);
 const allExist = async (page, sels) => { for (const s of sels) if (!(await page.$(s))) return false; return true; };
 const closeModals = async page => { for (let i = 0; i < 4 && await page.$(".scrim"); i++) { await page.keyboard.press("Escape"); await page.waitForTimeout(80); } };
@@ -146,8 +149,8 @@ async function fillForestDirect(page) {
     const prodOp = await lastOp(page);
     check("§22 T1: po zapisie drewno 692 m³, zrębka 8 793 MP, status ZATWIERDZONY", (await bal(page, "pr_drewno")) === 692 && (await bal(page, "pr_zr_lesna")) === 8793 && prodOp.status === "POSTED" && prodOp.no.startsWith("PW/"));
 
-    /* ------------- §31.16 B: brak surowca (Pyskowice 30 m³) ------------- */
-    await setUser(page, "u_pys");
+    /* ------------- §31.16 B: brak surowca (Brąszewice 30 m³) ------------- */
+    await setUser(page, "u_bra");
     await preset(page, "produkcja");
     await fillTab(page, "#f-production-outQty", "500");
     check("§31.16 B: komunikat „Brak wystarczającej ilości surowca. Dostępne: 30 m³. Wymagane: 125 m³. Brakuje: 95 m³.”", (await msg(page, "production.outQty")) === "Brak wystarczającej ilości surowca. Dostępne: 30 m³. Wymagane: 125 m³. Brakuje: 95 m³.", await msg(page, "production.outQty"));
@@ -198,13 +201,13 @@ async function fillForestDirect(page) {
 
     /* ------------- MM ------------- */
     await preset(page, "mm");
-    await page.selectOption("#f-mm-toWhId", "wh_pys"); await page.waitForTimeout(100);
+    await page.selectOption("#f-mm-toWhId", "wh_bra"); await page.waitForTimeout(100);
     await page.selectOption("#f-mm-productId", "pr_zr_lesna"); await page.waitForTimeout(100);
     await fillTab(page, "#f-mm-qty", "300");
     check("MM: źródło 8 293 → 7 993 MP, cel 220 → 520 MP", (await out(page, "mm.srcBal")) === "8 293 MP → 7 993 MP" && (await out(page, "mm.dstBal")) === "220 MP → 520 MP", [await out(page, "mm.srcBal"), await out(page, "mm.dstBal")]);
     check("MM: zatwierdzenie", (await approve(page)) === 1);
     const mmOp = await lastOp(page);
-    check("MM: stany po przesunięciu, stan firmy bez zmian", (await bal(page, "pr_zr_lesna")) === 7993 && (await bal(page, "pr_zr_lesna", "wh_pys")) === 520 && mmOp.no.startsWith("MM/"));
+    check("MM: stany po przesunięciu, stan firmy bez zmian", (await bal(page, "pr_zr_lesna")) === 7993 && (await bal(page, "pr_zr_lesna", "wh_bra")) === 520 && mmOp.no.startsWith("MM/"));
 
     /* ------------- wersja robocza ------------- */
     await preset(page, "zakup");
@@ -230,10 +233,10 @@ async function fillForestDirect(page) {
     await closeModals(page);
 
     /* ------------- §32.4: blokada anulowania przy zależnościach ------------- */
-    await setUser(page, "u_pys");
+    await setUser(page, "u_kbra");
     const dep = await page.evaluate(async () => {
       const R = RIW_DEBUG.R, S = RIW_DEBUG.store;
-      const d1 = R.Seed.draftOf("2026-09-23", { purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "100", unit: "m3", price: "230" }, transport: { mode: "none", place: "RiC Pyskowice" } });
+      const d1 = R.Seed.draftOf("2026-09-23", { purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "100", unit: "m3", price: "230" }, transport: { mode: "none", place: "RiC Brąszewice" } });
       const a = await S.exec("op.commit", { draft: d1 }, "test");
       const b = await S.exec("op.commit", { draft: R.Seed.draftOf("2026-09-23", { type: "PRODUKCJA", production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "480" } }) }, "test");
       return { ok: a.ok && b.ok, buy: a.op && a.op.id, use: b.op && b.op.id };
@@ -319,7 +322,7 @@ async function fillForestDirect(page) {
     /* ------------- kwit produkcji dnia ------------- */
     await go(page, "kwit");
     await page.fill("#k-date", "2026-09-22"); await page.press("#k-date", "Tab"); await page.waitForTimeout(150);
-    await page.selectOption("#k-wh", "wh_pys"); await page.waitForTimeout(150);
+    await page.selectOption("#k-wh", "wh_bra"); await page.waitForTimeout(150);
     const kw = nb(await page.textContent("#kwit-kpis"));
     check("§16 Kwit: 20 MP = 5 m³, 6,60 t, 56,1 GJ, 200,00 zł", ["20 MP", "= 5 m³ surowca", "6,60 t", "56,1 GJ", "200,00 zł"].every(x => kw.includes(x)), kw);
     const kh = await page.$$eval("#kwit-table thead th", t => t.map(x => x.textContent));
@@ -506,6 +509,76 @@ async function fillForestDirect(page) {
       check(`Telefon 390 px: ${r} bez przewijania w poziomie`, over <= 1, over);
     }
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, "e2e_mobile.png"), fullPage: false });
+    await ctx.close();
+  }
+
+  /* ------------- 3.1: rejestracja, role, obieg zatwierdzania, magazyny ------------- */
+  {
+    const ctx = await newCtx(browser);
+    const page = await ctx.newPage(); watch(page, "3.1"); await boot(page);
+    check("3.1 Stopka autorska w programie", nb(await page.textContent(".app-foot")).includes("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"));
+    check("3.1 Trzy magazyny RiC", (await page.evaluate(() => RIW_DEBUG.store.state.warehouses.map(w => w.name).join("|"))) === "RiC Zabrze|RiC Brąszewice|RiC Rokitki");
+    // rejestracja
+    await page.evaluate(() => RIW_DEBUG.app.logout()); await page.waitForSelector("#login-form");
+    check("3.1 Logowanie: pole „E-mail firmowy”", nb(await page.textContent('label[for="lg-login"]')) === "E-mail firmowy");
+    await page.click('[data-auth-tab="register"]');
+    const reg = async (name, email) => { await page.fill("#rg-name", name); await page.fill("#rg-email", email); await page.fill("#rg-pass", "Rejestracja2026"); await page.fill("#rg-pass2", "Rejestracja2026"); await page.click("#rg-submit"); await page.waitForTimeout(400); };
+    await reg("Jan Obcy", "jan@gmail.com");
+    check("3.1 Rejestracja: tylko domena firmowa", nb(await page.textContent("#rg-err")).includes("Wymagany e-mail firmowy"));
+    await reg("Ewa Nowicka", "ewa.nowicka@resinvest.group");
+    check("3.1 Rejestracja: konto utworzone, oczekuje", nb(await page.textContent("#auth-info")).includes("zarejestrowane"));
+    await page.fill("#lg-pass", "Rejestracja2026"); await page.click("#lg-submit"); await page.waitForTimeout(400);
+    check("3.1 Rejestracja: logowanie zablokowane do zatwierdzenia", nb(await page.textContent("#lg-err")).includes("oczekuje na zatwierdzenie"));
+    await login(page, LOGINS.u_admin);
+    check("3.1 Zgłoszenie widoczne dla administratora (pulpit)", nb(await page.textContent("#dash-todo")).includes("zgłoszenie rejestracji"));
+    await go(page, "uzytkownicy"); await page.waitForSelector("#reg-table");
+    await page.click("[data-uapprove]"); await page.waitForSelector("#user-edit");
+    await page.selectOption("#me-role", "magazynier"); await page.selectOption("#me-whId", "wh_zab"); await page.click("#user-edit [data-yes]"); await page.waitForTimeout(400);
+    check("3.1 Administrator aktywuje konto (rola, magazyn)", (await page.evaluate(() => { const u = RIW_DEBUG.store.state.users.find(x => x.login === "ewa.nowicka@resinvest.group"); return `${u.role}/${u.whId}/${u.active}/${!!u.pending}`; })) === "magazynier/wh_zab/true/false");
+    // magazynier przekazuje operację do zatwierdzenia
+    await login(page, "ewa.nowicka@resinvest.group", "Rejestracja2026");
+    await preset(page, "wz");
+    check("3.1 Magazynier: przycisk „Przekaż do zatwierdzenia…”", nb(await page.textContent("#summary [data-save]")) === "Przekaż do zatwierdzenia…");
+    await page.selectOption("#f-sale-productId", "pr_zr_lesna"); await fillTab(page, "#f-sale-qty", "120"); await page.fill("#f-sale-price", "90"); await page.selectOption("#f-sale-buyerId", "pa_ec_zab"); await page.waitForTimeout(100);
+    const n0 = await opsN(page), st0 = await bal(page, "pr_zr_lesna");
+    await page.click("#summary [data-save]"); await page.waitForSelector("#confirm-op"); await page.click("#confirm-yes"); await page.waitForTimeout(500);
+    check("3.1 Przekazana operacja: bez numeru i bez zmiany stanu", (await opsN(page)) === n0 && (await bal(page, "pr_zr_lesna")) === st0 && (await page.evaluate(() => RIW_DEBUG.store.state.drafts.filter(d => d.status === "PENDING").length)) === 1);
+    // kierownik innego magazynu nie widzi kolejki, kierownik Zabrza zatwierdza
+    await login(page, LOGINS.u_kbra); await go(page, "operacje");
+    check("3.1 Kierownik Brąszewic nie zatwierdza operacji Zabrza", !(await page.$("#approvals-table [data-review]")));
+    await login(page, LOGINS.u_kier); await go(page, "operacje"); await page.waitForSelector("#approvals-table");
+    check("3.1 Kolejka „Do zatwierdzenia” u kierownika (znacznik w menu)", nb(await page.textContent('[data-nav="operacje"] .cnt')) === "1");
+    await page.click("#approvals-table [data-review]"); await page.waitForSelector("#opf");
+    await page.click("#summary [data-save]"); await page.waitForSelector("#confirm-op"); await page.click("#confirm-yes");
+    await page.waitForSelector("#op-detail", { timeout: 4000 }).catch(() => {});
+    const apr = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { no: o.no, by: o.userName, ap: o.approvedByName }; });
+    check("3.1 Zatwierdzenie: dokument WZ, autor magazynier, zatwierdził kierownik", apr.no.startsWith("WZ/") && apr.by === "Ewa Nowicka" && apr.ap === "Anna Górska" && (await bal(page, "pr_zr_lesna")) === st0 - 120, apr);
+    await closeModals(page);
+    // obserwator
+    await login(page, LOGINS.u_view);
+    check("3.1 Obserwator: brak „Nowej operacji” i edycji kartotek", await page.evaluate(() => document.querySelector("#top-new").classList.contains("hidden")) && (await go(page, "produkty"), !(await page.$("[data-madd]"))));
+    // administrator: magazyn roboczy, flota wg magazynu
+    await login(page, LOGINS.u_admin);
+    await page.click("#wh-chip"); await page.click('[data-wh="wh_rok"]'); await page.waitForTimeout(300);
+    check("3.1 Administrator przełącza magazyn roboczy", nb(await page.textContent("#wh-chip")).includes("RiC Rokitki"));
+    await preset(page, "produkcja");
+    const chOpts = await page.$$eval("#f-production-chipperId option", o => o.map(x => x.value).filter(Boolean));
+    check("3.1 Formularz: tylko rębaki magazynu operacji", chOpts.length === 1 && chOpts[0] === "ch_albach", chOpts);
+    await ctx.close();
+  }
+
+  /* ------------- 3.1: ramka z zablokowanym magazynem przeglądarki (podgląd pliku) ------------- */
+  {
+    const wrap = path.join(TMP, "podglad.html");
+    fs.writeFileSync(wrap, `<!doctype html><body style="margin:0"><iframe sandbox="allow-scripts allow-forms allow-popups allow-modals" src="${FILE}" style="width:1400px;height:880px;border:0"></iframe></body>`);
+    const ctx = await newCtx(browser); const page = await ctx.newPage(); watch(page, "sandbox");
+    await page.goto("file://" + wrap); await page.waitForTimeout(1500);
+    const f = page.frames().find(x => x.url().endsWith("ResInvest_ERP.html"));
+    await f.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))).catch(() => {});
+    await f.waitForSelector("#login-form", { timeout: 8000 });
+    await f.fill("#lg-login", LOGINS.u_admin); await f.fill("#lg-pass", "demo1234"); await f.click("#lg-submit");
+    await f.waitForSelector("#nav .nav-item", { timeout: 8000 }).catch(() => {});
+    check("3.1 Logowanie działa także w ramce bez dostępu do pamięci przeglądarki", (await f.$$("#nav .nav-item")).length > 10 && !!(await f.$("#kpis")));
     await ctx.close();
   }
   await browser.close();

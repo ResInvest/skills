@@ -66,12 +66,12 @@ test("Serwer: ochrona CSRF — bez nagłówka aplikacji i z obcego pochodzenia �
 
 test("Serwer: setup → logowanie → komenda → stan; sesja HttpOnly; drugi setup zablokowany", async () => {
   const c = client();
-  assert.equal((await c.post("/api/setup", { name: "Anna Admin", login: "anna", password: "krotkie", sample: true })).status, 400);
-  const s = await c.post("/api/setup", { name: "Anna Admin", login: "anna", password: "Biomasa2026", sample: true });
+  assert.equal((await c.post("/api/setup", { name: "Anna Admin", login: "magazyn@resinvest.group", password: "krotkie", sample: true })).status, 400);
+  const s = await c.post("/api/setup", { name: "Anna Admin", login: "magazyn@resinvest.group", password: "Biomasa2026", sample: true });
   assert.equal(s.status, 200, JSON.stringify(s.json));
-  assert.equal((await c.post("/api/setup", { name: "X Y Z", login: "xyz", password: "Biomasa2026" })).status, 409);
+  assert.equal((await c.post("/api/setup", { name: "X Y Z", login: "xyz@resinvest.group", password: "Biomasa2026" })).status, 409);
   assert.equal((await c.get("/api/state")).status, 401);
-  const l = await c.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  const l = await c.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
   assert.equal(l.status, 200, JSON.stringify(l.json));
   assert.match(l.headers.get("set-cookie"), /HttpOnly/i);
   assert.match(l.headers.get("set-cookie"), /SameSite=Strict/i);
@@ -83,18 +83,18 @@ test("Serwer: setup → logowanie → komenda → stan; sesja HttpOnly; drugi se
   assert.equal(r.json.res.ok, true, r.json.res.error);
   assert.equal(r.json.state.operations.length, n0 + 1);
   assert.ok(r.json.rev > rev0);
-  assert.equal(r.json.state.audit.at(-1).userId, r.json.state.users.find(u => u.login === "anna").id, "autor z sesji serwera");
+  assert.equal(r.json.state.audit.at(-1).userId, r.json.state.users.find(u => u.login === "magazyn@resinvest.group").id, "autor z sesji serwera");
   const dup = await c.post("/api/cmd", { cmd: "op.commit", args: { draft: d } });
   assert.equal(((await c.get("/api/state")).json.state.operations.length), n0 + 1, "idempotencja: ponowne wysłanie nie tworzy drugiej operacji");
   assert.equal(dup.json.res.duplicate, true);
   const d2 = R.Seed.draftOf("2026-09-23", { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "10", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place: "RiC Zabrze" } });
   const forged = await c.post("/api/cmd", { cmd: "op.commit", args: { draft: d2, user: { id: "u_view" }, userId: "u_view" } });
-  assert.equal(forged.json.state.operations.at(-1).userId, forged.json.state.users.find(u => u.login === "anna").id, "użytkownik podany w argumentach jest ignorowany");
+  assert.equal(forged.json.state.operations.at(-1).userId, forged.json.state.users.find(u => u.login === "magazyn@resinvest.group").id, "użytkownik podany w argumentach jest ignorowany");
 });
 
 test("Serwer: język odpowiedzi wg Accept-Language / profilu", async () => {
   const c = client();
-  await c.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  await c.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
   const r = await c.post("/api/cmd", { cmd: "master.save", args: { kind: "partners", rec: { name: "Firma Z", role: "buyer", nip: "1234567890" } } }, { "Accept-Language": "en" });
   assert.equal(r.json.res.ok, false);
   assert.match(JSON.stringify(r.json.res), /Invalid NIP|NIP tax ID/);
@@ -102,36 +102,60 @@ test("Serwer: język odpowiedzi wg Accept-Language / profilu", async () => {
 
 test("Serwer: użytkownik tworzony przez administratora — hasło tymczasowe wymusza zmianę", async () => {
   const a = client();
-  await a.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
-  const cr = await a.post("/api/users", { rec: { name: "Jan Magazyn", login: "jan.mag", role: "magazynier", whId: "wh_zab", active: true }, password: "Tymczas2026" });
+  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
+  const cr = await a.post("/api/users", { rec: { name: "Jan Magazyn", login: "jan.mag@resinvest.group", role: "magazynier", whId: "wh_zab", active: true }, password: "Tymczas2026" });
   assert.equal(cr.json.res.ok, true, JSON.stringify(cr.json.res));
   const j = client();
-  const l = await j.post("/api/auth/login", { login: "jan.mag", password: "Tymczas2026" });
+  const l = await j.post("/api/auth/login", { login: "jan.mag@resinvest.group", password: "Tymczas2026" });
   assert.equal(l.json.mustChange, true);
   assert.equal((await j.get("/api/state")).json.code, "MUST_CHANGE");
   assert.equal((await j.post("/api/auth/password", { old: "Tymczas2026", new: "Wlasne2026x" })).status, 200);
   assert.equal((await j.get("/api/state")).status, 200);
-  assert.equal((await j.post("/api/users", { rec: { name: "Ktoś Inny", login: "ktos", role: "admin", whId: "wh_zab" }, password: "Tymczas2026" })).status, 403, "magazynier nie zarządza kontami");
+  assert.equal((await j.post("/api/users", { rec: { name: "Ktoś Inny", login: "ktos@resinvest.group", role: "admin", whId: "wh_zab" }, password: "Tymczas2026" })).status, 403, "magazynier nie zarządza kontami");
 });
 
 test("Serwer: blokada konta po 5 błędnych hasłach, odblokowanie przez administratora", async () => {
   const x = client();
-  for (let i = 0; i < 5; i++) assert.equal((await x.post("/api/auth/login", { login: "jan.mag", password: "zle-haslo-" + i })).status, 401);
-  const locked = await x.post("/api/auth/login", { login: "jan.mag", password: "Wlasne2026x" });
+  for (let i = 0; i < 5; i++) assert.equal((await x.post("/api/auth/login", { login: "jan.mag@resinvest.group", password: "zle-haslo-" + i })).status, 401);
+  const locked = await x.post("/api/auth/login", { login: "jan.mag@resinvest.group", password: "Wlasne2026x" });
   assert.equal(locked.status, 401);
   assert.match(locked.json.error, /zablokowane/);
   const a = client();
-  await a.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
-  const jan = (await a.get("/api/state")).json.state.users.find(u => u.login === "jan.mag");
+  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
+  const jan = (await a.get("/api/state")).json.state.users.find(u => u.login === "jan.mag@resinvest.group");
   const acc = (await a.get("/api/users/accounts")).json.accounts[jan.id];
   assert.ok(acc.lockedUntil, JSON.stringify(acc));
   assert.equal((await a.post("/api/users/unlock", { userId: jan.id })).status, 200);
-  assert.equal((await x.post("/api/auth/login", { login: "jan.mag", password: "Wlasne2026x" })).status, 200);
+  assert.equal((await x.post("/api/auth/login", { login: "jan.mag@resinvest.group", password: "Wlasne2026x" })).status, 200);
+});
+
+test("Serwer: rejestracja e-mailem firmowym → administrator aktywuje; magazynier przekazuje, kierownik zatwierdza", async () => {
+  const anon = client();
+  assert.equal((await anon.post("/api/auth/register", { rec: { name: "Obcy Ktoś", email: "obcy@gmail.com" }, password: "Rejestracja2026" })).status, 400);
+  assert.equal((await anon.post("/api/auth/register", { rec: { name: "Ewa Nowicka", email: "ewa.nowicka@resinvest.group" }, password: "Rejestracja2026" })).status, 200);
+  const pend = await anon.post("/api/auth/login", { login: "ewa.nowicka@resinvest.group", password: "Rejestracja2026" });
+  assert.equal(pend.json.code, "PENDING");
+  const a = client();
+  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
+  const ewa = (await a.get("/api/state")).json.state.users.find(u => u.login === "ewa.nowicka@resinvest.group");
+  const act = await a.post("/api/cmd", { cmd: "user.save", args: { rec: Object.assign({}, ewa, { role: "magazynier", whId: "wh_zab", active: true }) } });
+  assert.equal(act.json.res.ok, true, act.json.res.error);
+  const e = client();
+  assert.equal((await e.post("/api/auth/login", { login: "ewa.nowicka@resinvest.group", password: "Rejestracja2026" })).status, 200);
+  const d = R.Seed.draftOf("2026-09-23", { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "5", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place: "RiC Zabrze" } });
+  assert.equal((await e.post("/api/cmd", { cmd: "op.commit", args: { draft: d } })).json.res.code, "FORBIDDEN", "magazynier nie zatwierdza sam");
+  const sub = await e.post("/api/cmd", { cmd: "op.submit", args: { draft: d } });
+  assert.equal(sub.json.res.ok, true, sub.json.res.error);
+  const id = sub.json.state.drafts.find(x => x.status === "PENDING").id;
+  const ap = await a.post("/api/cmd", { cmd: "op.approve", args: { id } });
+  assert.equal(ap.json.res.ok, true, ap.json.res.error);
+  const op = ap.json.state.operations.at(-1);
+  assert.equal(op.userName, "Ewa Nowicka"); assert.equal(op.approvedById, "u_admin");
 });
 
 test("Serwer: wylogowanie unieważnia sesję", async () => {
   const c = client();
-  await c.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  await c.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
   const old = c.cookie;
   assert.equal((await c.post("/api/auth/logout", {})).status, 200);
   const r = await fetch(BASE + "/api/state", { headers: { Cookie: old } });
@@ -140,7 +164,7 @@ test("Serwer: wylogowanie unieważnia sesję", async () => {
 
 test("Serwer: kopia zapasowa na żądanie i kontrola spójności dziennika", async () => {
   const a = client();
-  await a.post("/api/auth/login", { login: "anna", password: "Biomasa2026" });
+  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
   const b = await a.post("/api/backups", {});
   assert.equal(b.status, 200, JSON.stringify(b.json));
   const list = await a.get("/api/backups");
@@ -151,5 +175,5 @@ test("Serwer: kopia zapasowa na żądanie i kontrola spójności dziennika", asy
   assert.ok(readdirSync(join(DATA, "backups")).some(f => f.endsWith(".sqlite")));
   await startServer();
   const again = client();
-  assert.equal((await again.post("/api/auth/login", { login: "anna", password: "Biomasa2026" })).status, 200, "dane przetrwały restart");
+  assert.equal((await again.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" })).status, 200, "dane przetrwały restart");
 });

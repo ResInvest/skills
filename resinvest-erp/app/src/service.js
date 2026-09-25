@@ -42,7 +42,11 @@
     /* ---- operacje ---- */
     "draft.save": { perm: "op.create", run: (s, a, c) => R.saveDraft(s, a.draft, c) },
     "draft.delete": { run: (s, a, c) => R.deleteDraft(s, a.id, c) },
-    "op.commit": { perm: "op.create", run: (s, a, c) => R.commitOperation(s, a.draft, c) },
+    /** Zatwierdzenie bezpośrednie (kierownik / administrator). Magazynier przekazuje operację: op.submit. */
+    "op.commit": { perm: "op.approve", run: (s, a, c) => R.commitOperation(s, a.draft, c) },
+    "op.submit": { perm: "op.create", run: (s, a, c) => R.submitOperation(s, a.draft, c) },
+    "op.approve": { perm: "op.approve", run: (s, a, c) => R.approvePending(s, a.id, a.draft || null, c) },
+    "op.reject": { perm: "op.approve", run: (s, a, c) => R.rejectPending(s, a.id, a.reason, c) },
     "op.correct": { perm: "documents.correct", run: (s, a, c) => R.correctOperation(s, a.opId, a.draft, a.reason, c, { corrKey: a.corrKey || null }) },
     "op.reverseCorrection": { perm: "documents.correct", run: (s, a, c) => R.reverseCorrection(s, a.opId, a.corrNo, a.reason, c) },
     "op.cancel": { perm: "documents.cancel", run: (s, a, c) => R.cancelOperation(s, a.opId, c, a.reason, { ack: !!a.ack }) },
@@ -58,13 +62,25 @@
     "fleet.save": { perm: "fleet.edit", run: (s, a, c) => R.Fleet.save(s, a.kind, a.rec, c) },
     "fleet.remove": { perm: "fleet.edit", run: (s, a, c) => R.Fleet.remove(s, a.kind, a.id, c) },
     "master.save": { perm: "master.edit", run: (s, a, c) => R.Master.save(s, a.kind, a.rec, c) },
+    "master.remove": { perm: "master.edit", run: (s, a, c) => R.Master.remove(s, a.kind, a.id, c) },
     /* ---- użytkownicy (profil; hasło — Auth hosta) ---- */
     "user.save": { perm: "users.manage", run: (s, a, c) => R.Users.save(s, a.rec, c) },
+    "user.remove": { perm: "users.manage", run: (s, a, c) => R.Users.remove(s, a.id, c) },
     "me.prefs": { run: (s, a, c) => R.Users.setPrefs(s, { lang: a.lang, theme: a.theme }, c) },
+    "me.warehouse": { run: (s, a, c) => R.Users.setMyWarehouse(s, a.whId, c) },
     /* ---- dane ---- */
     "data.backupLogged": { perm: "data.backup", run: (s, a, c) => { s.rev += 1; R.audit(s, c, { entity: "system", entityId: "backup", opNo: N_("kopia"), event: "backup", action: N_("Pobranie kopii zapasowej"), before: null, after: { rewizja: s.rev, format: str(a.format) || "json" } }); return { ok: true }; } },
     "data.import": { perm: "data.import", run: (s, a, c) => replaceState(s, a.state, c, "import", N_("Import kopii zapasowej")) },
-    "data.reset": { perm: "data.import", run: (s, a, c) => replaceState(s, R.Seed.build(c.today), c, "reset", N_("Przywrócenie danych przykładowych")) }
+    "data.reset": { perm: "data.import", run: (s, a, c) => replaceState(s, R.Seed.build(c.today), c, "reset", N_("Przywrócenie danych przykładowych")) },
+    /** Start pracy „na czysto”: zostają kartoteki, konta i flota; znikają operacje, księga, okresy (tylko Administrator). */
+    "data.clean": { perm: "users.manage", run: (s, a, c) => {
+      if (str(a.confirm) !== "WYCZYŚĆ") return { ok: false, error: t("Wpisz WYCZYŚĆ, aby potwierdzić") };
+      const n = R.clone(s);
+      Object.assign(n, { operations: [], drafts: [], ledger: [], inventory: [], seq: {} });
+      n.meta = Object.assign({}, n.meta, { lastMonthCheck: R.Dates.ym(c.today), cleanedAt: new Date().toISOString() });
+      n.audit = s.audit.filter(x => x.event === "user" || x.event === "register");
+      return replaceState(s, n, c, "clean", N_("Start pracy na czysto — usunięto operacje i dokumenty"));
+    } }
   };
 
   const Service = {
@@ -96,7 +112,13 @@
       if (!res || !res.ok || work.rev === rev0) return { res, state: null };
       return { res, state: work };
     },
-    replaceState
+    replaceState,
+    /** Rejestracja z ekranu logowania (bez sesji) — konto oczekuje na zatwierdzenie przez administratora. */
+    register(state, rec, today) {
+      const work = R.clone(state), rev0 = work.rev;
+      const res = R.Users.register(work, rec || {}, { today, source: N_("Rejestracja") });
+      return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
+    }
   };
 
   R.Service = Service;

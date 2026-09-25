@@ -24,8 +24,8 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.0.0";
-  const SCHEMA = 4;
+  const VERSION = "3.1.0";
+  const SCHEMA = 5;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -205,17 +205,24 @@
     "purchases.correct": N_("Korekty zakupów"), "inv.open": N_("Otwarcie okresu inwentaryzacji"), "inv.count": N_("Spis z natury"),
     "inv.close": N_("Zamknięcie okresu"), "fleet.edit": N_("Edycja floty"), "master.edit": N_("Edycja kartotek (produkty, kontrahenci, magazyny)"),
     "users.manage": N_("Zarządzanie użytkownikami i hasłami"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii"),
-    "report.view": N_("Raporty i historia")
+    "report.view": N_("Raporty i historia"), "op.approve": N_("Zatwierdzanie operacji")
   };
   const ROLES = {
     admin: { label: N_("Administrator"), perms: ["*"] },
-    kierownik: { label: N_("Kierownik"), perms: ["op.create", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "data.backup", "data.import", "report.view"] },
+    kierownik: { label: N_("Kierownik"), perms: ["op.create", "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "data.backup", "data.import", "report.view"] },
     magazynier: { label: N_("Magazynier"), perms: ["op.create", "inv.open", "inv.count", "report.view"] },
-    podglad: { label: N_("Podgląd"), perms: ["report.view"] }
+    obserwator: { label: N_("Obserwator"), perms: ["report.view"] }
+  };
+  /** Opis ról (ekran użytkowników): kto co może. */
+  const ROLE_INFO = {
+    admin: N_("Pełny dostęp: wszystkie magazyny, użytkownicy i role, kartoteki, kopie, zatwierdzanie, korekty i anulowania."),
+    kierownik: N_("Zatwierdza operacje swojego magazynu, wykonuje korekty i anulowania, zamyka okresy, prowadzi flotę i kartoteki."),
+    magazynier: N_("Wprowadza operacje i przekazuje je do zatwierdzenia; wersje robocze, spis z natury."),
+    obserwator: N_("Tylko podgląd: stany, dokumenty, historia i raporty — bez zmian w danych.")
   };
   function can(user, perm) {
-    if (!user || user.active === false) return false;
-    const p = (ROLES[user.role] || ROLES.podglad).perms;
+    if (!user || user.active === false || user.pending) return false;
+    const p = (ROLES[user.role] || ROLES.obserwator).perms;
     return p.includes("*") || p.includes(perm);
   }
   const OP_TYPES = {
@@ -224,7 +231,7 @@
     PRODUKCJA: { label: N_("Produkcja na magazyn"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct" },
     MM: { label: N_("Przesunięcie MM"), flow: N_("magazyn → magazyn"), correctPerm: "inventory.correct" }
   };
-  const STATUS = { DRAFT: N_("ROBOCZY"), POSTED: N_("ZATWIERDZONY"), CANCELLED: N_("ANULOWANY"), CORRECTED: N_("SKORYGOWANY") };
+  const STATUS = { DRAFT: N_("ROBOCZY"), PENDING: N_("DO ZATWIERDZENIA"), POSTED: N_("ZATWIERDZONY"), CANCELLED: N_("ANULOWANY"), CORRECTED: N_("SKORYGOWANY") };
   const KINDS = {
     BO: { doc: "BO", label: N_("Bilans otwarcia") }, ZAKUP: { doc: "PZ", label: N_("Zakup — przyjęcie") },
     ZUZYCIE: { doc: "RW", label: N_("Zużycie produkcyjne") }, PRODUKCJA: { doc: "PW", label: N_("Przyjęcie z produkcji") },
@@ -273,11 +280,19 @@
   const byId = (list, id) => (list || []).find(x => x.id === id) || null;
   const str = v => String(v == null ? "" : v).trim();
   const nowIso = ctx => (ctx && ctx.now) || new Date().toISOString();
+  const EMAIL_RE = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+  /** Adres e-mail w domenie firmowej (lista w konfiguracji; pusta lista = każda domena). */
+  function companyEmail(state, email) {
+    const e = str(email).toLowerCase();
+    if (!EMAIL_RE.test(e)) return false;
+    const doms = (state && state.config && state.config.companyDomains) || [];
+    return !doms.length || doms.some(d => e.endsWith("@" + String(d).toLowerCase()));
+  }
 
   function emptyState(config) {
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
-      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60 }, config || {}),
+      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"] }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
       operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {},
@@ -293,6 +308,7 @@
     if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push(t("Brak przeliczników"));
     if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push(t("Produkt bez jednostki magazynowej"));
     if (Array.isArray(s.users) && s.users.some(u => !u.id || !u.login)) e.push(t("Użytkownik bez identyfikatora lub loginu"));
+    if (Array.isArray(s.users) && s.users.some(u => !ROLES[u.role])) e.push(t("Użytkownik z nieznaną rolą"));
     if (Array.isArray(s.ledger)) for (const l of s.ledger) {
       if (!Number.isFinite(l.qty) || !l.productId || !l.whId || !Dates.isISO(l.date) || !l.cat) { e.push(t("Uszkodzony zapis księgi: {id}", { id: l.id || "?" })); break; }
     }
@@ -324,6 +340,20 @@
       for (const k of ["products", "partners", "warehouses"]) for (const x of s[k] || []) if (x.active === undefined) x.active = true;
       s.schema = 4; s.version = VERSION;
       notes.push(t("Schemat 3 → 4: loginy użytkowników, preferencje języka i motywu"));
+    }
+    if (s.schema === 4) {
+      if (!s.config) s.config = {};
+      if (!Array.isArray(s.config.companyDomains)) s.config.companyDomains = ["resinvest.group"];
+      for (const u of s.users || []) {
+        if (u.role === "podglad") u.role = "obserwator";
+        const mail = str(u.email).toLowerCase();
+        if (EMAIL_RE.test(mail)) u.login = mail;
+        else if (!EMAIL_RE.test(str(u.login))) u.login = `${str(u.login).toLowerCase()}@${s.config.companyDomains[0] || "resinvest.group"}`;   // dawny login → adres firmowy
+        u.email = EMAIL_RE.test(str(u.login)) ? str(u.login).toLowerCase() : mail;
+      }
+      for (const k of ["vehicles", "drivers", "chippers", "operators"]) for (const x of (s.fleet && s.fleet[k]) || []) if (x.whId === undefined) x.whId = "";
+      s.schema = 5; s.version = VERSION;
+      notes.push(t("Schemat 4 → 5: logowanie e-mailem firmowym, rola Obserwator, flota przypisana do magazynów, zatwierdzanie operacji"));
     }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
@@ -489,6 +519,7 @@
       if (R_.chipperId) {
         if (!ch) err("production.chipperId", t("Nieznany rębak"));
         else if (ch.status !== "aktywny") err("production.chipperId", t("Rębak ma status „{s}”", { s: t(ASSET_STATUS[ch.status] || ch.status) }));
+        else if (ch.whId && whId && ch.whId !== whId) err("production.chipperId", t("Rębak jest przypisany do magazynu {w}", { w: (byId(state.warehouses, ch.whId) || {}).name || "" }));
         if (!byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", t("Wybierz operatora rębaka"));
       }
       let chipRate = 0, chippingCost = 0;
@@ -748,6 +779,7 @@
           if (!r.vehicleId) err(K(i, "vehicleId"), t("Wybierz pojazd z floty"));
           else if (!v) err(K(i, "vehicleId"), t("Nieznany pojazd"));
           else if (v.status !== "aktywny") err(K(i, "vehicleId"), t("Pojazd ma status „{s}” — wybierz aktywny", { s: t(ASSET_STATUS[v.status] || v.status) }));
+          else if (v.whId && whId && v.whId !== whId) err(K(i, "vehicleId"), t("Pojazd jest przypisany do magazynu {w}", { w: (byId(state.warehouses, v.whId) || {}).name || "" }));
           const driverId = r.driverId || (v && v.driverId) || "";
           const d = byId(state.fleet.drivers, driverId);
           if (!driverId) err(K(i, "driverId"), t("Pojazd nie ma kierowcy domyślnego — wybierz kierowcę"));
@@ -950,7 +982,11 @@
   /* ------------------------------------------------------------------ */
   /* Zapis operacji — atomowo                                            */
   /* ------------------------------------------------------------------ */
-  function commitOperation(state, draft, ctx) {
+  /**
+   * Zatwierdzenie operacji: numer dokumentów, zapis w księdze, audyt.
+   * opts.author — autor (magazynier), gdy zatwierdza kierownik; domyślnie zatwierdzający.
+   */
+  function commitOperation(state, draft, ctx, opts = {}) {
     if (!draft || !draft.idemKey) return { ok: false, error: t("Brak klucza idempotencji formularza") };
     const dup = state.operations.find(o => o.idemKey === draft.idemKey);
     if (dup) return { ok: true, duplicate: true, op: dup };
@@ -982,7 +1018,8 @@
     const op = {
       id: opId, idemKey: draft.idemKey, type: plan.type, no: mainNo,
       date: plan.date, whId: plan.whId, toWhId: n.mm ? n.mm.toWhId : null, status: "POSTED",
-      userId: ctx.user.id, userName: ctx.user.name, createdAt: nowIso(ctx),
+      userId: (opts.author || ctx.user).id, userName: (opts.author || ctx.user).name, createdAt: opts.submittedAt || nowIso(ctx),
+      approvedById: (opts.approver || ctx.user).id, approvedByName: (opts.approver || ctx.user).name, approvedAt: nowIso(ctx),
       scope: plan.type === "ZAKUP" ? ["ZAKUP"].concat(n.production ? ["PRODUKCJA"] : []).concat(n.sale ? ["SPRZEDAZ"] : [])
         : plan.type === "PRODUKCJA" ? ["PRODUKCJA"] : plan.type === "MM" ? ["MM"] : n.sale.direct ? ["PRODUKCJA", "SPRZEDAZ"] : ["SPRZEDAZ"],
       direct: !!(n.sale && n.sale.direct),
@@ -998,7 +1035,8 @@
     if (draft.draftId) state.drafts = state.drafts.filter(d => d.id !== draft.draftId);
     state.rev += 1;
     audit(state, ctx, {
-      entity: "operation", entityId: op.id, opNo: op.no, event: "create", act: op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
+      entity: "operation", entityId: op.id, opNo: op.no, event: "create", act: opts.author && opts.author.id !== ctx.user.id
+        ? Lx("Zatwierdzenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[op.type].label }, a: opts.author.name }) : op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
       before: { stan: before }, after: { stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals },
       source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”")
     });
@@ -1025,6 +1063,60 @@
     if (d.userId !== (ctx.user && ctx.user.id) && !can(ctx.user, "documents.cancel")) return { ok: false, error: t("Wersję roboczą usuwa jej autor lub kierownik"), code: "FORBIDDEN" };
     state.drafts = state.drafts.filter(x => x.id !== id); state.rev += 1;
     audit(state, ctx, { entity: "draft", entityId: id, opNo: "roboczy", event: "draft-delete", action: N_("Usunięcie wersji roboczej (niezatwierdzona — bez wpływu na stan)"), before: { status: "ROBOCZY" }, after: null, source: (ctx && ctx.source) || N_("Rejestr operacji") });
+    return { ok: true };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Obieg zatwierdzania: magazynier przekazuje → kierownik zatwierdza   */
+  /*   Operacja „DO ZATWIERDZENIA” nie ma numeru i nie zmienia stanów.    */
+  /* ------------------------------------------------------------------ */
+  /** Czy użytkownik może zatwierdzać operacje danego magazynu (kierownik — tylko swojego). */
+  function canApprove(user, whId) { return can(user, "op.approve") && (user.role === "admin" || user.whId === whId); }
+  function submitOperation(state, draft, ctx) {
+    const user = ctx && ctx.user;
+    if (!can(user, "op.create")) return { ok: false, error: t("Twoja rola nie pozwala tworzyć operacji"), code: "FORBIDDEN" };
+    if (!draft || !draft.idemKey) return { ok: false, error: t("Brak klucza idempotencji formularza") };
+    const dup = state.operations.find(o => o.idemKey === draft.idemKey);
+    if (dup) return { ok: true, duplicate: true, op: dup };
+    const plan = planOperation(state, draft, ctx);
+    if (!plan.ok) return { ok: false, plan, error: plan.errorList[0].msg };
+    const id = draft.draftId || uid("dr");
+    const prev = byId(state.drafts, id);
+    if (prev && prev.userId !== user.id) return { ok: false, error: t("Operację przekazuje do zatwierdzenia jej autor"), code: "FORBIDDEN" };
+    const rec = { id, status: "PENDING", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: user.id, userName: user.name, whId: user.whId,
+      savedAt: nowIso(ctx), submittedAt: nowIso(ctx), totals: plan.totals, summary: planSummary(state, plan) };
+    if (prev) state.drafts = state.drafts.map(d => d.id === id ? rec : d); else state.drafts.push(rec);
+    state.rev += 1;
+    audit(state, ctx, { entity: "draft", entityId: id, opNo: "—", event: "submit", act: Lx("Przekazanie do zatwierdzenia: {type}", { type: { t: OP_TYPES[draft.type].label } }), before: prev ? { status: prev.status } : null, after: { status: "DO ZATWIERDZENIA", podsumowanie: rec.summary }, source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”") });
+    return { ok: true, id, pending: true };
+  }
+  /** Krótki opis operacji do kolejki zatwierdzania (produkt, ilość, kontrahent). */
+  function planSummary(state, plan) {
+    const n = plan.norm, name = id => (byId(state.products, id) || {}).name || "", party = id => (byId(state.partners, id) || {}).name || "";
+    const q = (v, u) => v === null || v === undefined ? "" : `${fmtQ(v)} ${Units.label(u)}`;
+    if (plan.type === "ZAKUP") return [name(n.purchase.productId), q(n.purchase.qty, n.purchase.unit), party(n.purchase.supplierId) || (n.purchase.newSupplier ? n.purchase.newSupplier.name : "")].filter(Boolean).join(" · ");
+    if (plan.type === "PRODUKCJA") return [name(n.production.outProductId), q(n.production.outQty, n.production.outUnit)].filter(Boolean).join(" · ");
+    if (plan.type === "MM") return [name(n.mm.productId), q(n.mm.qty, n.mm.unit), (byId(state.warehouses, n.mm.toWhId) || {}).name].filter(Boolean).join(" · ");
+    return [name(n.sale.productId), q(n.sale.qty, n.sale.unit), party(n.sale.buyerId)].filter(Boolean).join(" · ");
+  }
+  /** Zatwierdzenie operacji przekazanej przez magazyniera (opcjonalnie z poprawionym formularzem). */
+  function approvePending(state, id, draftOverride, ctx) {
+    const rec = byId(state.drafts, id), user = ctx && ctx.user;
+    if (!rec || rec.status !== "PENDING") return { ok: false, error: t("Nie znaleziono operacji do zatwierdzenia") };
+    if (!canApprove(user, rec.whId)) return { ok: false, error: t("Zatwierdzać może kierownik magazynu {w} albo administrator", { w: (byId(state.warehouses, rec.whId) || {}).name || "" }), code: "FORBIDDEN" };
+    const author = byId(state.users, rec.userId) || { id: rec.userId, name: rec.userName };
+    const draft = Object.assign(clone(draftOverride || rec.draft), { draftId: id, idemKey: rec.draft.idemKey });
+    const c = Object.assign({}, ctx, { user: Object.assign({}, user, { whId: rec.whId }) });
+    return commitOperation(state, draft, c, { author, approver: user, submittedAt: rec.submittedAt });
+  }
+  function rejectPending(state, id, reason, ctx) {
+    const rec = byId(state.drafts, id), user = ctx && ctx.user;
+    if (!rec || rec.status !== "PENDING") return { ok: false, error: t("Nie znaleziono operacji do zatwierdzenia") };
+    if (!canApprove(user, rec.whId)) return { ok: false, error: t("Odrzucić może kierownik magazynu {w} albo administrator", { w: (byId(state.warehouses, rec.whId) || {}).name || "" }), code: "FORBIDDEN" };
+    if (!str(reason)) return { ok: false, error: t("Podaj powód odrzucenia") };
+    rec.status = "DRAFT"; rec.rejectReason = str(reason).slice(0, 300); rec.rejectedBy = user.name; rec.rejectedAt = nowIso(ctx);
+    state.rev += 1;
+    audit(state, ctx, { entity: "draft", entityId: id, opNo: "—", event: "reject", act: Lx("Odrzucenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[rec.type].label }, a: rec.userName }), reason: rec.rejectReason, before: { status: "DO ZATWIERDZENIA" }, after: { status: "ROBOCZY" }, source: (ctx && ctx.source) || N_("Operacje do zatwierdzenia") });
     return { ok: true };
   }
 
@@ -1332,14 +1424,20 @@
   /* ------------------------------------------------------------------ */
   const Fleet = {
     KINDS: {
-      vehicles: { label: N_("Pojazd"), fields: ["name", "reg", "type", "status", "driverId"] },
-      drivers: { label: N_("Kierowca"), fields: ["name", "phone"] },
-      chippers: { label: N_("Rębak"), fields: ["name", "status", "operatorId"] },
-      operators: { label: N_("Operator rębaka"), fields: ["name", "phone"] }
+      vehicles: { label: N_("Pojazd"), fields: ["name", "reg", "type", "status", "driverId", "whId"] },
+      drivers: { label: N_("Kierowca"), fields: ["name", "phone", "whId"] },
+      chippers: { label: N_("Rębak"), fields: ["name", "status", "operatorId", "whId"] },
+      operators: { label: N_("Operator rębaka"), fields: ["name", "phone", "whId"] }
+    },
+    /** Czy zasób występuje w zapisanych operacjach lub wersjach roboczych (wtedy nie usuwa się go — tylko wycofuje). */
+    used(state, id) {
+      const needle = `"${id}"`;
+      return state.operations.some(o => JSON.stringify([o.input, o.transport, o.production]).includes(needle)) || state.drafts.some(d => JSON.stringify(d.draft).includes(needle));
     },
     validate(state, kind, rec) {
       const e = {}, list = state.fleet[kind];
       if (!str(rec.name)) e.name = t("Podaj nazwę");
+      if (str(rec.whId) && !byId(state.warehouses, rec.whId)) e.whId = t("Nieznany magazyn");
       if (kind === "vehicles") {
         const reg = str(rec.reg).toUpperCase().replace(/\s+/g, " ");
         if (!reg) e.reg = t("Podaj numer rejestracyjny");
@@ -1376,7 +1474,7 @@
       if (!rec) return { ok: false, error: t("Nie znaleziono") };
       if (kind === "drivers" && state.fleet.vehicles.some(v => v.driverId === id)) return { ok: false, error: t("Kierowca jest domyślny dla pojazdu — najpierw zmień przypisanie") };
       if (kind === "operators" && state.fleet.chippers.some(c => c.operatorId === id)) return { ok: false, error: t("Operator jest domyślny dla rębaka — najpierw zmień przypisanie") };
-      if (kind === "vehicles" || kind === "chippers") return { ok: false, error: t("Pojazdów i rębaków nie usuwa się — ustaw status „Wycofany” (historia kursów zostaje)") };
+      if ((kind === "vehicles" || kind === "chippers") && this.used(state, id)) return { ok: false, error: t("Pojazd lub rębak występuje w operacjach — nie można go usunąć; ustaw status „Wycofany” (historia kursów zostaje)") };
       state.fleet[kind] = list.filter(x => x.id !== id); state.rev += 1;
       audit(state, ctx, { entity: "fleet", entityId: id, opNo: rec.name, event: "fleet", act: Lx("Usunięcie: {k}", { k: { t: this.KINDS[kind].label } }), before: rec, after: null, source: (ctx && ctx.source) || N_("Moduł Flota") });
       return { ok: true };
@@ -1475,6 +1573,27 @@
     }
   };
 
+  /** Usunięcie rekordu kartoteki — tylko gdy nie ma go w żadnym dokumencie (inaczej dezaktywacja). */
+  Master.remove = function (state, kind, id, ctx) {
+    const K = this.KINDS[kind];
+    if (!K) return { ok: false, error: t("Nieznana kartoteka") };
+    if (!can(ctx && ctx.user, "master.edit")) return { ok: false, error: t("Edycja kartotek wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
+    const rec = byId(state[kind], id);
+    if (!rec) return { ok: false, error: t("Nie znaleziono") };
+    const inOps = state.operations.some(o => JSON.stringify(o).includes(`"${id}"`)) || state.drafts.some(d => JSON.stringify(d).includes(`"${id}"`));
+    if (kind === "products" && (this.usedProduct(state, id) || inOps)) return { ok: false, error: t("Produkt występuje w dokumentach — nie można go usunąć; dezaktywuj go") };
+    if (kind === "partners" && inOps) return { ok: false, error: t("Kontrahent występuje w dokumentach — nie można go usunąć; dezaktywuj go") };
+    if (kind === "warehouses") {
+      if (state.ledger.some(l => l.whId === id) || state.operations.some(o => o.whId === id || o.toWhId === id) || state.drafts.some(d => d.whId === id)) return { ok: false, error: t("Magazyn ma dokumenty lub ruchy w księdze — nie można go usunąć; dezaktywuj go") };
+      if (state.users.some(u => u.whId === id)) return { ok: false, error: t("Do magazynu są przypisani użytkownicy — najpierw przenieś ich do innego magazynu") };
+      if (Object.values(state.fleet).some(list => list.some(x => x.whId === id))) return { ok: false, error: t("Do magazynu jest przypisana flota — najpierw zmień jej magazyn") };
+      if (state.warehouses.length <= 1) return { ok: false, error: t("W systemie musi pozostać co najmniej jeden magazyn") };
+    }
+    state[kind] = state[kind].filter(x => x.id !== id); state.rev += 1;
+    audit(state, ctx, { entity: "master", entityId: id, opNo: rec.name, event: "master", act: Lx("Usunięcie: {k}", { k: { t: K.label } }), before: clone(rec), after: null, source: (ctx && ctx.source) || N_("Kartoteki") });
+    return { ok: true };
+  };
+
   /* ------------------------------------------------------------------ */
   /* Użytkownicy — profil w danych (hasła przechowuje osobno moduł Auth)  */
   /* ------------------------------------------------------------------ */
@@ -1484,15 +1603,16 @@
       const e = {};
       if (!str(rec.name) || str(rec.name).length < 3) e.name = t("Podaj imię i nazwisko (co najmniej 3 znaki)");
       const login = str(rec.login).toLowerCase();
-      if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(login)) e.login = t("Login: 3–32 znaki — małe litery, cyfry, kropka, myślnik");
-      else if (state.users.some(u => u.id !== rec.id && str(u.login).toLowerCase() === login)) e.login = t("Taki login już istnieje");
+      const doms = (state.config.companyDomains || []).map(d => "@" + d).join(", ");
+      if (!EMAIL_RE.test(login)) e.login = t("Podaj adres e-mail");
+      else if (!companyEmail(state, login)) e.login = t("Wymagany e-mail firmowy ({d})", { d: doms });
+      else if (state.users.some(u => u.id !== rec.id && (str(u.login).toLowerCase() === login || str(u.email).toLowerCase() === login))) e.login = t("Konto z tym adresem e-mail już istnieje");
       if (!ROLES[rec.role]) e.role = t("Wybierz rolę");
       const wh = byId(state.warehouses, rec.whId);
       if (!wh) e.whId = t("Wybierz magazyn");
       else if (wh.active === false) e.whId = t("Magazyn jest nieaktywny");
       if (rec.lang && !I18N.has(rec.lang)) e.lang = t("Nieznany język");
       if (rec.theme && !THEMES[rec.theme]) e.theme = t("Nieznany motyw");
-      if (str(rec.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(rec.email))) e.email = t("Niepoprawny adres e-mail");
       return e;
     },
     /** Liczba aktywnych administratorów po zmianie (zabezpieczenie przed zablokowaniem systemu). */
@@ -1502,18 +1622,59 @@
       const prev = rec.id ? byId(state.users, rec.id) : null;
       if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono użytkownika") };
       const r = Object.assign({ lang: "", theme: "", email: "" }, prev || {}, rec);
-      r.login = str(r.login).toLowerCase(); r.name = str(r.name); r.active = r.active !== false && r.active !== "false";
+      r.login = str(r.email || r.login).toLowerCase(); r.name = str(r.name); r.active = r.active !== false && r.active !== "false";
       const e = this.validate(state, r);
       if (prev && prev.id === ctx.user.id && !r.active) e.active = t("Nie możesz dezaktywować własnego konta");
       if (prev && prev.id === ctx.user.id && r.role !== prev.role) e.role = t("Nie możesz zmienić własnej roli");
       if (this.adminsAfter(state, Object.assign({ id: r.id || "__new" }, r)) === 0) e.role = t("W systemie musi pozostać co najmniej jeden aktywny administrator");
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
-      const clean = { id: prev ? prev.id : uid("u"), name: r.name, login: r.login, role: r.role, whId: r.whId, active: r.active, lang: r.lang || "", theme: r.theme || "", email: str(r.email), createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
+      const clean = { id: prev ? prev.id : uid("u"), name: r.name, login: r.login, email: r.login, role: r.role, whId: r.whId, active: r.active, phone: str(r.phone), lang: r.lang || "", theme: r.theme || "", createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
+      // zgłoszenie z rejestracji: aktywacja przez administratora kończy oczekiwanie
+      if (prev && prev.pending && !clean.active) { clean.pending = true; clean.registeredAt = prev.registeredAt; }
+      if (prev && prev.pending && clean.active) { clean.approvedAt = nowIso(ctx); clean.approvedBy = ctx.user.name; clean.registeredAt = prev.registeredAt; }
       const idx = state.users.findIndex(u => u.id === clean.id);
       if (idx >= 0) state.users[idx] = clean; else state.users.push(clean);
       state.rev += 1;
       audit(state, ctx, { entity: "user", entityId: clean.id, opNo: clean.login, event: "user", act: Lx(prev ? N_("Zmiana konta użytkownika {l}") : N_("Utworzenie konta użytkownika {l}"), { l: clean.login }), before: prev ? clone(prev) : null, after: clean, source: (ctx && ctx.source) || N_("Administracja") });
       return { ok: true, rec: clean, created: !prev };
+    },
+    /**
+     * Rejestracja z ekranu logowania (bez sesji): konto oczekuje na zatwierdzenie przez administratora,
+     * który nadaje rolę i magazyn. Hasło przechowuje moduł Auth hosta.
+     */
+    register(state, rec, ctx) {
+      const r = { name: str(rec.name), login: str(rec.email).toLowerCase(), role: "obserwator", whId: rec.whId || (state.warehouses.find(w => w.active !== false) || {}).id, phone: str(rec.phone) };
+      const e = this.validate(state, r);
+      delete e.role;
+      if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
+      const clean = { id: uid("u"), name: r.name, login: r.login, email: r.login, role: "obserwator", whId: r.whId, active: false, pending: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx) };
+      state.users.push(clean); state.rev += 1;
+      audit(state, Object.assign({}, ctx, { user: null }), { entity: "user", entityId: clean.id, opNo: clean.login, event: "register", act: Lx("Rejestracja konta {l} — oczekuje na zatwierdzenie", { l: clean.login }), before: null, after: { nazwa: clean.name, email: clean.login }, source: N_("Rejestracja") });
+      return { ok: true, rec: clean };
+    },
+    /** Usunięcie konta bez historii (np. odrzucone zgłoszenie). Konto z historią — tylko dezaktywacja. */
+    remove(state, id, ctx) {
+      if (!can(ctx && ctx.user, "users.manage")) return { ok: false, error: t("Zarządzanie użytkownikami wymaga roli Administrator"), code: "FORBIDDEN" };
+      const u = byId(state.users, id);
+      if (!u) return { ok: false, error: t("Nie znaleziono użytkownika") };
+      if (u.id === ctx.user.id) return { ok: false, error: t("Nie możesz usunąć własnego konta") };
+      if (this.adminsAfter(state, Object.assign({}, u, { active: false })) === 0) return { ok: false, error: t("W systemie musi pozostać co najmniej jeden aktywny administrator") };
+      const hist = state.operations.some(o => o.userId === id || o.approvedById === id) || state.ledger.some(l => l.userId === id) || state.drafts.some(d => d.userId === id) || state.audit.some(a => a.userId === id);
+      if (hist) return { ok: false, error: t("Konto ma historię operacji — nie można go usunąć; dezaktywuj je (historia zostaje)") };
+      state.users = state.users.filter(x => x.id !== id); state.rev += 1;
+      audit(state, ctx, { entity: "user", entityId: id, opNo: u.login, event: "user", act: Lx("Usunięcie konta użytkownika {l}", { l: u.login }), before: clone(u), after: null, source: (ctx && ctx.source) || N_("Administracja — użytkownicy") });
+      return { ok: true };
+    },
+    /** Administrator przełącza swój magazyn roboczy (operacje, pulpit, raporty domyślne). */
+    setMyWarehouse(state, whId, ctx) {
+      const u = ctx && ctx.user && byId(state.users, ctx.user.id);
+      if (!u) return { ok: false, error: t("Brak zalogowanego użytkownika") };
+      if (u.role !== "admin") return { ok: false, error: t("Magazyn przydziela administrator"), code: "FORBIDDEN" };
+      const wh = byId(state.warehouses, whId);
+      if (!wh || wh.active === false) return { ok: false, error: t("Wybierz magazyn") };
+      if (u.whId === whId) return { ok: true, unchanged: true };
+      u.whId = whId; state.rev += 1;
+      return { ok: true };
     },
     /** Preferencje własne (język, motyw) — każdy zalogowany użytkownik. */
     setPrefs(state, prefs, ctx) {
@@ -1754,7 +1915,8 @@
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
-    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, nipValid, trReason, auditText, loginFrom, migrate, I18N,
+    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, ROLE_INFO, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
+    submitOperation, approvePending, rejectPending, canApprove, planSummary,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Master, Users, Reports, audit
   };

@@ -1,4 +1,4 @@
-# Buduje ResInvest ERP 3.0 i instalator Windows.  Uruchom z katalogu resinvest-erp:
+# Buduje ResInvest ERP 3.1 i instalator Windows.  Uruchom z katalogu resinvest-erp:
 #   powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1 [-NodeVersion 22.22.2] [-SkipTests]
 # Wymagania: Node.js >= 22.13 (do budowania), Inno Setup 6 (ISCC.exe), dostęp do nodejs.org
 # (pobranie node.exe dołączanego do instalatora — suma SHA-256 sprawdzana z SHASUMS256.txt).
@@ -55,4 +55,4 @@ $iscc = @(
 if (-not $iscc) { throw "Nie znaleziono Inno Setup 6 (ISCC.exe). Pobierz: https://jrsoftware.org/isdl.php" }
 & $iscc "installer\ResInvestERP.iss"
 if ($LASTEXITCODE -ne 0) { throw "Kompilacja instalatora nieudana" }
-Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.0.0.exe"
+Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.1.0.exe"

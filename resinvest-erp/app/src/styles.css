@@ -543,3 +543,29 @@ details.audit summary{cursor:pointer;color:var(--brand-2);font-size:var(--t-sm)}
   .sidebar,.topbar,.toasts,.no-print,.chart-tip,.new-op-btn{display:none!important}
   body{background:#fff}
 }
+
+/* ---------- 3.1: obieg zatwierdzania, rejestracja, przydział magazynów, stopka ---------- */
+.badge.st-PENDING{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line)}
+.nav-item .cnt.warn{background:var(--warn-soft);color:var(--warn);font-weight:700}
+.queue-card{border-color:var(--warn-line);box-shadow:0 0 0 3px var(--warn-soft)}
+.queue-card .card-h h3{display:flex;align-items:center;gap:8px}
+button.wh-chip{font:inherit;color:inherit;cursor:default}
+button.wh-chip.switchable{cursor:pointer}
+button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-ring)}
+.auth-tabs{display:flex;width:100%;margin:var(--s4) 0 0}
+.auth-tabs button{flex:1}
+.auth-users{max-height:320px;overflow:auto}
+.credit{margin:var(--s3) 0 0;font-size:var(--t-xs);color:var(--text-3);text-align:center;line-height:1.5}
+.app-foot{padding:var(--s3) var(--s6) var(--s5);border-top:1px solid var(--border);margin-top:var(--s6)}
+.app-foot .credit{margin:0}
+.role-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s3)}
+.role-card{border:1px solid var(--border);border-radius:var(--r-md);padding:var(--s3);background:var(--surface-2)}
+.role-card p{margin:8px 0 6px;font-size:var(--t-sm);color:var(--text-2);line-height:1.45}
+.badge.role-admin{background:var(--err-soft);color:var(--err)} .badge.role-kierownik{background:var(--info-soft);color:var(--info)}
+.badge.role-magazynier{background:var(--ok-soft);color:var(--ok)} .badge.role-obserwator{background:var(--surface-3);color:var(--text-2)}
+.alert-item.warn{border-color:var(--warn-line);background:var(--warn-soft)}
+@media (max-width:720px){ .app-foot{padding:var(--s3) var(--s4) var(--s5)} }
+@media print{ .app-foot{display:none} }
+.btn.sm.icon{width:32px;padding:0;justify-content:center}
+.tbl td.small{font-size:var(--t-xs)}
+#users-table td:last-child{width:1%}

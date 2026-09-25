@@ -1,5 +1,20 @@
 # TASKS — ResInvest ERP
 
+## 3.1.0 — prototyp końcowy
+
+| Wymaganie | Status | Dowód |
+|---|---|---|
+| Logowanie działa (także w podglądzie pliku bez dostępu do pamięci) | DONE | E2E „ramka bez pamięci”, logowanie formularzem we wszystkich testach E2E |
+| Rejestracja i logowanie e-mailem firmowym; admin magazyn@resinvest.group | DONE | platform + server + E2E (rejestracja → aktywacja → logowanie) |
+| Admin dodaje adminów, kierowników, magazynierów, obserwatorów | DONE | platform („Administrator dodaje innych administratorów”) |
+| Role: admin wszystko, obserwator podgląd, magazynier dodaje, kierownik zatwierdza | DONE | platform (role, obieg zatwierdzania), server, E2E |
+| 3 magazyny: RiC Zabrze, RiC Brąszewice, RiC Rokitki | DONE | platform, E2E |
+| Flota, ludzie, rębaki, magazynierzy i kierownicy przypisani do magazynów; dodawanie / edycja / usuwanie | DONE | platform (flota wg magazynu, usuwanie), E2E (rębaki w formularzu) |
+| Nowe intro | DONE | `app/assets/intro.mp4` (10 s, 1280×720, H.264 + AAC, 2,8 MB) |
+| Stopka autorska, pliki licencyjne | DONE | `.app-foot`, ekran logowania, `LICENSE`, instalator (AppCopyright) |
+| Usunięcie śladów narzędzi w programie i plikach | DONE | przegląd plików projektu |
+| Kompilacja instalatora Windows | NIEPOTWIERDZONE — następny krok (Windows + Inno Setup 6) | `installer\build-installer.ps1` |
+
 ## 3.0.0 — FAZA 2 (logowanie, serwer, pulpit, języki, motywy)
 
 | Wymaganie | Status | Dowód |
@@ -121,11 +136,11 @@ Dowody: `U:` test jednostkowy w `tests/engine.test.mjs` / `tests/pdf.test.mjs`, 
 | Raport: operacja łańcuchowa (zakup + sprzedaż) przypisywała sprzedaż dostawcy i wartość zakupu odbiorcy | poprawione + test |
 | Historia: wiersz sprzedaży z operacji łańcuchowej pokazywał dostawcę | poprawione |
 | Anulowanie: dokument anulowany wcześniej (rozchód + odwrócenie w tym samym dniu) dawał fałszywą blokadę | poprawione (operacje anulowane pomijane w osi czasu) + test |
-| Przykłady GJ z polecenia (6 613 / 23 265 GJ) liczone z masy zaokrąglonej — system: 6 611 / 23 262 GJ | do decyzji firmy |
+| Przykłady GJ ze specyfikacji (6 613 / 23 265 GJ) liczone z masy zaokrąglonej — system: 6 611 / 23 262 GJ | do decyzji firmy |
 | Masa drewna 0,952 t/m³ vs 1,32 t/m³ w v1 | do decyzji firmy |
 | Czas audytu (rzeczywisty) vs data operacji (data demo) — filtr dziennika audytu działa po czasie rzeczywistym | ograniczenie demo |
 | Film intro w Chrome/Edge z H.264 | NIEPOTWIERDZONE (środowisko testowe bez kodeka) |
-| Instalator Windows nie kompilowany w sesji | NIEPOTWIERDZONE (brak Windows / Inno Setup) |
+| Instalator Windows jeszcze niekompilowany | NIEPOTWIERDZONE (brak Windows / Inno Setup) |
 
 ## 3. Na etap produkcyjny
 

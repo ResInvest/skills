@@ -1,8 +1,9 @@
 {
   "name": "resinvest-erp",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
-  "description": "ResInvest ERP 3.0 — obrót i magazynowanie biomasy drzewnej: logowanie, praca wielostanowiskowa (serwer Node.js + SQLite), PL/CS/EN, motywy Perła/Grafit/Azure, dokumenty, korekty, inwentaryzacja, raporty, druk i PDF",
+  "description": "ResInvest ERP 3.1 — obrót i magazynowanie biomasy drzewnej: logowanie, praca wielostanowiskowa (serwer Node.js + SQLite), PL/CS/EN, motywy Perła/Grafit/Azure, dokumenty, korekty, inwentaryzacja, raporty, druk i PDF",
+  "author": "Mateusz Roesner",
   "license": "SEE LICENSE IN LICENSE",
   "type": "commonjs",
   "scripts": {

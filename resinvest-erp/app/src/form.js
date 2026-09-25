@@ -11,7 +11,7 @@
   const { NumParse, fmt, fmtQ, money, Units, Dates, Stock } = R;
   const DBG = root.RIW_DEBUG;
   const eg = x => t("np. {x}", { x });
-  const SRC_NEW = N_("Formularz „Nowa operacja”"), SRC_CORR = N_("Korekta dokumentu");
+  const SRC_NEW = N_("Formularz „Nowa operacja”"), SRC_CORR = N_("Korekta dokumentu"), SRC_REVIEW = N_("Operacje do zatwierdzenia");
 
   /* ------------------------------------------------------------------ */
   /* Samouczek przy polach (HTML dozwolony w tłumaczeniach)              */
@@ -121,15 +121,22 @@
   const errorsWord = n => tp("{n} błąd|{n} błędy|{n} błędów", n);
 
   const Form = {
-    mode: "new", op: null, draft: null, touched: new Set(), showAll: false, saving: false, plan: null, corr: null,
+    mode: "new", op: null, draft: null, touched: new Set(), showAll: false, saving: false, plan: null, corr: null, review: null,
 
     /* ---------- cykl życia szkicu ---------- */
     ensureDraft(preset, draftId) {
       this.mode = "new"; this.op = null; this.corr = null;
       if (draftId) {
         const rec = R.byId(Store.state.drafts, draftId);
+        // operacja przekazana do zatwierdzenia, otwarta przez kierownika / administratora → przegląd i decyzja
+        if (rec && rec.status === "PENDING" && rec.userId !== Store.userId && R.canApprove(App.user(), rec.whId)) {
+          this.review = { id: rec.id, whId: rec.whId, userName: rec.userName, submittedAt: rec.submittedAt };
+          this.draft = Object.assign(R.clone(rec.draft), { draftId: rec.id, _user: Store.userId }); this.touched = new Set(); this.showAll = true; return;
+        }
+        this.review = null;
         if (rec) { this.draft = Object.assign(R.clone(rec.draft), { idemKey: R.uid("idem"), draftId: rec.id }); this.touched = new Set(); this.showAll = false; this.persist(); return; }
       }
+      if (this.review) { this.review = null; this.draft = null; }
       const stored = ssGet(DRAFT_KEY, null);
       if (!this.draft && stored) {
         try { const d = JSON.parse(stored); if (d && d.idemKey && d.type && d._user === Store.userId && !Store.state.operations.some(o => o.idemKey === d.idemKey)) this.draft = d; } catch (e) {}
@@ -156,7 +163,7 @@
       d.transport.place = this.defaultPlace();
       this.persist();
     },
-    persist() { if (this.mode === "new" && this.draft) { this.draft._user = Store.userId; ssSet(DRAFT_KEY, JSON.stringify(this.draft)); } },
+    persist() { if (this.mode === "new" && this.draft && !this.review) { this.draft._user = Store.userId; ssSet(DRAFT_KEY, JSON.stringify(this.draft)); } },
     defaultPlace() {
       const d = this.draft;
       if (!d) return App.wh() ? App.wh().name : "";
@@ -164,7 +171,11 @@
       if (d.type === "SPRZEDAZ" || (d.type === "ZAKUP" && d.sale.enabled)) { const b = App.partner(d.sale.buyerId); if (b) return b.name; }
       return App.wh() ? App.wh().name : "";
     },
-    whId() { return this.mode === "correct" && this.op ? this.op.whId : App.user().whId; },
+    /** Zasoby floty dostępne w magazynie operacji: przypisane do niego i wspólne (oraz już wybrany — dane historyczne). */
+    fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
+    whId() { return this.mode === "correct" && this.op ? this.op.whId : this.review ? this.review.whId : App.user().whId; },
+    /** Co zrobi przycisk główny: przegląd (zatwierdź przekazaną), zatwierdzenie bezpośrednie albo przekazanie do zatwierdzenia. */
+    action() { return this.review ? "approve" : R.canApprove(App.user(), App.user().whId) ? "commit" : "submit"; },
     /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
     supplierText() {
       const P = this.draft.purchase;
@@ -262,8 +273,8 @@
           ${field({ key: "production.chipRate", label: t("Cena za rąbanie [zł/MP]"), control: numIn("production.chipRate", P_.chipRate, { suffix: "zł/MP", placeholder: fmt(10, 2) }) })}
           ${field({ key: "production.chipCost", label: t("Koszt rąbania"), control: outBox("production.chipCost", "—"), help: false })}
           ${origin}
-          ${field({ key: "production.chipperId", label: t("Rębak (Flota)"), span: "span2", control: selIn("production.chipperId", [pick(t("bez wskazania rębaka"))].concat(S.fleet.chippers.map(c => ({ v: c.id, l: `${c.name}${c.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[c.status]) : ""}`, disabled: c.status !== "aktywny" }))), P_.chipperId, { struct: true }) })}
-          ${P_.chipperId ? field({ key: "production.operatorId", label: t("Operator rębaka"), span: "span2", control: selIn("production.operatorId", S.fleet.operators.map(o => ({ v: o.id, l: o.name + (chipper && chipper.operatorId === o.id ? " " + t("(domyślny)") : "") })), P_.operatorId || (chipper ? chipper.operatorId : "")) }) : ""}
+          ${field({ key: "production.chipperId", label: t("Rębak (Flota)"), span: "span2", control: selIn("production.chipperId", [pick(t("bez wskazania rębaka"))].concat(this.fleetOf("chippers", P_.chipperId).map(c => ({ v: c.id, l: `${c.name}${c.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[c.status]) : ""}`, disabled: c.status !== "aktywny" }))), P_.chipperId, { struct: true }) })}
+          ${P_.chipperId ? field({ key: "production.operatorId", label: t("Operator rębaka"), span: "span2", control: selIn("production.operatorId", this.fleetOf("operators", P_.operatorId).map(o => ({ v: o.id, l: o.name + (chipper && chipper.operatorId === o.id ? " " + t("(domyślny)") : "") })), P_.operatorId || (chipper ? chipper.operatorId : "")) }) : ""}
         </div>
         <datalist id="dl-ndl">${["Rudy Raciborskie", "Rybnik", "Katowice", "Brynek", "Gliwice"].map(x => `<option value="${esc(x)}">`).join("")}</datalist>`;
     },
@@ -392,7 +403,7 @@
         const O = this.ownRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
         const u = Units.label(this.shippedUnit());
-        const vehOpts = S.fleet.vehicles.map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[v.status]) : ""}`, disabled: v.status !== "aktywny" }));
+        const vehOpts = this.fleetOf("vehicles", null).map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[v.status]) : ""}`, disabled: v.status !== "aktywny" }));
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = O.runs[i] || R.blankRun(), veh = R.byId(S.fleet.vehicles, r.vehicleId), k = f => `transport.own.runs.${i}.${f}`;
@@ -400,7 +411,7 @@
             <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="run.${i}.cost">—</span></div>
             <div class="fgrid four">
               ${field({ key: k("vehicleId"), label: t("Pojazd z floty własnej"), req: true, span: "span2", help: false, control: selIn(k("vehicleId"), [pick(t("wybierz pojazd"))].concat(vehOpts), r.vehicleId, { struct: true }) })}
-              ${field({ key: k("driverId"), label: t("Kierowca"), req: true, span: "span2", help: false, control: selIn(k("driverId"), [pick(t("wybierz kierowcę"))].concat(S.fleet.drivers.map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " " + t("(domyślny)") : "") }))), r.driverId || (veh ? veh.driverId : "")) })}
+              ${field({ key: k("driverId"), label: t("Kierowca"), req: true, span: "span2", help: false, control: selIn(k("driverId"), [pick(t("wybierz kierowcę"))].concat(this.fleetOf("drivers", r.driverId).map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " " + t("(domyślny)") : "") }))), r.driverId || (veh ? veh.driverId : "")) })}
               ${forest ? `${field({ key: k("kwit"), label: t("Nr kwitu wywozowego"), req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: eg("KW 0217/09/2026") }) })}
               ${field({ key: k("kwitM3"), label: t("m³ z kwitu"), help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: eg("25") }) })}` : ""}
               ${field({ key: k("qty"), label: forest ? t("MP na aucie (m³ × 4)") : t("Ilość w kursie ({u})", { u }), req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: forest ? t("auto z m³") : count > 1 ? eg("100") : t("cała ilość") }) })}
@@ -507,7 +518,13 @@
         return `<div class="page-head"><div class="titles"><h2>${esc(t("Nowa operacja"))}</h2></div></div>
           <div class="info-line err">${ic("alert", 15)}<span>${t("Rola <b>{r}</b> nie pozwala tworzyć operacji. Zaloguj się kontem z odpowiednimi uprawnieniami.", { r: esc(App.roleLabel(App.user().role)) })}</span></div>`;
       }
+      const rv = this.review, rec = this.draft.draftId ? R.byId(Store.state.drafts, this.draft.draftId) : null;
+      if (rv) return `<div class="page-head"><div class="titles"><h2>${esc(t("Operacja do zatwierdzenia"))} ${statusBadge("PENDING")}</h2>
+          <p>${esc(t("Wprowadził: {u} · przekazano {d} · magazyn {w}. Sprawdź dane — możesz je poprawić przed zatwierdzeniem albo odrzucić z podaniem powodu.", { u: rv.userName, d: Dates.ts(rv.submittedAt), w: App.whName(rv.whId) }))}</p></div>
+          <div class="actions"><button class="btn ghost" type="button" id="review-close">${ic("x", 15)} ${esc(t("Zamknij przegląd"))}</button></div></div>` + this.layout(false);
       return `<div class="page-head"><div class="titles"><h2>${esc(t("Nowa operacja"))}${this.draft.draftId ? ` <span class="badge st-DRAFT">${esc(t("wersja robocza"))}</span>` : ""}</h2>
+          ${rec && rec.rejectReason ? `<div class="info-line err mt2" id="reject-info">${ic("alert", 15)}<span>${esc(t("Odrzucona przez {u} ({d}): {r}. Popraw i przekaż ponownie.", { u: rec.rejectedBy, d: Dates.ts(rec.rejectedAt), r: rec.rejectReason }))}</span></div>` : ""}
+          ${rec && rec.status === "PENDING" ? `<div class="info-line mt2">${ic("clock", 15)}<span>${esc(t("Operacja czeka na zatwierdzenie. Zmiana i zapis wycofa ją do wersji roboczej."))}</span></div>` : ""}
           <p>${t("Zakup, sprzedaż z magazynu, produkcja na magazyn, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.")}</p></div>
           <div class="actions">
             <label class="inline-opt"><input type="checkbox" id="tut-toggle" ${lsGet("riw.tutorial", "1") !== "0" ? "checked" : ""}> ${esc(t("Samouczek pod polami"))}</label>
@@ -529,12 +546,16 @@
                     <select class="ctrl" id="corr-reason"><option value="">— ${esc(t("wybierz powód"))} —</option>${R.CORRECTION_REASONS.map(r => `<option value="${esc(r)}" ${this.corr.reason === r ? "selected" : ""}>${esc(t(r))}</option>`).join("")}</select>
                     <input class="ctrl mt2" id="corr-reason-text" placeholder="${esc(this.corr.reason === "inny" ? t("opis powodu (wymagany)") : t("opis / własny powód (opcjonalnie)"))}" value="${esc(this.corr.reasonText)}"><div class="msg hidden" id="corr-reason-msg" role="alert"></div></div>
                   <button class="btn primary lg mt4" type="button" data-save style="width:100%">${ic("check", 16)} ${esc(t("Zatwierdź korektę…"))}</button>`
-                : `<button class="btn primary lg mt4" type="button" data-save style="width:100%">${ic("check", 16)} ${esc(t("Zatwierdź…"))}</button>
-                   <button class="btn mt2" type="button" data-draft style="width:100%">${ic("file", 15)} ${esc(t("Zapisz jako roboczy"))}</button>`}</div></div>
+                : this.review ? `<button class="btn primary lg mt4" type="button" data-save style="width:100%">${ic("check", 16)} ${esc(t("Zatwierdź dokument…"))}</button>
+                   <button class="btn danger mt2" type="button" data-reject style="width:100%">${ic("x", 15)} ${esc(t("Odrzuć…"))}</button>`
+                : `<button class="btn primary lg mt4" type="button" data-save style="width:100%">${ic(this.action() === "submit" ? "up" : "check", 16)} ${esc(this.saveLabel())}</button>
+                   <button class="btn mt2" type="button" data-draft style="width:100%">${ic("file", 15)} ${esc(t("Zapisz jako roboczy"))}</button>
+                   ${this.action() === "submit" ? `<p class="help mt2">${esc(t("Operację zatwierdza kierownik magazynu — do tego czasu nie ma numeru i nie zmienia stanów."))}</p>` : ""}`}</div></div>
           </aside>
         </div>
-        <div class="save-bar no-print"><div class="sb-info" id="sb-info"></div><button class="btn primary lg" type="button" data-save>${ic("check", 16)} ${esc(corr ? t("Zatwierdź korektę…") : t("Zatwierdź…"))}</button></div>`;
+        <div class="save-bar no-print"><div class="sb-info" id="sb-info"></div><button class="btn primary lg" type="button" data-save>${ic("check", 16)} ${esc(corr ? t("Zatwierdź korektę…") : this.saveLabel())}</button></div>`;
     },
+    saveLabel() { const a = this.action(); return a === "submit" ? t("Przekaż do zatwierdzenia…") : a === "approve" ? t("Zatwierdź dokument…") : t("Zatwierdź…"); },
 
     bind(page) {
       const cc = $("#corr-cancel", page);
@@ -567,6 +588,9 @@
       form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); this.save(); } });
       $$("[data-save]", page).forEach(b => b.onclick = () => this.save());
       $$("[data-draft]", page).forEach(b => b.onclick = () => this.saveDraft());
+      $$("[data-reject]", page).forEach(b => b.onclick = () => this.reject());
+      const rc = $("#review-close", page);
+      if (rc) rc.onclick = () => { this.review = null; this.draft = null; location.hash = "#/operacje"; };
       const rs = $("#corr-reason", page), rt = $("#corr-reason-text", page);
       if (rs) rs.onchange = () => { this.corr.reason = rs.value; rt.placeholder = rs.value === "inny" ? t("opis powodu (wymagany)") : t("opis / własny powód (opcjonalnie)"); this.reasonMsg(false); };
       if (rt) rt.oninput = () => { this.corr.reasonText = rt.value; this.reasonMsg(false); };
@@ -696,7 +720,11 @@
       this.refresh();
     },
 
-    ctx() { return App.ctx(this.mode === "correct" ? SRC_CORR : SRC_NEW); },
+    ctx() {
+      const c = App.ctx(this.mode === "correct" ? SRC_CORR : this.review ? SRC_REVIEW : SRC_NEW);
+      if (this.review) c.user = Object.assign({}, c.user, { whId: this.review.whId });   // plan w magazynie operacji
+      return c;
+    },
     /** Plan bieżącego formularza: dla korekty — plan na stanie bez skutków korygowanej operacji (jak w silniku). */
     computePlan() {
       const S = Store.state;
@@ -922,18 +950,27 @@
         return;
       }
       if (this.mode === "correct") return this.confirmCorrection();
-      const ok = await this.confirmDialog(plan);
+      const action = this.action();
+      const ok = await this.confirmDialog(plan, action);
       if (!ok) return;
       this.saving = true;
       $$("[data-save]").forEach(b => { b.disabled = true; b.dataset.label = b.innerHTML; b.innerHTML = esc(t("Zapisywanie…")); });
       const draft = R.clone(this.draft); delete draft._user;
-      const res = await Store.exec("op.commit", { draft }, SRC_NEW);
+      const res = action === "approve" ? await Store.exec("op.approve", { id: this.review.id, draft }, SRC_REVIEW)
+        : await Store.exec(action === "submit" ? "op.submit" : "op.commit", { draft }, SRC_NEW);
       this.saving = false;
       $$("[data-save]").forEach(b => { b.disabled = false; if (b.dataset.label) b.innerHTML = b.dataset.label; });
       if (!res || !res.ok) { Toast.err(t("Nie zapisano — nic nie zostało zaksięgowane"), res ? res.error : t("Nieznany błąd")); this.refresh(); return; }
+      if (action === "submit" && res.pending) {
+        Toast.ok(t("Przekazano do zatwierdzenia"), t("Kierownik magazynu {w} zobaczy operację w kolejce „Do zatwierdzenia”.", { w: App.whName(this.whId()) }));
+        this.reset(); App.go("operacje"); return;
+      }
+      if (action === "approve") { this.review = null; this.draft = null; }
       if (res.duplicate) Toast.info(t("Operacja była już zapisana"), t("Ochrona przed podwójnym zapisem — nie powstały nowe dokumenty."));
       else Toast.ok(t("Dokument zatwierdzony"), res.op.documents.map(x => x.no).join(" · "));
-      const op = res.op, keep = { type: this.draft.type, direct: this.draft.sale.direct };
+      const op = res.op;
+      if (action === "approve") { location.hash = "#/operacje"; App.render(); root.OpDetail.open(op.id, { justSaved: true }); return; }
+      const keep = { type: this.draft.type, direct: this.draft.sale.direct };
       this.reset();
       this.draft.type = keep.type; this.draft.sale.direct = keep.direct;
       if (keep.type === "PRODUKCJA" || keep.direct) PRESETS[keep.type === "PRODUKCJA" ? "produkcja" : "bezposrednia"](this.draft);
@@ -944,7 +981,17 @@
     },
 
     /** Okno podsumowania przed zatwierdzeniem. */
-    confirmDialog(plan) {
+    /** Odrzucenie operacji przekazanej do zatwierdzenia (powód wymagany; wraca do autora jako wersja robocza). */
+    async reject() {
+      if (!this.review) return;
+      const r = await Modal.confirm({ title: t("Odrzucić operację?"), text: t("Operacja wróci do autora ({u}) jako wersja robocza z Twoim komentarzem.", { u: this.review.userName }), ok: t("Odrzuć"), danger: true, input: { label: t("Powód odrzucenia"), required: true } });
+      if (!r.ok) return;
+      const res = await Store.exec("op.reject", { id: this.review.id, reason: r.value }, SRC_REVIEW);
+      if (!res.ok) return Toast.err(t("Nie odrzucono"), res.error);
+      Toast.ok(t("Operacja odrzucona"), t("Autor zobaczy powód przy wersji roboczej."));
+      this.review = null; this.draft = null; App.go("operacje");
+    },
+    confirmDialog(plan, action = "commit") {
       return new Promise(resolve => {
         const S = Store.state, cfg = S.config, n = plan.norm, X = n.production;
         const name = id => (App.product(id) || {}).name || "—";
@@ -971,12 +1018,13 @@
         const bal = plan.balances.map(b => `<tr><td>${esc(name(b.productId))}<br><small class="dim">${esc(App.whName(b.whId))}</small></td><td class="r">${esc(App.qtyNative(b.before, b.productId))}</td><td class="r"><span class="${b.after < b.before ? "neg" : "pos"}">${b.after - b.before > 0 ? "+" : ""}${esc(fmtQ(b.after - b.before, 6))}</span></td><td class="r"><b>${esc(App.qtyNative(b.after, b.productId))}</b></td></tr>`).join("");
         let done = false;
         const m = Modal.open({
-          title: t("Podsumowanie przed zatwierdzeniem"), sub: esc(t("Sprawdź dane — po zatwierdzeniu dokument otrzyma numer i status ZATWIERDZONY. Zmiany później wyłącznie przez korektę lub anulowanie.")), wide: true, id: "confirm-op",
+          title: action === "submit" ? t("Podsumowanie przed przekazaniem") : t("Podsumowanie przed zatwierdzeniem"),
+          sub: esc(action === "submit" ? t("Operacja trafi do kierownika magazynu. Numer dokumentu i zmiana stanów nastąpią dopiero po zatwierdzeniu.") : t("Sprawdź dane — po zatwierdzeniu dokument otrzyma numer i status ZATWIERDZONY. Zmiany później wyłącznie przez korektę lub anulowanie.")), wide: true, id: "confirm-op",
           body: `<div class="grid g2 confirm-grid"><dl class="money-list">${kv.join("")}</dl>
             <div><h4 class="mini-h">${esc(t("Stan magazynowy"))}</h4><div class="tbl-wrap"><table class="tbl" id="confirm-bal"><thead><tr><th>${esc(t("Produkt"))}</th><th class="r">${esc(t("Przed"))}</th><th class="r">${esc(t("Zmiana"))}</th><th class="r">${esc(t("Po"))}</th></tr></thead><tbody>${bal}</tbody></table></div>
             <h4 class="mini-h">${esc(t("Dokumenty"))}</h4><p>${plan.documents.map(d => `<span class="badge">${d.type}</span>`).join(" ")}</p>
             ${plan.warnings.length ? `<ul class="warn-list mt3">${plan.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}</div></div>`,
-          footer: `<button class="btn ghost" type="button" data-no>${esc(t("Wróć do edycji"))}</button><button class="btn primary" type="button" data-yes id="confirm-yes">${ic("check", 15)} ${esc(t("Zatwierdź dokument"))}</button>`,
+          footer: `<button class="btn ghost" type="button" data-no>${esc(t("Wróć do edycji"))}</button><button class="btn primary" type="button" data-yes id="confirm-yes">${ic("check", 15)} ${esc(action === "submit" ? t("Przekaż do zatwierdzenia") : t("Zatwierdź dokument"))}</button>`,
           onClose: () => { if (!done) resolve(false); }
         });
         $("[data-no]", m.el).onclick = () => m.close();

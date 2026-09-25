@@ -1,11 +1,11 @@
 ; =========================================================================
-;  ResInvest ERP 3.0 · instalator Windows (Inno Setup 6)
+;  ResInvest ERP 3.1 · instalator Windows (Inno Setup 6)
 ;
 ;  Budowanie (Windows, z katalogu resinvest-erp):
 ;    powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ;  Skrypt: buduje ResInvest_ERP.html, generuje dane przykładowe, pobiera
 ;  środowisko Node.js (node.exe, weryfikacja SHA-256) do installer\runtime
-;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.0.0.exe
+;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.1.0.exe
 ;
 ;  Składniki:
 ;   * Program (tryb lokalny)   — samodzielny plik HTML; dane w przeglądarce,
@@ -18,7 +18,7 @@
 ; =========================================================================
 
 #define AppName "ResInvest ERP"
-#define AppVersion "3.0.0"
+#define AppVersion "3.1.0"
 #define AppPublisher "ResInvest Commodities"
 #define AppURL "http://localhost:8080/"
 #define ServerPort "8080"
@@ -29,6 +29,10 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
+AppCopyright=Copyright (c) 2026 Mateusz Roesner — program stworzony dla ResInvest Commodities
+VersionInfoCompany=ResInvest Commodities
+VersionInfoDescription=ResInvest ERP — instalator
+VersionInfoVersion={#AppVersion}
 DefaultDirName={autopf}\ResInvest ERP
 DefaultGroupName=ResInvest ERP
 DisableProgramGroupPage=yes

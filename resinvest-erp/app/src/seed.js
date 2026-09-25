@@ -1,26 +1,38 @@
 /* =========================================================================
-   Warstwa S: dane przykładowe demonstratora.
-   Wszystkie operacje przechodzą przez ten sam silnik co formularz — dane
-   startowe są więc spójne z regułami (salda, numeracja, audyt).
-   Wyłącznie do demonstracji i testów — nie przenosić do produkcji.
+   Warstwa S: dane startowe.
+   * build()   — dane przykładowe (szkolenie, testy): 3 magazyny RiC, konta
+                 e-mail firmowe, flota przypisana do magazynów, operacje wzorcowe.
+                 Operacje przechodzą przez ten sam silnik co formularz — dane są
+                 spójne z regułami (salda, numeracja, obieg zatwierdzania, audyt).
+   * minimal() — start firmy: 3 magazyny, katalog produktów, administrator.
    ========================================================================= */
 (function (root) {
   "use strict";
   const RIW = root.RIW;
   const N_ = s => s;
 
+  /** Magazyny firmy (start firmy i dane przykładowe). */
+  const WAREHOUSES = [
+    { id: "wh_zab", code: "ZAB", name: "RiC Zabrze", address: "ul. Gwarecka 16, 41-800 Zabrze", active: true },
+    { id: "wh_bra", code: "BRA", name: "RiC Brąszewice", address: "Brąszewice", active: true },
+    { id: "wh_rok", code: "ROK", name: "RiC Rokitki", address: "Rokitki", active: true }
+  ];
+  /** Konto administratora (e-mail firmowy) — pierwsze logowanie. */
+  const ADMIN_EMAIL = "magazyn@resinvest.group";
+
   function base() {
     const s = RIW.emptyState(root.RIW_CONFIG || null);
-    s.warehouses = [
-      { id: "wh_zab", code: "ZAB", name: "RiC Zabrze", address: "ul. Gwarecka 16, 41-800 Zabrze", active: true },
-      { id: "wh_pys", code: "PYS", name: "RiC Pyskowice", address: "ul. Wyszyńskiego, 44-120 Pyskowice", active: true }
-    ];
+    s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
+    const U = (id, email, name, role, whId) => ({ id, login: email, email, name, role, whId, active: true, lang: "", theme: "" });
     s.users = [
-      { id: "u_admin", login: "admin", name: "Mateusz Roesner", role: "admin", whId: "wh_zab", active: true, lang: "", theme: "", email: "" },
-      { id: "u_kier", login: "kierownik", name: "Anna Górska", role: "kierownik", whId: "wh_zab", active: true, lang: "", theme: "", email: "" },
-      { id: "u_mag", login: "magazynier", name: "Adrian Wojciechowski", role: "magazynier", whId: "wh_zab", active: true, lang: "", theme: "", email: "" },
-      { id: "u_pys", login: "pyskowice", name: "Paweł Kaczmarek", role: "magazynier", whId: "wh_pys", active: true, lang: "", theme: "", email: "" },
-      { id: "u_view", login: "podglad", name: "Beata Nowak", role: "podglad", whId: "wh_zab", active: true, lang: "", theme: "", email: "" }
+      U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab"),
+      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab"),
+      U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab"),
+      U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra"),
+      U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra"),
+      U("u_krok", "michal.lewandowski@resinvest.group", "Michał Lewandowski", "kierownik", "wh_rok"),
+      U("u_rok", "karolina.wisniewska@resinvest.group", "Karolina Wiśniewska", "magazynier", "wh_rok"),
+      U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab")
     ];
     s.products = [
       { id: "pr_drewno", code: "DRW-O", name: "Drewno opałowe", cat: "drewno", unit: "m3", active: true },
@@ -46,23 +58,27 @@
     s.carriers = ["ESI Logistics", "DAP Trans", "Transport Kowalski", "PKP Cargo"];
     s.fleet = {
       drivers: [
-        { id: "dr_kowalski", name: "Jan Kowalski", phone: "600 100 200" },
-        { id: "dr_nowak", name: "Piotr Nowak", phone: "600 300 400" },
-        { id: "dr_zielinski", name: "Marek Zieliński", phone: "600 500 600" },
-        { id: "dr_wojcik", name: "Tomasz Wójcik", phone: "600 700 800" }
+        { id: "dr_kowalski", name: "Jan Kowalski", phone: "600 100 200", whId: "wh_zab" },
+        { id: "dr_nowak", name: "Piotr Nowak", phone: "600 300 400", whId: "wh_zab" },
+        { id: "dr_wojcik", name: "Tomasz Wójcik", phone: "600 700 800", whId: "wh_zab" },
+        { id: "dr_zielinski", name: "Marek Zieliński", phone: "600 500 600", whId: "wh_bra" },
+        { id: "dr_kaminski", name: "Łukasz Kamiński", phone: "600 900 100", whId: "wh_rok" }
       ],
       vehicles: [
-        { id: "ve_scania", name: "Scania R450 — ruchoma podłoga", reg: "SGL 4T821", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kowalski" },
-        { id: "ve_volvo", name: "Volvo FH 500 — ruchoma podłoga", reg: "SZA 12345", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_nowak" },
-        { id: "ve_man", name: "MAN TGX — ciężarowy", reg: "SK 7788X", type: "ciezarowy", status: "serwis", driverId: "dr_zielinski" }
+        { id: "ve_scania", name: "Scania R450 — ruchoma podłoga", reg: "SGL 4T821", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kowalski", whId: "wh_zab" },
+        { id: "ve_volvo", name: "Volvo FH 500 — ruchoma podłoga", reg: "SZA 12345", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_nowak", whId: "wh_zab" },
+        { id: "ve_man", name: "MAN TGX — ciężarowy", reg: "SK 7788X", type: "ciezarowy", status: "serwis", driverId: "dr_zielinski", whId: "wh_bra" },
+        { id: "ve_daf", name: "DAF XF 480 — ruchoma podłoga", reg: "ESR 4R210", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kaminski", whId: "wh_rok" }
       ],
       operators: [
-        { id: "op_lis", name: "Krzysztof Lis", phone: "601 111 222" },
-        { id: "op_mazur", name: "Adam Mazur", phone: "601 333 444" }
+        { id: "op_lis", name: "Krzysztof Lis", phone: "601 111 222", whId: "wh_zab" },
+        { id: "op_mazur", name: "Adam Mazur", phone: "601 333 444", whId: "wh_bra" },
+        { id: "op_dudek", name: "Rafał Dudek", phone: "601 555 666", whId: "wh_rok" }
       ],
       chippers: [
-        { id: "ch_jenz", name: "Jenz HEM 583", status: "aktywny", operatorId: "op_lis" },
-        { id: "ch_biber", name: "Eschlböck Biber 92", status: "aktywny", operatorId: "op_mazur" }
+        { id: "ch_jenz", name: "Jenz HEM 583", status: "aktywny", operatorId: "op_lis", whId: "wh_zab" },
+        { id: "ch_biber", name: "Eschlböck Biber 92", status: "aktywny", operatorId: "op_mazur", whId: "wh_bra" },
+        { id: "ch_albach", name: "Albach Diamant 2000", status: "aktywny", operatorId: "op_dudek", whId: "wh_rok" }
       ]
     };
     return s;
@@ -110,7 +126,7 @@
       { productId: "pr_zr_inw", qty: 120 }, { productId: "pr_zr_tow", qty: 200 },
       { productId: "pr_pks", qty: 728 }, { productId: "pr_lupina", qty: 728 }
     ], ctx("u_admin", "2026-08-01"));
-    RIW.openingBalance(s, "wh_pys", "2026-08-01", [
+    RIW.openingBalance(s, "wh_bra", "2026-08-01", [
       { productId: "pr_drewno", qty: 30 }, { productId: "pr_zr_lesna", qty: 250 }
     ], ctx("u_admin", "2026-08-01"));
 
@@ -133,7 +149,7 @@
       }],
       ["u_kier", "2026-08-20", {
         purchase: { supplierId: "pa_tartak", basis: "KZR", productId: "pr_drewno_inw", qty: "25", unit: "m3", price: "180" },
-        production: { enabled: true, type: "inwestycyjna", investSite: "Obwodnica Gliwic — odcinek II", sourceDoc: "Protokół wycinki 17/2026", chipperId: "ch_biber" },
+        production: { enabled: true, type: "inwestycyjna", investSite: "Obwodnica Gliwic — odcinek II", sourceDoc: "Protokół wycinki 17/2026", chipperId: "ch_jenz" },
         sale: { enabled: true, buyerId: "pa_ec_kat", qtyMP: "100", price: "95", priceUnit: "MP" },
         transport: { mode: "train", place: "EC Katowice — bocznica", train: { trainNo: "RC 44120", carrier: "PKP Cargo", docNo: "CIM 4412/08", loadPlace: "Bocznica Gliwice Port", wagonCount: "2", capUnit: "MP", capacity: "120", tonMode: "same", sameT: "16,5", price: "28", priceUnit: "t" } }
       }],
@@ -151,18 +167,18 @@
             { reg: "SZA 7K901", driver: "Marek Pawlik", km: "26", rate: "6", freight: "", kwit: "KW 0217/4/09/2026", kwitM3: "4", qty: "16", weightT: "5,5" },
             { reg: "SZA 7K902", driver: "Leszek Mróz", km: "26", rate: "6", freight: "", kwit: "KW 0217/5/09/2026", kwitM3: "4", qty: "16", weightT: "5,1" }] } }
       }],
-      ["u_pys", "2026-09-08", {
+      ["u_bra", "2026-09-08", {
         purchase: { supplierKind: "nadlesnictwo", supplierId: "pa_ndl_ryb", lesnictwo: "Wielopole", basis: "DEKL", productId: "pr_drewno", qty: "15", unit: "m3", price: "210" },
-        transport: { mode: "external", place: "RiC Pyskowice", external: { company: "Transport Kowalski", reg: "SPY 92FR", km: "40", includedInPrice: true } }
+        transport: { mode: "external", place: "RiC Brąszewice", external: { company: "Transport Kowalski", reg: "SPY 92FR", km: "40", includedInPrice: true } }
       }],
       // produkcja na magazynie: drewno ze stanu → zrębka na stan
-      ["u_pys", "2026-09-10", {
+      ["u_bra", "2026-09-10", {
         type: "PRODUKCJA",
         production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "40", chipperId: "ch_biber", chipRate: "10" },
         notes: "Rębanie na placu — pryzma P2", extDoc: "KP 12/09/2026"
       }],
       // sprzedaż z magazynu (WZ)
-      ["u_pys", "2026-09-12", {
+      ["u_bra", "2026-09-12", {
         type: "SPRZEDAZ",
         sale: { productId: "pr_zr_lesna", qty: "100", unit: "MP", buyerId: "pa_ciep_ryb", price: "85" },
         transport: { mode: "external", place: "Ciepłownia Rybnik", external: { company: "DAP Trans", reg: "SZA 7K901", km: "35", freight: "650" } }
@@ -176,56 +192,61 @@
       }]
     ];
     ops.push(
-      // przesunięcie międzymagazynowe (MM): Zabrze → Pyskowice
+      // przesunięcie międzymagazynowe (MM): Zabrze → Brąszewice
       ["u_kier", "2026-09-16", {
-        type: "MM", mm: { productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_pys" },
-        transport: { mode: "own", place: "RiC Pyskowice", own: { vehicleId: "ve_scania", km: "28", rate: "5" } }
+        type: "MM", mm: { productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_bra" },
+        transport: { mode: "own", place: "RiC Brąszewice", own: { vehicleId: "ve_scania", km: "28", rate: "5" } }
       }],
       // zakup wprowadzony omyłkowo — w danych przykładowych jest później anulowany
-      ["u_pys", "2026-09-17", {
+      ["u_bra", "2026-09-17", {
         purchase: { supplierId: "pa_agro", basis: "DEKL", productId: "pr_lupina", qty: "5", unit: "t", price: "610" },
-        transport: { mode: "none", place: "RiC Pyskowice" }, notes: "Pomyłka — dostawa nie dotarła"
+        transport: { mode: "none", place: "RiC Brąszewice" }, notes: "Pomyłka — dostawa nie dotarła"
       }],
       // produkcja na magazyn z wczoraj (kwit produkcji dnia)
-      ["u_pys", "2026-09-22", {
+      ["u_bra", "2026-09-22", {
         type: "PRODUKCJA",
         production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "20", chipperId: "ch_biber", chipRate: "10" },
         notes: "Pryzma P3"
       }]
     );
     const byNo = {};
+    // obieg zatwierdzania: operacje magazyniera zatwierdza kierownik jego magazynu
+    const approverOf = uid => { const u = user(uid); return u.role === "magazynier" ? s.users.find(k => k.role === "kierownik" && k.whId === u.whId) : null; };
     for (const [uid, date, over] of ops) {
-      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
+      const ap = approverOf(uid);
+      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date), ap ? { author: user(uid), approver: ap } : {});
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
     }
     // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
     const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);
     cd.sale.qty = "90";
-    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_pys" }) }));
+    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }));
     if (!r.ok) throw new Error("Dane przykładowe (korekta): " + r.error);
-    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_pys" }) }), "pomyłka operatora — dostawa nie dotarła");
+    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }), "pomyłka operatora — dostawa nie dotarła");
     if (!r.ok) throw new Error("Dane przykładowe (anulowanie): " + r.error);
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(today);
+    s.meta.sample = true;
     return s;
   }
 
   /**
-   * Czysty start (instalacja bez danych przykładowych): katalog produktów, jeden magazyn,
-   * administrator. Pozostałe kartoteki uzupełnia się w programie.
+   * Start firmy (instalacja bez danych przykładowych): 3 magazyny RiC, katalog produktów,
+   * administrator (e-mail firmowy). Pozostałe kartoteki uzupełnia się w programie.
    */
   function minimal(opts = {}) {
     const s = RIW.emptyState(root.RIW_CONFIG || null);
     const b = base();
     s.products = b.products;
-    s.warehouses = [{ id: "wh_main", code: String(opts.whCode || "MAG").toUpperCase(), name: opts.whName || "Magazyn główny", address: opts.whAddress || "", active: true }];
-    s.users = [{ id: "u_admin", login: String(opts.login || "admin").toLowerCase(), name: opts.name || "Administrator", role: "admin", whId: "wh_main", active: true, lang: opts.lang || "", theme: "", email: opts.email || "" }];
+    s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
+    const email = String(opts.email || opts.login || ADMIN_EMAIL).trim().toLowerCase();
+    s.users = [{ id: "u_admin", login: email, email, name: opts.name || "Administrator", role: "admin", whId: "wh_zab", active: true, lang: opts.lang || "", theme: "" }];
     s.carriers = [];
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());
     return s;
   }
 
-  RIW.Seed = { build, draftOf, minimal };
+  RIW.Seed = { build, draftOf, minimal, WAREHOUSES, ADMIN_EMAIL };
 })(typeof globalThis !== "undefined" ? globalThis : this);

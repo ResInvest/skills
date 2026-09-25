@@ -39,7 +39,7 @@
     truck: "M3 6h11v10H3zM14 10h4l3 3v3h-7M7 17.5a1.5 1.5 0 1 0 0 .01M17 17.5a1.5 1.5 0 1 0 0 .01",
     clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
     db: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
-    menu: "M4 6h16M4 12h16M4 18h16", play: "M7 4v16l13-8z", check: "M5 12l5 5L20 7", x: "M6 6l12 12M18 6 6 18",
+    menu: "M4 6h16M4 12h16M4 18h16", chevDown: "M6 9l6 6 6-6", mail: "M3 6h18v12H3zM3 7l9 6 9-6", shieldCheck: "M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6zM9 12l2 2 4-4", play: "M7 4v16l13-8z", check: "M5 12l5 5L20 7", x: "M6 6l12 12M18 6 6 18",
     alert: "M12 3 2 21h20zM12 10v5M12 18h.01", dl: "M12 4v12M7 11l5 5 5-5M5 20h14",
     print: "M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z", edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
     trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13", up: "M12 19V5M5 12l7-7 7 7",
@@ -217,12 +217,19 @@
       try { localStorage.setItem("riw.probe", "1"); localStorage.removeItem("riw.probe"); } catch (e) { this.memoryOnly = true; }
       let s = null, problem = null, migrated = false;
       if (!this.memoryOnly) {
+        // dane przykładowe z wersji 3.0 (magazyn Pyskowice, loginy bez e-maili) → nowe dane przykładowe 3.1; stare zostają w kopii
+        try {
+          const raw = localStorage.getItem(KEY), old = raw ? JSON.parse(raw) : null;
+          if (old && old.schema === 4 && (old.warehouses || []).some(w => w.id === "wh_pys") && (old.users || []).some(u => u.login === "admin")) {
+            localStorage.setItem(KEY + ".wersja-3.0", raw); localStorage.removeItem(KEY); migrated = "sample30";
+          }
+        } catch (e) {}
         try { s = this.read(); } catch (e) {
           problem = e.message;
           try { localStorage.setItem(KEY + ".uszkodzone." + Date.now(), localStorage.getItem(KEY)); } catch (x) {}
         }
         // dane z Demo 2.x (schemat 3) — przeniesienie z migracją; stare klucze zostają nietknięte
-        if (!s && !problem) {
+        if (!s && !problem && migrated !== "sample30") {
           const old = OLD_KEYS.map(k => [k, lsGet(k, null)]).find(([, v]) => v);
           if (old && old[0] === "riw.demo.state.v3") {
             try { const m = R.migrate(JSON.parse(old[1])); if (!m.error && !R.validateStateShape(m.state).length) { s = m.state; migrated = true; } } catch (e) {}
@@ -248,7 +255,11 @@
         } else Store.state = fresh;
         return res;
       };
-      if (root.navigator && navigator.locks && navigator.locks.request) return navigator.locks.request("riw-state", () => run());
+      // Web Locks bywają zablokowane (ramka piaskownicy, tryb bez zapisu) — wtedy jedna karta, zapis bezpośredni
+      if (!this.memoryOnly && this.locksOk !== false && root.navigator && navigator.locks && navigator.locks.request) {
+        try { return navigator.locks.request("riw-state", () => run()).catch(e => { if (e && e.name === "SecurityError") { this.locksOk = false; return run(); } throw e; }); }
+        catch (e) { this.locksOk = false; }
+      }
       return Promise.resolve(run());
     },
     async login(login, pw) { const r = await this.auth.login(Store.state, login, pw); if (r.ok) Store.userId = r.userId; return r; },
@@ -271,6 +282,19 @@
       const p = await this.setPassword(res.rec.id, pw, true);
       return p.ok ? res : p;
     },
+    /** Rejestracja (bez sesji): profil „oczekuje na zatwierdzenie” + hasło; hasło sprawdzane przed zapisem. */
+    async register(rec, pw) {
+      const e = AuthLib.passwordError(pw, rec.email);
+      if (e) return { ok: false, errors: { password: e }, error: e };
+      let fresh; try { fresh = this.read() || Store.state; } catch (x) { fresh = Store.state; }
+      const { res, state } = Service.register(fresh, rec, App.today());
+      if (!state) return res;
+      try { this.write(state); } catch (x) { return { ok: false, error: t("Zapis nieudany (pamięć przeglądarki pełna lub zablokowana) — nic nie zapisano.") }; }
+      Store.state = state;
+      await this.auth.setInitial(state, res.rec.id, pw);
+      return res;
+    },
+    async removeUser(id) { const r = await this.exec("user.remove", { id }, N_("Administracja — użytkownicy")); if (r.ok) this.auth.drop(id); return r; },
     sizeBytes() { try { return (localStorage.getItem(KEY) || "").length; } catch (e) { return 0; } }
   };
 
@@ -320,6 +344,8 @@
     async accounts() { const r = await this.api("GET", "/api/users/accounts"); return r && r.ok ? r.accounts : {}; },
     async loginLog() { const r = await this.api("GET", "/api/auth/log"); return r && r.ok ? r.log : []; },
     async createUser(rec, pw) { const r = await this.api("POST", "/api/users", { rec, password: pw }); if (r && r.state) Store.state = r.state; return r && r.res ? r.res : r; },
+    async register(rec, pw) { const r = await this.api("POST", "/api/auth/register", { rec, password: pw }); return r || { ok: false, error: t("Nieprawidłowa odpowiedź serwera") }; },
+    removeUser(id) { return this.exec("user.remove", { id }, N_("Administracja — użytkownicy")); },
     backups() { return this.api("GET", "/api/backups"); },
     backupNow() { return this.api("POST", "/api/backups", {}); },
     /** Zmiany innych użytkowników: serwer wysyła numer rewizji (SSE) — pobieramy świeży stan. */
@@ -424,7 +450,8 @@
       Store.backend = info ? ServerBackend : LocalBackend;
       const r = await Store.backend.boot(info);
       if (r.problem) setTimeout(() => Toast.err(t("Dane były uszkodzone lub w starszym formacie"), t("Zachowano kopię i wczytano dane przykładowe. {p}", { p: r.problem })), 400);
-      if (r.migrated) setTimeout(() => Toast.info(t("Przeniesiono dane z Demo 2.x"), t("Dane zostały zmigrowane do wersji 3.0. Zaloguj się kontem z danych przykładowych.")), 600);
+      if (r.migrated === "sample30") setTimeout(() => Toast.info(t("Nowe dane przykładowe 3.1"), t("Magazyny RiC Zabrze, RiC Brąszewice i RiC Rokitki, logowanie e-mailem firmowym. Poprzednie dane zachowano w kopii przeglądarki.")), 600);
+      else if (r.migrated) setTimeout(() => Toast.info(t("Przeniesiono dane z Demo 2.x"), t("Dane zostały zmigrowane do wersji 3.0. Zaloguj się kontem z danych przykładowych.")), 600);
       if (Store.memoryOnly) setTimeout(() => Toast.warn(t("Tryb bez zapisu"), t("Przeglądarka blokuje localStorage — zmiany znikną po zamknięciu karty.")), 400);
       document.body.classList.toggle("no-tutorial", lsGet("riw.tutorial", "1") === "0");
       root.addEventListener("hashchange", () => { if (Store.userId) this.render(); });
@@ -442,7 +469,8 @@
       Prefs.fromUser(u);
       if (res && res.mustChange) return Auth.forceChange();
       this.shell();
-      const done = await Store.exec("inv.autoClose", {}, N_("Automat: początek kolejnego miesiąca"), { quiet: true });
+      let done = null;
+      try { done = await Store.exec("inv.autoClose", {}, N_("Automat: początek kolejnego miesiąca"), { quiet: true }); } catch (e) { console.warn("inv.autoClose", e); }
       if (done && done.done && done.done.length) {
         const okN = done.done.filter(d => d.ok).length;
         Toast.info(t("Przełom miesiąca"), t("Automatycznie zamknięto okresy inwentaryzacji: {n}", { n: okN }) + (okN < done.done.length ? " · " + t("nieudane: {n}", { n: done.done.length - okN }) : ""));
@@ -500,13 +528,14 @@
               <h1 id="title"></h1>
               <div class="spacer"></div>
               <a class="btn primary sm new-op-btn" href="#/nowa" id="top-new">${ic("plus", 15)}<span>${esc(t("Nowa operacja"))}</span></a>
-              <div class="wh-chip" id="wh-chip" title="${esc(t("Magazyn aktywny wynika z zalogowanego użytkownika"))}"></div>
+              <button class="wh-chip" id="wh-chip" type="button"></button>
               <button class="icon-btn" id="lang-btn" type="button" aria-label="${esc(t("Język"))}"></button>
               <button class="icon-btn" id="theme-btn" type="button" aria-label="${esc(t("Motyw"))}"></button>
               <button class="icon-btn" id="intro-btn" type="button" title="${esc(t("Odtwórz intro"))}" aria-label="${esc(t("Odtwórz intro"))}">${ic("play", 17)}</button>
               <button class="user-btn" id="user-btn" type="button" aria-haspopup="menu"></button>
             </header>
             <main class="page" id="page" tabindex="-1"></main>
+            <footer class="app-foot">${Auth.credit()}</footer>
           </div>
         </div>
         <div class="toasts" id="toasts" aria-live="polite"></div>
@@ -517,6 +546,7 @@
       $("#user-btn").onclick = e => this.userMenu(e.currentTarget);
       $("#lang-btn").onclick = e => this.langMenu(e.currentTarget);
       $("#theme-btn").onclick = e => this.themeMenu(e.currentTarget);
+      $("#wh-chip").onclick = e => this.whMenu(e.currentTarget);
       document.addEventListener("keydown", this._keys || (this._keys = e => {
         if (!Store.userId) return;
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && !e.shiftKey) { e.preventDefault(); const i = THEME_LIST.findIndex(x => x.id === Prefs.theme); Prefs.setTheme(THEME_LIST[(i + 1) % THEME_LIST.length].id); }
@@ -531,7 +561,10 @@
       if (!u) return;
       $("#user-btn").innerHTML = `<span class="avatar">${esc(initials(u.name))}</span><span class="who"><b>${esc(u.name)}</b><small>${esc(this.roleLabel(u.role))}</small></span>`;
       $("#user-btn").setAttribute("aria-label", t("Konto: {n}", { n: u.name }));
-      $("#wh-chip").innerHTML = `<span class="dot"></span><small>${esc(t("Magazyn:"))}</small><b>${esc(wh ? wh.name : "—")}</b>`;
+      const canSwitch = u.role === "admin" && Store.state.warehouses.filter(w => w.active !== false).length > 1;
+      $("#wh-chip").innerHTML = `<span class="dot"></span><small>${esc(t("Magazyn:"))}</small><b>${esc(wh ? wh.name : "—")}</b>${canSwitch ? ic("chevDown", 14) : ""}`;
+      $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn aktywny wynika z zalogowanego użytkownika");
+      $("#wh-chip").classList.toggle("switchable", canSwitch);
       $("#lang-btn").innerHTML = `<span class="lbl">${esc(I18N.info().short)}</span>`;
       $("#lang-btn").title = t("Język") + ": " + I18N.info().label;
       const th = THEME_LIST.find(x => x.id === Prefs.theme);
@@ -555,6 +588,19 @@
         $("[data-pw]", el).onclick = () => { Dropdown.close(); Auth.changePasswordDialog(); };
         $("[data-logout]", el).onclick = () => this.logout();
       });
+    },
+    /** Administrator: przełączenie magazynu roboczego (pozostałe role mają magazyn przydzielony). */
+    whMenu(btn) {
+      const u = this.user();
+      if (u.role !== "admin") return;
+      Dropdown.open(btn, `<div class="dd-label">${esc(t("Magazyn roboczy"))}</div>` + Store.state.warehouses.filter(w => w.active !== false).map(w => `<button class="dd-item" type="button" data-wh="${esc(w.id)}"><span class="ic">${ic("building", 16)}</span>${esc(w.name)}${w.id === u.whId ? `<span class="chk">${ic("check", 15)}</span>` : ""}</button>`).join(""),
+        el => $$("[data-wh]", el).forEach(b => b.onclick = async () => {
+          Dropdown.close();
+          const r = await Store.exec("me.warehouse", { whId: b.dataset.wh }, N_("Zmiana magazynu roboczego"));
+          if (!r.ok) return Toast.err(t("Nie zmieniono magazynu"), r.error);
+          if (root.RIWForm && root.RIWForm.mode === "new") root.RIWForm.draft = null;
+          this.render();
+        }));
     },
     langMenu(btn) {
       Dropdown.open(btn, `<div class="dd-label">${esc(t("Język"))}</div>` + Object.values(I18N.LANGS).map(L => `<button class="dd-item" type="button" data-lang="${L.code}" lang="${L.code}"><span class="ic">${ic("globe", 16)}</span>${esc(L.label)}${L.code === I18N.lang ? `<span class="chk">${ic("check", 15)}</span>` : ""}</button>`).join(""),
@@ -602,7 +648,12 @@
     navBadge(id) {
       const S = Store.state, u = this.user();
       if (id === "inwentaryzacja") { const n = S.inventory.filter(p => p.whId === u.whId && p.status === "OTWARTA").length; return n ? `<span class="cnt">${n}</span>` : ""; }
-      if (id === "operacje") { const n = S.drafts.filter(d => d.userId === u.id).length; return n ? `<span class="cnt" title="${esc(t("Wersje robocze"))}">${n}</span>` : ""; }
+      if (id === "operacje") {
+        const pend = S.drafts.filter(d => d.status === "PENDING" && R.canApprove(u, d.whId)).length;
+        if (pend) return `<span class="cnt warn" title="${esc(t("Do zatwierdzenia"))}">${pend}</span>`;
+        const n = S.drafts.filter(d => d.userId === u.id).length; return n ? `<span class="cnt" title="${esc(t("Wersje robocze"))}">${n}</span>` : "";
+      }
+      if (id === "uzytkownicy") { const n = S.users.filter(x => x.pending).length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
       return "";
     },
     go(route) { if (location.hash !== "#/" + route) location.hash = "#/" + route; else this.render(); }
@@ -641,31 +692,52 @@
         <div><h2>${esc(t("Biomasa pod pełną kontrolą"))}</h2><p>${esc(t("Zakupy, produkcja zrębki, sprzedaż, transport i inwentaryzacja w jednym systemie — z historią każdej zmiany, raportami miesięcznymi i rocznymi oraz kopiami zapasowymi."))}</p></div>
         <div class="auth-facts"><div><b>3</b><span>${esc(t("języki: PL · CS · EN"))}</span></div><div><b>3</b><span>${esc(t("motywy kolorystyczne"))}</span></div><div><b>100%</b><span>${esc(t("operacji w dzienniku audytu"))}</span></div></div></section>`;
     },
+    /** Stopka autorska — ekran logowania i program. */
+    credit() { return `<p class="credit">${esc(t("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"))} · © 2026</p>`; },
     loginScreen(opts = {}) {
       this.screen = "login"; this.opts = opts;
-      document.title = t("Logowanie") + " · ResInvest ERP";
+      const reg = opts.tab === "register";
+      document.title = (reg ? t("Rejestracja") : t("Logowanie")) + " · ResInvest ERP";
       const local = Store.mode === "local";
+      const domains = ((Store.state && Store.state.config && Store.state.config.companyDomains) || ["resinvest.group"]).map(d => "@" + d).join(", ");
       const demo = local && Store.state ? Store.state.users.filter(u => AuthLib.DEMO_LOGINS.includes(u.login) && u.active !== false && AuthLib.LocalAuth.info(u.id).demo) : [];
-      document.getElementById("app").innerHTML = `<div class="auth" id="auth-screen">${this.side()}
-        <section class="auth-form">${this.tools()}
-          <div class="auth-box">
-            <h3>${esc(t("Zaloguj się"))}</h3>
-            <p class="lead">${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
-            ${opts.info ? `<div class="info-line mt4">${ic("alert", 15)}<span id="auth-info">${esc(opts.info)}</span></div>` : ""}
-            <form id="login-form" novalidate autocomplete="on">
-              <div class="field"><label for="lg-login">${esc(t("Login"))}</label><input class="ctrl" id="lg-login" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
+      const tabs = `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
+      const loginForm = `<form id="login-form" novalidate autocomplete="on">
+              <div class="field"><label for="lg-login">${esc(t("E-mail firmowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
               ${pwField("lg-pass", t("Hasło"), "current-password")}
               <div class="caps hidden" id="lg-caps">${esc(t("Włączony Caps Lock"))}</div>
               <div class="auth-err hidden" id="lg-err" role="alert"></div>
               <button class="btn primary lg block" type="submit" id="lg-submit">${ic("lock", 16)} ${esc(t("Zaloguj"))}</button>
-            </form>
-            ${demo.length ? `<div class="auth-divider">${esc(t("Konta demonstracyjne"))}</div>
-              <div class="auth-users" id="demo-users">${demo.map(u => `<button class="auth-user" type="button" data-demo="${esc(u.login)}"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b><small>${esc(u.login)} · ${esc(App.roleLabel(u.role))} · ${esc(App.whName(u.whId))}</small></div></button>`).join("")}</div>
+              <p class="help mt2">${esc(t("Nie pamiętasz hasła? Nowe hasło tymczasowe nadaje administrator ({e}).", { e: R.Seed ? R.Seed.ADMIN_EMAIL : "" }))}</p>
+            </form>`;
+      const regForm = `<form id="reg-form" novalidate autocomplete="on">
+              <p class="help">${esc(t("Rejestracja wyłącznie adresem firmowym ({d}). Konto aktywuje administrator — nadaje rolę i magazyn.", { d: domains }))}</p>
+              <div class="field"><label for="rg-name">${esc(t("Imię i nazwisko"))}</label><input class="ctrl" id="rg-name" autocomplete="name"></div>
+              <div class="field"><label for="rg-email">${esc(t("E-mail firmowy"))}</label><input class="ctrl" id="rg-email" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}"></div>
+              <div class="field"><label for="rg-phone">${esc(t("Telefon"))} <small class="dim">(${esc(t("opcjonalnie"))})</small></label><input class="ctrl" id="rg-phone" type="tel" autocomplete="tel"></div>
+              ${pwField("rg-pass", t("Hasło"), "new-password")}${pwMeter("rg-meter")}
+              ${pwField("rg-pass2", t("Powtórz hasło"), "new-password")}
+              <div class="auth-err hidden" id="rg-err" role="alert"></div>
+              <button class="btn primary lg block" type="submit" id="rg-submit">${ic("user", 16)} ${esc(t("Zarejestruj konto"))}</button>
+            </form>`;
+      document.getElementById("app").innerHTML = `<div class="auth" id="auth-screen">${this.side()}
+        <section class="auth-form">${this.tools()}
+          <div class="auth-box">
+            <h3>${esc(reg ? t("Załóż konto") : t("Zaloguj się"))}</h3>
+            <p class="lead">${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
+            ${tabs}
+            ${opts.info ? `<div class="info-line mt4 ${opts.ok ? "ok" : ""}">${ic(opts.ok ? "check" : "alert", 15)}<span id="auth-info">${esc(opts.info)}</span></div>` : ""}
+            ${reg ? regForm : loginForm}
+            ${!reg && demo.length ? `<div class="auth-divider">${esc(t("Konta demonstracyjne"))}</div>
+              <div class="auth-users" id="demo-users">${demo.map(u => `<button class="auth-user" type="button" data-demo="${esc(u.login)}"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)} · ${esc(App.roleLabel(u.role))}</b><small>${esc(u.login)} · ${esc(App.whName(u.whId))}</small></div></button>`).join("")}</div>
               <p class="help mt2">${esc(t("Hasło kont demonstracyjnych: {p} — zmień je w „Mój profil” przed pracą na prawdziwych danych.", { p: AuthLib.DEMO_PASSWORD }))}</p>` : ""}
             <p class="auth-foot">ResInvest ERP ${esc(R.VERSION)} · ${esc(t("Konto blokuje się na {m} min po {n} nieudanych próbach.", { m: AuthLib.POLICY.lockMinutes, n: AuthLib.POLICY.maxFailed }))}</p>
+            ${this.credit()}
           </div></section></div>`;
       const scope = $("#auth-screen");
       this.bindTools(scope); bindEyes(scope);
+      $$("[data-auth-tab]", scope).forEach(b => b.onclick = () => this.loginScreen({ tab: b.dataset.authTab }));
+      if (reg) return this.bindRegister(scope);
       const login = $("#lg-login"), pass = $("#lg-pass"), err = $("#lg-err");
       pass.addEventListener("keyup", e => $("#lg-caps").classList.toggle("hidden", !(e.getModifierState && e.getModifierState("CapsLock"))));
       $$("[data-demo]", scope).forEach(b => b.onclick = () => { login.value = b.dataset.demo; pass.value = AuthLib.DEMO_PASSWORD; pass.focus(); });
@@ -673,15 +745,37 @@
         e.preventDefault();
         const btn = $("#lg-submit");
         btn.disabled = true; err.classList.add("hidden");
-        const res = await Store.backend.login(login.value.trim(), pass.value);
+        let res;
+        try { res = await Store.backend.login(login.value.trim().toLowerCase(), pass.value); }
+        catch (x) { res = { ok: false, error: t("Nie udało się zalogować: {m}", { m: x.message }) }; }
         btn.disabled = false;
         if (!res.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(res.error)}</span>`; err.classList.remove("hidden"); pass.select(); return; }
         lsSet("riw.lastLogin", login.value.trim().toLowerCase());
         pass.value = "";
         this.screen = null;
-        App.afterLogin(res);
+        try { await App.afterLogin(res); }
+        catch (x) { console.error(x); Toast.err(t("Aplikacja"), x.message); App.render(); }
       };
       (login.value ? pass : login).focus();
+    },
+    bindRegister(scope) {
+      bindMeter($("#rg-pass"), $("#rg-meter"));
+      $("#reg-form").onsubmit = async e => {
+        e.preventDefault();
+        const err = $("#rg-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
+        err.classList.add("hidden");
+        const rec = { name: $("#rg-name").value.trim(), email: $("#rg-email").value.trim().toLowerCase(), phone: $("#rg-phone").value.trim(), lang: I18N.lang };
+        const pw = $("#rg-pass").value;
+        if (rec.name.length < 3) return fail(t("Podaj imię i nazwisko (co najmniej 3 znaki)"));
+        if (pw !== $("#rg-pass2").value) return fail(t("Hasła nie są takie same"));
+        $("#rg-submit").disabled = true;
+        let r;
+        try { r = await Store.backend.register(rec, pw); } catch (x) { r = { ok: false, error: x.message }; }
+        $("#rg-submit").disabled = false;
+        if (!r || !r.ok) return fail((r && r.error) || t("Nie udało się utworzyć konta"));
+        this.loginScreen({ login: rec.email, ok: true, info: t("Konto {e} zarejestrowane. Administrator nada rolę i magazyn — potem zalogujesz się tym adresem.", { e: rec.email }) });
+      };
+      $("#rg-name").focus();
     },
     /** Pierwsze uruchomienie serwera: konto administratora, magazyn, dane przykładowe. */
     setupScreen() {
@@ -691,13 +785,13 @@
         <section class="auth-form">${this.tools()}
           <div class="auth-box" style="max-width:440px">
             <h3>${esc(t("Pierwsze uruchomienie serwera"))}</h3>
-            <p class="lead">${esc(t("Utwórz konto administratora. Pozostałych użytkowników dodasz w module Użytkownicy."))}</p>
+            <p class="lead">${esc(t("Utwórz konto administratora. Pozostałych użytkowników dodasz w module Użytkownicy albo zatwierdzisz ich rejestrację."))}</p>
             <form id="setup-form" novalidate>
               <div class="field"><label for="su-name">${esc(t("Imię i nazwisko administratora"))}</label><input class="ctrl" id="su-name" autocomplete="name"></div>
-              <div class="field"><label for="su-login">${esc(t("Login"))}</label><input class="ctrl" id="su-login" value="admin" autocapitalize="off" spellcheck="false" autocomplete="username"></div>
+              <div class="field"><label for="su-login">${esc(t("E-mail firmowy administratora"))}</label><input class="ctrl" id="su-login" type="email" value="${esc(R.Seed.ADMIN_EMAIL)}" autocapitalize="off" spellcheck="false" autocomplete="username"></div>
               ${pwField("su-pass", t("Hasło"), "new-password")}${pwMeter("su-meter")}
               ${pwField("su-pass2", t("Powtórz hasło"), "new-password")}
-              <div class="field"><label for="su-wh">${esc(t("Nazwa magazynu głównego"))}</label><input class="ctrl" id="su-wh" value="${esc(t("Magazyn główny"))}"></div>
+              <p class="help">${esc(t("Zostaną utworzone magazyny: {w}. Kolejne dodasz w module Magazyny.", { w: R.Seed.WAREHOUSES.map(w => w.name).join(", ") }))}</p>
               <label class="inline-opt"><input type="checkbox" id="su-sample"> ${esc(t("Załaduj dane przykładowe (do nauki i testów)"))}</label>
               <div class="auth-err hidden" id="su-err" role="alert"></div>
               <button class="btn primary lg block" type="submit" id="su-submit">${ic("check", 16)} ${esc(t("Utwórz i zaloguj"))}</button>
@@ -712,7 +806,7 @@
         if (pw !== $("#su-pass2").value) return fail(t("Hasła nie są takie same"));
         const pe = AuthLib.passwordError(pw, login); if (pe) return fail(pe);
         $("#su-submit").disabled = true;
-        const r = await ServerBackend.api("POST", "/api/setup", { name, login, password: pw, whName: $("#su-wh").value.trim(), sample: $("#su-sample").checked, lang: I18N.lang });
+        const r = await ServerBackend.api("POST", "/api/setup", { name, email: login, login, password: pw, sample: $("#su-sample").checked, lang: I18N.lang });
         $("#su-submit").disabled = false;
         if (!r || !r.ok) return fail((r && r.error) || t("Nie udało się utworzyć konta"));
         const res = await Store.backend.login(login, pw);

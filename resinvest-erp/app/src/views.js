@@ -401,11 +401,19 @@
     html() {
       const S = Store.state, f = App.tabs.ops || (App.tabs.ops = { type: "", status: "", ym: "", q: "", scope: "active" });
       const rows = this.filtered();
-      const drafts = S.drafts.filter(d => d.whId === App.user().whId);
+      const me = App.user();
+      const queue = S.drafts.filter(d => d.status === "PENDING" && (R.canApprove(me, d.whId) || d.userId === me.id))
+        .sort((a, b) => (a.submittedAt || "") < (b.submittedAt || "") ? -1 : 1);
+      const drafts = S.drafts.filter(d => d.status !== "PENDING" && d.whId === me.whId);
       return `<div class="page-head"><div class="titles"><h2>${th("Operacje")}</h2><p>${esc(t("Rejestr wszystkich operacji magazynu {w} ze statusem dokumentu. Kliknij wiersz — szczegóły, powiązania, korekta, anulowanie. Dokumentów zatwierdzonych nie usuwa się.", { w: App.wh().name }))}</p></div>
           <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa">${ic("plus", 15)} ${th("Nowa operacja")}</a>` : ""}<button class="btn" type="button" id="ops-csv">${ic("dl", 15)} CSV</button></div></div>
+        ${queue.length ? `<div class="card mb4 queue-card" id="approvals"><div class="card-h"><h3>${ic("clock", 16)} ${th("Do zatwierdzenia")}</h3><span class="sub">${esc(t("operacje przekazane przez magazynierów — bez numeru i bez wpływu na stan do czasu zatwierdzenia"))}</span></div>
+          <div class="tbl-wrap"><table class="tbl" id="approvals-table"><thead><tr><th>${th("Rodzaj")}</th><th>${th("Operacja")}</th><th>${th("Magazyn")}</th><th>${th("Wprowadził")}</th><th>${th("Przekazano")}</th><th class="r">${th("Wynik")}</th><th></th></tr></thead><tbody>
+          ${queue.map(d => { const mine = R.canApprove(me, d.whId); return `<tr data-pending="${esc(d.id)}"><td>${esc(R.OP_TYPES[d.type] ? t(R.OP_TYPES[d.type].label) : d.type)}${d.type === "SPRZEDAZ" && d.draft.sale.direct ? " " + th("(bezpośrednia)") : ""}</td><td>${esc(d.summary || "—")}</td><td>${esc(App.whName(d.whId))}</td><td>${esc(d.userName)}</td><td class="nowrap">${esc(Dates.ts(d.submittedAt))}</td><td class="r nowrap">${d.totals ? esc(money(d.totals.result)) : "—"}</td>
+            <td class="r nowrap">${mine ? `<a class="btn sm primary" href="#/nowa?draft=${esc(d.id)}" data-review>${ic("check", 13)} ${th("Sprawdź i zatwierdź")}</a> <button class="btn sm danger" type="button" data-reject="${esc(d.id)}">${ic("x", 13)} ${th("Odrzuć")}</button>`
+              : `${statusBadge("PENDING")} <a class="btn sm" href="#/nowa?draft=${esc(d.id)}">${th("Wycofaj i edytuj")}</a>`}</td></tr>`; }).join("")}</tbody></table></div></div>` : ""}
         ${drafts.length ? `<div class="card mb4" id="drafts"><div class="card-h"><h3>${th("Wersje robocze (ROBOCZY)")}</h3><span class="sub">${th("bez numeru, bez wpływu na stan")}</span></div><div class="tbl-wrap"><table class="tbl" id="drafts-table"><thead><tr><th>${th("Rodzaj")}</th><th>${th("Autor")}</th><th>${th("Zapisano")}</th><th>${th("Status")}</th><th></th></tr></thead><tbody>
-          ${drafts.map(d => `<tr><td>${esc(R.OP_TYPES[d.type] ? t(R.OP_TYPES[d.type].label) : d.type)}${d.type === "SPRZEDAZ" && d.draft.sale.direct ? " " + th("(bezpośrednia)") : ""}</td><td>${esc(d.userName)}</td><td>${esc(Dates.ts(d.savedAt))}</td><td>${statusBadge("DRAFT")}</td>
+          ${drafts.map(d => `<tr><td>${esc(R.OP_TYPES[d.type] ? t(R.OP_TYPES[d.type].label) : d.type)}${d.type === "SPRZEDAZ" && d.draft.sale.direct ? " " + th("(bezpośrednia)") : ""}</td><td>${esc(d.userName)}</td><td>${esc(Dates.ts(d.savedAt))}</td><td>${statusBadge("DRAFT")}${d.rejectReason ? `<br><small class="neg">${esc(t("odrzucona: {r}", { r: d.rejectReason }))}</small>` : ""}</td>
             <td class="r nowrap">${d.userId === App.user().id ? `<a class="btn sm" href="#/nowa?draft=${esc(d.id)}">${th("Otwórz")}</a>` : ""} ${d.userId === App.user().id || App.can("documents.cancel") ? `<button class="btn sm danger" type="button" data-deldraft="${esc(d.id)}">${ic("trash", 13)} ${th("Usuń szkic")}</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
         <div class="card"><div class="toolbar">
           <div class="field"><label for="o-type">${th("Rodzaj")}</label><select class="ctrl" id="o-type">${[["", N_("Wszystkie")], ["ZAKUP", N_("Zakup")], ["SPRZEDAZ", N_("Sprzedaż (WZ)")], ["DIRECT", N_("Sprzedaż bezpośrednia")], ["PRODUKCJA", N_("Produkcja na magazyn")], ["MM", "MM"]].map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
@@ -422,6 +430,14 @@
       on("#o-type", "type"); on("#o-status", "status"); on("#o-ym", "ym"); on("#o-scope", "scope");
       bindSearch(page, "#o-q", f, "q", this);
       bindOps(page);
+      $$("[data-reject]", page).forEach(b => b.onclick = async () => {
+        const rec = R.byId(Store.state.drafts, b.dataset.reject);
+        const r = await Modal.confirm({ title: t("Odrzucić operację?"), text: t("Operacja wróci do autora ({u}) jako wersja robocza z Twoim komentarzem.", { u: rec ? rec.userName : "" }), ok: t("Odrzuć"), danger: true, input: { label: t("Powód odrzucenia"), required: true } });
+        if (!r.ok) return;
+        const res = await Store.exec("op.reject", { id: b.dataset.reject, reason: r.value }, N_("Operacje do zatwierdzenia"));
+        if (res.ok) Toast.ok(t("Operacja odrzucona"), t("Autor zobaczy powód przy wersji roboczej.")); else Toast.err(t("Nie odrzucono"), res.error);
+        App.render();
+      });
       $$("[data-deldraft]", page).forEach(b => b.onclick = async () => {
         const r = await Modal.confirm({ title: t("Usunąć wersję roboczą?"), text: t("Szkic nie ma numeru ani wpływu na stan. Usunięcie zostanie zapisane w dzienniku audytu."), ok: t("Usuń szkic"), danger: true });
         if (!r.ok) return;
@@ -969,6 +985,9 @@
     html() {
       const S = Store.state;
       const tab = App.tabs.fleet || "vehicles";
+      const fwh = App.tabs.fleetWh === undefined ? (App.user().role === "admin" ? "" : App.user().whId) : App.tabs.fleetWh;
+      const inWh = x => !fwh || x.whId === fwh || !x.whId;
+      const whCell = x => `<td>${x.whId ? esc(App.whName(x.whId)) : `<span class="dim">${th("wspólny")}</span>`}</td>`;
       const drv = id => (R.byId(S.fleet.drivers, id) || {}).name || "—";
       const opr = id => (R.byId(S.fleet.operators, id) || {}).name || "—";
       const runs = [];      // pojedyncze kursy (operacja może mieć kilka kursów)
@@ -976,35 +995,37 @@
       const prods = S.operations.filter(o => o.production && o.production.chipperId && o.status !== "CANCELLED");
       const st = s => `<span class="badge ${s === "aktywny" ? "ok" : s === "serwis" ? "warn" : ""}">${esc(t(R.ASSET_STATUS[s] || s))}</span>`;
       const edit = App.can("fleet.edit");
-      const btn = (kind, id) => edit ? `<button class="btn sm" type="button" data-edit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button>${kind === "drivers" || kind === "operators" ? ` <button class="btn sm danger" type="button" data-del="${kind}|${esc(id)}" aria-label="${th("Usuń")}">${ic("trash", 13)}</button>` : ""}` : "";
+      const btn = (kind, id) => edit ? `<button class="btn sm" type="button" data-edit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm danger" type="button" data-del="${kind}|${esc(id)}" aria-label="${th("Usuń")}" title="${th("Usuń")}">${ic("trash", 13)}</button>` : "";
       let body = "";
-      if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Nazwa")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th>${th("Status")}</th><th>${th("Kierowca domyślny")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.vehicles.map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td><td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
-      if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("Telefon")}</th><th>${th("Domyślny w pojazdach")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.drivers.map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td><td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
-      if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Rębak")}</th><th>${th("Status")}</th><th>${th("Operator domyślny")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.chippers.map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${st(c.status)}</td><td>${esc(opr(c.operatorId))}</td><td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("")}</tbody></table>`;
-      if (tab === "operators") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Operator")}</th><th>${th("Telefon")}</th><th>${th("Domyślny przy rębakach")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.operators.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.phone || "")}</td><td>${esc(S.fleet.chippers.filter(c => c.operatorId === o.id).map(c => c.name).join(", ") || "—")}</td><td class="r">${btn("operators", o.id)}</td></tr>`).join("")}</tbody></table>`;
+      if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Nazwa")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th>${th("Status")}</th><th>${th("Kierowca domyślny")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.vehicles.filter(inWh).map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td>${whCell(v)}<td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
+      if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("Telefon")}</th><th>${th("Domyślny w pojazdach")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.drivers.filter(inWh).map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td>${whCell(d)}<td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
+      if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Rębak")}</th><th>${th("Status")}</th><th>${th("Operator domyślny")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.chippers.filter(inWh).map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${st(c.status)}</td><td>${esc(opr(c.operatorId))}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("")}</tbody></table>`;
+      if (tab === "operators") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Operator")}</th><th>${th("Telefon")}</th><th>${th("Domyślny przy rębakach")}</th><th>${th("Magazyn")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.operators.filter(inWh).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.phone || "")}</td><td>${esc(S.fleet.chippers.filter(c => c.operatorId === o.id).map(c => c.name).join(", ") || "—")}</td>${whCell(o)}<td class="r">${btn("operators", o.id)}</td></tr>`).join("")}</tbody></table>`;
       const lastRuns = runs.slice().sort((a, b) => a.op.date < b.op.date ? 1 : -1).slice(0, 12);
       const labels = { vehicles: N_("Samochody / ruchome podłogi"), drivers: N_("Kierowcy"), chippers: N_("Rębaki"), operators: N_("Operatorzy rębaków") };
       return `<div class="page-head"><div class="titles"><h2>${th("Flota")}</h2><p>${th("Transport własny w „Nowej operacji” korzysta z tej listy. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.")}</p></div>
           <div class="actions">${edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} ${esc(t("Dodaj: {k}", { k: t(R.Fleet.KINDS[tab].label).toLowerCase() }))}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`}</div></div>
         <div class="tabs" role="tablist">${Object.entries(labels).map(([k, l]) => `<button class="tab" type="button" role="tab" aria-selected="${k === tab}" data-tab="${k}">${th(l)}</button>`).join("")}</div>
-        <div class="card"><div class="tbl-wrap">${body}</div></div>
+        <div class="card"><div class="toolbar"><div class="field"><label for="fl-wh">${th("Magazyn")}</label><select class="ctrl" id="fl-wh"><option value="">${th("Wszystkie")}</option>${S.warehouses.map(w => `<option value="${esc(w.id)}" ${fwh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
+          <p class="help" style="align-self:end">${th("Zasoby przypisane do magazynu są dostępne w jego operacjach; „wspólny” — we wszystkich magazynach.")}</p></div><div class="tbl-wrap">${body}</div></div>
         <div class="card mt4"><div class="card-h"><h3>${th("Ostatnie kursy transportu własnego")}</h3><span class="sub">${th("kierowca zapisany w chwili kursu")}</span></div>
           ${lastRuns.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-table"><thead><tr><th>${th("Data")}</th><th>${th("Dokument")}</th><th>${th("Pojazd")}</th><th>${th("Kierowca kursu")}</th><th class="r">km</th><th class="r">${th("Koszt")}</th><th>${th("Miejsce transportu")}</th></tr></thead><tbody>
             ${lastRuns.map(({ op: o, r }) => { const trd = o.documents.find(x => x.type === "TR"); return `<tr class="clickable" data-opid="${esc(o.id)}"><td>${esc(Dates.pl(o.date))}</td><td class="mono">${esc(trd ? trd.no : "")}${(o.transport.runs || []).length > 1 ? ` <small class="dim">${esc(t("kurs {n}", { n: r.no }))}</small>` : ""}</td><td>${esc(r.vehicleName)} · <span class="mono">${esc(r.reg)}</span></td><td>${esc(r.driverName)}${r.driverOverridden ? ` <span class="badge warn">${th("zmieniony dla kursu")}</span>` : ""}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${esc(money(r.cost))}</td><td>${esc(o.place)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak kursów.")}</div>`}</div>`;
     },
     bind(page) {
       $$("[data-tab]", page).forEach(b => b.onclick = () => { App.tabs.fleet = b.dataset.tab; App.render(); });
+      const fw = $("#fl-wh", page); if (fw) fw.onchange = e => { App.tabs.fleetWh = e.target.value; App.render(); };
       const add = $("#fleet-add", page);
       if (add) add.onclick = () => this.edit(App.tabs.fleet || "vehicles", null);
       $$("[data-edit]", page).forEach(b => b.onclick = () => { const [k, id] = b.dataset.edit.split("|"); this.edit(k, id); });
       $$("[data-del]", page).forEach(b => b.onclick = async () => {
         const [k, id] = b.dataset.del.split("|");
         const rec = R.byId(Store.state.fleet[k], id);
-        const r = await Modal.confirm({ title: t("Usunąć: {n}?", { n: rec.name }), text: t("Historyczne kursy zachowają zapisane nazwisko."), ok: t("Usuń"), danger: true });
+        const r = await Modal.confirm({ title: t("Usunąć: {n}?", { n: rec.name }), text: k === "vehicles" || k === "chippers" ? t("Usunąć można tylko pojazd lub rębak bez kursów i produkcji — używany ustaw jako „Wycofany”.") : t("Historyczne kursy zachowają zapisane nazwisko."), ok: t("Usuń"), danger: true });
         if (!r.ok) return;
         const res = await Store.exec("fleet.remove", { kind: k, id }, N_("Moduł Flota"));
         if (res.ok) Toast.ok(t("Usunięto"), rec.name); else Toast.err(t("Nie usunięto"), res.error);
@@ -1014,14 +1035,14 @@
     },
     edit(kind, id) {
       const S = Store.state;
-      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", operatorId: "", phone: "" };
+      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", operatorId: "", phone: "", whId: App.tabs.fleetWh || App.user().whId };
       const o = (arr, v) => arr.map(([k, l]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(l)}</option>`).join("");
       const f = (k, label, ctrl, help) => `<div class="field" data-ff="${k}"><label for="fe-${k}">${esc(label)}</label>${ctrl}<div class="msg hidden" data-fmsg="${k}"></div>${help ? `<div class="help">${esc(help)}</div>` : ""}</div>`;
       let body = f("name", kind === "vehicles" ? t("Nazwa pojazdu") : kind === "chippers" ? t("Nazwa rębaka") : t("Imię i nazwisko"), `<input class="ctrl" id="fe-name" value="${esc(rec.name)}">`, kind === "vehicles" ? t("np. Scania R450 — ruchoma podłoga") : "");
       if (kind === "vehicles") {
         body += f("reg", t("Numer rejestracyjny"), `<input class="ctrl" id="fe-reg" value="${esc(rec.reg)}" placeholder="${esc(t("np. {x}", { x: "SGL 4T821" }))}">`);
         body += f("type", t("Typ"), `<select class="ctrl" id="fe-type">${o(Object.entries(R.VEHICLE_TYPES).map(([k, v]) => [k, t(v)]), rec.type)}</select>`);
-        body += f("status", t("Status"), `<select class="ctrl" id="fe-status">${o(Object.entries(R.ASSET_STATUS).map(([k, v]) => [k, t(v)]), rec.status)}</select>`, t("Pojazdów nie usuwa się — wycofany pojazd zostaje w historii kursów."));
+        body += f("status", t("Status"), `<select class="ctrl" id="fe-status">${o(Object.entries(R.ASSET_STATUS).map(([k, v]) => [k, t(v)]), rec.status)}</select>`, t("Pojazd używany w kursach nie jest usuwany — ustaw „Wycofany” (historia zostaje)."));
         body += f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Zmiana dotyczy przyszłych kursów."));
       }
       if (kind === "chippers") {
@@ -1029,6 +1050,7 @@
         body += f("operatorId", t("Operator domyślny"), `<select class="ctrl" id="fe-operatorId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.operators.map(d => [d.id, d.name]), rec.operatorId)}</select>`);
       }
       if (kind === "drivers" || kind === "operators") body += f("phone", t("Telefon"), `<input class="ctrl" id="fe-phone" value="${esc(rec.phone || "")}" inputmode="tel">`);
+      body += f("whId", t("Magazyn"), `<select class="ctrl" id="fe-whId"><option value="">${th("wspólny (wszystkie magazyny)")}</option>${o(S.warehouses.filter(w => w.active !== false || w.id === rec.whId).map(w => [w.id, w.name]), rec.whId || "")}</select>`, t("Przydział do magazynu: zasób jest wybierany w operacjach tego magazynu."));
       const m = Modal.open({ title: `${id ? t("Edycja") : t("Nowy")}: ${t(R.Fleet.KINDS[kind].label).toLowerCase()}`, body: `<div class="stack">${body}</div>`,
         footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${th("Zapisz")}</button>` });
       $("[data-no]", m.el).onclick = () => m.close();
@@ -1047,6 +1069,6 @@
   };
 
   root.OpDetail = OpDetail;
-  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine });
+  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
   root.RIWViews = { allDocuments, docModel, kwitModel, historyModel, Reports, Printer, CancelDialog, DocPreview, OpDetail };
 })(typeof globalThis !== "undefined" ? globalThis : this);

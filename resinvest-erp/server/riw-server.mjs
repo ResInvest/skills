@@ -132,6 +132,15 @@ async function handleApi(req, res, url) {
     log("INFO", `Logowanie: ${r.user.login} (${ip})`);
     return json(req, res, 200, { ok: true, userId: r.user.id, mustChange: r.mustChange, user: { id: r.user.id, name: r.user.name, login: r.user.login, lang: r.user.lang, theme: r.user.theme } }, { "Set-Cookie": sessionCookie(token) });
   }
+  if (path === "/api/auth/register" && method === "POST") {
+    const ip = ipOf(req);
+    if (rateLimited(ip)) return json(req, res, 429, { ok: false, code: "RATE", error: t("Zbyt wiele prób logowania z tego adresu. Spróbuj za kilka minut.") });
+    if (!store.state) return json(req, res, 503, { ok: false, error: t("Serwer nie jest skonfigurowany") });
+    const b = await readBody(req);
+    const r = store.register(b.rec || {}, b.password, L);
+    if (r.ok) broadcast(store.state.rev, null);
+    return json(req, res, r.ok ? 200 : 400, r);
+  }
   if (path === "/api/auth/logout" && method === "POST") { if (sid) store.dropSession(sid); if (sess) store.logLogin(sess.user.login, sess.userId, true, N_("wylogowanie"), ipOf(req)); return json(req, res, 200, { ok: true }, { "Set-Cookie": clearCookie }); }
 
   /* ---- od tego miejsca wymagana sesja ---- */
@@ -167,6 +176,7 @@ async function handleApi(req, res, url) {
       broadcast(store.state.rev, user.id);
       // dezaktywacja / zmiana konta — wylogowanie tego użytkownika na innych stanowiskach
       if (b.cmd === "user.save" && r.ok && r.rec && r.rec.active === false) store.dropUserSessions(r.rec.id);
+      if (b.cmd === "user.remove" && r.ok) store.dropAccount(String(b.args && b.args.id));
     }
     return json(req, res, 200, Object.assign({ ok: true, res: r }, changed ? statePayload() : { today: store.today() }));
   }

@@ -1,6 +1,18 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-24 · etap: **ResInvest ERP 3.0.0 (faza 2) — program z logowaniem, serwerem wielostanowiskowym, PL/CS/EN i trzema motywami**
+Ostatnia aktualizacja: 2026-09-25 · etap: **ResInvest ERP 3.1.0 — prototyp końcowy przed kompilacją instalatora Windows**
+
+## Wykonane — 3.1.0 (prototyp końcowy)
+
+- [x] Naprawa logowania: w ramce z zablokowaną pamięcią / Web Locks (podgląd pliku) ekran po zalogowaniu pozostawał pusty
+- [x] Logowanie i rejestracja e-mailem firmowym (@resinvest.group), administrator magazyn@resinvest.group, zgłoszenia rejestracji zatwierdzane przez administratora
+- [x] Role: Administrator / Kierownik / Magazynier / Obserwator; obieg zatwierdzania (DO ZATWIERDZENIA → zatwierdzenie lub odrzucenie z powodem)
+- [x] Magazyny RiC Zabrze, RiC Brąszewice, RiC Rokitki; ludzie i flota przypisani do magazynów; dodawanie, edycja, usuwanie (bez historii) i dezaktywacja
+- [x] Administrator: magazyn roboczy, start pracy na czysto; Użytkownicy: filtry, opis ról, usuwanie kont bez historii
+- [x] Nowe intro, stopka „Program stworzony przez Roesner Mateusz dla ResInvest Commodities”, LICENSE (autor / licencjobiorca), wersja 3.1.0
+- [x] Tłumaczenia CS/EN: 1 669 tekstów, 0 braków; schemat danych 5 z migracją
+- [x] Testy: silnik 68, PDF 4, platforma 28, serwer 9, E2E 164 — wszystkie zaliczone
+
 
 ## Wykonane — 3.0.0 (faza 2)
 
@@ -50,7 +62,7 @@ Ostatnia aktualizacja: 2026-09-24 · etap: **ResInvest ERP 3.0.0 (faza 2) — pr
 - [x] Menu §20: Operacje, Przyjęcia, Wydania/WZ, Produkcja, Kwit, MM, Transport, Stany, Dokumenty, Historia, Raporty, Inwentaryzacja, Flota, Produkty, Kontrahenci, Magazyny, Administracja
 - [x] Dane przykładowe z MM, korektą i anulowaniem; instalator 2.1.0; dokumentacja; TASKS.md
 
-## Testy (3.0.0)
+## Testy (3.0.0 — historycznie; 3.1.0 powyżej)
 
 | Zestaw | Wynik |
 |---|---|
@@ -62,9 +74,9 @@ Ostatnia aktualizacja: 2026-09-24 · etap: **ResInvest ERP 3.0.0 (faza 2) — pr
 
 ## Znane problemy / ograniczenia
 
-- GJ liczone z masy dokładnej (6 611 GJ dla 817 m³), przykład w poleceniu używa masy zaokrąglonej (6 613 GJ) — do decyzji firmy.
+- GJ liczone z masy dokładnej (6 611 GJ dla 817 m³), przykład w specyfikacji używa masy zaokrąglonej (6 613 GJ) — do decyzji firmy.
 - Masa drewna 0,952 t/m³ (z przykładu 817 m³ ≈ 778 t) — do potwierdzenia przez firmę.
-- Instalator nie był kompilowany w tej sesji (brak Windows / Inno Setup) — skrypt i plik .iss gotowe; NIEPOTWIERDZONE na Windows.
+- Instalator nie był jeszcze kompilowany (wymaga Windows z Inno Setup 6) — skrypt i plik .iss gotowe; NIEPOTWIERDZONE na Windows.
 - Film intro nie jest odtwarzany w testowym Chromium (brak H.264) — NIEPOTWIERDZONE w Chrome/Edge.
 - Serwer trzyma stan jako dokument JSON (+ dziennik) — wystarczające dla skali firmy; przy setkach tysięcy operacji rozbicie na tabele.
 

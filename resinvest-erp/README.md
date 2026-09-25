@@ -1,4 +1,9 @@
-# ResInvest ERP 3.0 (3.0.0)
+# ResInvest ERP 3.1 (3.1.0) — prototyp końcowy
+
+*Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
+
+> Wersja 3.1.0 to **prototyp końcowy przed kompilacją instalatora Windows**: pełna funkcjonalność,
+> testy automatyczne zaliczone, instalator gotowy do zbudowania na Windows (`installer\build-installer.ps1`).
 
 System ERP do **obrotu i magazynowania biomasy drzewnej**: zakupy, produkcja zrębki, sprzedaż, przesunięcia MM,
 transport (flota własna, przewoźnicy, kolej), inwentaryzacja z zamknięciem miesiąca, korekty i anulowania,
@@ -12,6 +17,31 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 | **Lokalny** | jedno stanowisko, szkolenie, pokaz | przeglądarka (`localStorage`), kopia JSON na żądanie | konta lokalne, hasła **PBKDF2-SHA256**, wylogowanie po bezczynności |
 
 Program nie korzysta z internetu ani bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML.
+
+## Nowe w 3.1
+
+* **Logowanie i rejestracja e-mailem firmowym** (`@resinvest.group`, lista domen w `config/app.config.json` → `companyDomains`).
+  Konto administratora: **`magazyn@resinvest.group`**. Rejestracja z ekranu logowania tworzy konto „oczekuje na zatwierdzenie” —
+  administrator nadaje rolę i magazyn (moduł Użytkownicy → *Zgłoszenia rejestracji*) albo odrzuca zgłoszenie.
+* **Role:** *Administrator* — wszystko, w tym dodawanie innych administratorów, kierowników, magazynierów i obserwatorów;
+  *Kierownik* — zatwierdza operacje swojego magazynu, korekty, anulowania, zamknięcia okresów, flota i kartoteki;
+  *Magazynier* — wprowadza operacje i **przekazuje je do zatwierdzenia**; *Obserwator* — tylko podgląd.
+* **Obieg zatwierdzania:** operacja magazyniera ma status **DO ZATWIERDZENIA** — bez numeru i bez wpływu na stany.
+  Kierownik (lub administrator) widzi kolejkę w *Operacjach* i na pulpicie, sprawdza (może poprawić), **zatwierdza**
+  (powstają dokumenty, stan sprawdzany w chwili zatwierdzenia) albo **odrzuca z powodem** (wraca do autora jako wersja robocza).
+  Dokument zapisuje, kto wprowadził i kto zatwierdził.
+* **Magazyny RiC Zabrze, RiC Brąszewice, RiC Rokitki** — ludzie (kierownicy, magazynierzy, obserwatorzy) oraz flota
+  (pojazdy, kierowcy, rębaki, operatorzy) **przypisani do magazynów**; formularz podpowiada tylko zasoby magazynu operacji
+  (lub „wspólne”). Administrator przełącza swój magazyn roboczy kliknięciem w znacznik magazynu na górnym pasku.
+* **Dodawanie, edycja i usuwanie** użytkowników, magazynów, produktów, kontrahentów i floty — usunąć można rekord bez historii;
+  rekord użyty w dokumentach się dezaktywuje (historia zostaje nienaruszona).
+* **Start pracy na czysto** (Administracja, tylko Administrator): usuwa operacje i dokumenty po szkoleniu,
+  zachowuje magazyny, kartoteki, flotę i konta.
+* **Nowe intro wejściowe** (film ResInvest Commodities z dźwiękiem), **stopka autorska** w programie i na ekranie logowania.
+* Poprawka: logowanie działa także w podglądzie pliku / ramce, w której przeglądarka blokuje pamięć i Web Locks
+  (wcześniej po zalogowaniu ekran pozostawał pusty). Program pracuje wtedy w trybie „bez zapisu”.
+* Schemat danych 5 (migracja 4 → 5 automatyczna: loginy → adresy e-mail, „Podgląd” → „Obserwator”, flota bez magazynu = wspólna).
+  Dane przykładowe z 3.0 w tej samej przeglądarce są zastępowane nowymi (poprzednie zostają w kopii przeglądarki).
 
 ## Nowe w 3.0 (faza 2)
 
@@ -30,7 +60,7 @@ Program nie korzysta z internetu ani bibliotek zewnętrznych (CDN) — wszystko 
   miesiąca i liniami trendu, wykres sprzedaży i zakupów z 6 miesięcy (z tabelą), obroty według typu operacji,
   kafle stanów z linią 30 dni, ostatnia aktywność, lista „Do załatwienia” (niezamknięte okresy, wersje robocze,
   pozycje bez wyceny).
-* **Języki PL · CS · EN — kompletne** (1 542 teksty): interfejs, komunikaty silnika i serwera, podpowiedzi formularza,
+* **Języki PL · CS · EN — kompletne** (1 542 teksty; w 3.1: 1 669): interfejs, komunikaty silnika i serwera, podpowiedzi formularza,
   dziennik audytu, raporty, wydruki i PDF. Liczby i daty wg języka (1 234,50 · 1,234.50; 23.09.2026 · 23/09/2026).
   Język i motyw zapisują się w profilu użytkownika.
 * **Motywy Perła (jasny) · Grafit (ciemny) · Graphite Azure** — jak w 1.3.0; wszystkie kolory przez tokeny,
@@ -43,7 +73,7 @@ Program nie korzysta z internetu ani bibliotek zewnętrznych (CDN) — wszystko 
 
 ## Instalacja (Windows)
 
-Uruchom **`ResInvestERP_Setup_3.0.0.exe`** (budowanie — niżej) i wybierz:
+Uruchom **`ResInvestERP_Setup_3.1.0.exe`** (budowanie — niżej) i wybierz:
 
 * **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
   tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
@@ -59,25 +89,34 @@ Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie us
 
 1. Menu Start → *ResInvest ERP Serwer — uruchom* (okno konsoli musi pozostać otwarte; przy autostarcie działa zminimalizowane).
 2. Przeglądarka otworzy `http://localhost:8080/` → ekran **Pierwsze uruchomienie**: imię i nazwisko administratora,
-   login, hasło (min. 8 znaków, litery i cyfry), nazwa magazynu głównego; opcjonalnie dane przykładowe do nauki.
-3. W module **Użytkownicy** załóż konta pracowników (hasło startowe — użytkownik zmieni je przy pierwszym logowaniu).
+   e-mail firmowy (domyślnie `magazyn@resinvest.group`), hasło (min. 8 znaków, litery i cyfry); powstają magazyny
+   RiC Zabrze, RiC Brąszewice i RiC Rokitki; opcjonalnie dane przykładowe do nauki.
+3. Pracownicy **rejestrują się sami** adresem firmowym, a administrator nadaje im rolę i magazyn — albo administrator
+   zakłada konta w module **Użytkownicy** (hasło startowe — użytkownik zmieni je przy pierwszym logowaniu).
 4. Inne komputery / telefony w sieci: `http://<adres-serwera>:8080/` (adres IP pokazuje konsola serwera).
 
 ### Tryb lokalny (bez serwera)
 
-Otwórz `ResInvest_ERP.html` w Chrome / Edge / Firefox. Dane przykładowe zawierają konta demonstracyjne
-(hasło **`demo1234`** — zmień je w *Mój profil* przed pracą na prawdziwych danych):
+Otwórz `ResInvest_ERP.html` w Chrome / Edge / Firefox (zapisany na dysku — podgląd pliku w komunikatorze lub poczcie
+działa w trybie „bez zapisu”). Dane przykładowe zawierają konta demonstracyjne — hasło **`demo1234`**
+(zmień je w *Mój profil* przed pracą na prawdziwych danych; pulpit przypomina o tym w „Do załatwienia”):
 
-| Login | Osoba | Rola | Magazyn | Może |
-|---|---|---|---|---|
-| `admin` | Mateusz Roesner | Administrator | RiC Zabrze | wszystko, w tym użytkownicy i hasła |
-| `kierownik` | Anna Górska | Kierownik | RiC Zabrze | operacje, korekty, anulowania, zamknięcie okresu, kartoteki, kopie |
-| `magazynier` | Adrian Wojciechowski | Magazynier | RiC Zabrze | operacje, wersje robocze, spis — bez korekt i anulowań |
-| `pyskowice` | Paweł Kaczmarek | Magazynier | RiC Pyskowice | jw. w Pyskowicach |
-| `podglad` | Beata Nowak | Podgląd | RiC Zabrze | tylko odczyt i raporty |
+| E-mail (login) | Osoba | Rola | Magazyn |
+|---|---|---|---|
+| `magazyn@resinvest.group` | Mateusz Roesner | Administrator | RiC Zabrze (przełącza wszystkie) |
+| `anna.gorska@resinvest.group` | Anna Górska | Kierownik | RiC Zabrze |
+| `adrian.wojciechowski@resinvest.group` | Adrian Wojciechowski | Magazynier | RiC Zabrze |
+| `tomasz.zajac@resinvest.group` | Tomasz Zając | Kierownik | RiC Brąszewice |
+| `pawel.kaczmarek@resinvest.group` | Paweł Kaczmarek | Magazynier | RiC Brąszewice |
+| `michal.lewandowski@resinvest.group` | Michał Lewandowski | Kierownik | RiC Rokitki |
+| `karolina.wisniewska@resinvest.group` | Karolina Wiśniewska | Magazynier | RiC Rokitki |
+| `beata.nowak@resinvest.group` | Beata Nowak | Obserwator | RiC Zabrze |
+
+Flota przykładowa: Zabrze — Scania R450, Volvo FH 500, rębak Jenz HEM 583; Brąszewice — MAN TGX (serwis),
+rębak Eschlböck Biber 92; Rokitki — DAF XF 480, rębak Albach Diamant 2000 (z kierowcami i operatorami).
 
 Dane przykładowe: bilans otwarcia 01.08.2026 (Zabrze: drewno 817 m³, zrębka leśna 8 173 MP, PKS i łupina po 728 t),
-operacje każdego rodzaju, MM Zabrze → Pyskowice, korekta WZ i anulowany zakup; plik `data/sample_data.json`
+operacje każdego rodzaju (operacje magazynierów zatwierdzone przez kierowników), MM Zabrze → Brąszewice, korekta WZ i anulowany zakup; plik `data/sample_data.json`
 (kopia do wczytania w *Administracja → Wczytaj kopię*).
 
 ## Funkcje
@@ -174,10 +213,10 @@ cd resinvest-erp
 npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
-npm run test:unit     # silnik (68), PDF (4), platforma: i18n, hasła, logowanie, usługi, migracja (19)
-npm run test:server   # serwer: setup, logowanie, CSRF, komendy, blokady, kopie, restart (8)
+npm run test:unit     # silnik (68), PDF (4), platforma: i18n, hasła, logowanie, role, zatwierdzanie, rejestracja, magazyny (28)
+npm run test:server   # serwer: setup, logowanie, CSRF, komendy, rejestracja, zatwierdzanie, blokady, kopie, restart (9)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # 147 kontroli w przeglądarce (logowanie kontami demonstracyjnymi)
+npm run test:e2e      # 164 kontrole w przeglądarce (logowanie formularzem, rejestracja, zatwierdzanie, ramka bez pamięci)
 ```
 
 ### Instalator Windows
@@ -186,7 +225,7 @@ Wymaga [Inno Setup 6](https://jrsoftware.org/isdl.php) i dostępu do nodejs.org 
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Setup_3.0.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
+# → installer\Output\ResInvestERP_Setup_3.1.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
 ## Kopie zapasowe i bezpieczeństwo danych

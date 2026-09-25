@@ -6,7 +6,7 @@
 (function (root) {
   "use strict";
   const UI = root.RIWUI;
-  const { R, I18N, t, tp, N_, esc, $, $$, ic, download, Toast, Modal, Store, LocalBackend, ServerBackend, App, Auth, Prefs, THEME_LIST, Views, initials, lsGet, lsSet, ssGet, ssSet, DRAFT_KEY, pwField, bindEyes, pwMeter, bindMeter, opPartnerId } = UI;
+  const { R, I18N, t, tp, N_, esc, $, $$, ic, download, Toast, Modal, Store, LocalBackend, ServerBackend, App, Auth, Prefs, THEME_LIST, Views, initials, lsGet, lsSet, ssGet, ssSet, DRAFT_KEY, pwField, bindEyes, pwMeter, bindMeter, opPartnerId, searchInput, bindSearch } = UI;
   const { fmt, fmtQ, money, Units, Dates, Stock } = R;
   const AuthLib = root.RIW_Auth;
   const th = s => esc(t(s));
@@ -70,9 +70,18 @@
     }
   };
   const addBtn = (kind, label) => App.can("master.edit") ? `<button class="btn primary" type="button" data-madd="${kind}">${ic("plus", 15)} ${th(label)}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`;
-  const editBtn = (kind, id) => App.can("master.edit") ? `<button class="btn sm" type="button" data-medit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button>` : "";
+  const editBtn = (kind, id) => App.can("master.edit") ? `<button class="btn sm" type="button" data-medit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm danger" type="button" data-mdel="${kind}|${esc(id)}" title="${esc(t("Usuń"))}" aria-label="${esc(t("Usuń"))}">${ic("trash", 13)}</button>` : "";
   function bindMaster(page) {
     $$("[data-madd]", page).forEach(b => b.onclick = () => Master.edit(b.dataset.madd, null));
+    $$("[data-mdel]", page).forEach(b => b.onclick = async e => {
+      e.stopPropagation();
+      const [k, id] = b.dataset.mdel.split("|"), rec = R.byId(Store.state[k], id);
+      const r = await Modal.confirm({ title: t("Usunąć: {n}?", { n: rec ? rec.name : "" }), text: t("Usunąć można tylko rekord, który nie występuje w żadnym dokumencie. Rekord z historią dezaktywuj — historia zostaje."), ok: t("Usuń"), danger: true });
+      if (!r.ok) return;
+      const res = await Store.exec("master.remove", { kind: k, id }, SRC_MASTER);
+      if (res.ok) Toast.ok(t("Usunięto"), rec ? rec.name : ""); else Toast.err(t("Nie usunięto"), res.error);
+      App.render();
+    });
     $$("[data-medit]", page).forEach(b => b.onclick = e => { e.stopPropagation(); const [k, id] = b.dataset.medit.split("|"); Master.edit(k, id); });
   }
 
@@ -117,14 +126,17 @@
   Views.magazyny = {
     html() {
       const S = Store.state;
-      return `<div class="page-head"><div class="titles"><h2>${th("Magazyny")}</h2><p>${th("Magazyny firmy, przypisani użytkownicy, stan i zamknięte okresy. Magazyn aktywny wynika z zalogowanego użytkownika.")}</p></div>
+      return `<div class="page-head"><div class="titles"><h2>${th("Magazyny")}</h2><p>${th("Magazyny firmy z przypisanymi kierownikami, magazynierami i flotą, stanem i zamkniętymi okresami. Ludzi przydziela się w module Użytkownicy, pojazdy i rębaki — w module Flota.")}</p></div>
           <div class="actions">${addBtn("warehouses", N_("Nowy magazyn"))}</div></div>
         <div class="grid g2">${S.warehouses.map(w => {
           const m = Stock.byProduct(S, w.id), per = {};
           for (const [pid, q] of m) { const p = App.product(pid); if (Math.abs(q) > R.EPS) per[p.unit] = R.rq((per[p.unit] || 0) + q); }
           return `<div class="card" data-wh="${esc(w.id)}"><div class="card-h"><h3>${esc(w.name)}</h3><span class="sub">${esc(w.code)}</span>${activeBadge(w.active)}<span class="spacer"></span>${editBtn("warehouses", w.id)}</div><div class="card-b">
             <dl class="money-list"><dt>${th("Adres")}</dt><dd>${esc(w.address || "")}</dd><dt>${th("Stan wg jednostek")}</dt><dd>${esc(Object.entries(per).map(([u, q]) => `${fmtQ(q)} ${Units.label(u)}`).join(" · ") || "—")}</dd>
-            <dt>${th("Zamknięte do")}</dt><dd>${esc(R.lockedMonth(S, w.id) || "—")}</dd><dt>${th("Użytkownicy")}</dt><dd>${esc(S.users.filter(u => u.whId === w.id && u.active !== false).map(u => `${u.name} (${App.roleLabel(u.role)})`).join(", ") || "—")}</dd>
+            <dt>${th("Zamknięte do")}</dt><dd>${esc(R.lockedMonth(S, w.id) || "—")}</dd>${["kierownik", "magazynier", "obserwator", "admin"].map(r => { const us = S.users.filter(u => u.whId === w.id && u.role === r && u.active !== false && !u.pending); return us.length ? `<dt>${esc(t(R.ROLES[r].label))}</dt><dd>${esc(us.map(u => u.name).join(", "))}</dd>` : ""; }).join("")}
+            <dt>${th("Pojazdy")}</dt><dd>${esc(S.fleet.vehicles.filter(v => v.whId === w.id).map(v => `${v.reg}`).join(", ") || "—")}</dd>
+            <dt>${th("Kierowcy")}</dt><dd>${esc(S.fleet.drivers.filter(v => v.whId === w.id).map(v => v.name).join(", ") || "—")}</dd>
+            <dt>${th("Rębaki i operatorzy")}</dt><dd>${esc(S.fleet.chippers.filter(v => v.whId === w.id).map(v => v.name).concat(S.fleet.operators.filter(v => v.whId === w.id).map(v => v.name)).join(", ") || "—")}</dd>
             <dt>${th("Operacje")}</dt><dd>${S.operations.filter(o => o.whId === w.id).length}</dd></dl></div></div>`; }).join("")}</div>`;
     },
     bind(page) { bindMaster(page); }
@@ -138,31 +150,34 @@
       if (Store.mode === "server") return ServerBackend.accounts();
       const out = {}; for (const u of Store.state.users) out[u.id] = AuthLib.LocalAuth.info(u.id); return out;
     },
-    edit(id) {
+    edit(id, how = {}) {
       const S = Store.state, isNew = !id;
-      const rec = id ? R.clone(R.byId(S.users, id)) : { name: "", login: "", role: "magazynier", whId: App.user().whId, active: true, lang: "", theme: "", email: "" };
-      const self = id === Store.userId;
+      const rec = id ? R.clone(R.byId(S.users, id)) : { name: "", login: "", role: "magazynier", whId: App.user().whId, active: true, lang: "", theme: "", email: "", phone: "" };
+      const self = id === Store.userId, approving = !!(rec.pending && how.approve);
+      const domains = (S.config.companyDomains || []).map(d => "@" + d).join(", ");
+      const roleHelp = r => `<span data-role-help>${esc(t(R.ROLE_INFO[r] || ""))}</span>`;
       const body = `<div class="fgrid">
+        ${approving ? `<div class="span-all info-line">${ic("user", 15)}<span>${esc(t("Zgłoszenie z rejestracji ({d}). Nadaj rolę i magazyn — zapis aktywuje konto.", { d: Dates.ts(rec.registeredAt) }))}</span></div>` : ""}
         ${ff("name", t("Imię i nazwisko"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}" autocomplete="off">`)}
-        ${ff("login", t("Login"), `<input class="ctrl" id="me-login" value="${esc(rec.login)}" autocapitalize="off" spellcheck="false" autocomplete="off">`, t("Małe litery, cyfry, kropka, myślnik."))}
-        ${ff("role", t("Rola"), `<select class="ctrl" id="me-role" ${self ? "disabled" : ""}>${opts(Object.entries(R.ROLES).map(([k, v]) => [k, t(v.label)]), rec.role)}</select>`, self ? t("Nie możesz zmienić własnej roli") : "")}
-        ${ff("whId", t("Magazyn"), `<select class="ctrl" id="me-whId">${opts(S.warehouses.filter(w => w.active !== false || w.id === rec.whId).map(w => [w.id, w.name]), rec.whId)}</select>`)}
+        ${ff("login", t("E-mail firmowy (login)"), `<input class="ctrl" id="me-login" type="email" value="${esc(rec.login)}" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}">`, domains ? t("Dozwolone domeny: {d}", { d: domains }) : "")}
+        ${ff("role", t("Rola"), `<select class="ctrl" id="me-role" ${self ? "disabled" : ""}>${opts(Object.entries(R.ROLES).map(([k, v]) => [k, t(v.label)]), approving && rec.role === "obserwator" ? "magazynier" : rec.role)}</select>`, self ? t("Nie możesz zmienić własnej roli") : roleHelp(approving && rec.role === "obserwator" ? "magazynier" : rec.role))}
+        ${ff("whId", t("Magazyn"), `<select class="ctrl" id="me-whId">${opts(S.warehouses.filter(w => w.active !== false || w.id === rec.whId).map(w => [w.id, w.name]), rec.whId)}</select>`, t("Kierownik zatwierdza operacje tego magazynu; Administrator ma dostęp do wszystkich."))}
+        ${ff("phone", t("Telefon"), `<input class="ctrl" id="me-phone" type="tel" value="${esc(rec.phone || "")}">`)}
         ${ff("lang", t("Język interfejsu"), `<select class="ctrl" id="me-lang">${opts([["", t("wybór użytkownika / przeglądarki")]].concat(Object.values(I18N.LANGS).map(L => [L.code, L.label])), rec.lang)}</select>`)}
-        ${ff("email", t("E-mail"), `<input class="ctrl" id="me-email" type="email" value="${esc(rec.email || "")}">`)}
-        ${isNew ? "" : ff("active", t("Status konta"), `<select class="ctrl" id="me-active" ${self ? "disabled" : ""}>${opts([["true", t("aktywne")], ["false", t("nieaktywne (logowanie zablokowane)")]], String(rec.active !== false))}</select>`)}
+        ${isNew ? "" : ff("active", t("Status konta"), `<select class="ctrl" id="me-active" ${self ? "disabled" : ""}>${opts([["true", t("aktywne")], ["false", rec.pending ? t("oczekuje na zatwierdzenie") : t("nieaktywne (logowanie zablokowane)")]], String(approving || rec.active !== false))}</select>`)}
         ${isNew ? `<div class="span-all"><h4 class="mini-h">${th("Hasło startowe")}</h4><p class="help">${th("Użytkownik zmieni je przy pierwszym logowaniu.")}</p></div>
           <div data-ff="password">${pwField("me-pw", t("Hasło"), "new-password")}${pwMeter("me-pw-meter")}<div class="msg hidden" data-fmsg="password"></div></div>
           <div>${pwField("me-pw2", t("Powtórz hasło"), "new-password")}</div>` : ""}
       </div>`;
-      const m = Modal.open({ title: isNew ? t("Nowy użytkownik") : t("Edycja użytkownika {l}", { l: rec.login }), id: "user-edit", wide: true, body,
-        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${ic("check", 15)} ${th("Zapisz")}</button>` });
+      const m = Modal.open({ title: isNew ? t("Nowy użytkownik") : approving ? t("Zatwierdzenie rejestracji: {l}", { l: rec.login }) : t("Edycja użytkownika {l}", { l: rec.login }), id: "user-edit", wide: true, body,
+        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${ic("check", 15)} ${approving ? th("Zatwierdź i aktywuj") : th("Zapisz")}</button>` });
       bindEyes(m.el); if (isNew) bindMeter($("#me-pw", m.el), $("#me-pw-meter", m.el));
-      const nm = $("#me-name", m.el), lg = $("#me-login", m.el);
-      if (isNew) nm.oninput = () => { if (!lg.dataset.touched) lg.value = R.loginFrom(nm.value, "user"); };
-      lg.oninput = () => { lg.dataset.touched = "1"; };
+      const nm = $("#me-name", m.el), lg = $("#me-login", m.el), rl = $("#me-role", m.el);
+      rl.onchange = () => { const h = $("[data-role-help]", m.el); if (h) h.textContent = t(R.ROLE_INFO[rl.value] || ""); };
       $("[data-no]", m.el).onclick = () => m.close();
       $("[data-yes]", m.el).onclick = async () => {
-        const next = Object.assign({}, rec, { name: nm.value, login: lg.value, role: $("#me-role", m.el).value, whId: $("#me-whId", m.el).value, lang: $("#me-lang", m.el).value, email: $("#me-email", m.el).value });
+        const email = lg.value.trim().toLowerCase();
+        const next = Object.assign({}, rec, { name: nm.value, login: email, email, role: rl.value, whId: $("#me-whId", m.el).value, lang: $("#me-lang", m.el).value, phone: $("#me-phone", m.el).value });
         if (!isNew) next.active = $("#me-active", m.el).value === "true";
         let res;
         if (isNew) {
@@ -172,9 +187,17 @@
           res = await Store.backend.createUser(next, pw);
         } else res = await Store.exec("user.save", { rec: next }, SRC_USERS);
         if (!res || !res.ok) { showErrors(m, res || {}); Toast.err(t("Nie zapisano"), (res && res.error) || ""); return; }
-        m.close(); Toast.ok(isNew ? t("Utworzono konto") : t("Zapisano"), res.rec ? `${res.rec.name} (${res.rec.login})` : ""); App.render();
+        m.close(); Toast.ok(isNew ? t("Utworzono konto") : approving ? t("Konto aktywowane") : t("Zapisano"), res.rec ? `${res.rec.name} (${res.rec.login})` : ""); App.render();
       };
       nm.focus();
+    },
+    async remove(id) {
+      const u = R.byId(Store.state.users, id);
+      const r = await Modal.confirm({ title: u.pending ? t("Odrzucić zgłoszenie {l}?", { l: u.login }) : t("Usunąć konto {l}?", { l: u.login }), text: u.pending ? t("Zgłoszenie i hasło zostaną usunięte. Osoba może zarejestrować się ponownie.") : t("Usunąć można tylko konto bez historii operacji. Konto z historią dezaktywuj — historia zostaje."), ok: u.pending ? t("Odrzuć zgłoszenie") : t("Usuń konto"), danger: true });
+      if (!r.ok) return;
+      const res = await Store.backend.removeUser(id);
+      if (!res || !res.ok) return Toast.err(t("Nie usunięto"), res && res.error);
+      Toast.ok(u.pending ? t("Zgłoszenie odrzucone") : t("Konto usunięte"), u.login); App.render();
     },
     resetPassword(id) {
       const u = R.byId(Store.state.users, id);
@@ -195,18 +218,36 @@
   };
   Views.uzytkownicy = {
     html() {
-      const S = Store.state;
-      return `<div class="page-head"><div class="titles"><h2>${th("Użytkownicy i uprawnienia")}</h2><p>${th("Konta, role, przypisanie do magazynu, hasła i blokady. Kont nie usuwa się — dezaktywowane konto zachowuje historię operacji.")}</p></div>
+      const S = Store.state, f = App.tabs.users || (App.tabs.users = { wh: "", role: "", q: "" });
+      const pend = S.users.filter(u => u.pending);
+      const list = S.users.filter(u => !u.pending && (!f.wh || u.whId === f.wh) && (!f.role || u.role === f.role)
+        && (!f.q || `${u.name} ${u.login} ${u.phone || ""}`.toLowerCase().includes(f.q.toLowerCase())))
+        .sort((a, b) => (a.whId + a.role + a.name).localeCompare(b.whId + b.role + b.name));
+      const row = u => `<tr data-user="${esc(u.id)}" class="${u.active === false ? "void" : ""}"><td><div class="row"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)}</b>${u.phone ? `<br><small class="dim">${esc(u.phone)}</small>` : ""}</div></div></td><td class="mono small">${esc(u.login)}</td><td><span class="badge role-${esc(u.role)}">${esc(App.roleLabel(u.role))}</span></td><td>${esc(App.whName(u.whId))}</td><td>${activeBadge(u.active)}</td><td data-acc="${esc(u.id)}"><span class="dim">…</span></td><td data-last="${esc(u.id)}">—</td>
+            <td class="r nowrap"><button class="btn sm" type="button" data-uedit="${esc(u.id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm icon" type="button" data-upw="${esc(u.id)}" title="${esc(t("Ustaw hasło"))}" aria-label="${esc(t("Ustaw hasło"))}">${ic("key", 14)}</button> <button class="btn sm icon hidden" type="button" data-unlock="${esc(u.id)}" title="${esc(t("Odblokuj"))}" aria-label="${esc(t("Odblokuj"))}">${ic("lock", 14)}</button>${u.id !== Store.userId ? ` <button class="btn sm icon danger" type="button" data-udel="${esc(u.id)}" title="${esc(t("Usuń konto"))}" aria-label="${esc(t("Usuń konto"))}">${ic("trash", 14)}</button>` : ""}</td></tr>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Użytkownicy i uprawnienia")}</h2><p>${th("Konta (logowanie e-mailem firmowym), role, przypisanie do magazynu, hasła i blokady. Konto z historią operacji dezaktywuje się — usunąć można tylko konto bez historii.")}</p></div>
           <div class="actions"><button class="btn primary" type="button" id="user-add">${ic("plus", 15)} ${th("Nowy użytkownik")}</button></div></div>
-        <div class="card"><div class="tbl-wrap"><table class="tbl" id="users-table"><thead><tr><th>${th("Użytkownik")}</th><th>${th("Login")}</th><th>${th("Rola")}</th><th>${th("Magazyn")}</th><th>${th("Status")}</th><th>${th("Hasło")}</th><th>${th("Ostatnie logowanie")}</th><th></th></tr></thead>
-          <tbody id="users-body">${S.users.map(u => `<tr data-user="${esc(u.id)}" class="${u.active === false ? "void" : ""}"><td><div class="row"><span class="avatar">${esc(initials(u.name))}</span><b>${esc(u.name)}</b></div></td><td class="mono">${esc(u.login)}</td><td>${esc(App.roleLabel(u.role))}</td><td>${esc(App.whName(u.whId))}</td><td>${activeBadge(u.active)}</td><td data-acc="${esc(u.id)}"><span class="dim">…</span></td><td data-last="${esc(u.id)}">—</td>
-            <td class="r nowrap"><button class="btn sm" type="button" data-uedit="${esc(u.id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm" type="button" data-upw="${esc(u.id)}">${ic("key", 13)} ${th("Hasło")}</button> <button class="btn sm hidden" type="button" data-unlock="${esc(u.id)}">${ic("lock", 13)} ${th("Odblokuj")}</button></td></tr>`).join("")}</tbody></table></div></div>
+        ${pend.length ? `<div class="card mb4 queue-card" id="reg-requests"><div class="card-h"><h3>${ic("user", 16)} ${th("Zgłoszenia rejestracji")}</h3><span class="sub">${esc(t("konta oczekujące na nadanie roli i magazynu"))}</span></div><div class="tbl-wrap"><table class="tbl" id="reg-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("E-mail")}</th><th>${th("Telefon")}</th><th>${th("Zgłoszono")}</th><th></th></tr></thead><tbody>
+          ${pend.map(u => `<tr data-reg="${esc(u.id)}"><td><b>${esc(u.name)}</b></td><td class="mono">${esc(u.login)}</td><td>${esc(u.phone || "—")}</td><td>${esc(Dates.ts(u.registeredAt))}</td><td class="r nowrap"><button class="btn sm primary" type="button" data-uapprove="${esc(u.id)}">${ic("check", 13)} ${th("Nadaj rolę i aktywuj")}</button> <button class="btn sm danger" type="button" data-udel="${esc(u.id)}">${ic("x", 13)} ${th("Odrzuć")}</button></td></tr>`).join("")}</tbody></table></div></div>` : ""}
+        <div class="card"><div class="toolbar">
+          <div class="field"><label for="uf-wh">${th("Magazyn")}</label><select class="ctrl" id="uf-wh"><option value="">${th("Wszystkie")}</option>${S.warehouses.map(w => `<option value="${esc(w.id)}" ${f.wh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
+          <div class="field"><label for="uf-role">${th("Rola")}</label><select class="ctrl" id="uf-role"><option value="">${th("Wszystkie")}</option>${Object.entries(R.ROLES).map(([k, v]) => `<option value="${k}" ${f.role === k ? "selected" : ""}>${esc(t(v.label))}</option>`).join("")}</select></div>
+          ${searchInput("uf-q", f.q, t("nazwisko, e-mail, telefon…"))}</div>
+          <div class="tbl-wrap"><table class="tbl" id="users-table"><thead><tr><th>${th("Użytkownik")}</th><th>${th("E-mail")}</th><th>${th("Rola")}</th><th>${th("Magazyn")}</th><th>${th("Status")}</th><th>${th("Hasło")}</th><th>${th("Ostatnie logowanie")}</th><th></th></tr></thead>
+          <tbody id="users-body">${list.map(row).join("") || `<tr><td colspan="8" class="empty">${th("Brak wpisów.")}</td></tr>`}</tbody></table></div></div>
+        <div class="card mt4"><div class="card-h"><h3>${th("Role")}</h3></div><div class="card-b"><div class="role-grid">${Object.entries(R.ROLES).map(([k, v]) => `<div class="role-card"><span class="badge role-${k}">${esc(t(v.label))}</span><p>${esc(t(R.ROLE_INFO[k]))}</p><small class="dim">${esc(tp("{n} osoba|{n} osoby|{n} osób", S.users.filter(u => u.role === k && !u.pending && u.active !== false).length))}</small></div>`).join("")}</div></div></div>
         <div class="card mt4"><div class="card-h"><h3>${th("Macierz uprawnień")}</h3><span class="sub">${th("uprawnienia sprawdzane w silniku przy każdej operacji")}</span></div><div class="tbl-wrap"><table class="tbl" id="perm-table"><thead><tr><th>${th("Uprawnienie")}</th>${Object.values(R.ROLES).map(r => `<th class="c">${esc(t(r.label))}</th>`).join("")}</tr></thead><tbody>
           ${Object.keys(R.PERMS).map(p => `<tr><td><span class="mono">${esc(p)}</span><br><small class="dim">${esc(t(R.PERMS[p]))}</small></td>${Object.keys(R.ROLES).map(k => `<td class="c">${R.can({ role: k }, p) ? `<span class="badge ok">${ic("check", 12)}</span>` : "—"}</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>
         <div class="card mt4"><div class="card-h"><h3>${th("Dziennik logowań")}</h3><span class="sub">${th("ostatnie 100 zdarzeń")}</span></div><div id="login-log"><div class="empty">…</div></div></div>`;
     },
     async bind(page) {
       $("#user-add", page).onclick = () => Users.edit(null);
+      const f = App.tabs.users;
+      const on = (sel, k) => { const el = $(sel, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
+      on("#uf-wh", "wh"); on("#uf-role", "role");
+      bindSearch(page, "#uf-q", f, "q", this);
+      $$("[data-uapprove]", page).forEach(b => b.onclick = () => Users.edit(b.dataset.uapprove, { approve: true }));
+      $$("[data-udel]", page).forEach(b => b.onclick = () => Users.remove(b.dataset.udel));
       $$("[data-uedit]", page).forEach(b => b.onclick = () => Users.edit(b.dataset.uedit));
       $$("[data-upw]", page).forEach(b => b.onclick = () => Users.resetPassword(b.dataset.upw));
       $$("[data-unlock]", page).forEach(b => b.onclick = async () => { const r = await Store.backend.unlock(b.dataset.unlock); if (r && r.ok) { Toast.ok(t("Konto odblokowane")); App.render(); } else Toast.err(t("Nie odblokowano"), r && r.error); });
@@ -221,7 +262,7 @@
       }
       const log = (await Store.backend.loginLog()).slice(0, 100);
       const box = $("#login-log", page);
-      if (box) box.innerHTML = log.length ? `<div class="tbl-wrap"><table class="tbl dense" id="login-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("Login")}</th><th>${th("Wynik")}</th><th>${th("Szczegóły")}</th>${Store.mode === "server" ? `<th>${th("Adres")}</th>` : ""}</tr></thead><tbody>
+      if (box) box.innerHTML = log.length ? `<div class="tbl-wrap"><table class="tbl dense" id="login-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("E-mail")}</th><th>${th("Wynik")}</th><th>${th("Szczegóły")}</th>${Store.mode === "server" ? `<th>${th("Adres")}</th>` : ""}</tr></thead><tbody>
         ${log.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.login || (R.byId(Store.state.users, x.userId) || {}).login || "")}</td><td>${x.ok ? `<span class="badge ok">${th("OK")}</span>` : `<span class="badge err">${th("odrzucone")}</span>`}</td><td>${esc(t(x.reason || ""))}</td>${Store.mode === "server" ? `<td class="mono">${esc(x.ip || "")}</td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wpisów.")}</div>`;
     }
   };
@@ -277,6 +318,9 @@
               <input type="file" id="bk-file" accept="application/json,.json" class="hidden"></div>
             <p class="help">${esc(t("Wymagana rola: Kierownik lub Administrator. Rozmiar danych: {kb} kB (rewizja {rev}, schemat {s}).", { kb: fmt(size / 1024, 1), rev: S.rev, s: S.schema }))}</p></div></div>
           ${srv ? `<div class="card"><div class="card-h"><h3>${th("Kopie serwera (SQLite)")}</h3><span class="spacer"></span><button class="btn sm" type="button" id="srv-bk" ${App.can("data.backup") ? "" : "disabled"}>${ic("db", 13)} ${th("Utwórz kopię teraz")}</button></div><div id="srv-bk-list"><div class="empty">…</div></div></div>` : ""}
+          ${App.can("users.manage") ? `<div class="card" id="clean-card"><div class="card-h"><h3>${th("Start pracy na czysto")}</h3></div><div class="card-b stack">
+            <p class="muted">${th("Usuwa operacje, dokumenty, księgę, wersje robocze i okresy inwentaryzacji — zostają magazyny, produkty, kontrahenci, flota i konta użytkowników. Użyj przed rozpoczęciem pracy na prawdziwych danych (po szkoleniu na danych przykładowych). Przed wyczyszczeniem pobierz kopię.")}</p>
+            <div><button class="btn danger" type="button" id="dm-clean">${ic("trash", 15)} ${th("Wyczyść operacje i rozpocznij pracę")}</button></div></div></div>` : ""}
           <div class="card"><div class="card-h"><h3>${th("Preferencje programu")}</h3></div><div class="card-b stack">
             <label class="inline-opt"><input type="checkbox" id="pf-intro" ${intro && intro.enabled() ? "checked" : ""}> ${th("Intro przy uruchomieniu")}</label>
             <label class="inline-opt"><input type="checkbox" id="pf-music" ${intro && intro.musicOn() ? "checked" : ""}> ${th("Muzyka w intro (domyślnie włączona)")}</label>
@@ -327,6 +371,13 @@
         const done = res.done || [];
         Toast.info(t("Kontrola przełomu miesiąca"), done.length ? done.map(d => `${d.ym}: ${d.ok ? t("zamknięto") + (d.docNo ? " (" + d.docNo + ")" : "") : d.error}`).join(" · ") : t("Brak otwartych okresów z poprzednich miesięcy lub kontrola już wykonana w tym miesiącu."));
         App.render();
+      };
+      const cl = $("#dm-clean", page);
+      if (cl) cl.onclick = async () => {
+        const r = await Modal.confirm({ title: t("Wyczyścić wszystkie operacje?"), text: t("Tej czynności nie można cofnąć (poza wczytaniem kopii). Wpisz WYCZYŚĆ, aby potwierdzić."), ok: t("Wyczyść"), danger: true, input: { label: t("Potwierdzenie"), placeholder: "WYCZYŚĆ", required: true } });
+        if (!r.ok) return;
+        const res = await Store.exec("data.clean", { confirm: String(r.value).toUpperCase() }, N_("Administracja"));
+        if (res.ok) { UI.Form.draft = null; ssSet(DRAFT_KEY, null); Toast.ok(t("Dane wyczyszczone — można rozpocząć pracę")); App.render(); } else Toast.err(t("Nie wyczyszczono"), res.error);
       };
       const rs = $("#dm-reset", page);
       if (rs) rs.onclick = async () => {

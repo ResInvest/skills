@@ -185,7 +185,7 @@ export class Store {
   login(login, pw, ip) {
     const L = String(login || "").trim().toLowerCase();
     if (!L || !pw) return { ok: false, code: "EMPTY", error: t("Podaj login i hasło") };
-    const u = this.state && this.state.users.find(x => String(x.login).toLowerCase() === L);
+    const u = this.state && this.state.users.find(x => String(x.login).toLowerCase() === L || String(x.email || "").toLowerCase() === L);
     const acc = u ? this.account(u.id) : null;
     const bad = reason => { this.logLogin(L, u ? u.id : null, false, reason, ip); return { ok: false, code: "BAD", error: t("Nieprawidłowy login lub hasło") }; };
     if (!u || !acc) { verifyPassword(pw, { algo: "scrypt", salt: "00", hash: "00".repeat(32), params: JSON.stringify(SCRYPT) }); return bad(N_("nieznany login")); }
@@ -198,6 +198,7 @@ export class Store {
       this.db.prepare("UPDATE accounts SET failed = ?, locked_until = ? WHERE user_id = ?").run(lock ? 0 : failed, lock ? new Date(Date.now() + this.cfg.security.lockMinutes * 60000).toISOString() : acc.locked_until, u.id);
       return bad(N_("błędne hasło"));
     }
+    if (u.pending) { this.logLogin(L, u.id, false, N_("konto oczekuje na zatwierdzenie"), ip); return { ok: false, code: "PENDING", error: t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") }; }
     if (u.active === false) return bad(N_("konto nieaktywne"));
     this.db.prepare("UPDATE accounts SET failed = 0, locked_until = NULL, last_login = ? WHERE user_id = ?").run(nowIso(), u.id);
     this.logLogin(L, u.id, true, "", ip);
@@ -229,10 +230,10 @@ export class Store {
   purgeSessions() { this.db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(nowIso()); }
 
   /* ---------------- pierwsze uruchomienie ---------------- */
-  setup({ name, login, password, whName, sample, lang }) {
+  setup({ name, email, login, password, sample, lang }) {
     if (this.hasAccounts()) return { ok: false, error: t("Serwer jest już skonfigurowany") };
-    const L = String(login || "").trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(L)) return { ok: false, error: t("Login: 3–32 znaki — małe litery, cyfry, kropka, myślnik") };
+    const L = String(email || login || "").trim().toLowerCase();
+    if (!R.EMAIL_RE.test(L)) return { ok: false, error: t("Podaj adres e-mail") };
     if (String(name || "").trim().length < 3) return { ok: false, error: t("Podaj imię i nazwisko (co najmniej 3 znaki)") };
     const pe = AuthLib.passwordError(password, L); if (pe) return { ok: false, error: pe };
     let s;
@@ -240,9 +241,10 @@ export class Store {
       s = R.Seed.build(this.today());
       const admin = R.byId(s.users, "u_admin");
       const clash = s.users.find(u => u.login === L && u.id !== "u_admin");
-      if (clash) clash.login = clash.login + "2";
-      Object.assign(admin, { login: L, name: String(name).trim(), lang: lang || "" });
-    } else s = R.Seed.minimal({ login: L, name: String(name).trim(), whName: whName || t("Magazyn główny"), lang, today: this.today() });
+      if (clash) clash.login = clash.email = "demo." + clash.login;
+      Object.assign(admin, { login: L, email: L, name: String(name).trim(), lang: lang || "" });
+    } else s = R.Seed.minimal({ email: L, name: String(name).trim(), lang, today: this.today() });
+    if (!R.companyEmail(s, L)) return { ok: false, error: t("Wymagany e-mail firmowy ({d})", { d: s.config.companyDomains.map(d => "@" + d).join(", ") }) };
     s.rev = (s.rev || 0) + 1;
     this.saveState(s, { id: "u_admin", login: L }, "system.setup", { sample: !!sample }, 0);
     this.setPassword("u_admin", password, false);
@@ -250,6 +252,21 @@ export class Store {
     this.log("INFO", `Pierwsze uruchomienie: administrator ${L}, dane przykładowe: ${sample ? "tak" : "nie"}`);
     return { ok: true };
   }
+
+  /** Rejestracja z ekranu logowania: profil „oczekuje na zatwierdzenie” + hasło (bez sesji). */
+  register(rec, password, lang) {
+    I18N.setLang(lang || "pl");
+    const pe = AuthLib.passwordError(password, rec && rec.email); if (pe) return { ok: false, errors: { password: pe }, error: pe };
+    const rev0 = this.state.rev;
+    const { res, state } = Service.register(this.state, rec, this.today());
+    if (!state) return res;
+    try { this.saveState(state, null, "auth.register", { email: res.rec.login }, rev0); }
+    catch (e) { return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }) }; }
+    this.setPassword(res.rec.id, password, false);
+    this.log("INFO", `Rejestracja: ${res.rec.login} — oczekuje na zatwierdzenie`);
+    return { ok: true };
+  }
+  dropAccount(userId) { this.tx(() => { this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId); this.db.prepare("DELETE FROM accounts WHERE user_id = ?").run(userId); }); }
 
   /* ---------------- kopie zapasowe ---------------- */
   backup(reason = "manual") {

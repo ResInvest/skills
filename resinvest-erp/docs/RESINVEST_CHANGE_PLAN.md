@@ -1,20 +1,18 @@
 # ResInvest ERP — plan zmian (FAZA 0 → FAZA 1)
 
-Dokument powstał **przed** napisaniem kodu demonstratora, na podstawie rozpoznania
-repozytorium i dostarczonego pliku `ResInvestERP_1.3.0.html`.
+Dokument powstał **przed** napisaniem kodu, na podstawie analizy dostarczonego pliku
+`ResInvestERP_1.3.0.html` i wymagań ResInvest Commodities.
 
-## 1. Rozpoznanie środowiska
+## 1. Punkt wyjścia
 
-| Element | Wynik rozpoznania |
+| Element | Stan |
 |---|---|
-| `pwd` | `/home/user/skills` — repozytorium `roesnermateusz-cmyk/skills` (fork zbioru *skills*), gałąź `claude/nifty-knuth-od1ibq` |
-| Kod ERP w repozytorium | **Brak.** Repozytorium nie zawiera frontendu React, backendu NestJS ani migracji PostgreSQL. Nie ma `CLAUDE.md`. |
-| Źródło prawdy o obecnym systemie | Przesłany plik `ResInvestERP_1.3.0.html` (7650 linii, 2,57 MB, w tym film intro 1,56 MB jako data URI) |
-| Narzędzia testowe | Node 22, Playwright 1.56 + Chromium (`/opt/pw-browsers`), ESLint, Prettier. Brak Cypress / MCP browser. |
+| Repozytorium projektu | katalog `resinvest-erp/` (kod programu, serwer, testy, instalator, dokumentacja) |
+| Źródło prawdy o poprzednim systemie | plik `ResInvestERP_1.3.0.html` (7650 linii, 2,57 MB, w tym film intro jako data URI) |
+| Narzędzia testowe | Node.js 22, Playwright + Chromium, ESLint, Prettier |
 
-Wniosek: FAZĘ 1 realizujemy w nowym katalogu `resinvest-erp/`. Produkcyjny
-React/NestJS/PostgreSQL **nie jest dostępny w tej sesji** — FAZA 2 wymaga dołączenia
-tego repozytorium (patrz §7).
+Wniosek: FAZA 1 powstaje jako nowy projekt `resinvest-erp/`, bez zależności od zewnętrznych
+frameworków; FAZA 2 rozbudowuje go o logowanie i serwer wielostanowiskowy (patrz §7 i „FAZA 2”).
 
 ## 2. Architektura ResInvestERP 1.3.0 (odczytana z kodu, nie z nazw)
 
@@ -110,7 +108,7 @@ Plik `ResInvestERP_1.3.0.html` **nie jest modyfikowany**.
 
 ## 7. FAZA 2 — najmniejsza zmiana architektoniczna
 
-Prompt zakłada produkcyjny React/NestJS/PostgreSQL. Ten kod nie jest dostępny w sesji,
+Specyfikacja zakłada produkcyjny React/NestJS/PostgreSQL. Taki kod nie istniał w projekcie,
 a dostarczony 1.3.0 działa na IndexedDB z opcjonalną synchronizacją Supabase.
 Przed FAZĄ 2 potrzebne jest jedno z dwóch:
 
@@ -125,7 +123,7 @@ Przed FAZĄ 2 potrzebne jest jedno z dwóch:
 
 ---
 
-# Demo v2 — zmiany modelu (dodatek do promptu)
+# Demo v2 — zmiany modelu (uzupełnienie specyfikacji)
 
 ## Decyzje
 
@@ -153,7 +151,7 @@ Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodny
 
 ---
 
-# Demo v2.1 — domknięcie prototypu (master prompt: §0–32, testy 11–42)
+# Demo v2.1 — domknięcie prototypu (specyfikacja: §0–32, testy 11–42)
 
 ## Decyzje
 
@@ -189,7 +187,7 @@ Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodny
 ## Ryzyka / pytania do firmy przed Production v1
 
 1. Masa drewna 0,952 t/m³ (z przykładu 817 m³ ≈ 778 t) vs 1,32 t/m³ z v1 — do potwierdzenia.
-2. Przykłady GJ w poleceniu liczone z masy zaokrąglonej (778 × 8,5 = 6 613) — system liczy z masy dokładnej (6 611). Do potwierdzenia, który wynik ma być na dokumentach.
+2. Przykłady GJ w specyfikacji liczone z masy zaokrąglonej (778 × 8,5 = 6 613) — system liczy z masy dokładnej (6 611). Do potwierdzenia, który wynik ma być na dokumentach.
 3. Sprzedaż bezpośrednia z niesprzedaną resztą — reszta trafia na stan (z ostrzeżeniem). Alternatywa: blokada. Do decyzji.
 4. Korekta daty dokumentu i zmiana magazynu — obecnie tylko przez anulowanie i nowy dokument.
 5. Metoda wyceny magazynu (średnia / FIFO) i czy koszt rąbania/transportu wchodzi do wartości zapasu.
@@ -198,7 +196,7 @@ Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodny
 
 ## FAZA 2 — zrealizowana (ResInvest ERP 3.0.0)
 
-### Zakres (polecenie)
+### Zakres (zlecenie)
 „Podrasuj i popraw graficznie pulpit główny, zbuduj kompletny program z systemem logowania, z kompletnymi językami
 (PL/CS/EN) i motywami jasnym, ciemnym i azure — jak w 1.3.0.”
 

@@ -85,7 +85,8 @@
     const p = String(pw || ""), out = [];
     if (p.length < POLICY.minLength) out.push(t("co najmniej {n} znaków", { n: POLICY.minLength }));
     if (!/[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]/.test(p) || !/\d/.test(p)) out.push(t("litery i cyfry"));
-    if (login && p.toLowerCase().includes(String(login).toLowerCase())) out.push(t("nie może zawierać loginu"));
+    const lg = String(login || "").toLowerCase().split("@")[0];   // e-mail: sprawdzana część przed „@”
+    if (lg.length >= 3 && p.toLowerCase().includes(lg)) out.push(t("nie może zawierać loginu"));
     if (p.length > 128) out.push(t("maksymalnie 128 znaków"));
     return out;
   }
@@ -106,7 +107,8 @@
   const AUTH_KEY = "riw.v3.auth", SESSION_KEY = "riw.v3.session";
   /** Konta danych przykładowych (tryb lokalny / demonstracyjny) — hasło startowe „demo1234”. */
   const DEMO_PASSWORD = "demo1234";
-  const DEMO_LOGINS = ["admin", "kierownik", "magazynier", "pyskowice", "podglad"];
+  const DEMO_LOGINS = ["magazyn@resinvest.group", "anna.gorska@resinvest.group", "adrian.wojciechowski@resinvest.group", "tomasz.zajac@resinvest.group",
+    "pawel.kaczmarek@resinvest.group", "michal.lewandowski@resinvest.group", "karolina.wisniewska@resinvest.group", "beata.nowak@resinvest.group"];
 
   const LocalAuth = {
     store: null, memory: null,
@@ -133,7 +135,7 @@
     info(userId) { const a = this.read().accounts[userId]; return a ? { hasPassword: true, mustChange: !!a.mustChange, failed: a.failed || 0, lockedUntil: a.lockedUntil || null, lastLogin: a.lastLogin || null, changedAt: a.changedAt || null, demo: !!a.demo } : { hasPassword: false }; },
     async login(state, login, password) {
       const L = String(login || "").trim().toLowerCase();
-      const u = state.users.find(x => String(x.login).toLowerCase() === L);
+      const u = state.users.find(x => String(x.login).toLowerCase() === L || String(x.email || "").toLowerCase() === L);
       const s = this.read();
       const fail = (code, reason) => { this.log({ login: L, userId: u ? u.id : null, ok: false, reason }); return { ok: false, code, error: code === "LOCKED" ? reason : t("Nieprawidłowy login lub hasło") }; };
       if (!L || !password) return { ok: false, code: "EMPTY", error: t("Podaj login i hasło") };
@@ -150,6 +152,7 @@
         this.write();
         return fail("BAD", N_("błędne hasło"));
       }
+      if (u.pending) { this.log({ login: L, userId: u.id, ok: false, reason: N_("konto oczekuje na zatwierdzenie") }); return { ok: false, code: "PENDING", error: t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") }; }
       if (u.active === false) return fail("BAD", N_("konto nieaktywne"));
       acc.failed = 0; acc.lockedUntil = null; acc.lastLogin = new Date().toISOString();
       this.write();
@@ -184,6 +187,19 @@
       this.log({ login: u.login, userId, ok: true, reason: N_("zmiana hasła") });
       return { ok: true };
     },
+    /** Hasło podane przy rejestracji (konto oczekuje na zatwierdzenie przez administratora). */
+    async setInitial(state, userId, pw) {
+      const u = state.users.find(x => x.id === userId);
+      if (!u) return { ok: false, error: t("Nie znaleziono użytkownika") };
+      const e = passwordError(pw, u.login);
+      if (e) return { ok: false, field: "password", error: e };
+      this.read().accounts[userId] = Object.assign(await hashPassword(pw), { mustChange: false, failed: 0, lockedUntil: null, changedAt: new Date().toISOString(), lastLogin: null });
+      this.write();
+      this.log({ login: u.login, userId, ok: true, reason: N_("rejestracja konta") });
+      return { ok: true };
+    },
+    /** Usunięcie konta (usunięty użytkownik). */
+    drop(userId) { const s = this.read(); if (s.accounts[userId]) { delete s.accounts[userId]; this.write(); } },
     /** Administrator ustawia hasło (nowe konto albo reset) — użytkownik zmieni je przy logowaniu. */
     async setPassword(state, adminUser, userId, newPw, mustChange = true) {
       const u = state.users.find(x => x.id === userId);

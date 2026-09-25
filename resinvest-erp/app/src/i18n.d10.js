@@ -112,7 +112,6 @@
   "Nazwa rębaka": ["Název štěpkovače", "Chipper name"],
   "np. Scania R450 — ruchoma podłoga": ["např. Scania R450 — posuvná podlaha", "e.g. Scania R450 — walking floor"],
   "Numer rejestracyjny": ["SPZ", "Registration number"],
-  "Pojazdów nie usuwa się — wycofany pojazd zostaje w historii kursów.": ["Vozidla se nemažou — vyřazené vozidlo zůstává v historii jízd.", "Vehicles are not deleted — a retired vehicle stays in the trip history."],
   "Zmiana dotyczy przyszłych kursów.": ["Změna platí pro budoucí jízdy.", "The change applies to future trips."],
   "Zapis w bazie nieudany — nic nie zapisano: {m}": ["Zápis do databáze se nezdařil — nic nebylo uloženo: {m}", "Database write failed — nothing was saved: {m}"],
   "konto zablokowane": ["účet zablokován", "account locked"],

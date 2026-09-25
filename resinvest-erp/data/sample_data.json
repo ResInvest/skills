@@ -1,6 +1,6 @@
 {
- "schema": 4,
- "version": "3.0.0",
+ "schema": 5,
+ "version": "3.1.0",
  "rev": 15,
  "config": {
   "m3_mp": 4,
@@ -12,7 +12,10 @@
   "chipRateDefault": 10,
   "wagonMPDefault": 120,
   "maxWagons": 60,
-  "_opis": "Konfiguracja Demo v2. Wartości są wstrzykiwane do pliku HTML przez tools/build-demo.mjs (npm run build). woodTPerM3 — orientacyjna masa 1 m³ drewna (z przykładu 817 m³ ≈ 778 t); mp_t — masa 1 MP zrębki; m3_mp — 1 m³ drewna = 4 MP zrębki; chipRateDefault — domyślna cena za rąbanie zł/MP; t_gj — orientacyjna energia 1 t biomasy (GJ). Zmiana dotyczy nowych danych (reset danych przykładowych)."
+  "companyDomains": [
+   "resinvest.group"
+  ],
+  "_opis": "Konfiguracja programu ResInvest ERP 3.0 (przeliczniki i wartości domyślne). Wartości są wbudowywane do ResInvest_ERP.html przez tools/build.mjs (npm run build) i ładowane przez serwer. woodTPerM3 — orientacyjna masa 1 m³ drewna (817 m³ ≈ 778 t); mp_t — masa 1 MP zrębki; m3_mp — 1 m³ drewna = 4 MP zrębki; chipRateDefault — domyślna cena za rąbanie zł/MP; kmRateDefault — stawka zł/km; t_gj — orientacyjna energia 1 t biomasy (GJ). Zmiana dotyczy nowych danych. companyDomains — domeny adresów e-mail dozwolonych przy logowaniu, rejestracji i zakładaniu kont (pusta lista = dowolna domena)."
  },
  "warehouses": [
   {
@@ -23,68 +26,108 @@
    "active": true
   },
   {
-   "id": "wh_pys",
-   "code": "PYS",
-   "name": "RiC Pyskowice",
-   "address": "ul. Wyszyńskiego, 44-120 Pyskowice",
+   "id": "wh_bra",
+   "code": "BRA",
+   "name": "RiC Brąszewice",
+   "address": "Brąszewice",
+   "active": true
+  },
+  {
+   "id": "wh_rok",
+   "code": "ROK",
+   "name": "RiC Rokitki",
+   "address": "Rokitki",
    "active": true
   }
  ],
  "users": [
   {
    "id": "u_admin",
-   "login": "admin",
+   "login": "magazyn@resinvest.group",
+   "email": "magazyn@resinvest.group",
    "name": "Mateusz Roesner",
    "role": "admin",
    "whId": "wh_zab",
    "active": true,
    "lang": "",
-   "theme": "",
-   "email": ""
+   "theme": ""
   },
   {
    "id": "u_kier",
-   "login": "kierownik",
+   "login": "anna.gorska@resinvest.group",
+   "email": "anna.gorska@resinvest.group",
    "name": "Anna Górska",
    "role": "kierownik",
    "whId": "wh_zab",
    "active": true,
    "lang": "",
-   "theme": "",
-   "email": ""
+   "theme": ""
   },
   {
    "id": "u_mag",
-   "login": "magazynier",
+   "login": "adrian.wojciechowski@resinvest.group",
+   "email": "adrian.wojciechowski@resinvest.group",
    "name": "Adrian Wojciechowski",
    "role": "magazynier",
    "whId": "wh_zab",
    "active": true,
    "lang": "",
-   "theme": "",
-   "email": ""
+   "theme": ""
   },
   {
-   "id": "u_pys",
-   "login": "pyskowice",
-   "name": "Paweł Kaczmarek",
-   "role": "magazynier",
-   "whId": "wh_pys",
+   "id": "u_kbra",
+   "login": "tomasz.zajac@resinvest.group",
+   "email": "tomasz.zajac@resinvest.group",
+   "name": "Tomasz Zając",
+   "role": "kierownik",
+   "whId": "wh_bra",
    "active": true,
    "lang": "",
-   "theme": "",
-   "email": ""
+   "theme": ""
+  },
+  {
+   "id": "u_bra",
+   "login": "pawel.kaczmarek@resinvest.group",
+   "email": "pawel.kaczmarek@resinvest.group",
+   "name": "Paweł Kaczmarek",
+   "role": "magazynier",
+   "whId": "wh_bra",
+   "active": true,
+   "lang": "",
+   "theme": ""
+  },
+  {
+   "id": "u_krok",
+   "login": "michal.lewandowski@resinvest.group",
+   "email": "michal.lewandowski@resinvest.group",
+   "name": "Michał Lewandowski",
+   "role": "kierownik",
+   "whId": "wh_rok",
+   "active": true,
+   "lang": "",
+   "theme": ""
+  },
+  {
+   "id": "u_rok",
+   "login": "karolina.wisniewska@resinvest.group",
+   "email": "karolina.wisniewska@resinvest.group",
+   "name": "Karolina Wiśniewska",
+   "role": "magazynier",
+   "whId": "wh_rok",
+   "active": true,
+   "lang": "",
+   "theme": ""
   },
   {
    "id": "u_view",
-   "login": "podglad",
+   "login": "beata.nowak@resinvest.group",
+   "email": "beata.nowak@resinvest.group",
    "name": "Beata Nowak",
-   "role": "podglad",
+   "role": "obserwator",
    "whId": "wh_zab",
    "active": true,
    "lang": "",
-   "theme": "",
-   "email": ""
+   "theme": ""
   }
  ],
  "products": [
@@ -245,22 +288,32 @@
    {
     "id": "dr_kowalski",
     "name": "Jan Kowalski",
-    "phone": "600 100 200"
+    "phone": "600 100 200",
+    "whId": "wh_zab"
    },
    {
     "id": "dr_nowak",
     "name": "Piotr Nowak",
-    "phone": "600 300 400"
-   },
-   {
-    "id": "dr_zielinski",
-    "name": "Marek Zieliński",
-    "phone": "600 500 600"
+    "phone": "600 300 400",
+    "whId": "wh_zab"
    },
    {
     "id": "dr_wojcik",
     "name": "Tomasz Wójcik",
-    "phone": "600 700 800"
+    "phone": "600 700 800",
+    "whId": "wh_zab"
+   },
+   {
+    "id": "dr_zielinski",
+    "name": "Marek Zieliński",
+    "phone": "600 500 600",
+    "whId": "wh_bra"
+   },
+   {
+    "id": "dr_kaminski",
+    "name": "Łukasz Kamiński",
+    "phone": "600 900 100",
+    "whId": "wh_rok"
    }
   ],
   "vehicles": [
@@ -270,7 +323,8 @@
     "reg": "SGL 4T821",
     "type": "ruchoma_podloga",
     "status": "aktywny",
-    "driverId": "dr_kowalski"
+    "driverId": "dr_kowalski",
+    "whId": "wh_zab"
    },
    {
     "id": "ve_volvo",
@@ -278,7 +332,8 @@
     "reg": "SZA 12345",
     "type": "ruchoma_podloga",
     "status": "aktywny",
-    "driverId": "dr_nowak"
+    "driverId": "dr_nowak",
+    "whId": "wh_zab"
    },
    {
     "id": "ve_man",
@@ -286,19 +341,37 @@
     "reg": "SK 7788X",
     "type": "ciezarowy",
     "status": "serwis",
-    "driverId": "dr_zielinski"
+    "driverId": "dr_zielinski",
+    "whId": "wh_bra"
+   },
+   {
+    "id": "ve_daf",
+    "name": "DAF XF 480 — ruchoma podłoga",
+    "reg": "ESR 4R210",
+    "type": "ruchoma_podloga",
+    "status": "aktywny",
+    "driverId": "dr_kaminski",
+    "whId": "wh_rok"
    }
   ],
   "operators": [
    {
     "id": "op_lis",
     "name": "Krzysztof Lis",
-    "phone": "601 111 222"
+    "phone": "601 111 222",
+    "whId": "wh_zab"
    },
    {
     "id": "op_mazur",
     "name": "Adam Mazur",
-    "phone": "601 333 444"
+    "phone": "601 333 444",
+    "whId": "wh_bra"
+   },
+   {
+    "id": "op_dudek",
+    "name": "Rafał Dudek",
+    "phone": "601 555 666",
+    "whId": "wh_rok"
    }
   ],
   "chippers": [
@@ -306,20 +379,29 @@
     "id": "ch_jenz",
     "name": "Jenz HEM 583",
     "status": "aktywny",
-    "operatorId": "op_lis"
+    "operatorId": "op_lis",
+    "whId": "wh_zab"
    },
    {
     "id": "ch_biber",
     "name": "Eschlböck Biber 92",
     "status": "aktywny",
-    "operatorId": "op_mazur"
+    "operatorId": "op_mazur",
+    "whId": "wh_bra"
+   },
+   {
+    "id": "ch_albach",
+    "name": "Albach Diamant 2000",
+    "status": "aktywny",
+    "operatorId": "op_dudek",
+    "whId": "wh_rok"
    }
   ]
  },
  "operations": [
   {
-   "id": "op_mug4qp4pcxqq11i",
-   "idemKey": "idem_mug4qp4lb4yudpq",
+   "id": "op_mugk4fz3co4isic",
+   "idemKey": "idem_mugk4fyzb63ebah",
    "type": "ZAKUP",
    "no": "PZ/001/08/2026",
    "date": "2026-08-05",
@@ -329,6 +411,9 @@
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "createdAt": "2026-08-05T08:00:00.000Z",
+   "approvedById": "u_kier",
+   "approvedByName": "Anna Górska",
+   "approvedAt": "2026-08-05T08:00:00.000Z",
    "scope": [
     "ZAKUP",
     "PRODUKCJA"
@@ -914,8 +999,8 @@
    ]
   },
   {
-   "id": "op_mug4qp4ripn61km",
-   "idemKey": "idem_mug4qp4qhhqtqfj",
+   "id": "op_mugk4fz4is583ox",
+   "idemKey": "idem_mugk4fz4hrctbgu",
    "type": "ZAKUP",
    "no": "PZ/002/08/2026",
    "date": "2026-08-12",
@@ -925,6 +1010,9 @@
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "createdAt": "2026-08-12T08:00:00.000Z",
+   "approvedById": "u_kier",
+   "approvedByName": "Anna Górska",
+   "approvedAt": "2026-08-12T08:00:00.000Z",
    "scope": [
     "ZAKUP"
    ],
@@ -1320,8 +1408,8 @@
    ]
   },
   {
-   "id": "op_mug4qp4smdlvprp",
-   "idemKey": "idem_mug4qp4rl93wpkr",
+   "id": "op_mugk4fz5m9k7hmx",
+   "idemKey": "idem_mugk4fz4l4kr3c8",
    "type": "ZAKUP",
    "no": "PZ/003/08/2026",
    "date": "2026-08-20",
@@ -1331,6 +1419,9 @@
    "userId": "u_kier",
    "userName": "Anna Górska",
    "createdAt": "2026-08-20T08:00:00.000Z",
+   "approvedById": "u_kier",
+   "approvedByName": "Anna Górska",
+   "approvedAt": "2026-08-20T08:00:00.000Z",
    "scope": [
     "ZAKUP",
     "PRODUKCJA",
@@ -1367,7 +1458,7 @@
      "kwit": "",
      "investSite": "Obwodnica Gliwic — odcinek II",
      "sourceDoc": "Protokół wycinki 17/2026",
-     "chipperId": "ch_biber",
+     "chipperId": "ch_jenz",
      "operatorId": "",
      "chipRate": ""
     },
@@ -1482,10 +1573,10 @@
     "sourceType": "Wycinka inwestycyjna",
     "investSite": "Obwodnica Gliwic — odcinek II",
     "sourceDoc": "Protokół wycinki 17/2026",
-    "chipperId": "ch_biber",
-    "chipperName": "Eschlböck Biber 92",
-    "operatorId": "op_mazur",
-    "operatorName": "Adam Mazur"
+    "chipperId": "ch_jenz",
+    "chipperName": "Jenz HEM 583",
+    "operatorId": "op_lis",
+    "operatorName": "Krzysztof Lis"
    },
    "sale": {
     "direct": false,
@@ -1576,8 +1667,8 @@
       "productionType": "Zrębka produkcyjna inwestycyjna",
       "chipRate": 10,
       "chippingCost": 1000,
-      "chipper": "Eschlböck Biber 92",
-      "operator": "Adam Mazur",
+      "chipper": "Jenz HEM 583",
+      "operator": "Krzysztof Lis",
       "sourceType": "Wycinka inwestycyjna",
       "investSite": "Obwodnica Gliwic — odcinek II",
       "sourceDoc": "Protokół wycinki 17/2026",
@@ -1689,10 +1780,10 @@
      "sourceType": "Wycinka inwestycyjna",
      "investSite": "Obwodnica Gliwic — odcinek II",
      "sourceDoc": "Protokół wycinki 17/2026",
-     "chipperId": "ch_biber",
-     "chipperName": "Eschlböck Biber 92",
-     "operatorId": "op_mazur",
-     "operatorName": "Adam Mazur"
+     "chipperId": "ch_jenz",
+     "chipperName": "Jenz HEM 583",
+     "operatorId": "op_lis",
+     "operatorName": "Krzysztof Lis"
     },
     "sale": {
      "direct": false,
@@ -1759,8 +1850,8 @@
    ]
   },
   {
-   "id": "op_mug4qp4ut1k0krk",
-   "idemKey": "idem_mug4qp4ssariqsk",
+   "id": "op_mugk4fz7t16gjqh",
+   "idemKey": "idem_mugk4fz5sgfi6tc",
    "type": "ZAKUP",
    "no": "PZ/001/09/2026",
    "date": "2026-09-03",
@@ -1770,6 +1861,9 @@
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "createdAt": "2026-09-03T08:00:00.000Z",
+   "approvedById": "u_kier",
+   "approvedByName": "Anna Górska",
+   "approvedAt": "2026-09-03T08:00:00.000Z",
    "scope": [
     "ZAKUP",
     "PRODUKCJA",
@@ -2868,17 +2962,20 @@
    ]
   },
   {
-   "id": "op_mug4qp4u10k87xml",
-   "idemKey": "idem_mug4qp4uzf9kncl",
+   "id": "op_mugk4fz710o66wai",
+   "idemKey": "idem_mugk4fz7zc3e79g",
    "type": "ZAKUP",
    "no": "PZ/002/09/2026",
    "date": "2026-09-08",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "toWhId": null,
    "status": "POSTED",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "createdAt": "2026-09-08T08:00:00.000Z",
+   "approvedById": "u_kbra",
+   "approvedByName": "Tomasz Zając",
+   "approvedAt": "2026-09-08T08:00:00.000Z",
    "scope": [
     "ZAKUP"
    ],
@@ -2936,7 +3033,7 @@
     },
     "transport": {
      "mode": "external",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "placeTouched": false,
      "own": {
       "runCount": "1",
@@ -3012,7 +3109,7 @@
    "mm": null,
    "transport": {
     "mode": "external",
-    "place": "RiC Pyskowice",
+    "place": "RiC Brąszewice",
     "cost": 0,
     "kind": "external",
     "company": "Transport Kowalski",
@@ -3049,7 +3146,7 @@
     "limitQty": 15,
     "remainingQty": 0
    },
-   "place": "RiC Pyskowice",
+   "place": "RiC Brąszewice",
    "notes": "",
    "extDoc": "",
    "documents": [
@@ -3068,7 +3165,7 @@
      "partner": "Nadleśnictwo Rybnik",
      "basis": "DEKL",
      "stock": "+",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "PZ/002/09/2026"
     },
     {
@@ -3081,7 +3178,7 @@
      "stock": "brak",
      "transport": {
       "mode": "external",
-      "place": "RiC Pyskowice",
+      "place": "RiC Brąszewice",
       "cost": 0,
       "kind": "external",
       "company": "Transport Kowalski",
@@ -3118,7 +3215,7 @@
       "limitQty": 15,
       "remainingQty": 0
      },
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "TR/002/09/2026"
     }
    ],
@@ -3157,7 +3254,7 @@
     "mm": null,
     "transport": {
      "mode": "external",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "cost": 0,
      "kind": "external",
      "company": "Transport Kowalski",
@@ -3221,17 +3318,20 @@
    ]
   },
   {
-   "id": "op_mug4qp4v14y9uijj",
-   "idemKey": "idem_mug4qp4v134x4crf",
+   "id": "op_mugk4fz814w8dk2k",
+   "idemKey": "idem_mugk4fz713ivrlq3",
    "type": "PRODUKCJA",
    "no": "PW/002/09/2026",
    "date": "2026-09-10",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "toWhId": null,
    "status": "POSTED",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "createdAt": "2026-09-10T08:00:00.000Z",
+   "approvedById": "u_kbra",
+   "approvedByName": "Tomasz Zając",
+   "approvedAt": "2026-09-10T08:00:00.000Z",
    "scope": [
     "PRODUKCJA"
    ],
@@ -3373,10 +3473,10 @@
    "mm": null,
    "transport": {
     "mode": "none",
-    "place": "RiC Pyskowice",
+    "place": "RiC Brąszewice",
     "cost": 0
    },
-   "place": "RiC Pyskowice",
+   "place": "RiC Brąszewice",
    "notes": "Rębanie na placu — pryzma P2",
    "extDoc": "KP 12/09/2026",
    "documents": [
@@ -3391,7 +3491,7 @@
      "weightT": 9.52,
      "value": 0,
      "stock": "−",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "RW/002/09/2026"
     },
     {
@@ -3413,7 +3513,7 @@
       "operator": "Adam Mazur",
       "fromDoc": "RW/002/09/2026"
      },
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "PW/002/09/2026"
     }
    ],
@@ -3458,7 +3558,7 @@
     "mm": null,
     "transport": {
      "mode": "none",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "cost": 0
     },
     "totals": {
@@ -3488,17 +3588,20 @@
    ]
   },
   {
-   "id": "op_mug4qp4v19x91vzs",
-   "idemKey": "idem_mug4qp4v1838fpou",
+   "id": "op_mugk4fz8199jutt0",
+   "idemKey": "idem_mugk4fz81886l8g1",
    "type": "SPRZEDAZ",
    "no": "WZ/002/09/2026",
    "date": "2026-09-12",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "toWhId": null,
    "status": "CORRECTED",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "createdAt": "2026-09-12T08:00:00.000Z",
+   "approvedById": "u_kbra",
+   "approvedByName": "Tomasz Zając",
+   "approvedAt": "2026-09-12T08:00:00.000Z",
    "scope": [
     "SPRZEDAZ"
    ],
@@ -3949,7 +4052,7 @@
      ],
      "deltas": [
       {
-       "whId": "wh_pys",
+       "whId": "wh_bra",
        "productId": "pr_zr_lesna",
        "cat": "SPRZEDAZ",
        "direct": false,
@@ -4014,8 +4117,8 @@
    ]
   },
   {
-   "id": "op_mug4qp4w1dl94zgb",
-   "idemKey": "idem_mug4qp4v1c1t8hjt",
+   "id": "op_mugk4fz91d5j5qgy",
+   "idemKey": "idem_mugk4fz81c72r82x",
    "type": "SPRZEDAZ",
    "no": "PW/003/09/2026",
    "date": "2026-09-15",
@@ -4025,6 +4128,9 @@
    "userId": "u_kier",
    "userName": "Anna Górska",
    "createdAt": "2026-09-15T08:00:00.000Z",
+   "approvedById": "u_kier",
+   "approvedByName": "Anna Górska",
+   "approvedAt": "2026-09-15T08:00:00.000Z",
    "scope": [
     "PRODUKCJA",
     "SPRZEDAZ"
@@ -4416,17 +4522,20 @@
    ]
   },
   {
-   "id": "op_mug4qp4x1ibi6pli",
-   "idemKey": "idem_mug4qp4x1hjxyg8h",
+   "id": "op_mugk4fza1ilcru3k",
+   "idemKey": "idem_mugk4fz91h79xqca",
    "type": "MM",
    "no": "MM/001/09/2026",
    "date": "2026-09-16",
    "whId": "wh_zab",
-   "toWhId": "wh_pys",
+   "toWhId": "wh_bra",
    "status": "POSTED",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "createdAt": "2026-09-16T08:00:00.000Z",
+   "approvedById": "u_kier",
+   "approvedByName": "Anna Górska",
+   "approvedAt": "2026-09-16T08:00:00.000Z",
    "scope": [
     "MM"
    ],
@@ -4480,11 +4589,11 @@
      "productId": "pr_zr_tow",
      "qty": "50",
      "unit": "MP",
-     "toWhId": "wh_pys"
+     "toWhId": "wh_bra"
     },
     "transport": {
      "mode": "own",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "placeTouched": false,
      "own": {
       "runCount": "1",
@@ -4546,14 +4655,14 @@
     "unit": "MP",
     "stockQty": 50,
     "stockUnit": "MP",
-    "toWhId": "wh_pys",
-    "toWhName": "RiC Pyskowice",
+    "toWhId": "wh_bra",
+    "toWhName": "RiC Brąszewice",
     "fromWhName": "RiC Zabrze",
     "onStock": 300
    },
    "transport": {
     "mode": "own",
-    "place": "RiC Pyskowice",
+    "place": "RiC Brąszewice",
     "cost": 140,
     "kind": "own",
     "runs": [
@@ -4595,7 +4704,7 @@
     "limitQty": 50,
     "remainingQty": 0
    },
-   "place": "RiC Pyskowice",
+   "place": "RiC Brąszewice",
    "notes": "",
    "extDoc": "",
    "documents": [
@@ -4611,9 +4720,9 @@
      "value": 0,
      "stock": "±",
      "fromWh": "RiC Zabrze",
-     "toWh": "RiC Pyskowice",
-     "toWhId": "wh_pys",
-     "place": "RiC Pyskowice",
+     "toWh": "RiC Brąszewice",
+     "toWhId": "wh_bra",
+     "place": "RiC Brąszewice",
      "no": "MM/001/09/2026"
     },
     {
@@ -4626,7 +4735,7 @@
      "stock": "brak",
      "transport": {
       "mode": "own",
-      "place": "RiC Pyskowice",
+      "place": "RiC Brąszewice",
       "cost": 140,
       "kind": "own",
       "runs": [
@@ -4668,7 +4777,7 @@
       "limitQty": 50,
       "remainingQty": 0
      },
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "TR/005/09/2026"
     }
    ],
@@ -4693,14 +4802,14 @@
      "unit": "MP",
      "stockQty": 50,
      "stockUnit": "MP",
-     "toWhId": "wh_pys",
-     "toWhName": "RiC Pyskowice",
+     "toWhId": "wh_bra",
+     "toWhName": "RiC Brąszewice",
      "fromWhName": "RiC Zabrze",
      "onStock": 300
     },
     "transport": {
      "mode": "own",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "cost": 140,
      "kind": "own",
      "runs": [
@@ -4769,17 +4878,20 @@
    ]
   },
   {
-   "id": "op_mug4qp4x1n80o2in",
-   "idemKey": "idem_mug4qp4x1mz3gdow",
+   "id": "op_mugk4fza1n5qgdpk",
+   "idemKey": "idem_mugk4fza1maljrum",
    "type": "ZAKUP",
    "no": "PZ/003/09/2026",
    "date": "2026-09-17",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "toWhId": null,
    "status": "CANCELLED",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "createdAt": "2026-09-17T08:00:00.000Z",
+   "approvedById": "u_kbra",
+   "approvedByName": "Tomasz Zając",
+   "approvedAt": "2026-09-17T08:00:00.000Z",
    "scope": [
     "ZAKUP"
    ],
@@ -4837,7 +4949,7 @@
     },
     "transport": {
      "mode": "none",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "placeTouched": false,
      "own": {
       "runCount": "1",
@@ -4913,10 +5025,10 @@
    "mm": null,
    "transport": {
     "mode": "none",
-    "place": "RiC Pyskowice",
+    "place": "RiC Brąszewice",
     "cost": 0
    },
-   "place": "RiC Pyskowice",
+   "place": "RiC Brąszewice",
    "notes": "Pomyłka — dostawa nie dotarła",
    "extDoc": "",
    "documents": [
@@ -4935,7 +5047,7 @@
      "partner": "Biomass Trading B.V.",
      "basis": "DEKL",
      "stock": "+",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "PZ/003/09/2026"
     }
    ],
@@ -4972,7 +5084,7 @@
     "mm": null,
     "transport": {
      "mode": "none",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "cost": 0
     },
     "totals": {
@@ -4996,7 +5108,7 @@
     "dependents": [],
     "effect": [
      {
-      "whId": "wh_pys",
+      "whId": "wh_bra",
       "productId": "pr_lupina",
       "qty": -5,
       "before": 5,
@@ -5032,17 +5144,20 @@
    ]
   },
   {
-   "id": "op_mug4qp4y1rlpjkbu",
-   "idemKey": "idem_mug4qp4y1qcghlh8",
+   "id": "op_mugk4fza1rqcydbk",
+   "idemKey": "idem_mugk4fza1qucc73j",
    "type": "PRODUKCJA",
    "no": "PW/004/09/2026",
    "date": "2026-09-22",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "toWhId": null,
    "status": "POSTED",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "createdAt": "2026-09-22T08:00:00.000Z",
+   "approvedById": "u_kbra",
+   "approvedByName": "Tomasz Zając",
+   "approvedAt": "2026-09-22T08:00:00.000Z",
    "scope": [
     "PRODUKCJA"
    ],
@@ -5184,10 +5299,10 @@
    "mm": null,
    "transport": {
     "mode": "none",
-    "place": "RiC Pyskowice",
+    "place": "RiC Brąszewice",
     "cost": 0
    },
-   "place": "RiC Pyskowice",
+   "place": "RiC Brąszewice",
    "notes": "Pryzma P3",
    "extDoc": "",
    "documents": [
@@ -5202,7 +5317,7 @@
      "weightT": 4.76,
      "value": 0,
      "stock": "−",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "RW/003/09/2026"
     },
     {
@@ -5224,7 +5339,7 @@
       "operator": "Adam Mazur",
       "fromDoc": "RW/003/09/2026"
      },
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "no": "PW/004/09/2026"
     }
    ],
@@ -5269,7 +5384,7 @@
     "mm": null,
     "transport": {
      "mode": "none",
-     "place": "RiC Pyskowice",
+     "place": "RiC Brąszewice",
      "cost": 0
     },
     "totals": {
@@ -5302,7 +5417,7 @@
  "drafts": [],
  "ledger": [
   {
-   "id": "l_mug4qp4k1l0h63t",
+   "id": "l_mugk4fyy1gbqcw6",
    "seq": 1,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5320,7 +5435,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mug4qp4k23tdl97",
+   "id": "l_mugk4fyy2ejsw5x",
    "seq": 2,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5338,7 +5453,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mug4qp4k3n564i2",
+   "id": "l_mugk4fyz3yrm2p3",
    "seq": 3,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5356,7 +5471,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mug4qp4k43yq2jv",
+   "id": "l_mugk4fyz4zq488n",
    "seq": 4,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5374,7 +5489,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mug4qp4k5sw62ja",
+   "id": "l_mugk4fyz5qgbsdv",
    "seq": 5,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5392,7 +5507,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mug4qp4k60uaxv1",
+   "id": "l_mugk4fyz6fvtup5",
    "seq": 6,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5410,7 +5525,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mug4qp4l855vhyg",
+   "id": "l_mugk4fyz8mbzmfv",
    "seq": 7,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5420,7 +5535,7 @@
    "opId": null,
    "step": 1,
    "date": "2026-08-01",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_drewno",
    "kind": "BO",
    "cat": "BO",
@@ -5428,7 +5543,7 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_mug4qp4l9n1z2dr",
+   "id": "l_mugk4fyz9jnnts1",
    "seq": 8,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5438,7 +5553,7 @@
    "opId": null,
    "step": 1,
    "date": "2026-08-01",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_zr_lesna",
    "kind": "BO",
    "cat": "BO",
@@ -5446,14 +5561,14 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_mug4qp4qdx7ivyh",
+   "id": "l_mugk4fz3d5e7ilz",
    "seq": 9,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 28.56,
    "direct": false,
-   "opId": "op_mug4qp4pcxqq11i",
+   "opId": "op_mugk4fz3co4isic",
    "step": 1,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -5464,14 +5579,14 @@
    "docNo": "PZ/001/08/2026"
   },
   {
-   "id": "l_mug4qp4qeilc2w5",
+   "id": "l_mugk4fz3eot0wt4",
    "seq": 10,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -28.56,
    "direct": false,
-   "opId": "op_mug4qp4pcxqq11i",
+   "opId": "op_mugk4fz3co4isic",
    "step": 2,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -5482,14 +5597,14 @@
    "docNo": "RW/001/08/2026"
   },
   {
-   "id": "l_mug4qp4qf958tar",
+   "id": "l_mugk4fz3fb4wgs1",
    "seq": 11,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 39.6,
    "direct": false,
-   "opId": "op_mug4qp4pcxqq11i",
+   "opId": "op_mugk4fz3co4isic",
    "step": 3,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -5500,14 +5615,14 @@
    "docNo": "PW/001/08/2026"
   },
   {
-   "id": "l_mug4qp4rjancz9s",
+   "id": "l_mugk4fz4jntms5j",
    "seq": 12,
    "ts": "2026-08-12T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_mug4qp4ripn61km",
+   "opId": "op_mugk4fz4is583ox",
    "step": 1,
    "date": "2026-08-12",
    "whId": "wh_zab",
@@ -5518,14 +5633,14 @@
    "docNo": "PZ/002/08/2026"
   },
   {
-   "id": "l_mug4qp4snwxjhhw",
+   "id": "l_mugk4fz5n5c4nw9",
    "seq": 13,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": 23.8,
    "direct": false,
-   "opId": "op_mug4qp4smdlvprp",
+   "opId": "op_mugk4fz5m9k7hmx",
    "step": 1,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5536,14 +5651,14 @@
    "docNo": "PZ/003/08/2026"
   },
   {
-   "id": "l_mug4qp4sovza4jj",
+   "id": "l_mugk4fz5ot8qrk2",
    "seq": 14,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": -23.8,
    "direct": false,
-   "opId": "op_mug4qp4smdlvprp",
+   "opId": "op_mugk4fz5m9k7hmx",
    "step": 2,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5554,14 +5669,14 @@
    "docNo": "RW/002/08/2026"
   },
   {
-   "id": "l_mug4qp4spy8u32e",
+   "id": "l_mugk4fz5p5w2ljm",
    "seq": 15,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_mug4qp4smdlvprp",
+   "opId": "op_mugk4fz5m9k7hmx",
    "step": 3,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5572,14 +5687,14 @@
    "docNo": "PW/002/08/2026"
   },
   {
-   "id": "l_mug4qp4sqvavkqz",
+   "id": "l_mugk4fz5qnrz4ny",
    "seq": 16,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_mug4qp4smdlvprp",
+   "opId": "op_mugk4fz5m9k7hmx",
    "step": 4,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5590,14 +5705,14 @@
    "docNo": "WZ/001/08/2026"
   },
   {
-   "id": "l_mug4qp4uudzpubs",
+   "id": "l_mugk4fz7uaf9ms5",
    "seq": 17,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 19.04,
    "direct": false,
-   "opId": "op_mug4qp4ut1k0krk",
+   "opId": "op_mugk4fz7t16gjqh",
    "step": 1,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5608,14 +5723,14 @@
    "docNo": "PZ/001/09/2026"
   },
   {
-   "id": "l_mug4qp4uvob150f",
+   "id": "l_mugk4fz7v8cyhev",
    "seq": 18,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -19.04,
    "direct": false,
-   "opId": "op_mug4qp4ut1k0krk",
+   "opId": "op_mugk4fz7t16gjqh",
    "step": 2,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5626,14 +5741,14 @@
    "docNo": "RW/001/09/2026"
   },
   {
-   "id": "l_mug4qp4uwe67x4x",
+   "id": "l_mugk4fz7woljm00",
    "seq": 19,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 26.4,
    "direct": false,
-   "opId": "op_mug4qp4ut1k0krk",
+   "opId": "op_mugk4fz7t16gjqh",
    "step": 3,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5644,14 +5759,14 @@
    "docNo": "PW/001/09/2026"
   },
   {
-   "id": "l_mug4qp4ux9qm2et",
+   "id": "l_mugk4fz7x1j2g0o",
    "seq": 20,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": -26.4,
    "direct": false,
-   "opId": "op_mug4qp4ut1k0krk",
+   "opId": "op_mugk4fz7t16gjqh",
    "step": 4,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5662,17 +5777,17 @@
    "docNo": "WZ/001/09/2026"
   },
   {
-   "id": "l_mug4qp4u11b1vp4n",
+   "id": "l_mugk4fz7110f2wn5",
    "seq": 21,
    "ts": "2026-09-08T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": 14.28,
    "direct": false,
-   "opId": "op_mug4qp4u10k87xml",
+   "opId": "op_mugk4fz710o66wai",
    "step": 1,
    "date": "2026-09-08",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_drewno",
    "kind": "ZAKUP",
    "cat": "ZAKUP",
@@ -5680,17 +5795,17 @@
    "docNo": "PZ/002/09/2026"
   },
   {
-   "id": "l_mug4qp4v15psnkbj",
+   "id": "l_mugk4fz8154e8al4",
    "seq": 22,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -9.52,
    "direct": false,
-   "opId": "op_mug4qp4v14y9uijj",
+   "opId": "op_mugk4fz814w8dk2k",
    "step": 1,
    "date": "2026-09-10",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_drewno",
    "kind": "ZUZYCIE",
    "cat": "ZUZYCIE",
@@ -5698,17 +5813,17 @@
    "docNo": "RW/002/09/2026"
   },
   {
-   "id": "l_mug4qp4v16qptppz",
+   "id": "l_mugk4fz816j05z5u",
    "seq": 23,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 13.2,
    "direct": false,
-   "opId": "op_mug4qp4v14y9uijj",
+   "opId": "op_mugk4fz814w8dk2k",
    "step": 2,
    "date": "2026-09-10",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_zr_lesna",
    "kind": "PRODUKCJA",
    "cat": "PRODUKCJA",
@@ -5716,17 +5831,17 @@
    "docNo": "PW/002/09/2026"
   },
   {
-   "id": "l_mug4qp4v1aanv81q",
+   "id": "l_mugk4fz81alk41ua",
    "seq": 24,
    "ts": "2026-09-12T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_mug4qp4v19x91vzs",
+   "opId": "op_mugk4fz8199jutt0",
    "step": 1,
    "date": "2026-09-12",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_zr_lesna",
    "kind": "SPRZEDAZ",
    "cat": "SPRZEDAZ",
@@ -5734,14 +5849,14 @@
    "docNo": "WZ/002/09/2026"
   },
   {
-   "id": "l_mug4qp4w1ebz2whf",
+   "id": "l_mugk4fz91evuw2mw",
    "seq": 25,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 198,
    "direct": true,
-   "opId": "op_mug4qp4w1dl94zgb",
+   "opId": "op_mugk4fz91d5j5qgy",
    "step": 1,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -5752,14 +5867,14 @@
    "docNo": "PW/003/09/2026"
   },
   {
-   "id": "l_mug4qp4w1ff1pvdl",
+   "id": "l_mugk4fz91f2xhwkl",
    "seq": 26,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -198,
    "direct": true,
-   "opId": "op_mug4qp4w1dl94zgb",
+   "opId": "op_mugk4fz91d5j5qgy",
    "step": 2,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -5770,14 +5885,14 @@
    "docNo": "WZ/003/09/2026"
   },
   {
-   "id": "l_mug4qp4x1jk61zcz",
+   "id": "l_mugk4fza1j19vgl9",
    "seq": 27,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -16.5,
    "direct": false,
-   "opId": "op_mug4qp4x1ibi6pli",
+   "opId": "op_mugk4fza1ilcru3k",
    "step": 1,
    "date": "2026-09-16",
    "whId": "wh_zab",
@@ -5788,17 +5903,17 @@
    "docNo": "MM/001/09/2026"
   },
   {
-   "id": "l_mug4qp4x1kq0eknd",
+   "id": "l_mugk4fza1k5oy6x9",
    "seq": 28,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 16.5,
    "direct": false,
-   "opId": "op_mug4qp4x1ibi6pli",
+   "opId": "op_mugk4fza1ilcru3k",
    "step": 2,
    "date": "2026-09-16",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_zr_tow",
    "kind": "MM",
    "cat": "MM",
@@ -5806,17 +5921,17 @@
    "docNo": "MM/001/09/2026"
   },
   {
-   "id": "l_mug4qp4x1oj4o7ib",
+   "id": "l_mugk4fza1oa6nzef",
    "seq": 29,
    "ts": "2026-09-17T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "t",
    "t": 5,
    "direct": false,
-   "opId": "op_mug4qp4x1n80o2in",
+   "opId": "op_mugk4fza1n5qgdpk",
    "step": 1,
    "date": "2026-09-17",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_lupina",
    "kind": "ZAKUP",
    "cat": "ZAKUP",
@@ -5824,17 +5939,17 @@
    "docNo": "PZ/003/09/2026"
   },
   {
-   "id": "l_mug4qp4y1skb9tdw",
+   "id": "l_mugk4fza1shd2jpa",
    "seq": 30,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -4.76,
    "direct": false,
-   "opId": "op_mug4qp4y1rlpjkbu",
+   "opId": "op_mugk4fza1rqcydbk",
    "step": 1,
    "date": "2026-09-22",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_drewno",
    "kind": "ZUZYCIE",
    "cat": "ZUZYCIE",
@@ -5842,17 +5957,17 @@
    "docNo": "RW/003/09/2026"
   },
   {
-   "id": "l_mug4qp4y1t06bkvr",
+   "id": "l_mugk4fza1t8ml0g8",
    "seq": 31,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 6.6,
    "direct": false,
-   "opId": "op_mug4qp4y1rlpjkbu",
+   "opId": "op_mugk4fza1rqcydbk",
    "step": 2,
    "date": "2026-09-22",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_zr_lesna",
    "kind": "PRODUKCJA",
    "cat": "PRODUKCJA",
@@ -5860,17 +5975,17 @@
    "docNo": "PW/004/09/2026"
   },
   {
-   "id": "l_mug4qp4z1v1p1e2l",
+   "id": "l_mugk4fzc1vikqwy8",
    "seq": 32,
    "ts": "2026-09-14T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "MP",
    "t": 3.3,
    "direct": false,
-   "opId": "op_mug4qp4v19x91vzs",
+   "opId": "op_mugk4fz8199jutt0",
    "step": 100,
    "date": "2026-09-14",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_zr_lesna",
    "kind": "KOREKTA",
    "cat": "SPRZEDAZ",
@@ -5879,17 +5994,17 @@
    "refDoc": "WZ/002/09/2026"
   },
   {
-   "id": "l_mug4qp501xm459k6",
+   "id": "l_mugk4fzd1xwla8j8",
    "seq": 33,
    "ts": "2026-09-18T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "t",
    "t": -5,
    "direct": false,
-   "opId": "op_mug4qp4x1n80o2in",
+   "opId": "op_mugk4fza1n5qgdpk",
    "step": 200,
    "date": "2026-09-18",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "productId": "pr_lupina",
    "kind": "ANULOWANIE",
    "cat": "ZAKUP",
@@ -5901,7 +6016,7 @@
  "inventory": [],
  "audit": [
   {
-   "id": "a_mug4qp4l7ewslrw",
+   "id": "a_mugk4fyz7spw0gr",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -5919,7 +6034,7 @@
    }
   },
   {
-   "id": "a_mug4qp4lays0qeg",
+   "id": "a_mugk4fyzac16611",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -5932,19 +6047,19 @@
    "action": "Bilans otwarcia",
    "before": null,
    "after": {
-    "magazyn": "wh_pys",
+    "magazyn": "wh_bra",
     "pozycje": 2
    }
   },
   {
-   "id": "a_mug4qp4qg1h6s3x",
+   "id": "a_mugk4fz3g4yur7h",
    "ts": "2026-08-05T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4pcxqq11i",
+   "entityId": "op_mugk4fz3co4isic",
    "opNo": "PZ/001/08/2026",
    "event": "create",
    "act": {
@@ -5984,14 +6099,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mug4qp4rkcwj0qs",
+   "id": "a_mugk4fz4k449tfi",
    "ts": "2026-08-12T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4ripn61km",
+   "entityId": "op_mugk4fz4is583ox",
    "opNo": "PZ/002/08/2026",
    "event": "create",
    "act": {
@@ -6027,14 +6142,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mug4qp4sr5y2rj0",
+   "id": "a_mugk4fz5r5m8g54",
    "ts": "2026-08-20T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4smdlvprp",
+   "entityId": "op_mugk4fz5m9k7hmx",
    "opNo": "PZ/003/08/2026",
    "event": "create",
    "act": {
@@ -6075,14 +6190,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mug4qp4uy7h2gir",
+   "id": "a_mugk4fz7ygtlbry",
    "ts": "2026-09-03T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4ut1k0krk",
+   "entityId": "op_mugk4fz7t16gjqh",
    "opNo": "PZ/001/09/2026",
    "event": "create",
    "act": {
@@ -6123,14 +6238,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mug4qp4v125kzp6b",
+   "id": "a_mugk4fz712yukvq9",
    "ts": "2026-09-08T08:00:00.000Z",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4u10k87xml",
+   "entityId": "op_mugk4fz710o66wai",
    "opNo": "PZ/002/09/2026",
    "event": "create",
    "act": {
@@ -6143,12 +6258,12 @@
    },
    "before": {
     "stan": {
-     "wh_pys|pr_drewno": 30
+     "wh_bra|pr_drewno": 30
     }
    },
    "after": {
     "stan": {
-     "wh_pys|pr_drewno": 45
+     "wh_bra|pr_drewno": 45
     },
     "dokumenty": [
      "PZ/002/09/2026",
@@ -6166,14 +6281,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mug4qp4v17vbz95y",
+   "id": "a_mugk4fz817khidui",
    "ts": "2026-09-10T08:00:00.000Z",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4v14y9uijj",
+   "entityId": "op_mugk4fz814w8dk2k",
    "opNo": "PW/002/09/2026",
    "event": "create",
    "act": {
@@ -6186,14 +6301,14 @@
    },
    "before": {
     "stan": {
-     "wh_pys|pr_drewno": 45,
-     "wh_pys|pr_zr_lesna": 250
+     "wh_bra|pr_drewno": 45,
+     "wh_bra|pr_zr_lesna": 250
     }
    },
    "after": {
     "stan": {
-     "wh_pys|pr_drewno": 35,
-     "wh_pys|pr_zr_lesna": 290
+     "wh_bra|pr_drewno": 35,
+     "wh_bra|pr_zr_lesna": 290
     },
     "dokumenty": [
      "RW/002/09/2026",
@@ -6211,14 +6326,14 @@
    "action": "Utworzenie i zatwierdzenie: Produkcja na magazyn"
   },
   {
-   "id": "a_mug4qp4v1bqvlldx",
+   "id": "a_mugk4fz81btcwhpn",
    "ts": "2026-09-12T08:00:00.000Z",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4v19x91vzs",
+   "entityId": "op_mugk4fz8199jutt0",
    "opNo": "WZ/002/09/2026",
    "event": "create",
    "act": {
@@ -6231,12 +6346,12 @@
    },
    "before": {
     "stan": {
-     "wh_pys|pr_zr_lesna": 290
+     "wh_bra|pr_zr_lesna": 290
     }
    },
    "after": {
     "stan": {
-     "wh_pys|pr_zr_lesna": 190
+     "wh_bra|pr_zr_lesna": 190
     },
     "dokumenty": [
      "WZ/002/09/2026",
@@ -6254,14 +6369,14 @@
    "action": "Utworzenie i zatwierdzenie: Sprzedaż"
   },
   {
-   "id": "a_mug4qp4x1g0rd91u",
+   "id": "a_mugk4fz91gf06sbx",
    "ts": "2026-09-15T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4w1dl94zgb",
+   "entityId": "op_mugk4fz91d5j5qgy",
    "opNo": "PW/003/09/2026",
    "event": "create",
    "act": {
@@ -6298,14 +6413,14 @@
    "action": "Utworzenie i zatwierdzenie: Sprzedaż (bezpośrednia)"
   },
   {
-   "id": "a_mug4qp4x1l29bx44",
+   "id": "a_mugk4fza1lrz57yb",
    "ts": "2026-09-16T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4x1ibi6pli",
+   "entityId": "op_mugk4fza1ilcru3k",
    "opNo": "MM/001/09/2026",
    "event": "create",
    "act": {
@@ -6319,13 +6434,13 @@
    "before": {
     "stan": {
      "wh_zab|pr_zr_tow": 300,
-     "wh_pys|pr_zr_tow": 0
+     "wh_bra|pr_zr_tow": 0
     }
    },
    "after": {
     "stan": {
      "wh_zab|pr_zr_tow": 250,
-     "wh_pys|pr_zr_tow": 50
+     "wh_bra|pr_zr_tow": 50
     },
     "dokumenty": [
      "MM/001/09/2026",
@@ -6343,14 +6458,14 @@
    "action": "Utworzenie i zatwierdzenie: Przesunięcie MM"
   },
   {
-   "id": "a_mug4qp4x1pd5ers5",
+   "id": "a_mugk4fza1pe9kpb8",
    "ts": "2026-09-17T08:00:00.000Z",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4x1n80o2in",
+   "entityId": "op_mugk4fza1n5qgdpk",
    "opNo": "PZ/003/09/2026",
    "event": "create",
    "act": {
@@ -6363,12 +6478,12 @@
    },
    "before": {
     "stan": {
-     "wh_pys|pr_lupina": 0
+     "wh_bra|pr_lupina": 0
     }
    },
    "after": {
     "stan": {
-     "wh_pys|pr_lupina": 5
+     "wh_bra|pr_lupina": 5
     },
     "dokumenty": [
      "PZ/003/09/2026"
@@ -6385,14 +6500,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mug4qp4y1u75b53b",
+   "id": "a_mugk4fza1unic0ty",
    "ts": "2026-09-22T08:00:00.000Z",
-   "userId": "u_pys",
+   "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4y1rlpjkbu",
+   "entityId": "op_mugk4fza1rqcydbk",
    "opNo": "PW/004/09/2026",
    "event": "create",
    "act": {
@@ -6405,14 +6520,14 @@
    },
    "before": {
     "stan": {
-     "wh_pys|pr_drewno": 35,
-     "wh_pys|pr_zr_lesna": 190
+     "wh_bra|pr_drewno": 35,
+     "wh_bra|pr_zr_lesna": 190
     }
    },
    "after": {
     "stan": {
-     "wh_pys|pr_drewno": 30,
-     "wh_pys|pr_zr_lesna": 210
+     "wh_bra|pr_drewno": 30,
+     "wh_bra|pr_zr_lesna": 210
     },
     "dokumenty": [
      "RW/003/09/2026",
@@ -6430,14 +6545,14 @@
    "action": "Utworzenie i zatwierdzenie: Produkcja na magazyn"
   },
   {
-   "id": "a_mug4qp501wm0taek",
+   "id": "a_mugk4fzc1wxfeytt",
    "ts": "2026-09-14T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4v19x91vzs",
+   "entityId": "op_mugk4fz8199jutt0",
    "opNo": "WZ/002/09/2026",
    "relatedNo": "KOR/001/09/2026",
    "event": "correction",
@@ -6448,7 +6563,7 @@
    "before": {
     "status": "ZATWIERDZONY",
     "stan": {
-     "wh_pys|pr_zr_lesna": 210
+     "wh_bra|pr_zr_lesna": 210
     },
     "wartosci": [
      "Ilość sprzedaży: 100 MP"
@@ -6458,7 +6573,7 @@
     "status": "SKORYGOWANY",
     "dokument": "KOR/001/09/2026",
     "stan": {
-     "wh_pys|pr_zr_lesna": 220
+     "wh_bra|pr_zr_lesna": 220
     },
     "wartosci": [
      "Ilość sprzedaży: 90 MP"
@@ -6468,14 +6583,14 @@
    "action": "Korekta dokumentu"
   },
   {
-   "id": "a_mug4qp501y2ankmr",
+   "id": "a_mugk4fzd1yag7l61",
    "ts": "2026-09-18T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
-   "whId": "wh_pys",
+   "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mug4qp4x1n80o2in",
+   "entityId": "op_mugk4fza1n5qgdpk",
    "opNo": "PZ/003/09/2026",
    "relatedNo": "AN/001/09/2026",
    "event": "cancel",
@@ -6483,14 +6598,14 @@
    "before": {
     "status": "ZATWIERDZONY",
     "stan": {
-     "wh_pys|pr_lupina": 5
+     "wh_bra|pr_lupina": 5
     }
    },
    "after": {
     "status": "ANULOWANY",
     "dokument": "AN/001/09/2026",
     "stan": {
-     "wh_pys|pr_lupina": 0
+     "wh_bra|pr_lupina": 0
     }
    },
    "reason": "pomyłka operatora — dostawa nie dotarła"
@@ -6514,6 +6629,7 @@
  },
  "meta": {
   "lastMonthCheck": "2026-09",
-  "createdAt": "2026-09-24T22:55:03.108Z"
+  "createdAt": "2026-09-25T06:05:38.665Z",
+  "sample": true
  }
 }

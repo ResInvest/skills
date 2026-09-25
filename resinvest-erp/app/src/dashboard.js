@@ -149,6 +149,15 @@
       const drafts = S.drafts.filter(d => d.userId === u.id);
       const per = R.Inventory.find(S, wh.id, ym);
       const alerts = [];
+      const pendingForMe = S.drafts.filter(d => d.status === "PENDING" && R.canApprove(u, d.whId)).length;
+      if (pendingForMe) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja czeka na zatwierdzenie|{n} operacje czekają na zatwierdzenie|{n} operacji czeka na zatwierdzenie", pendingForMe), text: t("Sprawdź i zatwierdź albo odrzuć z podaniem powodu.") });
+      const myRejected = S.drafts.filter(d => d.userId === u.id && d.rejectReason && d.status !== "PENDING").length;
+      if (myRejected) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja odrzucona|{n} operacje odrzucone|{n} operacji odrzuconych", myRejected), text: t("Popraw według uwag kierownika i przekaż ponownie.") });
+      const myPending = S.drafts.filter(d => d.userId === u.id && d.status === "PENDING").length;
+      if (myPending && !pendingForMe) alerts.push({ cls: "info", href: "#/operacje", title: tp("{n} operacja przekazana|{n} operacje przekazane|{n} operacji przekazanych", myPending), text: t("Czeka na zatwierdzenie przez kierownika magazynu.") });
+      const regs = App.can("users.manage") ? S.users.filter(x => x.pending).length : 0;
+      if (regs) alerts.push({ cls: "warn", href: "#/uzytkownicy", title: tp("{n} zgłoszenie rejestracji|{n} zgłoszenia rejestracji|{n} zgłoszeń rejestracji", regs), text: t("Nadaj rolę i magazyn albo odrzuć zgłoszenie.") });
+      if (Store.mode === "local" && root.RIW_Auth && root.RIW_Auth.LocalAuth.info(u.id).demo) alerts.push({ cls: "info", href: "#/profil", title: t("Hasło startowe konta"), text: t("Konto używa hasła demonstracyjnego — zmień je w „Mój profil” przed pracą na prawdziwych danych.") });
       if (openPrev) alerts.push({ cls: "", href: "#/inwentaryzacja", title: tp("{n} niezamknięty okres|{n} niezamknięte okresy|{n} niezamkniętych okresów", openPrev), text: t("Zamknij poprzednie miesiące — do tego czasu dokumenty z tych okresów można zmieniać.") });
       if (!per) alerts.push({ cls: "info", href: "#/inwentaryzacja", title: t("Okres {ym} nie jest otwarty", { ym }), text: t("Otwórz okres inwentaryzacji bieżącego miesiąca, aby przygotować zamknięcie.") });
       else alerts.push({ cls: per.status === "OTWARTA" ? "info" : "ok", href: "#/inwentaryzacja", title: t("Okres {ym}: {s}", { ym, s: t(R.INV_STATUS[per.status]) }), text: t("Po zamknięciu okresu dokumenty z tego miesiąca są tylko do odczytu — zmiany wyłącznie korektą z bieżącą datą.") });

@@ -1,5 +1,5 @@
 /* Testy jednostkowe silnika Demo v2 (2.1).  Uruchomienie:  node --test tests/engine.test.mjs
-   Numeracja w nazwach odpowiada poleceniu: §22 TEST 1–7, §31.16 A–J, §32.23 TEST 1–10, raporty TEST 11–42. */
+   Numeracja w nazwach odpowiada specyfikacji: §22 TEST 1–7, §31.16 A–J, §32.23 TEST 1–10, raporty TEST 11–42. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -27,15 +27,15 @@ const DIRECT = (sale = {}, production = {}) => draft({ type: "SPRZEDAZ",
   sale: Object.assign({ direct: true, buyerId: "pa_elektrownia", price: "88", priceUnit: "MP" }, sale),
   transport: { mode: "none", place: "Elektrownia Łaziska" } });
 const PROD = over => draft({ type: "PRODUKCJA", production: Object.assign({ rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "500" }, over) });
-const MM = over => draft({ type: "MM", mm: Object.assign({ productId: "pr_zr_lesna", qty: "300", unit: "MP", toWhId: "wh_pys" }, over), transport: { mode: "none", place: "RiC Pyskowice" } });
+const MM = over => draft({ type: "MM", mm: Object.assign({ productId: "pr_zr_lesna", qty: "300", unit: "MP", toWhId: "wh_bra" }, over), transport: { mode: "none", place: "RiC Brąszewice" } });
 const commit = (s, d, c) => { const r = R.commitOperation(s, d, c || ctx(s)); assert.equal(r.ok, true, r.error); return r.op; };
-/** Pyskowice z dokładnie `m3` m³ drewna (30 m³ na starcie + zakup różnicy). */
-const pysWith = (s, m3) => { const add = m3 - bal(s, "pr_drewno", "wh_pys"); if (add > 0) commit(s, draft({ purchase: Object.assign({}, PURCHASE_A, { qty: String(add).replace(".", ",") }), transport: { mode: "none", place: "RiC Pyskowice" } }), ctx(s, "u_pys")); return s; };
+/** Brąszewice z dokładnie `m3` m³ drewna (30 m³ na starcie + zakup różnicy). */
+const pysWith = (s, m3) => { const add = m3 - bal(s, "pr_drewno", "wh_bra"); if (add > 0) commit(s, draft({ purchase: Object.assign({}, PURCHASE_A, { qty: String(add).replace(".", ",") }), transport: { mode: "none", place: "RiC Brąszewice" } }), ctx(s, "u_bra")); return s; };
 
 /* ============================ dane startowe i przeliczniki ============================ */
-// Uwaga: przykłady z polecenia (6 613 GJ, 23 265 GJ) liczą GJ z masy zaokrąglonej do pełnych ton (778 × 8,5; 2 737 × 8,5).
+// Uwaga: przykłady ze specyfikacji (6 613 GJ, 23 265 GJ) liczą GJ z masy zaokrąglonej do pełnych ton (778 × 8,5; 2 737 × 8,5).
 // Silnik mnoży masę dokładną: 777,784 t × 8,5 = 6 611,16 GJ; 2 736,69 t × 8,5 = 23 261,87 GJ (różnica < 0,02%).
-test("Stan startowy = przykłady z polecenia: 817 m³ ≈ 778 t ≈ 6 611 GJ; 8 293 MP ≈ 2 737 t ≈ 23 262 GJ; PKS 728 t = 6 188 GJ", () => {
+test("Stan startowy = przykłady ze specyfikacji: 817 m³ ≈ 778 t ≈ 6 611 GJ; 8 293 MP ≈ 2 737 t ≈ 23 262 GJ; PKS 728 t = 6 188 GJ", () => {
   const s = fresh();
   const o = (q, id) => R.Units.orient(q, prod(s, id), s.config);
   assert.equal(bal(s, "pr_drewno"), 817);
@@ -134,7 +134,7 @@ test("§31.16 A: poprawna produkcja — zużycie liczone automatycznie, masa i G
   assert.deepEqual([p.norm.production.consumeQty, o.t, o.gj], [125, 165, 1402.5]);
 });
 test("§31.16 B: brak surowca — „Dostępne: 100 m³. Wymagane: 125 m³. Brakuje: 25 m³.” i brak zapisu", () => {
-  const s = pysWith(fresh(), 100), c = ctx(s, "u_pys");
+  const s = pysWith(fresh(), 100), c = ctx(s, "u_bra");
   const snap = JSON.stringify(s);
   const r = R.commitOperation(s, PROD(), c);
   assert.equal(r.ok, false);
@@ -156,7 +156,7 @@ test("§31.16 D: brak / błędny przelicznik blokuje produkcję", () => {
   assert.equal(z.ok, false);
 });
 test("§31.16 E: precyzja — 250,0001 MP przy 62,5 m³ nie jest zaokrąglane przed walidacją", () => {
-  const s = pysWith(fresh(), 62.5), c = ctx(s, "u_pys");
+  const s = pysWith(fresh(), 62.5), c = ctx(s, "u_bra");
   assert.equal(R.planOperation(s, PROD({ outQty: "250" }), c).ok, true);
   const p = R.planOperation(s, PROD({ outQty: "250,0001" }), c);
   assert.equal(p.norm.production.consumeQty, 62.500025);
@@ -199,11 +199,11 @@ test("§31.16 J: walidacja w logice biznesowej — zapis z pominięciem formular
 });
 
 /* ======================================== MM ======================================== */
-test("MM: Zabrze → Pyskowice 300 MP — stan ogółem bez zmian, blokada ponad stan i na ten sam magazyn", () => {
+test("MM: Zabrze → Brąszewice 300 MP — stan ogółem bez zmian, blokada ponad stan i na ten sam magazyn", () => {
   const s = fresh();
   const tot0 = R.Stock.balance(s, null, "pr_zr_lesna");
   const op = commit(s, MM());
-  assert.deepEqual([bal(s, "pr_zr_lesna"), bal(s, "pr_zr_lesna", "wh_pys")], [7993, 520]);
+  assert.deepEqual([bal(s, "pr_zr_lesna"), bal(s, "pr_zr_lesna", "wh_bra")], [7993, 520]);
   assert.equal(R.Stock.balance(s, null, "pr_zr_lesna"), tot0);
   assert.deepEqual(op.documents.map(d => d.type), ["MM"]);
   assert.match(R.planOperation(s, MM({ qty: "8000" }), ctx(s)).errors["mm.qty"], /Nie można przesunąć/);
@@ -225,8 +225,8 @@ test("§32.23 TEST 1: anulowanie WZ — nowy dokument AN, stan przywrócony, dok
   assert.equal(R.cancelOperation(s, op.id, ctx(s), "x").ok, false, "podwójne anulowanie");
 });
 test("§32.23 TEST 2: anulowanie zakupu wykorzystanego później — blokada z komunikatem o zależnościach", () => {
-  const s = fresh(), c = ctx(s, "u_pys"), k = ctx(s, "u_admin", TODAY, "wh_pys");
-  const buy = commit(s, draft({ purchase: Object.assign({}, PURCHASE_A, { qty: "100" }), transport: { mode: "none", place: "RiC Pyskowice" } }), c);
+  const s = fresh(), c = ctx(s, "u_bra"), k = ctx(s, "u_admin", TODAY, "wh_bra");
+  const buy = commit(s, draft({ purchase: Object.assign({}, PURCHASE_A, { qty: "100" }), transport: { mode: "none", place: "RiC Brąszewice" } }), c);
   const use = commit(s, PROD({ outQty: "480" }), c);                  // 120 m³ z 130 m³
   const r = R.cancelOperation(s, buy.id, k, "pomyłka");
   assert.equal(r.ok, false);
@@ -237,7 +237,7 @@ test("§32.23 TEST 2: anulowanie zakupu wykorzystanego później — blokada z k
   // po anulowaniu operacji zależnej anulowanie zakupu jest możliwe
   assert.equal(R.cancelOperation(s, use.id, k, "kolejność").ok, true);
   assert.equal(R.cancelOperation(s, buy.id, k, "pomyłka").ok, true);
-  assert.equal(bal(s, "pr_drewno", "wh_pys"), 30);
+  assert.equal(bal(s, "pr_drewno", "wh_bra"), 30);
 });
 test("§32.23 TEST 3: zależne operacje bez utraty pokrycia wymagają potwierdzenia (ack)", () => {
   const s = fresh();
@@ -354,7 +354,7 @@ const REP = (s, f) => R.Reports.business(s, Object.assign({ mode: "month", from:
 const row = (rep, id) => rep.recon.find(r => r.productId === id);
 test("TEST 11–13: bilans okresu: stan pocz. + przyjęcia + produkcja − zużycie − sprzedaż ± MM = stan końc. = stan z księgi", () => {
   const s = fresh();
-  for (const whId of [null, "wh_zab", "wh_pys"]) {
+  for (const whId of [null, "wh_zab", "wh_bra"]) {
     const rep = REP(s, { whId });
     assert.equal(rep.consistent, true);
     for (const r of rep.recon) {
@@ -392,13 +392,13 @@ test("TEST 15–18: sekcje miesiąca — zakupy, produkcja (+ koszt rąbania), s
 test("TEST 19–20: MM w raporcie — magazyn źródłowy −, docelowy +, łącznie 0", () => {
   const s = fresh();
   assert.equal(row(REP(s, { whId: "wh_zab" }), "pr_zr_tow").MM, -50);
-  assert.equal(row(REP(s, { whId: "wh_pys" }), "pr_zr_tow").MM, 50);
+  assert.equal(row(REP(s, { whId: "wh_bra" }), "pr_zr_tow").MM, 50);
   assert.equal(row(REP(s, {}), "pr_zr_tow").MM, 0);
   assert.equal(REP(s, {}).mm.length, 1);
 });
 test("TEST 21–23: korekty i anulowania — raport pokazuje wartości netto i listę dokumentów KOR / AN", () => {
   const s = fresh();
-  const rep = REP(s, { whId: "wh_pys" });
+  const rep = REP(s, { whId: "wh_bra" });
   assert.equal(row(rep, "pr_zr_lesna").SPRZEDAZ, -90);
   assert.equal(rep.corrections.length, 1);
   assert.equal(rep.cancellations.length, 1);
@@ -458,13 +458,13 @@ test("TEST 33–35: spójność modułów — Pulpit (obroty) = Raport = Stany =
 });
 test("TEST 36–37: korekta w październiku operacji z września — wrzesień bez zmian, korekta w październiku", () => {
   const s = fresh();
-  const sepBefore = JSON.stringify(REP(s, { whId: "wh_pys" }).recon);
+  const sepBefore = JSON.stringify(REP(s, { whId: "wh_bra" }).recon);
   const wz = s.operations.find(o => o.no && o.no.startsWith("WZ/002/09"));
   const d = R.clone(wz.input); d.sale.qty = "80";
-  const r = R.correctOperation(s, wz.id, d, "błędnie wpisana ilość", ctx(s, "u_admin", "2026-10-02", "wh_pys"));
+  const r = R.correctOperation(s, wz.id, d, "błędnie wpisana ilość", ctx(s, "u_admin", "2026-10-02", "wh_bra"));
   assert.equal(r.ok, true, r.error);
-  assert.equal(JSON.stringify(REP(s, { whId: "wh_pys" }).recon), sepBefore);
-  const oct = REP(s, { whId: "wh_pys", from: "2026-10-01", to: "2026-10-31" });
+  assert.equal(JSON.stringify(REP(s, { whId: "wh_bra" }).recon), sepBefore);
+  const oct = REP(s, { whId: "wh_bra", from: "2026-10-01", to: "2026-10-31" });
   assert.equal(row(oct, "pr_zr_lesna").SPRZEDAZ, 10);
   assert.equal(oct.corrections.length, 1);
 });
@@ -481,19 +481,19 @@ test("TEST 38–39: zamknięty miesiąc — dane zachowane, raport oznacza zamkn
 });
 test("TEST 40: kwit produkcji dnia — MP, m³, t, GJ, koszt rąbania", () => {
   const s = fresh();
-  const k = R.Reports.productionDay(s, "2026-09-22", "wh_pys");
+  const k = R.Reports.productionDay(s, "2026-09-22", "wh_bra");
   assert.deepEqual(k.totals, { count: 1, mp: 20, m3: 5, t: 6.6, gj: 56.1, chipCost: 200 });
   assert.equal(k.rows[0].consume, 5);
   assert.equal(k.rows[0].operator, "Adam Mazur");
 });
 test("TEST 41: historia — stan przed / zmiana / po, filtry typu, użytkownika i kontrahenta", () => {
   const s = fresh();
-  const h = R.Reports.history(s, { whId: "wh_pys", productId: "pr_zr_lesna" });
+  const h = R.Reports.history(s, { whId: "wh_bra", productId: "pr_zr_lesna" });
   for (let i = 1; i < h.length; i++) assert.equal(h[i].before, h[i - 1].after);
   assert.ok(h.every(r => Math.abs(r.before + r.change - r.after) < 1e-9));
   assert.deepEqual(R.Reports.history(s, { type: "KOREKTA" }).map(r => r.docNo), ["KOR/001/09/2026"]);
   assert.ok(R.Reports.history(s, { type: "TRANSPORT" }).length >= 5);
-  assert.ok(R.Reports.history(s, { userId: "u_pys" }).every(r => r.user === "Paweł Kaczmarek"));
+  assert.ok(R.Reports.history(s, { userId: "u_bra" }).every(r => r.user === "Paweł Kaczmarek"));
   assert.ok(R.Reports.history(s, { partnerId: "pa_ciep_ryb" }).length >= 2);
 });
 test("TEST 42: pełny miesiąc E2E w silniku — zakup, produkcja, WZ, MM, bezpośrednia, korekta, anulowanie → bilans spójny", () => {
@@ -526,7 +526,7 @@ test("Wyścig: dwa WZ na ten sam stan — drugi odrzucony, stan nieujemny", () =
 test("Transport nie zmienia stanu; produkcja na magazyn nie ma transportu", () => {
   const s = fresh();
   const modes = [{ mode: "none", place: "X" }, { mode: "own", place: "X", own: { vehicleId: "ve_scania", km: "262" } }, { mode: "external", place: "X", external: { company: "DAP", reg: "SZA 7K901", freight: "900" } }, { mode: "train", place: "X", train: { wagonCount: "3", tonMode: "same", sameT: "20", price: "30", priceUnit: "t" } }];
-  for (const base of [{ purchase: PURCHASE_A }, { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "500", unit: "MP", buyerId: "pa_ec_zab", price: "90" } }, { type: "MM", mm: { productId: "pr_zr_lesna", qty: "10", unit: "MP", toWhId: "wh_pys" } }]) {
+  for (const base of [{ purchase: PURCHASE_A }, { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "500", unit: "MP", buyerId: "pa_ec_zab", price: "90" } }, { type: "MM", mm: { productId: "pr_zr_lesna", qty: "10", unit: "MP", toWhId: "wh_bra" } }]) {
     const sig = modes.map(t => JSON.stringify(R.planOperation(s, draft(Object.assign({}, base, { transport: t })), ctx(s)).postings.map(p => [p.kind, p.whId, p.productId, p.qty])));
     assert.equal(new Set(sig).size, 1, JSON.stringify(base));
   }
