@@ -3,7 +3,7 @@
    * build()   — dane przykładowe (szkolenie, testy): 3 magazyny RiC, konta
                  e-mail firmowe, flota przypisana do magazynów, operacje wzorcowe.
                  Operacje przechodzą przez ten sam silnik co formularz — dane są
-                 spójne z regułami (salda, numeracja, obieg zatwierdzania, audyt).
+                 spójne z regułami (salda, numeracja, audyt).
    * minimal() — start firmy: 3 magazyny, katalog produktów, administrator.
    ========================================================================= */
 (function (root) {
@@ -23,16 +23,23 @@
   function base() {
     const s = RIW.emptyState(root.RIW_CONFIG || null);
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
-    const U = (id, email, name, role, whId) => ({ id, login: email, email, name, role, whId, active: true, lang: "", theme: "" });
+    // konto: e-mail firmowy = login; magazyn domyślny (whId) + przydzielone (warehouseIds); status konta
+    const U = (id, email, name, role, whId, more) => {
+      const [firstName, ...rest] = name.split(" ");
+      return Object.assign({ id, login: email, email, name, firstName, lastName: rest.join(" "), role, whId, warehouseIds: [whId], status: "ACTIVE", active: true, lang: "", theme: "" }, more || {});
+    };
     s.users = [
       U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab"),
-      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab"),
+      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab", { warehouseIds: ["wh_zab", "wh_bra"] }),
       U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab"),
       U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra"),
       U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra"),
       U("u_krok", "michal.lewandowski@resinvest.group", "Michał Lewandowski", "kierownik", "wh_rok"),
       U("u_rok", "karolina.wisniewska@resinvest.group", "Karolina Wiśniewska", "magazynier", "wh_rok"),
-      U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab")
+      U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab"),
+      U("u_aud", "ewa.krawczyk@resinvest.group", "Ewa Krawczyk", "audytor", "wh_zab"),
+      // zaproszenie wysłane, konto jeszcze nieaktywne (nie może się zalogować)
+      U("u_inv", "jan.mazur@resinvest.group", "Jan Mazur", "magazynier", "wh_rok", { status: "INVITED", active: false, invitedAt: "2026-09-20T08:00:00.000Z" })
     ];
     s.products = [
       { id: "pr_drewno", code: "DRW-O", name: "Drewno opałowe", cat: "drewno", unit: "m3", active: true },
@@ -210,11 +217,9 @@
       }]
     );
     const byNo = {};
-    // obieg zatwierdzania: operacje magazyniera zatwierdza kierownik jego magazynu
-    const approverOf = uid => { const u = user(uid); return u.role === "magazynier" ? s.users.find(k => k.role === "kierownik" && k.whId === u.whId) : null; };
+    // obieg zatwierdzania jest domyślnie wyłączony — magazynier zatwierdza operację sam
     for (const [uid, date, over] of ops) {
-      const ap = approverOf(uid);
-      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date), ap ? { author: user(uid), approver: ap } : {});
+      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
     }
@@ -241,7 +246,8 @@
     s.products = b.products;
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
     const email = String(opts.email || opts.login || ADMIN_EMAIL).trim().toLowerCase();
-    s.users = [{ id: "u_admin", login: email, email, name: opts.name || "Administrator", role: "admin", whId: "wh_zab", active: true, lang: opts.lang || "", theme: "" }];
+    const name = String(opts.name || "Administrator").trim(), [firstName, ...rest] = name.split(/\s+/);
+    s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "" }];
     s.carriers = [];
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());

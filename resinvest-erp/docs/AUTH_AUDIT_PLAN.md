@@ -125,3 +125,12 @@ i nie tworzymy drugiego systemu Auth. Supabase — opcjonalnie w przyszłości j
 2. **Rejestracja samodzielna:** wyłączyć (tylko zaproszenia, zgodnie ze specyfikacją) czy pozostawić z zatwierdzaniem przez administratora.
 3. **Wysyłka e-mail:** Resend (wymaga klucza API i rekordów DNS domeny `resinvest.group`) czy inny serwer SMTP firmy.
 4. **Obieg zatwierdzania** (magazynier przekazuje → kierownik zatwierdza) — pozostaje (specyfikacja go nie wymienia, był wymagany wcześniej).
+
+### Decyzje (zaakceptowane 2026-09-25)
+
+| # | Decyzja |
+|---|---|
+| 1 | **Wariant A** — rozszerzenie obecnego systemu (Node.js + SQLite), bez Supabase i bez przepisywania aplikacji. |
+| 2 | **Tylko zaproszenia** — rejestracja samodzielna wyłączona (`allowSelfRegistration: false`, możliwa do włączenia w konfiguracji). |
+| 3 | **Resend** — wysyłka przez Resend (HTTP API lub SMTP `smtp.resend.com:465`), nadawca `ResInvest ERP <no-reply@resinvest.group>`. |
+| 4 | **Obieg zatwierdzania wyłączony** — magazynier zapisuje operacje bezpośrednio (`requireApproval: false`; mechanizm pozostaje w silniku do ewentualnego włączenia). |

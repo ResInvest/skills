@@ -103,7 +103,7 @@ test("Serwer: język odpowiedzi wg Accept-Language / profilu", async () => {
 test("Serwer: użytkownik tworzony przez administratora — hasło tymczasowe wymusza zmianę", async () => {
   const a = client();
   await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
-  const cr = await a.post("/api/users", { rec: { name: "Jan Magazyn", login: "jan.mag@resinvest.group", role: "magazynier", whId: "wh_zab", active: true }, password: "Tymczas2026" });
+  const cr = await a.post("/api/users", { rec: { firstName: "Jan", lastName: "Magazyn", email: "jan.mag@resinvest.group", role: "magazynier", whId: "wh_zab" }, password: "Tymczas2026" });
   assert.equal(cr.json.res.ok, true, JSON.stringify(cr.json.res));
   const j = client();
   const l = await j.post("/api/auth/login", { login: "jan.mag@resinvest.group", password: "Tymczas2026" });
@@ -129,21 +129,26 @@ test("Serwer: blokada konta po 5 błędnych hasłach, odblokowanie przez adminis
   assert.equal((await x.post("/api/auth/login", { login: "jan.mag@resinvest.group", password: "Wlasne2026x" })).status, 200);
 });
 
-test("Serwer: rejestracja e-mailem firmowym → administrator aktywuje; magazynier przekazuje, kierownik zatwierdza", async () => {
+test("Serwer: rejestracja samodzielna (po włączeniu przez administratora) → aktywacja; obieg zatwierdzania włączony", async () => {
   const anon = client();
+  const off = await anon.post("/api/auth/register", { rec: { name: "Ewa Nowicka", email: "ewa.nowicka@resinvest.group" }, password: "Rejestracja2026" });
+  assert.equal(off.status, 400); assert.equal(off.json.code, "DISABLED", "domyślnie tylko zaproszenia");
+  const a = client();
+  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
+  assert.equal((await a.post("/api/cmd", { cmd: "settings.save", args: { settings: { allowSelfRegistration: true, requireApproval: true } } })).json.res.ok, true);
+  assert.equal((await anon.get("/api/health")).json.selfRegistration, true);
   assert.equal((await anon.post("/api/auth/register", { rec: { name: "Obcy Ktoś", email: "obcy@gmail.com" }, password: "Rejestracja2026" })).status, 400);
   assert.equal((await anon.post("/api/auth/register", { rec: { name: "Ewa Nowicka", email: "ewa.nowicka@resinvest.group" }, password: "Rejestracja2026" })).status, 200);
   const pend = await anon.post("/api/auth/login", { login: "ewa.nowicka@resinvest.group", password: "Rejestracja2026" });
-  assert.equal(pend.json.code, "PENDING");
-  const a = client();
-  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
+  assert.equal(pend.json.code, "INVITED");
   const ewa = (await a.get("/api/state")).json.state.users.find(u => u.login === "ewa.nowicka@resinvest.group");
-  const act = await a.post("/api/cmd", { cmd: "user.save", args: { rec: Object.assign({}, ewa, { role: "magazynier", whId: "wh_zab", active: true }) } });
+  const act = await a.post("/api/cmd", { cmd: "user.save", args: { rec: Object.assign({}, ewa, { role: "magazynier", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE" }) } });
   assert.equal(act.json.res.ok, true, act.json.res.error);
   const e = client();
   assert.equal((await e.post("/api/auth/login", { login: "ewa.nowicka@resinvest.group", password: "Rejestracja2026" })).status, 200);
   const d = R.Seed.draftOf("2026-09-23", { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "5", unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place: "RiC Zabrze" } });
-  assert.equal((await e.post("/api/cmd", { cmd: "op.commit", args: { draft: d } })).json.res.code, "FORBIDDEN", "magazynier nie zatwierdza sam");
+  const direct = await e.post("/api/cmd", { cmd: "op.commit", args: { draft: d } });
+  assert.equal(direct.status, 403); assert.equal(direct.json.res.code, "FORBIDDEN", "przy włączonym obiegu magazynier nie zatwierdza sam");
   const sub = await e.post("/api/cmd", { cmd: "op.submit", args: { draft: d } });
   assert.equal(sub.json.res.ok, true, sub.json.res.error);
   const id = sub.json.state.drafts.find(x => x.status === "PENDING").id;
@@ -151,6 +156,7 @@ test("Serwer: rejestracja e-mailem firmowym → administrator aktywuje; magazyni
   assert.equal(ap.json.res.ok, true, ap.json.res.error);
   const op = ap.json.state.operations.at(-1);
   assert.equal(op.userName, "Ewa Nowicka"); assert.equal(op.approvedById, "u_admin");
+  assert.equal((await a.post("/api/cmd", { cmd: "settings.save", args: { settings: { allowSelfRegistration: false, requireApproval: false } } })).json.res.ok, true);
 });
 
 test("Serwer: wylogowanie unieważnia sesję", async () => {

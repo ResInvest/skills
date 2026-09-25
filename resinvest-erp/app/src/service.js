@@ -1,5 +1,5 @@
 /* =========================================================================
-   ResInvest ERP 3.0 — warstwa S: usługa aplikacyjna (komendy)
+   ResInvest ERP 3.2 — warstwa S: usługa aplikacyjna (komendy)
 
    Jedyne wejście do zmian danych — identyczne w trybie lokalnym (przeglądarka)
    i serwerowym (Node + SQLite):
@@ -42,8 +42,14 @@
     /* ---- operacje ---- */
     "draft.save": { perm: "op.create", run: (s, a, c) => R.saveDraft(s, a.draft, c) },
     "draft.delete": { run: (s, a, c) => R.deleteDraft(s, a.id, c) },
-    /** Zatwierdzenie bezpośrednie (kierownik / administrator). Magazynier przekazuje operację: op.submit. */
-    "op.commit": { perm: "op.approve", run: (s, a, c) => R.commitOperation(s, a.draft, c) },
+    /**
+     * Zatwierdzenie operacji. Obieg zatwierdzania wyłączony (domyślnie) — każdy z uprawnieniem do wprowadzania;
+     * włączony (`config.requireApproval`) — tylko z „op.approve”, pozostali przekazują operację (op.submit).
+     */
+    "op.commit": { perm: "op.create", run: (s, a, c) => {
+      if (s.config.requireApproval && !R.can(c.user, "op.approve")) return { ok: false, error: t("Obieg zatwierdzania jest włączony — przekaż operację do zatwierdzenia"), code: "FORBIDDEN" };
+      return R.commitOperation(s, a.draft, c);
+    } },
     "op.submit": { perm: "op.create", run: (s, a, c) => R.submitOperation(s, a.draft, c) },
     "op.approve": { perm: "op.approve", run: (s, a, c) => R.approvePending(s, a.id, a.draft || null, c) },
     "op.reject": { perm: "op.approve", run: (s, a, c) => R.rejectPending(s, a.id, a.reason, c) },
@@ -68,6 +74,10 @@
     "user.remove": { perm: "users.manage", run: (s, a, c) => R.Users.remove(s, a.id, c) },
     "me.prefs": { run: (s, a, c) => R.Users.setPrefs(s, { lang: a.lang, theme: a.theme }, c) },
     "me.warehouse": { run: (s, a, c) => R.Users.setMyWarehouse(s, a.whId, c) },
+    /* ---- role, uprawnienia, konfiguracja (administrator) ---- */
+    "roles.save": { perm: "roles.assign", run: (s, a, c) => R.Roles.save(s, str(a.role), a.perms, c) },
+    "roles.reset": { perm: "roles.assign", run: (s, a, c) => R.Roles.reset(s, str(a.role), c) },
+    "settings.save": { perm: "settings.edit", run: (s, a, c) => R.Settings.save(s, a.settings || {}, c) },
     /* ---- dane ---- */
     "data.backupLogged": { perm: "data.backup", run: (s, a, c) => { s.rev += 1; R.audit(s, c, { entity: "system", entityId: "backup", opNo: N_("kopia"), event: "backup", action: N_("Pobranie kopii zapasowej"), before: null, after: { rewizja: s.rev, format: str(a.format) || "json" } }); return { ok: true }; } },
     "data.import": { perm: "data.import", run: (s, a, c) => replaceState(s, a.state, c, "import", N_("Import kopii zapasowej")) },
@@ -83,6 +93,33 @@
     } }
   };
 
+  /**
+   * Widok danych dla użytkownika — izolacja magazynów (serwer wysyła do przeglądarki WYŁĄCZNIE ten widok).
+   * Role globalne (ADMINISTRATOR, AUDYTOR) — całość; pozostałe — magazyn domyślny i przydzielone:
+   * operacje (magazyn źródłowy lub docelowy MM), księga, inwentaryzacja, robocze, flota (magazyn lub wspólna),
+   * dziennik zmian (wpisy magazynu lub własne), użytkownicy dzielący magazyn.
+   */
+  function project(state, user) {
+    const u = user && R.byId(state.users, user.id);
+    if (!u) return null;
+    const acc = R.whAccess(u);
+    if (acc === null) return state;
+    const A = new Set(acc), inA = w => A.has(w);
+    const out = Object.assign({}, state);
+    out.operations = state.operations.filter(o => inA(o.whId) || (o.toWhId && inA(o.toWhId)));
+    const opIds = new Set(out.operations.map(o => o.id));
+    out.ledger = state.ledger.filter(l => inA(l.whId) || (l.opId && opIds.has(l.opId)));
+    out.drafts = state.drafts.filter(d => d.userId === u.id || (d.status === "PENDING" && inA(d.whId)));
+    out.inventory = state.inventory.filter(p => inA(p.whId));
+    out.audit = state.audit.filter(a => a.userId === u.id || (a.whId && inA(a.whId) && a.entity !== "user" && a.entity !== "role" && a.entity !== "system"));
+    const fl = state.fleet || {};
+    out.fleet = Object.fromEntries(Object.entries(fl).map(([k, v]) => [k, Array.isArray(v) ? v.filter(x => !x.whId || inA(x.whId)) : v]));
+    out.users = state.users.filter(x => x.id === u.id || R.whAccess(x) === null && x.role === "admin" || (x.warehouseIds || [x.whId]).concat(x.whId).some(inA))
+      .map(x => x.id === u.id ? x : { id: x.id, name: x.name, firstName: x.firstName, lastName: x.lastName, login: x.login, email: x.email, role: x.role, whId: x.whId, warehouseIds: x.warehouseIds, status: x.status, active: x.active });
+    out.projected = true;
+    return out;
+  }
+
   const Service = {
     COMMANDS,
     has(cmd) { return Object.prototype.hasOwnProperty.call(COMMANDS, cmd); },
@@ -91,9 +128,10 @@
       const c = COMMANDS[cmd];
       if (!c) return { ok: false, error: t("Nieznana komenda: {c}", { c: cmd }), code: "UNKNOWN" };
       if (!ctx || !ctx.user) return { ok: false, error: t("Brak zalogowanego użytkownika"), code: "AUTH" };
+      R.applyRoles(state);
       const user = R.byId(state.users, ctx.user.id);
-      if (!user || user.active === false) return { ok: false, error: t("Konto jest nieaktywne"), code: "AUTH" };
-      if (c.perm && !R.can(user, c.perm)) return { ok: false, error: t("Brak uprawnienia „{p}”", { p: c.perm }), code: "FORBIDDEN" };
+      if (!user || R.statusOf(user) !== "ACTIVE") return { ok: false, error: t("Twoje konto jest nieaktywne."), code: "AUTH" };
+      if (c.perm && !R.can(user, c.perm)) return { ok: false, error: t("Nie masz uprawnień do wykonania tej operacji."), detail: c.perm, code: "FORBIDDEN" };
       const a = Object.assign({}, args || {});
       const full = Object.assign({}, ctx, { user, source: str(a.source).slice(0, 120) || ctx.source || N_("Aplikacja") });
       try {
@@ -113,12 +151,20 @@
       return { res, state: work };
     },
     replaceState,
-    /** Rejestracja z ekranu logowania (bez sesji) — konto oczekuje na zatwierdzenie przez administratora. */
-    register(state, rec, today) {
+    /** Rejestracja z ekranu logowania (bez sesji) — tylko gdy włączona w konfiguracji; konto czeka na administratora. */
+    register(state, rec, today, meta) {
       const work = R.clone(state), rev0 = work.rev;
-      const res = R.Users.register(work, rec || {}, { today, source: N_("Rejestracja") });
+      const res = R.Users.register(work, rec || {}, Object.assign({ today, source: N_("Rejestracja") }, meta || {}));
       return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
-    }
+    },
+    /** Zmiana stanu wykonywana przez hosta poza sesją (aktywacja zaproszenia, wpis audytu). */
+    apply(state, fn) {
+      const work = R.clone(state), rev0 = work.rev;
+      R.applyRoles(work);
+      const res = fn(work) || { ok: false };
+      return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
+    },
+    project
   };
 
   R.Service = Service;

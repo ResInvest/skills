@@ -1,5 +1,5 @@
 /* =========================================================================
-   ResInvest ERP 3.0 — warstwa A0: logowanie w trybie lokalnym (jedno stanowisko)
+   ResInvest ERP 3.2 — warstwa A0: logowanie w trybie lokalnym (jedno stanowisko)
 
    * Hasła: PBKDF2-SHA256 (Web Crypto; awaryjnie implementacja JS), sól 16 B,
      120 000 iteracji. Hasła nigdy nie są zapisywane ani logowane jawnie.
@@ -108,7 +108,7 @@
   /** Konta danych przykładowych (tryb lokalny / demonstracyjny) — hasło startowe „demo1234”. */
   const DEMO_PASSWORD = "demo1234";
   const DEMO_LOGINS = ["magazyn@resinvest.group", "anna.gorska@resinvest.group", "adrian.wojciechowski@resinvest.group", "tomasz.zajac@resinvest.group",
-    "pawel.kaczmarek@resinvest.group", "michal.lewandowski@resinvest.group", "karolina.wisniewska@resinvest.group", "beata.nowak@resinvest.group"];
+    "pawel.kaczmarek@resinvest.group", "michal.lewandowski@resinvest.group", "karolina.wisniewska@resinvest.group", "beata.nowak@resinvest.group", "ewa.krawczyk@resinvest.group"];
 
   const LocalAuth = {
     store: null, memory: null,
@@ -137,8 +137,8 @@
       const L = String(login || "").trim().toLowerCase();
       const u = state.users.find(x => String(x.login).toLowerCase() === L || String(x.email || "").toLowerCase() === L);
       const s = this.read();
-      const fail = (code, reason) => { this.log({ login: L, userId: u ? u.id : null, ok: false, reason }); return { ok: false, code, error: code === "LOCKED" ? reason : t("Nieprawidłowy login lub hasło") }; };
-      if (!L || !password) return { ok: false, code: "EMPTY", error: t("Podaj login i hasło") };
+      const fail = (code, reason) => { this.log({ login: L, userId: u ? u.id : null, ok: false, reason }); return { ok: false, code, error: code === "LOCKED" ? reason : t("Nieprawidłowy e-mail lub hasło.") }; };
+      if (!L || !password) return { ok: false, code: "EMPTY", error: t("Podaj e-mail służbowy i hasło") };
       if (!u) return fail("BAD", N_("nieznany login"));
       const acc = s.accounts[u.id];
       if (!acc) return fail("BAD", N_("konto bez hasła"));
@@ -152,8 +152,9 @@
         this.write();
         return fail("BAD", N_("błędne hasło"));
       }
-      if (u.pending) { this.log({ login: L, userId: u.id, ok: false, reason: N_("konto oczekuje na zatwierdzenie") }); return { ok: false, code: "PENDING", error: t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") }; }
-      if (u.active === false) return fail("BAD", N_("konto nieaktywne"));
+      const st = root.RIW.statusOf(u);
+      if (st === "INVITED") { this.log({ login: L, userId: u.id, ok: false, reason: N_("konto nieaktywowane") }); return { ok: false, code: "INVITED", error: u.selfRegistered ? t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") : t("Twoje konto nie zostało jeszcze aktywowane.") }; }
+      if (st !== "ACTIVE") { this.log({ login: L, userId: u.id, ok: false, reason: st === "SUSPENDED" ? N_("konto zawieszone") : N_("konto dezaktywowane") }); return { ok: false, code: "INACTIVE", error: t("Twoje konto jest nieaktywne.") }; }
       acc.failed = 0; acc.lockedUntil = null; acc.lastLogin = new Date().toISOString();
       this.write();
       this.log({ login: L, userId: u.id, ok: true, reason: "" });

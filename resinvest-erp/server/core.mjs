@@ -11,6 +11,9 @@
    * WAL + synchronous=FULL, kopie `VACUUM INTO` (spójne, bez zatrzymywania pracy).
    Konta: hasła scrypt (N=2^15), sesje losowe 256 bit (w bazie tylko skrót),
    blokada konta po nieudanych próbach, dziennik logowań.
+   Tokeny e-mail (zaproszenie, reset hasła, potwierdzenie adresu): losowe 256 bit,
+   w bazie tylko skrót SHA-256, jednorazowe, z terminem ważności; kolejka `outbox`
+   zapisuje każdą wysyłkę (bez treści linków).
    ========================================================================= */
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -42,6 +45,30 @@ const N_ = s => s;
 
 export const sha256 = s => createHash("sha256").update(s).digest("hex");
 const nowIso = () => new Date().toISOString();
+
+/* ---------------- zmienne środowiskowe (sekrety — tylko serwer) ---------------- */
+/** Plik KLUCZ=wartość (# komentarz). Zmienne procesu mają pierwszeństwo przed plikiem. */
+export function parseEnv(text) {
+  const out = {};
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const m = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m) continue;
+    let v = m[2].trim();
+    if (/^(["']).*\1$/.test(v)) v = v.slice(1, -1); else v = v.replace(/\s+#.*$/, "");
+    out[m[1]] = v;
+  }
+  return out;
+}
+/** Kolejność: .env (katalog programu) → config/server.env → <dataDir>/server.env → zmienne procesu. */
+export function loadEnv(dataDir) {
+  const files = [join(ROOT, ".env"), join(ROOT, "config", "server.env"), dataDir ? join(dataDir, "server.env") : null].filter(Boolean);
+  const env = {}, used = [];
+  for (const f of files) if (existsSync(f)) { Object.assign(env, parseEnv(readFileSync(f, "utf8"))); used.push(f); }
+  for (const [k, v] of Object.entries(process.env)) if (/^(RESEND_|EMAIL_|SMTP_|APP_URL|SUPABASE_)/.test(k)) env[k] = v;
+  return { env, files: used };
+}
 
 /* ---------------- konfiguracja ---------------- */
 export function loadConfig(overrides = {}) {
@@ -104,7 +131,10 @@ export class Store {
       CREATE TABLE IF NOT EXISTS accounts(user_id TEXT PRIMARY KEY, algo TEXT NOT NULL, salt TEXT NOT NULL, hash TEXT NOT NULL, params TEXT, must_change INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, locked_until TEXT, changed_at TEXT, last_login TEXT);
       CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL, last_seen TEXT NOT NULL, expires_at TEXT NOT NULL, ip TEXT, ua TEXT);
       CREATE TABLE IF NOT EXISTS login_log(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, login TEXT, user_id TEXT, ok INTEGER NOT NULL, reason TEXT, ip TEXT);
-      CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);`);
+      CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+      CREATE TABLE IF NOT EXISTS tokens(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, email TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, created_by TEXT);
+      CREATE INDEX IF NOT EXISTS tokens_user ON tokens(user_id, kind);
+      CREATE TABLE IF NOT EXISTS outbox(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, template TEXT NOT NULL, to_addr TEXT NOT NULL, user_id TEXT, status TEXT NOT NULL, error TEXT, provider_id TEXT, transport TEXT);`);
     this.db.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES ('created_at', ?)").run(nowIso());
     this.state = null; this.integrity = { ok: true, notes: [] };
     this.load();
@@ -154,10 +184,10 @@ export class Store {
   }
 
   /** Komenda usługi: silnik na kopii → zapis atomowy → stan w pamięci. */
-  execute(userId, cmd, args, lang) {
+  execute(userId, cmd, args, lang, meta) {
     if (!Service.has(cmd)) return { ok: false, error: t("Nieznana komenda: {c}", { c: cmd }), code: "UNKNOWN" };
     I18N.setLang(lang || "pl");
-    const ctx = { user: { id: userId }, today: this.today() };
+    const ctx = Object.assign({ user: { id: userId }, today: this.today() }, meta && { ip: meta.ip || "", ua: String(meta.ua || "").slice(0, 200) });
     const rev0 = this.state.rev;
     const { res, state } = Service.run(this.state, cmd, args, ctx);
     if (state) {
@@ -168,6 +198,25 @@ export class Store {
       res.__changed = true;
     }
     return res;
+  }
+  /** Zmiana stanu przez hosta (bez komendy użytkownika): aktywacja, wpis audytu. Zapis atomowy jak execute. */
+  applyChange(label, fn, journalArgs, actor) {
+    const rev0 = this.state.rev;
+    const { res, state } = Service.apply(this.state, fn);
+    if (state) {
+      try { this.saveState(state, actor || null, label, journalArgs || {}, rev0); }
+      catch (e) { this.log("ERROR", `Zapis nieudany (${label}): ${e.message}`); return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }), code: "DB" }; }
+      res.__changed = true;
+    }
+    return res;
+  }
+  /** Wpis dziennika audytu wykonany przez serwer (np. wysyłka e-mail, prośba o reset hasła). */
+  auditEvent(rec, meta, actor) {
+    return this.applyChange("audit." + String(rec.code || "event").toLowerCase(), s => {
+      s.rev += 1;
+      R.audit(s, Object.assign({ user: actor ? R.byId(s.users, actor.id) || null : null, source: rec.source || N_("Serwer") }, meta || {}), Object.assign({ entity: "user", event: "user" }, rec));
+      return { ok: true };
+    }, { code: rec.code, entityId: rec.entityId || "" }, actor);
   }
 
   /* ---------------- konta ---------------- */
@@ -184,10 +233,13 @@ export class Store {
   }
   login(login, pw, ip) {
     const L = String(login || "").trim().toLowerCase();
-    if (!L || !pw) return { ok: false, code: "EMPTY", error: t("Podaj login i hasło") };
+    if (!L || !pw) return { ok: false, code: "EMPTY", error: t("Podaj e-mail służbowy i hasło") };
+    const em = R.validateCompanyEmail(L, this.state && this.state.config.companyDomains);
+    if (!em.ok) { this.logLogin(L, null, false, N_("adres spoza domeny firmowej"), ip); return { ok: false, code: "DOMAIN", field: "login", error: em.error }; }
     const u = this.state && this.state.users.find(x => String(x.login).toLowerCase() === L || String(x.email || "").toLowerCase() === L);
     const acc = u ? this.account(u.id) : null;
-    const bad = reason => { this.logLogin(L, u ? u.id : null, false, reason, ip); return { ok: false, code: "BAD", error: t("Nieprawidłowy login lub hasło") }; };
+    const bad = reason => { this.logLogin(L, u ? u.id : null, false, reason, ip); return { ok: false, code: "BAD", error: t("Nieprawidłowy e-mail lub hasło.") }; };
+    if (u && !acc && R.statusOf(u) === "INVITED") { verifyPassword(pw, { algo: "scrypt", salt: "00", hash: "00".repeat(32), params: JSON.stringify(SCRYPT) }); this.logLogin(L, u.id, false, N_("konto nieaktywowane (zaproszenie)"), ip); return { ok: false, code: "INVITED", error: t("Twoje konto nie zostało jeszcze aktywowane.") }; }
     if (!u || !acc) { verifyPassword(pw, { algo: "scrypt", salt: "00", hash: "00".repeat(32), params: JSON.stringify(SCRYPT) }); return bad(N_("nieznany login")); }
     if (acc.locked_until && Date.parse(acc.locked_until) > Date.now()) {
       this.logLogin(L, u.id, false, N_("konto zablokowane"), ip);
@@ -198,8 +250,10 @@ export class Store {
       this.db.prepare("UPDATE accounts SET failed = ?, locked_until = ? WHERE user_id = ?").run(lock ? 0 : failed, lock ? new Date(Date.now() + this.cfg.security.lockMinutes * 60000).toISOString() : acc.locked_until, u.id);
       return bad(N_("błędne hasło"));
     }
-    if (u.pending) { this.logLogin(L, u.id, false, N_("konto oczekuje na zatwierdzenie"), ip); return { ok: false, code: "PENDING", error: t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") }; }
-    if (u.active === false) return bad(N_("konto nieaktywne"));
+    const st = R.statusOf(u);
+    if (st === "INVITED") { this.logLogin(L, u.id, false, N_("konto nieaktywowane"), ip); return { ok: false, code: "INVITED", error: u.selfRegistered ? t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") : t("Twoje konto nie zostało jeszcze aktywowane.") }; }
+    if (st !== "ACTIVE") { this.logLogin(L, u.id, false, st === "SUSPENDED" ? N_("konto zawieszone") : N_("konto dezaktywowane"), ip); return { ok: false, code: "INACTIVE", error: t("Twoje konto jest nieaktywne.") }; }
+    if (u.emailUnverified) { this.logLogin(L, u.id, false, N_("adres e-mail niepotwierdzony"), ip); return { ok: false, code: "UNVERIFIED", error: t("Adres e-mail nie został potwierdzony. Kliknij link z wiadomości albo poproś administratora o ponowne wysłanie.") }; }
     this.db.prepare("UPDATE accounts SET failed = 0, locked_until = NULL, last_login = ? WHERE user_id = ?").run(nowIso(), u.id);
     this.logLogin(L, u.id, true, "", ip);
     return { ok: true, user: u, mustChange: !!acc.must_change };
@@ -218,7 +272,7 @@ export class Store {
     const now = Date.now();
     if (Date.parse(s.expires_at) < now || now - Date.parse(s.last_seen) > this.cfg.session.idleMinutes * 60000) { this.dropSession(token); return null; }
     const u = this.state && R.byId(this.state.users, s.user_id);
-    if (!u || u.active === false) { this.dropSession(token); return null; }
+    if (!u || R.statusOf(u) !== "ACTIVE" || u.emailUnverified) { this.dropSession(token); return null; }
     if (now - Date.parse(s.last_seen) > 15000) this.db.prepare("UPDATE sessions SET last_seen = ? WHERE token_hash = ?").run(new Date(now).toISOString(), s.token_hash);
     return { userId: s.user_id, user: u };
   }
@@ -248,17 +302,17 @@ export class Store {
     s.rev = (s.rev || 0) + 1;
     this.saveState(s, { id: "u_admin", login: L }, "system.setup", { sample: !!sample }, 0);
     this.setPassword("u_admin", password, false);
-    if (sample) for (const u of s.users) if (u.id !== "u_admin") this.setPassword(u.id, AuthLib.DEMO_PASSWORD, true);
+    if (sample) for (const u of s.users) if (u.id !== "u_admin" && R.statusOf(u) === "ACTIVE") this.setPassword(u.id, AuthLib.DEMO_PASSWORD, true);
     this.log("INFO", `Pierwsze uruchomienie: administrator ${L}, dane przykładowe: ${sample ? "tak" : "nie"}`);
     return { ok: true };
   }
 
   /** Rejestracja z ekranu logowania: profil „oczekuje na zatwierdzenie” + hasło (bez sesji). */
-  register(rec, password, lang) {
+  register(rec, password, lang, meta) {
     I18N.setLang(lang || "pl");
     const pe = AuthLib.passwordError(password, rec && rec.email); if (pe) return { ok: false, errors: { password: pe }, error: pe };
     const rev0 = this.state.rev;
-    const { res, state } = Service.register(this.state, rec, this.today());
+    const { res, state } = Service.register(this.state, rec, this.today(), meta);
     if (!state) return res;
     try { this.saveState(state, null, "auth.register", { email: res.rec.login }, rev0); }
     catch (e) { return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }) }; }
@@ -266,6 +320,42 @@ export class Store {
     this.log("INFO", `Rejestracja: ${res.rec.login} — oczekuje na zatwierdzenie`);
     return { ok: true };
   }
+  /* ---------------- tokeny e-mail (jednorazowe, w bazie tylko skrót) ---------------- */
+  /** Nowy token; poprzednie niewykorzystane tokeny tego rodzaju dla użytkownika tracą ważność. */
+  createToken(userId, kind, hours, email, createdBy) {
+    const token = randomBytes(32).toString("base64url"), now = Date.now();
+    this.tx(() => {
+      this.db.prepare("UPDATE tokens SET used_at = ? WHERE user_id = ? AND kind = ? AND used_at IS NULL").run(nowIso(), userId, kind);
+      this.db.prepare("INSERT INTO tokens(token_hash, user_id, kind, email, created_at, expires_at, used_at, created_by) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)")
+        .run(sha256(token), userId, kind, email || null, new Date(now).toISOString(), new Date(now + hours * 3600000).toISOString(), createdBy || null);
+    });
+    return token;
+  }
+  /** Sprawdzenie tokenu bez zużycia. Zwraca { ok, row } albo { ok:false, code: BAD|USED|EXPIRED }. */
+  peekToken(token, kind) {
+    if (!token || typeof token !== "string" || token.length < 20 || token.length > 100) return { ok: false, code: "BAD" };
+    const row = this.db.prepare("SELECT * FROM tokens WHERE token_hash = ? AND kind = ?").get(sha256(token), kind);
+    if (!row) return { ok: false, code: "BAD" };
+    if (row.used_at) return { ok: false, code: "USED" };
+    if (Date.parse(row.expires_at) < Date.now()) return { ok: false, code: "EXPIRED" };
+    return { ok: true, row };
+  }
+  /** Zużycie tokenu (atomowo — drugi raz ten sam token nie przejdzie). */
+  useToken(token, kind) {
+    const p = this.peekToken(token, kind);
+    if (!p.ok) return p;
+    const r = this.db.prepare("UPDATE tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL").run(nowIso(), p.row.token_hash);
+    return r.changes === 1 ? p : { ok: false, code: "USED" };
+  }
+  dropTokens(userId, kind) { this.db.prepare(`UPDATE tokens SET used_at = ? WHERE user_id = ? AND used_at IS NULL${kind ? " AND kind = ?" : ""}`).run(...[nowIso(), userId].concat(kind ? [kind] : [])); }
+  tokenInfo(userId) {
+    return this.db.prepare("SELECT kind, created_at AS createdAt, expires_at AS expiresAt, used_at AS usedAt FROM tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 5").all(userId);
+  }
+  logMail(template, to, userId, r, transport) {
+    this.db.prepare("INSERT INTO outbox(ts, template, to_addr, user_id, status, error, provider_id, transport) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(nowIso(), template, to, userId || null, r.ok ? "SENT" : "FAILED", r.ok ? null : String(r.error || "").slice(0, 500), r.providerId || r.file || null, transport || "");
+  }
+  mailLog(limit = 200) { return this.db.prepare("SELECT id, ts, template, to_addr AS \"to\", user_id AS userId, status, error, transport FROM outbox ORDER BY id DESC LIMIT ?").all(limit); }
   dropAccount(userId) { this.tx(() => { this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId); this.db.prepare("DELETE FROM accounts WHERE user_id = ?").run(userId); }); }
 
   /* ---------------- kopie zapasowe ---------------- */

@@ -13,9 +13,10 @@
     "server": "node --disable-warning=ExperimentalWarning server/riw-server.mjs",
     "server:check": "node --disable-warning=ExperimentalWarning server/riw-server.mjs --check",
     "server:backup": "node --disable-warning=ExperimentalWarning server/riw-server.mjs --backup-now",
-    "check": "node --check app/src/i18n.js && node --check app/src/engine.js && node --check app/src/service.js && node --check app/src/seed.js && node --check app/src/auth.js && node --check app/src/pdf.js && node --check app/src/intro.js && node --check app/src/core.js && node --check app/src/form.js && node --check app/src/views.js && node --check app/src/dashboard.js && node --check app/src/admin.js && node --check server/core.mjs && node --check server/riw-server.mjs",
+    "check": "node --check app/src/i18n.js && node --check app/src/engine.js && node --check app/src/service.js && node --check app/src/seed.js && node --check app/src/auth.js && node --check app/src/pdf.js && node --check app/src/intro.js && node --check app/src/core.js && node --check app/src/form.js && node --check app/src/views.js && node --check app/src/dashboard.js && node --check app/src/admin.js && node --check server/core.mjs && node --check server/riw-server.mjs && node --check server/mail.mjs",
     "test:unit": "node --test tests/engine.test.mjs tests/pdf.test.mjs tests/platform.test.mjs",
-    "test:server": "node --test tests/server.test.mjs",
+    "test:server": "node --test tests/server.test.mjs tests/auth.test.mjs",
+    "test:auth": "node --test tests/auth.test.mjs",
     "test:e2e": "node tests/e2e.cjs",
     "test": "npm run check && npm run i18n && npm run build && npm run test:unit && npm run test:server && npm run test:e2e"
   },

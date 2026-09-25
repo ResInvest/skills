@@ -98,7 +98,7 @@ test("LocalAuth: konta demonstracyjne, logowanie, blokada po 5 próbach, odbloko
   assert.equal(L.unlock(R.byId(s.users, "u_mag"), "u_mag").ok, false, "magazynier nie odblokowuje kont");
   assert.equal(L.unlock(R.byId(s.users, "u_admin"), "u_mag").ok, true);
   assert.equal((await L.login(s, "adrian.wojciechowski@resinvest.group", "demo1234")).ok, true);
-  assert.equal((await L.login(s, "nieznany@resinvest.group", "demo1234")).error, "Nieprawidłowy login lub hasło", "ten sam komunikat dla nieznanego loginu");
+  assert.equal((await L.login(s, "nieznany@resinvest.group", "demo1234")).error, "Nieprawidłowy e-mail lub hasło.", "ten sam komunikat dla nieznanego loginu");
   assert.ok(L.loginLog().some(x => x.reason === "błędne hasło"));
 });
 test("LocalAuth: zmiana hasła i hasło nadane przez administratora (wymuszona zmiana)", async () => {
@@ -204,8 +204,9 @@ test("Import kopii: zalogowany administrator zostaje zachowany, rewizja rośnie"
 /* ============================ 3.1: role, zatwierdzanie, rejestracja, magazyny ============================ */
 const WZ_DRAFT = (qty = "100") => R.Seed.draftOf(TODAY, { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty, unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place: "RiC Zabrze" } });
 
-test("Role 3.1: Administrator wszystko, Kierownik zatwierdza, Magazynier przekazuje, Obserwator tylko podgląd", () => {
-  assert.deepEqual(Object.keys(R.ROLES), ["admin", "kierownik", "magazynier", "obserwator"]);
+test("Role 3.2: ADMINISTRATOR, MANAGER, MAGAZYNIER, OBSERWATOR, AUDYTOR — uprawnienia i obieg zatwierdzania", () => {
+  assert.deepEqual(Object.keys(R.ROLES), ["admin", "kierownik", "magazynier", "obserwator", "audytor"]);
+  assert.deepEqual(Object.values(R.ROLES).map(r => r.code), ["ADMINISTRATOR", "MANAGER", "MAGAZYNIER", "OBSERWATOR", "AUDYTOR"]);
   const s = fresh(), u = id => R.byId(s.users, id);
   assert.equal(R.can(u("u_admin"), "users.manage"), true);
   assert.equal(R.can(u("u_kier"), "op.approve"), true);
@@ -213,10 +214,27 @@ test("Role 3.1: Administrator wszystko, Kierownik zatwierdza, Magazynier przekaz
   assert.equal(R.can(u("u_mag"), "op.create"), true);
   assert.equal(R.can(u("u_view"), "op.create"), false);
   assert.equal(R.can(u("u_view"), "report.view"), true);
-  assert.equal(R.canApprove(u("u_kier"), "wh_bra"), false, "kierownik zatwierdza tylko swój magazyn");
+  assert.equal(R.canApprove(u("u_kier"), "wh_bra"), true, "kierownik z dostępem do Brąszewic");
+  assert.equal(R.canApprove(u("u_kier"), "wh_rok"), false, "kierownik zatwierdza tylko przydzielone magazyny");
   assert.equal(R.canApprove(u("u_admin"), "wh_rok"), true, "administrator — każdy magazyn");
-  assert.equal(Service.exec(s, "op.commit", { draft: WZ_DRAFT() }, ctxOf(s, "u_mag")).code, "FORBIDDEN", "magazynier nie zatwierdza bezpośrednio");
-  assert.equal(Service.exec(s, "op.submit", { draft: WZ_DRAFT() }, ctxOf(s, "u_view")).code, "FORBIDDEN", "obserwator nie wprowadza operacji");
+  // AUDYTOR: odczyt wszystkich magazynów i audytu, bez zmian w danych
+  assert.equal(R.can(u("u_aud"), "audit.read"), true);
+  assert.equal(R.can(u("u_aud"), "op.create"), false);
+  assert.equal(R.can(u("u_aud"), "users.manage"), false);
+  assert.equal(R.whAccess(u("u_aud")), null, "audytor — wszystkie magazyny");
+  assert.equal(R.can(u("u_inv"), "report.view"), false, "konto INVITED nie ma żadnych uprawnień");
+  // obieg zatwierdzania wyłączony (domyślnie): magazynier zatwierdza operację sam
+  assert.equal(s.config.requireApproval, false);
+  const direct = Service.run(s, "op.commit", { draft: WZ_DRAFT() }, ctxOf(s, "u_mag"));
+  assert.equal(direct.res.ok, true, direct.res.error);
+  // obieg włączony: magazynier przekazuje, zatwierdza kierownik
+  const s2 = fresh();
+  assert.equal(Service.exec(s2, "settings.save", { settings: { requireApproval: true } }, ctxOf(s2, "u_kier")).code, "FORBIDDEN", "konfigurację zmienia administrator");
+  assert.equal(Service.exec(s2, "settings.save", { settings: { requireApproval: true } }, ctxOf(s2, "u_admin")).ok, true);
+  assert.equal(s2.audit.at(-1).code, "SETTINGS_CHANGED");
+  assert.equal(Service.exec(s2, "op.commit", { draft: WZ_DRAFT() }, ctxOf(s2, "u_mag")).code, "FORBIDDEN", "magazynier nie zatwierdza przy włączonym obiegu");
+  assert.equal(Service.exec(s2, "op.submit", { draft: WZ_DRAFT() }, ctxOf(s2, "u_view")).code, "FORBIDDEN", "obserwator nie wprowadza operacji");
+  assert.equal(Service.exec(s2, "op.commit", { draft: WZ_DRAFT() }, ctxOf(s2, "u_aud")).code, "FORBIDDEN", "audytor nie wprowadza operacji");
 });
 
 test("Obieg zatwierdzania: magazynier przekazuje (bez numeru i bez zmiany stanu) → kierownik zatwierdza", () => {
@@ -265,23 +283,28 @@ test("Zatwierdzenie sprawdza stan w chwili zatwierdzenia (bez stanów ujemnych)"
   assert.match(ap.res.error, /Nie można sprzedać/);
 });
 
-test("Logowanie e-mailem firmowym: domena z konfiguracji, unikalny adres, rejestracja oczekuje na administratora", async () => {
+test("Logowanie e-mailem firmowym: domena z konfiguracji, unikalny adres, rejestracja domyślnie wyłączona", async () => {
   const s = fresh(), c = ctxOf(s, "u_admin");
   assert.equal(Service.exec(s, "user.save", { rec: { name: "Jan Obcy", email: "jan@gmail.com", role: "magazynier", whId: "wh_zab" } }, c).ok, false);
+  assert.equal(R.validateCompanyEmail(" Jan.Kowalski@ResInvest.Group ", ["resinvest.group"]).email, "jan.kowalski@resinvest.group");
+  for (const bad of ["jan@resinvest.group.pl", "jan@evilresinvest.group", "jan@sub.resinvest.group", "jan@gmail.com", "jan"]) assert.equal(R.validateCompanyEmail(bad, ["resinvest.group"]).ok, false, bad);
+  const off = Service.register(s, { name: "Ewa Nowicka", email: "ewa.nowicka@resinvest.group" }, TODAY);
+  assert.equal(off.res.code, "DISABLED", "samodzielna rejestracja wyłączona — tylko zaproszenia");
+  assert.equal(Service.exec(s, "settings.save", { settings: { allowSelfRegistration: true } }, c).ok, true);
   const reg = Service.register(s, { name: "Ewa Nowicka", email: "Ewa.Nowicka@resinvest.group" }, TODAY);
   assert.equal(reg.res.ok, true, reg.res.error);
   const u = reg.state.users.find(x => x.login === "ewa.nowicka@resinvest.group");
-  assert.equal(u.pending, true); assert.equal(u.active, false); assert.equal(u.role, "obserwator");
+  assert.equal(u.status, "INVITED"); assert.equal(u.selfRegistered, true); assert.equal(u.active, false); assert.equal(u.role, "obserwator");
   assert.equal(Service.register(reg.state, { name: "Ewa Druga", email: "ewa.nowicka@resinvest.group" }, TODAY).res.ok, false, "adres już zarejestrowany");
   assert.equal(Service.register(s, { name: "Obcy Ktoś", email: "ktos@example.com" }, TODAY).res.ok, false, "tylko domena firmowa");
   localStorage.clear(); sessionStorage.clear();
   const L = Auth.LocalAuth; L.store = null;
   await L.setInitial(reg.state, u.id, "Rejestracja2026");
-  assert.equal((await L.login(reg.state, "ewa.nowicka@resinvest.group", "Rejestracja2026")).code, "PENDING");
+  assert.equal((await L.login(reg.state, "ewa.nowicka@resinvest.group", "Rejestracja2026")).code, "INVITED");
   const ok = Service.run(reg.state, "user.save", { rec: Object.assign({}, u, { role: "magazynier", whId: "wh_rok", active: true }) }, ctxOf(reg.state, "u_admin"));
   assert.equal(ok.res.ok, true, ok.res.error);
   const after = R.byId(ok.state.users, u.id);
-  assert.equal(after.pending, undefined); assert.equal(after.approvedBy, "Mateusz Roesner");
+  assert.equal(after.status, "ACTIVE"); assert.equal(after.selfRegistered, undefined); assert.equal(after.approvedBy, "Mateusz Roesner");
   assert.equal((await L.login(ok.state, "ewa.nowicka@resinvest.group", "Rejestracja2026")).ok, true);
 });
 
