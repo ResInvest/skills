@@ -106,6 +106,17 @@ async function fillForestDirect(page) {
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const card = await page.evaluate(() => getComputedStyle(document.querySelector(".card, .kpi")).backgroundColor);
     check("§19 Jasny motyw: jasne tło, białe karty", lum(bg) > 0.85 && card === "rgb(255, 255, 255)", { bg, card });
+    // 3.2: pięć motywów — przełączanie z profilu, zapis w profilu użytkownika, Ctrl+D przez całą piątkę
+    await go(page, "profil"); await page.waitForSelector(".theme-cards");
+    check("3.2 Motywy: 5 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium");
+    const themeLook = async id => { await page.click(`[data-ptheme="${id}"]`); await page.waitForTimeout(200); return page.evaluate(() => ({ th: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, cs: document.documentElement.style.colorScheme, saved: RIW_DEBUG.store.state.users.find(u => u.id === RIW_DEBUG.store.userId).theme })); };
+    const ul = await themeLook("ultra");
+    check("3.2 Ultra Dark: czarne tło (OLED), schemat ciemny, zapis w profilu", ul.th === "ultra" && ul.bg === "rgb(0, 0, 0)" && ul.cs === "dark" && ul.saved === "ultra", ul);
+    const pr = await themeLook("premium");
+    check("3.2 Light Premium: tło kość słoniowa, schemat jasny, granat marki", pr.th === "premium" && pr.bg === "rgb(247, 244, 238)" && pr.cs === "light" && (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--brand").trim())) === "#1B2A4A", pr);
+    const cyc = []; for (let i = 0; i < 5; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
+    check("3.2 Ctrl+D przełącza przez pięć motywów", cyc.join(",") === "pearl,graphite,azure,ultra,premium", cyc);
+    await themeLook("pearl"); await go(page, "pulpit"); await page.waitForSelector("#kpi-wood");
 
     /* ------------- pulpit ------------- */
     check("§13 Pulpit: KPI stanów z ≈ t i ≈ GJ", nb(await page.textContent("#kpi-wood .k-v")).replace(/ /g, "") === "817m³" && nb(await page.textContent("#kpi-wood")).includes("≈ 778 t · ≈ 6 611 GJ"), nb(await page.textContent("#kpi-wood")));
@@ -668,12 +679,18 @@ async function fillForestDirect(page) {
   {
     const b1 = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
     const p = await b1.newPage(); watch(p, "intro");
-    await p.goto(FILE); await p.waitForTimeout(700);
+    await p.goto(FILE, { waitUntil: "commit" });
+    await p.waitForSelector("#splash .splash-poster", { state: "visible", timeout: 5000 });
+    const fcp = await p.evaluate(() => { const e = performance.getEntriesByName("first-contentful-paint")[0]; return e ? e.startTime : null; });
+    check("Intro: pierwsza klatka filmu na pierwszym malowaniu (przed skryptami programu)", fcp !== null && (await p.evaluate(() => !!document.querySelector("#splash .splash-poster").complete)), fcp);
+    await p.waitForTimeout(700);
     check("Intro: muzyka domyślnie włączona i gra", await p.evaluate(() => RIW_DEBUG.intro.music && RIW_DEBUG.intro.audible));
     await p.click(".splash [data-music]");
     check("Intro: „Wycisz” działa", await p.evaluate(() => !RIW_DEBUG.intro.audible && localStorage.getItem("riw.music") === "0"));
     await p.click(".splash [data-skip]"); await p.waitForSelector(".splash", { state: "detached" });
     check("Intro: „Pomiń intro”", (await p.evaluate(() => RIW_DEBUG.intro.result)) === "skip");
+    const disp = await p.evaluate(() => ({ d: RIW_DEBUG.intro.disposed, media: document.querySelectorAll("video,audio").length, blob: RIW_DEBUG.introModule._blob, login: !!document.querySelector("#login-form") }));
+    check("Intro: po pominięciu odtwarzacz odmontowany, zasoby zwolnione, ekran logowania", disp.login && disp.media === 0 && disp.blob === null && Object.values(disp.d).every(Boolean), disp);
     await b1.close();
     const b2 = await chromium.launch({ args: ["--autoplay-policy=document-user-activation-required"] });
     const q = await b2.newPage(); watch(q, "intro-blocked");

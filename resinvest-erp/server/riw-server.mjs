@@ -465,7 +465,9 @@ server.listen(cfg.port, cfg.host, () => {
   const mi = mailInfo(mailCfg);
   log("INFO", `Poczta: ${mi.transport}${mi.configured ? "" : " (BRAK KLUCZA — wysyłka nie zadziała)"} · nadawca: ${mi.from} · linki: ${appUrl()}${env.APP_URL ? "" : " (ustaw APP_URL)"}${mi.outDir ? " · wiadomości zapisywane w: " + mi.outDir : ""}${envFiles.length ? " · środowisko: " + envFiles.join(", ") : ""}`);
   if (!store.hasAccounts()) log("INFO", "Pierwsze uruchomienie — otwórz adres serwera w przeglądarce i utwórz konto administratora.");
-  if (arg("--open")) { const u = `${proto}://localhost:${cfg.port}/`; const cmd = process.platform === "win32" ? ["cmd", ["/c", "start", "", u]] : process.platform === "darwin" ? ["open", [u]] : ["xdg-open", [u]]; try { spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" }).unref(); } catch (e) {} }
+  // Windows: okno aplikacji Edge/Chrome z polityką autoodtwarzania (intro z dźwiękiem od pierwszej klatki), gdy jest skrypt instalatora
+  const launcher = join(ROOT, "ResInvestERP-Otworz.cmd");
+  if (arg("--open")) { const u = `${proto}://localhost:${cfg.port}/`; const cmd = process.platform === "win32" ? (existsSync(launcher) ? ["cmd", ["/c", launcher, u]] : ["cmd", ["/c", "start", "", u]]) : process.platform === "darwin" ? ["open", [u]] : ["xdg-open", [u]]; try { spawn(cmd[0], cmd[1], { detached: true, stdio: "ignore" }).unref(); } catch (e) {} }
   try { store.autoBackup(true); } catch (e) { log("ERROR", "Kopia przy starcie: " + e.message); }
 });
 const timers = [

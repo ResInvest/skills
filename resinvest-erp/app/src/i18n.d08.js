@@ -17,8 +17,6 @@
   "ERP · obrót i magazynowanie biomasy drzewnej": ["ERP · obchod a skladování dřevní biomasy", "ERP · wood biomass trading and storage"],
   "Pomiń intro": ["Přeskočit úvod", "Skip intro"],
   "Wycisz": ["Ztlumit", "Mute"],
-  "Włącz muzykę": ["Zapnout hudbu", "Turn music on"],
-  "Wycisz muzykę": ["Ztlumit hudbu", "Mute music"],
   "Przeglądarka zablokowała automatyczny dźwięk. Kliknij w dowolnym miejscu lub naciśnij klawisz, aby włączyć muzykę.": ["Prohlížeč zablokoval automatické přehrávání zvuku. Klikněte kamkoli nebo stiskněte klávesu pro zapnutí hudby.", "The browser blocked autoplay audio. Click anywhere or press a key to turn the music on."],
   "ResInvest Commodities · biomasa": ["ResInvest Commodities · biomasa", "ResInvest Commodities · biomass"],
   "Nr {no}": ["Č. {no}", "No. {no}"],

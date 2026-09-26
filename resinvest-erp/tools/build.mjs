@@ -3,7 +3,7 @@
    (ten sam plik działa samodzielnie — tryb lokalny — i jest serwowany przez ResInvest ERP Serwer).
    Użycie:  node tools/build.mjs            (z katalogu resinvest-erp)
             node tools/build.mjs --no-video (bez filmu intro — tylko muzyka syntezowana) */
-import { readFileSync, writeFileSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, statSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -16,7 +16,8 @@ const noVideo = process.argv.includes("--no-video");
 
 /** Kolejność ładowania warstw (zależności: i18n + słowniki → silnik → usługa → interfejs). */
 export const DICTS = readdirSync(SRC).filter(f => /^i18n\.d\d+\.js$/.test(f)).sort();
-export const SCRIPTS = ["i18n.js", ...DICTS, "engine.js", "service.js", "seed.js", "pdf.js", "auth.js", "intro.js", "core.js", "form.js", "views.js", "dashboard.js", "admin.js"];
+// intro.js jako pierwszy — buforowanie filmu rusza, zanim przeglądarka przeczyta resztę programu
+export const SCRIPTS = ["intro.js", "i18n.js", ...DICTS, "engine.js", "service.js", "seed.js", "pdf.js", "auth.js", "core.js", "form.js", "views.js", "dashboard.js", "admin.js"];
 
 const read = f => readFileSync(join(SRC, f), "utf8");
 for (const f of SCRIPTS.concat(["styles.css"])) {
@@ -32,8 +33,10 @@ const require = createRequire(import.meta.url);
 require(join(SRC, "i18n.js"));
 const { VERSION } = require(join(SRC, "engine.js"));
 
-let media = "";
+let media = "", poster = "";
 if (!noVideo) {
+  const jpg = join(ROOT, "app", "assets", "intro-poster.jpg");
+  if (existsSync(jpg)) poster = "data:image/jpeg;base64," + readFileSync(jpg).toString("base64");
   const mp4 = join(ROOT, "app", "assets", "intro.mp4");
   media = "data:video/mp4;base64," + readFileSync(mp4).toString("base64");
   console.log(`intro.mp4: ${(statSync(mp4).size / 1024).toFixed(0)} kB`);
@@ -60,6 +63,7 @@ put("/*@@STYLES@@*/", read("styles.css"));
 put("<!--@@SCRIPTS@@-->", SCRIPTS.map(f => `<script>\n/* ${f} */\n${read(f)}\n</script>`).join("\n"));
 put("@@FONTS@@", JSON.stringify(loadPdfFonts()));
 put("@@INTRO_MEDIA@@", media);
+put("@@INTRO_POSTER@@", poster);
 put("@@CONFIG@@", JSON.stringify(cfg));
 put("@@VERSION@@", VERSION);
 put("@@BUILT@@", new Date().toISOString().slice(0, 10));
