@@ -2,7 +2,7 @@
   "name": "resinvest-erp",
   "version": "3.2.0",
   "private": true,
-  "description": "ResInvest ERP 3.2 — obrót i magazynowanie biomasy drzewnej: logowanie e-mailem firmowym, zaproszenia i reset hasła (Resend), role i uprawnienia, izolacja magazynów, praca wielostanowiskowa (serwer Node.js + SQLite), PL/CS/EN, motywy Perła/Grafit/Azure, dokumenty, korekty, inwentaryzacja, raporty, druk i PDF",
+  "description": "ResInvest ERP 3.2 — obrót i magazynowanie biomasy drzewnej: logowanie e-mailem firmowym, zaproszenia i reset hasła (Resend), role i uprawnienia, izolacja magazynów, praca wielostanowiskowa (serwer Node.js + SQLite), PL/CS/EN, 5 motywów (Perła, Grafit, Azure, Ultra Dark, Light Premium), dokumenty, korekty, inwentaryzacja, raporty, druk i PDF",
   "author": "Mateusz Roesner",
   "license": "SEE LICENSE IN LICENSE",
   "type": "commonjs",
@@ -10,6 +10,7 @@
     "build": "node tools/build.mjs",
     "sample-data": "node tools/export-sample-data.mjs",
     "i18n": "node tools/i18n-extract.mjs",
+    "themes": "node tools/theme-contrast.mjs",
     "server": "node --disable-warning=ExperimentalWarning server/riw-server.mjs",
     "server:check": "node --disable-warning=ExperimentalWarning server/riw-server.mjs --check",
     "server:backup": "node --disable-warning=ExperimentalWarning server/riw-server.mjs --backup-now",
@@ -18,7 +19,7 @@
     "test:server": "node --test tests/server.test.mjs tests/auth.test.mjs",
     "test:auth": "node --test tests/auth.test.mjs",
     "test:e2e": "node tests/e2e.cjs && node tests/e2e-server.cjs",
-    "test": "npm run check && npm run i18n && npm run build && npm run test:unit && npm run test:server && npm run test:e2e"
+    "test": "npm run check && npm run i18n && npm run themes && npm run build && npm run test:unit && npm run test:server && npm run test:e2e"
   },
   "engines": { "node": ">=22.13" }
 }

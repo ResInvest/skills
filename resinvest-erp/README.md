@@ -48,6 +48,18 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
   listę jednostek dozwolonych na dokumentach i przeliczniki (masa jednostki, MP z 1 m³, gęstość t/m³ dla produktów
   w tonach). Można np. dodać łupinę liczoną w MP albo kupować PKS także w m³. Jednostki magazynowej nie zmienia się
   po pierwszym ruchu w księdze; dozwolone jednostki i przeliczniki — zawsze.
+* **Nowe intro** — film startuje natychmiast (plakat pierwszej klatki widoczny przed wczytaniem skryptów,
+  film wczytywany z wyprzedzeniem jako Blob), dźwięk razem z obrazem; u góry przycisk **Wycisz / Wyłącz wyciszenie**
+  (ikona stanu) i **Pomiń intro** (od razu logowanie). Po końcu lub pominięciu odtwarzacz jest usuwany z drzewa DOM,
+  a zasoby zwalniane (źródło wideo, adres Blob, AudioContext, słuchacze zdarzeń). Gdy przeglądarka blokuje dźwięk bez
+  kliknięcia, film gra wyciszony i włącza dźwięk przy pierwszym kliknięciu. Skróty *ResInvest ERP* w Windows otwierają
+  program w oknie Edge / Chrome (`ResInvestERP-Otworz.cmd`), w którym dźwięk intro działa od startu.
+* **Pięć motywów** — Perła, Grafit, Azure oraz nowe **Ultra Dark (OLED)** (czysta czerń, grafit, stonowana zieleń)
+  i **Light Premium** (kość słoniowa, granat, subtelne złoto). Jeden rejestr motywów (`THEME_REGISTRY` w silniku),
+  przełączanie bez migotania (*Mój profil → Wygląd* lub Ctrl+D), wybór zapisany w profilu użytkownika. Kontrast WCAG
+  wszystkich motywów sprawdza `npm run themes`.
+* **Plan architektury Windows** (VPN FortiClient, dysk sieciowy, szyfrowanie AES-256, podwójna kopia A/B, klient
+  .NET + WebView2, instalator): `docs/ARCHITECTURE_WINDOWS_PLAN.md`.
 * Zabezpieczenia: brak zmiany własnej roli, rolę ADMINISTRATOR nadaje tylko administrator, ostatniego aktywnego
   administratora nie można zdegradować / zawiesić / dezaktywować / usunąć; magazyny zmienia tylko Administrator.
 * Schemat danych **6** (migracja 5 → 6 automatyczna, bez utraty danych). Dokumentacja: `docs/AUTHENTICATION.md`,
@@ -239,17 +251,17 @@ resinvest-erp/
 │   ├── form.js                    ← formularz „Nowa operacja” i korekty
 │   ├── views.js · dashboard.js · admin.js  ← ekrany modułów, pulpit, kartoteki, użytkownicy, role, audyt, administracja
 │   └── intro.js · styles.css · index.template.html
-├── app/assets/                    ← film intro, czcionki PDF (SIL OFL 1.1)
+├── app/assets/                    ← film intro (MP4 H.264/AAC) i plakat pierwszej klatki, czcionki PDF (SIL OFL 1.1)
 ├── server/core.mjs · riw-server.mjs ← ResInvest ERP Serwer (SQLite, sesje, tokeny, API, kopie)
 ├── server/mail.mjs                ← poczta: szablony PL, Resend (API / SMTP), zapis .eml
 ├── .env.example                   ← wzór zmiennych środowiskowych serwera (bez sekretów)
 ├── config/app.config.json         ← przeliczniki i wartości domyślne
 ├── config/server.config.json      ← konfiguracja serwera (środowisko)
 ├── data/sample_data.json          ← przykładowe dane testowe
-├── tools/                         ← build.mjs, i18n-extract.mjs, export-sample-data.mjs, czcionki PDF
+├── tools/                         ← build.mjs, i18n-extract.mjs, theme-contrast.mjs, export-sample-data.mjs, czcionki PDF
 ├── installer/                     ← instalator Windows (Inno Setup 7 / 6.3+), skrypty uruchomieniowe .cmd
-├── tests/                         ← engine, pdf, platform, server, auth (node:test) · e2e.cjs, e2e-server.cjs (Playwright)
-├── docs/                          ← uwierzytelnianie, użytkownicy i role, poczta, bezpieczeństwo, audyt i plan zmian
+├── tests/                         ← engine, pdf, platform, server, auth (node:test) · e2e.cjs, e2e-server.cjs, e2e-intro.cjs (Playwright)
+├── docs/                          ← uwierzytelnianie, użytkownicy i role, poczta, bezpieczeństwo, plan architektury Windows
 ├── TASKS.md · progress.md
 └── LICENSE
 ```
@@ -262,11 +274,13 @@ Wymagany **Node.js ≥ 22.13** (moduł `node:sqlite`).
 cd resinvest-erp
 npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
+npm run themes        # kontrast WCAG wszystkich 5 motywów
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
-npm run test:unit     # silnik (68), PDF (4), platforma: i18n, hasła, logowanie, role, statusy, magazyny, uprawnienia (29)
+npm run test:unit     # silnik, PDF, platforma: jednostki, korekty, transport, i18n, hasła, role, magazyny (105)
 npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35: zaproszenia, reset, izolacja magazynów, 403 (25)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # przeglądarka: tryb OFFLINE (178 kontroli) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
+npm run test:e2e      # przeglądarka: tryb OFFLINE (193 kontrole) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
+FFMPEG=ffmpeg node tests/e2e-intro.cjs   # intro na prawdziwym filmie (wariant WebM dla Chromium bez H.264)
 ```
 
 ### Instalator Windows

@@ -1695,7 +1695,19 @@
   /* ------------------------------------------------------------------ */
   /* Użytkownicy — profil w danych (hasła przechowuje osobno moduł Auth)  */
   /* ------------------------------------------------------------------ */
-  const THEMES = { pearl: N_("Perła (jasny)"), graphite: N_("Grafit (ciemny)"), azure: N_("Graphite Azure") };
+  /**
+   * Rejestr motywów (jedno źródło prawdy: przeglądarka, serwer, walidacja profilu).
+   * scheme — jasny / ciemny (meta color-scheme, kontrolki systemowe); sw — próbki kolorów w selektorze.
+   * Nowy motyw = wpis tutaj + blok tokenów [data-theme="…"] w styles.css.
+   */
+  const THEME_REGISTRY = [
+    { id: "pearl", label: N_("Perła (jasny)"), scheme: "light", icon: "sun", sw: ["#FFFFFF", "#EEF2EF", "#1E6B45"] },
+    { id: "graphite", label: N_("Grafit (ciemny)"), scheme: "dark", icon: "moon", sw: ["#141B17", "#0D120F", "#3AA76E"] },
+    { id: "azure", label: N_("Graphite Azure"), scheme: "dark", icon: "drop", sw: ["#111823", "#090C11", "#3E8EF7"] },
+    { id: "ultra", label: N_("Ultra Dark (OLED)"), scheme: "dark", icon: "eclipse", sw: ["#0A0C0B", "#000000", "#4CC38A"] },
+    { id: "premium", label: N_("Light Premium"), scheme: "light", icon: "gem", sw: ["#FFFFFF", "#F7F4EE", "#1B2A4A", "#B8912E"] }
+  ];
+  const THEMES = Object.fromEntries(THEME_REGISTRY.map(x => [x.id, x.label]));
   const Users = {
     fullName(r) { return [str(r.firstName), str(r.lastName)].filter(Boolean).join(" ") || str(r.name); },
     validate(state, rec, prev) {
@@ -2100,7 +2112,7 @@
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
-    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
+    PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,

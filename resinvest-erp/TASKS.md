@@ -28,6 +28,9 @@
 | zakup: ilość w m³, cena za MP; korekta m³ ↔ MP | DONE | `platform.test` (3.2), E2E „3.2 Zakup”, „3.2 Korekta” |
 | transport w cenie zakupu — zapewnia dostawca | DONE | `platform.test`, E2E |
 | produkty: dowolna jednostka magazynowa, dozwolone jednostki, przeliczniki | DONE | `platform.test`, E2E „3.2 Produkty” |
+| intro: natychmiastowy start (plakat + preload Blob), dźwięk, Wycisz / Pomiń intro, zwolnienie zasobów | DONE | `e2e-intro.cjs` 15/15 (film WebM), `e2e.cjs` (plakat, dispose); odtwarzanie H.264 w Edge/Chrome na Windows — NIEPOTWIERDZONE |
+| motywy Ultra Dark (OLED) i Light Premium + rejestr motywów | DONE | `npm run themes` (WCAG), E2E „Motywy” (5 motywów, zapis w profilu, Ctrl+D) |
+| plan architektury: VPN, dysk sieciowy, AES-256, kopie A/B, klient i instalator | PLAN | `docs/ARCHITECTURE_WINDOWS_PLAN.md` — do realizacji etapami 1–8 |
 
 ## 3.1.0 — prototyp końcowy
 

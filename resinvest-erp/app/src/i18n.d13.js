@@ -33,5 +33,10 @@
   "Dostawca przywozi towar na swój koszt; bez kursów i bez kosztu transportu.": ["Dodavatel doveze zboží na své náklady; bez jízd a bez nákladu na dopravu.", "The supplier delivers at its own cost; no runs and no transport cost."],
   "dostawca: {c} — koszt w cenie zakupu": ["dodavatel: {c} — náklad v ceně nákupu", "supplier: {c} — cost in the purchase price"],
   "Cena jednostkowa": ["Jednotková cena", "Unit price"],
-  "ilość do ceny: {q} {u}": ["množství pro cenu: {q} {u}", "quantity for price: {q} {u}"]
+  "ilość do ceny: {q} {u}": ["množství pro cenu: {q} {u}", "quantity for price: {q} {u}"],
+  "Ultra Dark (OLED)": ["Ultra Dark (OLED)", "Ultra Dark (OLED)"],
+  "Light Premium": ["Light Premium", "Light Premium"],
+  "Wyłącz wyciszenie": ["Zapnout zvuk", "Unmute"],
+  "Wycisz dźwięk intro": ["Ztlumit zvuk úvodu", "Mute the intro sound"],
+  "Włącz dźwięk intro": ["Zapnout zvuk úvodu", "Unmute the intro sound"]
 }); })(typeof globalThis !== "undefined" ? globalThis : this);

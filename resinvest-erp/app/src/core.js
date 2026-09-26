@@ -52,6 +52,8 @@
     undo: "M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3", ban: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM5.6 5.6l12.8 12.8",
     sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4",
     moon: "M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z", drop: "M12 2.7s-7 7.6-7 12.3a7 7 0 0 0 14 0c0-4.7-7-12.3-7-12.3z",
+    eclipse: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 3a9 9 0 0 1 0 18z",
+    gem: "M6.5 3.5h11l3.5 5.5-9 11.5L3 9zM3 9h18M9.5 3.5 12 20.5M14.5 3.5 12 20.5",
     globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
     user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0", key: "M15 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-3h2.1A4 4 0 0 1 15 7zM16 10h.01",
     lock: "M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4", logout: "M9 21H5V3h4M16 17l5-5-5-5M21 12H9",
@@ -159,17 +161,29 @@
   /* ------------------------------------------------------------------ */
   /* Motywy i języki                                                     */
   /* ------------------------------------------------------------------ */
-  const THEME_LIST = [
-    { id: "pearl", label: N_("Perła (jasny)"), icon: "sun", sw: ["#FFFFFF", "#EEF2EF", "#1E6B45"] },
-    { id: "graphite", label: N_("Grafit (ciemny)"), icon: "moon", sw: ["#141B17", "#0D120F", "#3AA76E"] },
-    { id: "azure", label: N_("Graphite Azure"), icon: "drop", sw: ["#111823", "#090C11", "#3E8EF7"] }
-  ];
+  /**
+   * Theme Provider: lista motywów z rejestru silnika (R.THEME_REGISTRY), stan w Prefs.theme.
+   * Źródło wyboru: profil użytkownika (serwer / dane) → kopia w przeglądarce (riw.theme, tylko do pierwszego
+   * malowania przed logowaniem). Zmiana: jeden atrybut data-theme na <html> — wszystkie kolory to tokeny CSS,
+   * więc przełączenie jest natychmiastowe, bez przeładowania i bez utraty stanu ekranu.
+   */
+  const THEME_LIST = R.THEME_REGISTRY;
   const Prefs = {
     theme: "pearl",
+    listeners: new Set(),
+    /** Subskrypcja zmian motywu (np. wykresy, które przeliczają kolory). Zwraca funkcję wypisania. */
+    onTheme(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     applyTheme(id) {
-      this.theme = THEME_LIST.some(x => x.id === id) ? id : "pearl";
-      document.documentElement.setAttribute("data-theme", this.theme);
-      const meta = $('meta[name="color-scheme"]'); if (meta) meta.setAttribute("content", this.theme === "pearl" ? "light" : "dark");
+      const th = THEME_LIST.find(x => x.id === id) || THEME_LIST[0];
+      const changed = th.id !== this.theme;
+      this.theme = th.id;
+      const html = document.documentElement;
+      html.classList.add("theme-switching");                                   // bez animacji przejść podczas zmiany
+      html.setAttribute("data-theme", th.id);
+      html.style.colorScheme = th.scheme;
+      const meta = $('meta[name="color-scheme"]'); if (meta) meta.setAttribute("content", th.scheme);
+      root.requestAnimationFrame ? requestAnimationFrame(() => requestAnimationFrame(() => html.classList.remove("theme-switching"))) : html.classList.remove("theme-switching");
+      if (changed) this.listeners.forEach(fn => { try { fn(th); } catch (e) { console.error(e); } });
     },
     applyLang(code) {
       I18N.setLang(code);

@@ -162,7 +162,7 @@ Filename: "{app}\ResInvest ERP (serwer).url"; Section: "InternetShortcut"; Key: 
 [Icons]
 Name: "{group}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; Components: app
 Name: "{group}\{cm:LnkServer}"; Filename: "{app}\ResInvestERP-Serwer.cmd"; WorkingDir: "{app}"; Components: server
-Name: "{group}\{cm:LnkOpen}"; Filename: "{app}\ResInvest ERP (serwer).url"; Components: server
+Name: "{group}\{cm:LnkOpen}"; Filename: "{app}\ResInvestERP-Otworz.cmd"; Parameters: "{#AppURL}"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Flags: runminimized; Components: server
 Name: "{group}\{cm:LnkBackup}"; Filename: "{app}\ResInvestERP-Kopia.cmd"; WorkingDir: "{app}"; Components: server
 Name: "{group}\{cm:LnkCheck}"; Filename: "{app}\ResInvestERP-Kontrola.cmd"; WorkingDir: "{app}"; Components: server
 Name: "{group}\{cm:LnkData}"; Filename: "{commonappdata}\ResInvestERP"; Components: server
@@ -170,7 +170,7 @@ Name: "{group}\{cm:LnkEnv}"; Filename: "{sys}\notepad.exe"; Parameters: """{comm
 Name: "{group}\{cm:LnkDocs}"; Filename: "{app}\README.md"; Components: app
 Name: "{group}\{uninstallexe}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; Tasks: desktopicon; Components: app and not server
-Name: "{autodesktop}\{cm:LnkOpen}"; Filename: "{app}\ResInvest ERP (serwer).url"; Tasks: desktopicon; Components: server
+Name: "{autodesktop}\{cm:LnkOpen}"; Filename: "{app}\ResInvestERP-Otworz.cmd"; Parameters: "{#AppURL}"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Flags: runminimized; Tasks: desktopicon; Components: server
 Name: "{commonstartup}\{cm:LnkServer}"; Filename: "{app}\ResInvestERP-Serwer.cmd"; Parameters: "--no-open"; WorkingDir: "{app}"; Flags: runminimized; Tasks: autostart
 
 [Run]
