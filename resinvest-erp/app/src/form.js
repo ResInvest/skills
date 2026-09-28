@@ -54,7 +54,10 @@
     "sale.priceUnit": N_("<b>Co:</b> jednostka ceny. Przy cenie za tonę przychód liczony jest z masy (MP × 0,33 t)."),
     "mm.productId": N_("<b>Co:</b> towar przesuwany między magazynami. Stan ogółem firmy się nie zmienia."),
     "mm.qty": N_("<b>Co:</b> ilość do przesunięcia. Nie więcej niż stan w magazynie źródłowym."),
-    "mm.toWhId": N_("<b>Co:</b> magazyn docelowy. Musi być inny niż magazyn aktywny (źródłowy)."),
+    "mm.fromWhId": N_("<b>Co:</b> magazyn, z którego towar wychodzi. Lista zawiera magazyny, do których masz dostęp."),
+    "mm.toWhId": N_("<b>Co:</b> magazyn, do którego towar jest wysyłany. Musi być inny niż magazyn źródłowy."),
+    "mm.weightMode": N_("<b>Automatyczny</b> = przelicznik produktu (np. zrębka 0,33 t/MP). <b>Ręczny</b> = tonaż z kwitu wagowego. Tonaż nie zmienia ilości na stanie."),
+    "mm.weightManual": N_("<b>Co:</b> tonaż ładunku z wagi (kwit wagowy), w tonach. <b>Przykład:</b> 16,40."),
     "transport.place": N_("<b>Co:</b> dokąd jedzie ładunek (miejsce dostawy). Trafia na dokumenty jako „Miejsce transportu”."),
     "transport.mode": N_("<b>Co:</b> kto wiezie ładunek. <b>Transport nie zmienia stanu</b> — to wyłącznie koszt i karta transportu (TR)."),
     "transport.external.company": N_("<b>Co:</b> firma przewozowa. <b>Przykład:</b> ESI Logistics."),
@@ -116,7 +119,7 @@
     wz: d => { d.type = "SPRZEDAZ"; d.sale.direct = false; },
     produkcja: d => { d.type = "PRODUKCJA"; d.production.rawProductId = "pr_drewno"; d.production.outProductId = "pr_zr_lesna"; },
     bezposrednia: d => { d.type = "SPRZEDAZ"; d.sale.direct = true; d.production.rawProductId = "pr_drewno"; d.production.outProductId = "pr_zr_lesna"; },
-    mm: d => { d.type = "MM"; }
+    mm: d => { d.type = "MM"; d.mm.fromWhId = App.user().whId; }
   };
   const CANCEL_REASONS = [N_("pomyłka operatora"), N_("dokument wprowadzony podwójnie"), N_("dostawa nie dotarła"), N_("błędny kontrahent"), N_("błędny magazyn"), N_("inny")];
   const errorsWord = n => tp("{n} błąd|{n} błędy|{n} błędów", n);
@@ -174,9 +177,21 @@
     },
     /** Zasoby floty dostępne w magazynie operacji: przypisane do niego i wspólne (oraz już wybrany — dane historyczne). */
     fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
-    whId() { return this.mode === "correct" && this.op ? this.op.whId : this.review ? this.review.whId : App.user().whId; },
+    whId() {
+      if (this.mode === "correct" && this.op) return this.op.whId;
+      if (this.review) return this.review.whId;
+      // MM: magazyn źródłowy wybrany w formularzu (domyślnie — magazyn aktywny użytkownika)
+      const d = this.draft;
+      if (d && d.type === "MM" && d.mm && d.mm.fromWhId && R.byId(Store.state.warehouses, d.mm.fromWhId)) return d.mm.fromWhId;
+      return App.user().whId;
+    },
+    /** Magazyny, z których użytkownik może wysłać MM: dostępne dla niego i aktywne (oraz już wybrany — dane historyczne). */
+    sourceWarehouses(keepId) {
+      const acc = R.whAccess(App.user());
+      return Store.state.warehouses.filter(w => (acc === null || acc.includes(w.id)) && (w.active !== false || w.id === keepId));
+    },
     /** Co zrobi przycisk główny: przegląd (zatwierdź przekazaną), zatwierdzenie bezpośrednie albo przekazanie do zatwierdzenia. */
-    action() { return this.review ? "approve" : (!Store.state.config.requireApproval || R.canApprove(App.user(), App.user().whId)) ? "commit" : "submit"; },
+    action() { return this.review ? "approve" : (!Store.state.config.requireApproval || R.canApprove(App.user(), this.whId())) ? "commit" : "submit"; },
     /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
     supplierText() {
       const P = this.draft.purchase;
@@ -305,7 +320,7 @@
           ${typeCard("PRODUKCJA", t("Produkcja na magazyn"), t("Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu."))}
           ${typeCard("MM", t("Przesunięcie MM"), t("Magazyn → inny magazyn firmy. Stan firmy bez zmian."))}
         </div>
-        <div class="info-line mt3">${ic("layers", 15)}<span>${corr ? t("Magazyn: <b>{w}</b> — magazyn dokumentu.", { w: esc(wh ? wh.name : "—") }) : t("Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).", { w: esc(wh ? wh.name : "—"), u: esc(App.user().name) })}</span></div>
+        <div class="info-line mt3">${ic("layers", 15)}<span>${corr ? t("Magazyn: <b>{w}</b> — magazyn dokumentu.", { w: esc(wh ? wh.name : "—") }) : type === "MM" ? t("Magazyn źródłowy i docelowy wybierasz w sekcji przesunięcia.") : t("Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).", { w: esc(wh ? wh.name : "—"), u: esc(App.user().name) })}</span></div>
         <div class="fgrid four mt4">${field({ key: "date", label: t("Data operacji"), req: true, control: `<input class="ctrl" type="date" id="${fid("date")}" data-bind="date" value="${esc(d.date)}" max="${esc(App.today())}" ${corr ? "disabled" : ""}>` })}</div>`);
 
       if (type === "ZAKUP") {
@@ -375,15 +390,28 @@
         const prods = S.products.filter(p => (stock.get(p.id) || 0) > R.EPS || p.id === M.productId);
         const prod = App.product(M.productId);
         const u = Units.label(M.unit);
-        html += section(n++, "mm", t("Przesunięcie międzymagazynowe (MM)"), t("Rozchód z magazynu źródłowego i przychód w docelowym — jednym dokumentem MM."), `
+        const src = this.whId(), wMode = M.weightMode === "manual" ? "manual" : "auto";
+        const twoStage = corr ? !!(this.op.mm && this.op.mm.twoStage) : R.mmMode(S.config) === "two";
+        const srcList = corr ? S.warehouses.filter(w => w.id === src) : this.sourceWarehouses(src);
+        const dstList = S.warehouses.filter(w => w.active !== false || w.id === M.toWhId);
+        html += section(n++, "mm", t("Przesunięcie międzymagazynowe (MM)"), twoStage
+          ? t("Wysłanie z magazynu źródłowego; magazyn docelowy przyjmuje towar przyciskiem „Przyjmij MM”.")
+          : t("Rozchód z magazynu źródłowego i przychód w docelowym — jednym dokumentem MM."), `
+          <div class="info-line ${twoStage ? "warn" : ""} mb3" id="mm-mode-info">${ic(twoStage ? "truck" : "swap", 15)}<span>${twoStage
+            ? t("Tryb <b>dwuetapowy</b>: po zatwierdzeniu towar schodzi ze stanu źródła, a dokument ma status <b>W DRODZE</b>. Stan magazynu docelowego wzrośnie dopiero po przyjęciu MM (z ilością faktycznie przyjętą).")
+            : t("Tryb <b>jednoetapowy</b>: zatwierdzenie jednocześnie zmniejsza stan źródła i zwiększa stan magazynu docelowego.")}</span></div>
           <div class="fgrid four">
-            ${field({ key: "mm.from", label: t("Magazyn źródłowy"), control: outBox("mm.from", esc(wh ? wh.name : "—")), help: false })}
-            ${field({ key: "mm.toWhId", label: t("Magazyn docelowy"), req: true, control: selIn("mm.toWhId", [pick(t("wybierz magazyn"))].concat(S.warehouses.filter(w => w.id !== this.whId() && (w.active !== false || w.id === M.toWhId)).map(w => ({ v: w.id, l: w.name }))), M.toWhId, { struct: true, disabled: corr }) })}
+            ${field({ key: "mm.fromWhId", label: t("Magazyn źródłowy"), req: true, control: selIn("mm.fromWhId", srcList.map(w => ({ v: w.id, l: w.name })), src, { struct: true, disabled: corr || srcList.length < 2 && srcList.some(w => w.id === src) }) })}
+            ${field({ key: "mm.toWhId", label: t("Magazyn docelowy"), req: true, control: selIn("mm.toWhId", [pick(t("wybierz magazyn"))].concat(dstList.map(w => ({ v: w.id, l: w.id === src ? `${w.name} — ${t("magazyn źródłowy")}` : w.name }))), M.toWhId, { struct: true, disabled: corr }) })}
             ${field({ key: "mm.productId", label: t("Towar"), req: true, span: "span2", control: selIn("mm.productId", [pick(t("wybierz towar"))].concat(prods.map(p => ({ v: p.id, l: `${p.name} — ${fmtQ(stock.get(p.id) || 0)} ${Units.label(p.unit)}` }))), M.productId, { struct: true, disabled: corr }) })}
             ${field({ key: "mm.qty", label: t("Ilość"), req: true, control: numIn("mm.qty", M.qty, { suffix: u, placeholder: eg("300") }) })}
             ${field({ key: "mm.unit", label: t("Jednostka"), req: true, control: prod ? selIn("mm.unit", Units.allowed(prod).map(x => ({ v: x, l: Units.label(x) })), M.unit, { struct: true }) : outBox("mm.unit", esc(t("wybierz towar"))) })}
-            ${field({ key: "mm.srcBal", label: t("Źródło: stan przed → po"), control: outBox("mm.srcBal", "—"), help: false })}
-            ${field({ key: "mm.dstBal", label: t("Cel: stan przed → po"), control: outBox("mm.dstBal", "—"), help: false })}
+            ${field({ key: "mm.weightMode", label: t("Tonaż"), req: true, control: selIn("mm.weightMode", [{ v: "auto", l: t("Automatyczny (przelicznik)") }, { v: "manual", l: t("Ręczny — z kwitu wagowego") }], wMode, { struct: true }) })}
+            ${wMode === "manual"
+              ? field({ key: "mm.weightManual", label: t("Tonaż z wagi (t)"), req: true, control: numIn("mm.weightManual", M.weightManual, { suffix: "t", placeholder: eg(fmt(16.4, 2)) }) })
+              : field({ key: "mm.weightAuto", label: t("Tonaż wyliczony"), control: outBox("mm.weightAuto", "—"), help: false })}
+            ${field({ key: "mm.srcBal", label: t("Źródło: stan przed → po"), span: "span2", control: outBox("mm.srcBal", "—"), help: false })}
+            ${field({ key: "mm.dstBal", label: twoStage ? t("Cel: stan teraz → po przyjęciu") : t("Cel: stan przed → po"), span: "span2", control: outBox("mm.dstBal", "—"), help: false })}
           </div>`);
       }
 
@@ -669,6 +697,16 @@
       }
       if (key === "sale.productId") { const p = App.product(v); if (p) d.sale.unit = p.unit; }
       if (key === "mm.productId") { const p = App.product(v); if (p) d.mm.unit = p.unit; }
+      if (key === "mm.unit" && prev && prev !== v) {
+        // zmiana jednostki przelicza wpisaną ilość (ta sama fizyczna ilość)
+        const p = App.product(d.mm.productId), r = NumParse.parse(d.mm.qty);
+        if (p && r.ok) { try { d.mm.qty = fmtQ(Units.convert(r.value, prev, v, p, S.config), 6); } catch (e) {} }
+      }
+      if (key === "mm.fromWhId") {
+        // inny magazyn źródłowy = inny stan; towar spoza stanu nowego źródła zostaje (walidacja pokaże brak stanu)
+        const p = App.product(d.mm.productId);
+        if (p && !(Stock.balance(S, v, p.id) > R.EPS) && !String(d.mm.qty).trim()) d.mm.productId = "";
+      }
       if (key === "production.type" && R.PROD_TYPES[v] && d.type !== "PRODUKCJA") d.production.outProductId = R.PROD_TYPES[v].productId;
       if (key === "production.enabled" && !v) d.sale.enabled = false;
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
@@ -816,8 +854,14 @@
         const b = w => plan.balances.find(x => x.whId === w && x.productId === M.productId);
         const src = b(this.whId()), dst = b(M.toWhId);
         out("mm.srcBal", p && src ? `${esc(qn(src.before, p.id))} → <b>${esc(qn(src.after, p.id))}</b>` : p ? esc(qn(M.onStock, p.id)) : "—");
-        out("mm.dstBal", p && dst ? `${esc(qn(dst.before, p.id))} → <b>${esc(qn(dst.after, p.id))}</b>` : "—");
+        if (M.twoStage) {
+          const toWh = R.byId(S.warehouses, M.toWhId);
+          const now = p && toWh ? (this.mode === "correct" ? Stock.balance(Object.assign({}, S, { ledger: S.ledger.filter(l => l.opId !== this.op.id) }), toWh.id, p.id) : Stock.balance(S, toWh.id, p.id)) : null;
+          out("mm.dstBal", p && toWh && toWh.id !== this.whId() ? `${esc(qn(now, p.id))} → <b>${esc(qn(R.rq(now + (M.stockQty || 0)), p.id))}</b> <small class="dim" style="margin-left:6px">${esc(t("po przyjęciu"))}</small>` : "—");
+        } else out("mm.dstBal", p && dst ? `${esc(qn(dst.before, p.id))} → <b>${esc(qn(dst.after, p.id))}</b>` : "—");
         if (p && M.qty !== null && M.unit !== p.unit) add("mm.qty", `= ${esc(qn(M.stockQty, p.id))}`);
+        out("mm.weightAuto", p && M.qty !== null ? `${p.unit === "t" ? "" : "≈ "}<b>${esc(fmt(M.autoWeight, 2))} t</b>` : "—");
+        if (M.weightMode === "manual" && M.qty !== null && p) add("mm.weightManual", esc(t("z przelicznika: {q} t — ilość na stanie się nie zmienia", { q: fmtQ(M.autoWeight) })));
       }
       const T = n.transport;
       const ownP = T.mode === "own" ? T : T.mode === "mixed" ? T.own : null;
@@ -985,9 +1029,10 @@
       else Toast.ok(t("Dokument zatwierdzony"), res.op.documents.map(x => x.no).join(" · "));
       const op = res.op;
       if (action === "approve") { location.hash = "#/operacje"; App.render(); root.OpDetail.open(op.id, { justSaved: true }); return; }
-      const keep = { type: this.draft.type, direct: this.draft.sale.direct };
+      const keep = { type: this.draft.type, direct: this.draft.sale.direct, from: this.draft.mm && this.draft.mm.fromWhId };
       this.reset();
       this.draft.type = keep.type; this.draft.sale.direct = keep.direct;
+      if (keep.type === "MM") this.draft.mm.fromWhId = keep.from || App.user().whId;
       if (keep.type === "PRODUKCJA" || keep.direct) PRESETS[keep.type === "PRODUKCJA" ? "produkcja" : "bezposrednia"](this.draft);
       this.draft.transport.place = this.defaultPlace();
       this.persist();
@@ -1026,7 +1071,11 @@
           if (X.outUnit === "MP") add(t("Cena za rąbanie / koszt"), `${fmt(X.chipRate)} zł/MP → <b>${money(X.chippingCost)}</b>`);
         }
         if (n.sale) { add(t("Odbiorca"), esc((App.partner(n.sale.buyerId) || {}).name)); add(t("Sprzedaż"), `${esc(fmtQ(n.sale.qty))} ${Units.label(n.sale.unit)} → <b>${money(n.sale.revenue)}</b>`); }
-        if (n.mm) add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);
+        if (n.mm) {
+          add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);
+          add(t("Tonaż"), `${esc(fmtQ(n.mm.weightT))} t ${n.mm.weightMode === "manual" ? esc(t("(z wagi)")) : esc(t("(z przelicznika)"))}`);
+          add(t("Tryb MM"), n.mm.twoStage ? `<span class="badge warn">${esc(t("W DRODZE"))}</span> ${esc(t("stan magazynu docelowego wzrośnie po przyjęciu MM"))}` : esc(t("jednoetapowy — przychód w magazynie docelowym od razu")));
+        }
         if (n.transport.mode !== "none") add(t("Transport"), `${esc(t(R.TRANSPORT_MODES[n.transport.mode]))} — ${esc(transportText(n.transport))} · ${money(n.transport.cost)}`);
         if (plan.type !== "PRODUKCJA") add(t("Miejsce transportu"), esc(n.transport.place));
         add(t("Wynik operacji"), `<b>${money(plan.totals.result)}</b>`);

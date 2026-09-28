@@ -1,8 +1,12 @@
-# ResInvest ERP 3.2 (3.2.0)
+# ResInvest ERP 3.3 (3.3.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
-> Wersja 3.2.0 wprowadza **pełny system kont firmowych**: logowanie e-mailem `@resinvest.group` sprawdzanym
+> Wersja 3.3.0 przebudowuje **przesunięcia międzymagazynowe (MM)**: dowolny wybór magazynu źródłowego i docelowego,
+> tryb **dwuetapowy** (wysłanie → „W drodze” → **Przyjmij MM** z ilością faktyczną) przełączany w Administracji
+> oraz **tonaż** automatyczny lub ręczny z kwitu wagowego. Szczegóły: [`docs/MM_PRZESUNIECIA.md`](docs/MM_PRZESUNIECIA.md).
+>
+> Wersja 3.2.0 wprowadziła **pełny system kont firmowych**: logowanie e-mailem `@resinvest.group` sprawdzanym
 > po stronie serwera, dodawanie pracowników **zaproszeniem e-mail** (Resend), reset hasła linkiem, role
 > ADMINISTRATOR / MANAGER / MAGAZYNIER / OBSERWATOR / AUDYTOR z edytowalnymi uprawnieniami, statusy kont,
 > **izolację danych magazynów** i dziennik audytu z adresem IP. Instalator Windows: Inno Setup 7 (`installer\build-installer.ps1`).
@@ -20,6 +24,26 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.3
+
+* **MM — wybór magazynu źródłowego:** pole „Magazyn źródłowy” jest aktywne i zawiera magazyny, do których użytkownik
+  ma dostęp (lista z danych programu). Magazyn docelowy — dowolny aktywny magazyn firmy. Wybranie tego samego
+  magazynu w obu polach zwraca błąd „Magazyn źródłowy i docelowy nie mogą być takie same”. Dostęp do magazynu
+  źródłowego sprawdza **serwer** — pole `fromWhId` z przeglądarki nie daje uprawnień.
+* **MM dwuetapowe (domyślnie):** zatwierdzenie = **wysłanie** — towar schodzi ze stanu źródła w tej samej transakcji,
+  dokument ma status **W DRODZE**. Stan magazynu docelowego rośnie dopiero, gdy użytkownik tego magazynu kliknie
+  **Przyjmij MM** i wpisze **ilość faktycznie przyjętą** (dowolna dozwolona jednostka), datę i tonaż. Różnica
+  (ubytek / nadwyżka) wymaga przyczyny i trafia do dokumentu, audytu i raportu MM (wysłano / przyjęto / różnica).
+  Nowe uprawnienie **`mm.receive`** (Kierownik, Magazynier). Lista „Przesunięcia w drodze” w module MM, alerty
+  na pulpicie („MM do przyjęcia”, „MM wysłane — w drodze”).
+* **Przełącznik w Administracji** (*Konfiguracja dostępu → Przesunięcia międzymagazynowe*): tryb jednoetapowy
+  (rozchód i przychód jednym zatwierdzeniem) albo dwuetapowy. Zmiana dotyczy nowych dokumentów.
+* **Tonaż MM:** automatyczny z przelicznika produktu albo ręczny (kwit wagowy) — przy wysłaniu i przy przyjęciu;
+  tonaż nie zmienia ilości na stanie, ostrzeżenie przy rozbieżności > 25%.
+* Anulowanie MM w drodze przywraca stan źródła (przyjęcie zablokowane); po przyjęciu — cofa oba magazyny.
+  Korekta MM zmienia ilość wysłaną (przyjęcie zostaje, różnica jest przeliczana); magazynów i towaru korektą się nie zmienia.
+* Schemat danych **7** (migracja 6 → 7 automatyczna: tryb MM, uprawnienie `mm.receive` dla ról z `mm.create`).
 
 ## Nowe w 3.2
 
@@ -120,7 +144,7 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
 
 ## Instalacja (Windows)
 
-Uruchom **`ResInvestERP_Setup_3.2.0.exe`** (budowanie — niżej) i wybierz:
+Uruchom **`ResInvestERP_Setup_3.3.0.exe`** (budowanie — niżej) i wybierz:
 
 * **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
   tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
@@ -168,7 +192,7 @@ Flota przykładowa: Zabrze — Scania R450, Volvo FH 500, rębak Jenz HEM 583; B
 rębak Eschlböck Biber 92; Rokitki — DAF XF 480, rębak Albach Diamant 2000 (z kierowcami i operatorami).
 
 Dane przykładowe: bilans otwarcia 01.08.2026 (Zabrze: drewno 817 m³, zrębka leśna 8 173 MP, PKS i łupina po 728 t),
-operacje każdego rodzaju, MM Zabrze → Brąszewice, korekta WZ i anulowany zakup; plik `data/sample_data.json`
+operacje każdego rodzaju, MM Zabrze → Brąszewice (dwuetapowe: wysłanie i przyjęcie z tonażem z wagi), korekta WZ i anulowany zakup; plik `data/sample_data.json`
 (kopia do wczytania w *Administracja → Wczytaj kopię*).
 
 ## Funkcje
@@ -276,10 +300,10 @@ npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
 npm run themes        # kontrast WCAG wszystkich 5 motywów
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
-npm run test:unit     # silnik, PDF, platforma: jednostki, korekty, transport, i18n, hasła, role, magazyny (105)
-npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35: zaproszenia, reset, izolacja magazynów, 403 (25)
+npm run test:unit     # silnik (w tym MM dwuetapowe), PDF, platforma: jednostki, korekty, transport, i18n, hasła, role (113)
+npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35, MM przez serwer: zaproszenia, reset, izolacja magazynów, 403 (26)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # przeglądarka: tryb OFFLINE (193 kontrole) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
+npm run test:e2e      # przeglądarka: tryb OFFLINE (202 kontrole) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
 FFMPEG=ffmpeg node tests/e2e-intro.cjs   # intro na prawdziwym filmie (wariant WebM dla Chromium bez H.264)
 ```
 
@@ -291,7 +315,7 @@ Plik `.iss` jest zapisany w UTF-8 z BOM (polskie i czeskie znaki w Inno Setup 7)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Setup_3.2.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
+# → installer\Output\ResInvestERP_Setup_3.3.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
 Bez Windows (serwer budowania Linux): `bash installer/build-installer-wine.sh` — ten sam plik `.iss`,
@@ -304,7 +328,7 @@ kompilator Inno Setup 6.4 (pakiet npm `innosetup`) uruchamiany w Wine (wymaga `w
   i wpis dziennika zapisują się razem albo wcale. `--check` sprawdza sumy kontrolne stanu i łańcuch dziennika.
 * **Tryb lokalny:** *Administracja → Pobierz kopię (JSON)*; zapis chroniony blokadą między kartami (Web Locks);
   uszkodzone dane są zachowywane pod kluczem `riw.v3.state.uszkodzone.<czas>`.
-* **Import kopii** (oba tryby): kontrola struktury, migracja do bieżącego schematu (6), zachowanie zalogowanego administratora;
+* **Import kopii** (oba tryby): kontrola struktury, migracja do bieżącego schematu (7), zachowanie zalogowanego administratora;
   hasła nigdy nie trafiają do kopii JSON.
 
 ## Migracja z Demo 2.x

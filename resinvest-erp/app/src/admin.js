@@ -382,7 +382,7 @@
   /* Role i uprawnienia                                                   */
   /* ================================================================== */
   const PERM_GROUPS = [
-    [N_("Operacje"), ["receipts.create", "issues.create", "production.create", "mm.create", "op.approve"]],
+    [N_("Operacje"), ["receipts.create", "issues.create", "production.create", "mm.create", "mm.receive", "op.approve"]],
     [N_("Korekty i anulowania"), ["documents.cancel", "documents.correct", "purchases.correct", "sales.correct", "production.correct", "inventory.correct"]],
     [N_("Inwentaryzacja"), ["inv.open", "inv.count", "inv.close"]],
     [N_("Kartoteki"), ["fleet.edit", "master.edit", "warehouses.edit"]],
@@ -543,6 +543,9 @@
           ${App.can("settings.edit") ? `<div class="card" id="access-card"><div class="card-h"><h3>${th("Konfiguracja dostępu")}</h3></div><div class="card-b stack">
             <label class="inline-opt"><input type="checkbox" id="cfg-approval" ${S.config.requireApproval ? "checked" : ""}> ${th("Obieg zatwierdzania operacji")}</label>
             <p class="help">${th("Wyłączony (domyślnie): osoba z uprawnieniem do wprowadzania zatwierdza operację sama. Włączony: operacje osób bez uprawnienia „op.approve” czekają na zatwierdzenie kierownika magazynu.")}</p>
+            <div class="field"><label for="cfg-mmmode">${th("Przesunięcia międzymagazynowe (MM)")}</label>
+              <select class="ctrl" id="cfg-mmmode">${Object.entries(R.MM_MODES).map(([k, l]) => `<option value="${k}" ${R.mmMode(S.config) === k ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+            <p class="help">${th("Dwuetapowy (domyślnie): wysłanie zmniejsza stan źródła, dokument ma status „W drodze”, a stan magazynu docelowego rośnie dopiero po „Przyjmij MM” (z ilością faktyczną i przyczyną różnicy). Zmiana dotyczy nowych dokumentów — MM już wysłane zachowują swój tryb.")}</p>
             <label class="inline-opt"><input type="checkbox" id="cfg-selfreg" ${S.config.allowSelfRegistration ? "checked" : ""}> ${th("Samodzielna rejestracja z ekranu logowania")}</label>
             <p class="help">${th("Wyłączona (zalecane): konta zakłada wyłącznie administrator — zaproszeniem e-mail. Włączona: zgłoszenie czeka na nadanie roli i magazynu przez administratora.")}</p>
             <p class="help">${esc(t("Dozwolone domeny e-mail: {d} (config/app.config.json).", { d: (S.config.companyDomains || []).map(d => "@" + d).join(", ") }))}</p>
@@ -582,6 +585,7 @@
         App.render();
       };
       const ca = $("#cfg-approval", page); if (ca) ca.onchange = e => setCfg("requireApproval", e.target.checked);
+      const cm = $("#cfg-mmmode", page); if (cm) cm.onchange = e => setCfg("mmMode", e.target.value);
       const cs = $("#cfg-selfreg", page); if (cs) cs.onchange = e => setCfg("allowSelfRegistration", e.target.checked);
       $("#bk-export", page).onclick = async () => {
         download(`resinvest_kopia_${App.today()}.json`, JSON.stringify(Store.state, null, 1), "application/json");

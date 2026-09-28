@@ -199,9 +199,9 @@
       }]
     ];
     ops.push(
-      // przesunięcie międzymagazynowe (MM): Zabrze → Brąszewice
+      // przesunięcie międzymagazynowe (MM, dwuetapowe): wysłanie Zabrze → Brąszewice, przyjęcie w Brąszewicach tego samego dnia
       ["u_kier", "2026-09-16", {
-        type: "MM", mm: { productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_bra" },
+        type: "MM", mm: { fromWhId: "wh_zab", productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_bra", weightMode: "manual", weightManual: "16,4" },
         transport: { mode: "own", place: "RiC Brąszewice", own: { vehicleId: "ve_scania", km: "28", rate: "5" } }
       }],
       // zakup wprowadzony omyłkowo — w danych przykładowych jest później anulowany
@@ -222,6 +222,12 @@
       const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
+    }
+    // przyjęcie MM przez magazyn docelowy (Brąszewice): pełna ilość, tonaż z wagi
+    const mm = byNo["MM@2026-09-16"];
+    if (RIW.mmState(mm) === "W_DRODZE") {
+      const rr = RIW.receiveTransfer(s, mm.id, { qty: "50", unit: "MP", date: "2026-09-16", weightMode: "manual", weightManual: "16,2", note: "Kwit wagowy BR 0916/1" }, ctx("u_bra", "2026-09-16"));
+      if (!rr.ok) throw new Error("Dane przykładowe (przyjęcie MM): " + rr.error);
     }
     // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
     const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);

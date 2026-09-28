@@ -12,7 +12,7 @@ Administrator może tworzyć innych administratorów, nadawać i odbierać role.
 |---|---|---|---|
 | **ADMINISTRATOR** | Administrator | wszystkie | wszystkie (`*`) — nie można ich ograniczyć |
 | **MANAGER** | Kierownik | przydzielone | wprowadzanie operacji, zatwierdzanie, korekty i anulowania, inwentaryzacja (otwarcie, spis, zamknięcie), flota, kartoteki (produkty, kontrahenci), raporty z eksportem, historia, podgląd użytkowników |
-| **MAGAZYNIER** | Magazynier | przydzielone | przyjęcia, wydania, produkcja, MM, spis z natury, raporty, historia |
+| **MAGAZYNIER** | Magazynier | przydzielone | przyjęcia, wydania, produkcja, MM (wysłanie i przyjęcie), spis z natury, raporty, historia |
 | **OBSERWATOR** | Obserwator | przydzielone | tylko odczyt: stany, dokumenty, raporty, historia |
 | **AUDYTOR** | Audytor | wszystkie (odczyt) | raporty z eksportem, historia, dziennik audytu, podgląd użytkowników — bez zmian w danych |
 
@@ -23,6 +23,7 @@ Kod roli w danych: `admin`, `kierownik`, `magazynier`, `obserwator`, `audytor` (
 | Uprawnienie | Znaczenie |
 |---|---|
 | `receipts.create`, `issues.create`, `production.create`, `mm.create` | wprowadzanie zakupów/przyjęć, sprzedaży/wydań, produkcji, przesunięć MM |
+| `mm.receive` | przyjęcie MM w magazynie docelowym (tryb dwuetapowy); dodatkowo wymagany dostęp do magazynu docelowego |
 | `op.approve` | zatwierdzanie operacji innych osób (gdy obieg zatwierdzania jest włączony) |
 | `documents.cancel`, `documents.correct` | anulowanie i korekty dokumentów |
 | `purchases.correct`, `sales.correct`, `production.correct`, `inventory.correct` | korekty wg rodzaju operacji |

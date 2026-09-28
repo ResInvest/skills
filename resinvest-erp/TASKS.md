@@ -1,5 +1,23 @@
 # TASKS — ResInvest ERP
 
+## 3.3.0 — przesunięcia MM: magazyn źródłowy, tryb dwuetapowy, przyjęcie, tonaż
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| pole „Magazyn źródłowy” aktywne, lista magazynów dostępnych użytkownikowi (z danych) | DONE | E2E „MM: pole magazynu źródłowego aktywne…”, „listy magazynów z danych…” |
+| magazyn docelowy — dowolny aktywny magazyn firmy | DONE | E2E, `engine.test` „wybór magazynu źródłowego” |
+| walidacja: źródło ≠ cel (błąd, kod SAME_WH) | DONE | `engine.test`, E2E „ten sam magazyn…” |
+| dostęp do magazynu źródłowego sprawdzany na serwerze (manipulacja `fromWhId`) | DONE | `engine.test`, `auth.test` „MM dwuetapowe przez serwer” |
+| rozchód w źródle i przychód w celu w jednej transakcji (tryb jednoetapowy) | DONE | `engine.test` „MM jednoetapowe…” |
+| tryb dwuetapowy: W DRODZE → „Przyjmij MM” (magazyn docelowy, `mm.receive`) | DONE | `engine.test` (8 testów MM), `auth.test`, E2E |
+| przyjęcie z ilością faktyczną, przyczyna różnicy, raport wysłano / przyjęto / różnica | DONE | `engine.test` „przyjęcie z ilością faktyczną…”, E2E |
+| przełącznik trybu w Administracji (+ audyt) | DONE | `engine.test` „przełącznik trybu…” |
+| tonaż automatyczny / ręczny (wysłanie i przyjęcie) | DONE | `engine.test` „tonaż…”, E2E |
+| anulowanie i korekta MM w obu stanach | DONE | `engine.test` |
+| migracja danych 6 → 7 | DONE | `engine.test` „…migracja 6 → 7” |
+| tłumaczenia CS / EN | DONE | `npm run i18n`: 0 braków, 0 nieużywanych |
+| instalator 3.3.0 | DONE (Inno Setup 6.4.1 w Wine) | aktualizacja 3.2 → 3.3 w Wine 9 (win64) zakończona sukcesem; prawdziwy Windows / Inno Setup 7 — NIEPOTWIERDZONE |
+
 ## 3.2.0 — konta firmowe, role, uprawnienia, izolacja magazynów (kryteria gotowości §44)
 
 | Kryterium | Status | Dowód |

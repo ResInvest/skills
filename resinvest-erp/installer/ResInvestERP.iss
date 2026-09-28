@@ -1,5 +1,5 @@
 ﻿; =========================================================================
-;  ResInvest ERP 3.2 · instalator Windows (Inno Setup 7; zgodny z Inno Setup 6.3+)
+;  ResInvest ERP 3.3 · instalator Windows (Inno Setup 7; zgodny z Inno Setup 6.3+)
 ;  Kodowanie pliku: UTF-8 z BOM (wymagane dla polskich i czeskich znaków — Inno Setup 7
 ;  przerywa kompilację przy bajtach niezgodnych ze stroną kodową pliku).
 ;
@@ -7,7 +7,7 @@
 ;    powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ;  Skrypt: buduje ResInvest_ERP.html, generuje dane przykładowe, pobiera
 ;  środowisko Node.js (node.exe, weryfikacja SHA-256) do installer\runtime
-;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.2.0.exe
+;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.3.0.exe
 ;
 ;  Składniki:
 ;   * Program (tryb lokalny)   — samodzielny plik HTML; dane w przeglądarce,
@@ -22,7 +22,7 @@
 ; =========================================================================
 
 #define AppName "ResInvest ERP"
-#define AppVersion "3.2.0"
+#define AppVersion "3.3.0"
 #define AppPublisher "ResInvest Commodities"
 #define AppURL "http://localhost:8080/"
 #define ServerPort "8080"
