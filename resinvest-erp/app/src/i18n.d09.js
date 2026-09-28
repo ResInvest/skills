@@ -32,7 +32,6 @@
   "Dokumenty zmniejszające stan: sprzedaż (WZ), zużycie surowca (RW) i przesunięcia wychodzące (MM). WZ nie może przekroczyć stanu dostępnego.": ["Doklady snižující zásobu: prodej (WZ), spotřeba suroviny (RW) a odchozí převody (MM). WZ nesmí překročit dostupnou zásobu.", "Documents that reduce stock: sales (WZ), raw material consumption (RW) and outgoing transfers (MM). A WZ cannot exceed available stock."],
   "Nowa sprzedaż (WZ)": ["Nový prodej (WZ)", "New sale (WZ)"],
   "Przesunięcia międzymagazynowe (MM)": ["Meziskladové převody (MM)", "Inter-warehouse transfers (MM)"],
-  "Rozchód z magazynu źródłowego i przychód w docelowym jednym dokumentem. Stan firmy ogółem się nie zmienia.": ["Výdej ze zdrojového skladu a příjem v cílovém jedním dokladem. Celková zásoba firmy se nemění.", "Issue from the source warehouse and receipt in the target with one document. The company's total stock does not change."],
   "Nowe przesunięcie MM": ["Nový převod MM", "New MM transfer"],
   "przesunięcie": ["převod", "transfer"],
   "transport": ["doprava", "transport"],

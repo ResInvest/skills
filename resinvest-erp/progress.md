@@ -106,3 +106,16 @@ Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z
 | server + auth | 34/34 |
 | E2E OFFLINE | 187/187 |
 | E2E FIRMOWY | 24/24 |
+
+## 3.3.0 — przesunięcia MM: magazyn źródłowy, tryb dwuetapowy, przyjęcie MM, tonaż (2026-09-28)
+
+| Zestaw | Wynik |
+|---|---|
+| `npm run check`, `npm run i18n`, `npm run themes` | OK · CS/EN 0 braków / 0 nieużywanych · kontrast 5 motywów OK |
+| unit (engine, pdf, platform) | 113/113 (w tym 8 nowych testów MM) |
+| server + auth | 35/35 (w tym MM przez HTTP) |
+| E2E OFFLINE (`e2e.cjs`) | 202/202, konsola bez błędów |
+| E2E FIRMOWY (`e2e-server.cjs`) | 24/24 |
+| Intro (`e2e-intro.cjs`) | 15/15 |
+| Układ na telefonie (390 px): formularz MM, lista „w drodze”, okno przyjęcia | bez poziomego przewijania (zrzuty ekranu sprawdzone) |
+| Instalator 3.3.0 | Inno Setup 6.4.1 (Wine); aktualizacja istniejącej instalacji 3.2 w Wine 9 (win64) zakończona sukcesem. Prawdziwy Windows / Inno Setup 7 — NIEPOTWIERDZONE |

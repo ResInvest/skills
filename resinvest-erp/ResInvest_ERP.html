@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="description" content="ResInvest ERP 3.2 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
-<meta name="generator" content="ResInvest ERP build 3.2.0 · 2026-09-26">
+<meta name="description" content="ResInvest ERP 3.3 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
+<meta name="generator" content="ResInvest ERP build 3.3.0 · 2026-09-28">
 <title>ResInvest ERP</title>
 <script>
 /* Przed pierwszym malowaniem: motyw (bez „mignięcia” jasnego tła) i decyzja o intro (ekran z pierwszą klatką filmu). */
@@ -1640,7 +1640,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "Wybierz produkt": ["Vyberte produkt", "Select a product"],
   "Wybierz magazyn docelowy przesunięcia": ["Vyberte cílový sklad převodu", "Select the target warehouse for the transfer"],
   "Nieznany magazyn": ["Neznámý sklad", "Unknown warehouse"],
-  "Magazyn docelowy musi być inny niż magazyn źródłowy": ["Cílový sklad musí být jiný než zdrojový", "The target warehouse must differ from the source warehouse"],
   "Magazyn docelowy jest nieaktywny": ["Cílový sklad je neaktivní", "The target warehouse is inactive"],
   "W magazynie {w} okres {ym} jest zamknięty": ["Ve skladu {w} je období {ym} uzavřené", "Period {ym} is closed in warehouse {w}"],
   "Nie można przesunąć {a} {u}. Dostępny stan: {b} {u}.": ["Nelze převést {a} {u}. Dostupná zásoba: {b} {u}.", "Cannot transfer {a} {u}. Available stock: {b} {u}."],
@@ -1838,7 +1837,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "<b>Co:</b> jednostka ceny. Przy cenie za tonę przychód liczony jest z masy (MP × 0,33 t).": ["<b>Co:</b> jednotka ceny. Při ceně za tunu se tržba počítá z hmotnosti (MP × 0,33 t).", "<b>What:</b> the price unit. With a price per tonne, revenue is calculated from mass (MP × 0.33 t)."],
   "<b>Co:</b> towar przesuwany między magazynami. Stan ogółem firmy się nie zmienia.": ["<b>Co:</b> zboží převáděné mezi sklady. Celková zásoba firmy se nemění.", "<b>What:</b> goods moved between warehouses. The company's total stock does not change."],
   "<b>Co:</b> ilość do przesunięcia. Nie więcej niż stan w magazynie źródłowym.": ["<b>Co:</b> množství k převodu. Ne více než zásoba ve zdrojovém skladu.", "<b>What:</b> the quantity to transfer. No more than the stock in the source warehouse."],
-  "<b>Co:</b> magazyn docelowy. Musi być inny niż magazyn aktywny (źródłowy).": ["<b>Co:</b> cílový sklad. Musí být jiný než aktivní (zdrojový) sklad.", "<b>What:</b> the target warehouse. It must differ from the active (source) warehouse."],
   "<b>Co:</b> dokąd jedzie ładunek (miejsce dostawy). Trafia na dokumenty jako „Miejsce transportu”.": ["<b>Co:</b> kam náklad jede (místo dodání). Uvádí se na dokladech jako „Místo přepravy“.", "<b>What:</b> where the load is going (delivery location). It appears on documents as “Transport location”."],
   "<b>Co:</b> kto wiezie ładunek. <b>Transport nie zmienia stanu</b> — to wyłącznie koszt i karta transportu (TR).": ["<b>Co:</b> kdo náklad veze. <b>Doprava nemění zásobu</b> — je to pouze náklad a přepravní karta (TR).", "<b>What:</b> who carries the load. <b>Transport does not change stock</b> — it is only a cost and a transport card (TR)."],
   "<b>Co:</b> firma przewozowa. <b>Przykład:</b> ESI Logistics.": ["<b>Co:</b> dopravní firma. <b>Příklad:</b> ESI Logistics.", "<b>What:</b> the haulage company. <b>Example:</b> ESI Logistics."],
@@ -2386,7 +2384,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "Dokumenty zmniejszające stan: sprzedaż (WZ), zużycie surowca (RW) i przesunięcia wychodzące (MM). WZ nie może przekroczyć stanu dostępnego.": ["Doklady snižující zásobu: prodej (WZ), spotřeba suroviny (RW) a odchozí převody (MM). WZ nesmí překročit dostupnou zásobu.", "Documents that reduce stock: sales (WZ), raw material consumption (RW) and outgoing transfers (MM). A WZ cannot exceed available stock."],
   "Nowa sprzedaż (WZ)": ["Nový prodej (WZ)", "New sale (WZ)"],
   "Przesunięcia międzymagazynowe (MM)": ["Meziskladové převody (MM)", "Inter-warehouse transfers (MM)"],
-  "Rozchód z magazynu źródłowego i przychód w docelowym jednym dokumentem. Stan firmy ogółem się nie zmienia.": ["Výdej ze zdrojového skladu a příjem v cílovém jedním dokladem. Celková zásoba firmy se nemění.", "Issue from the source warehouse and receipt in the target with one document. The company's total stock does not change."],
   "Nowe przesunięcie MM": ["Nový převod MM", "New MM transfer"],
   "przesunięcie": ["převod", "transfer"],
   "transport": ["doprava", "transport"],
@@ -3023,6 +3020,114 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
 </script>
 <script>
+/* i18n.d14.js */
+/* Słownik CS/EN — część 14 (3.2: przesunięcia MM — magazyn źródłowy, tryb dwuetapowy, przyjęcie MM, tonaż) */
+(function (root) { "use strict"; (root.RIW_I18N || require("./i18n.js")).addPairs({
+  "Dwuetapowy (domyślnie): wysłanie zmniejsza stan źródła, dokument ma status „W drodze”, a stan magazynu docelowego rośnie dopiero po „Przyjmij MM” (z ilością faktyczną i przyczyną różnicy). Zmiana dotyczy nowych dokumentów — MM już wysłane zachowują swój tryb.": ["Dvoufázový (výchozí): odeslání sníží zásobu zdroje, doklad má stav „Na cestě“ a zásoba cílového skladu vzroste až po „Přijmout MM“ (se skutečným množstvím a důvodem rozdílu). Změna se týká nových dokladů — již odeslané MM si ponechají svůj režim.", "Two-step (default): dispatch reduces the source stock, the document is “In transit”, and the destination stock grows only after “Receive MM” (with the actual quantity and a reason for any difference). The change applies to new documents — MM already dispatched keep their mode."],
+  "{n} MM do przyjęcia|{n} MM do przyjęcia|{n} MM do przyjęcia": ["{n} MM k přijetí|{n} MM k přijetí|{n} MM k přijetí", "{n} MM to receive|{n} MM to receive"],
+  "Towar w drodze do magazynu {w} — przyjmij MM, aby zwiększyć stan.": ["Zboží na cestě do skladu {w} — přijměte MM, aby se zvýšila zásoba.", "Goods in transit to warehouse {w} — receive the MM to increase stock."],
+  "{n} MM wysłane — w drodze|{n} MM wysłane — w drodze|{n} MM wysłanych — w drodze": ["{n} MM odeslaná — na cestě|{n} MM odeslaná — na cestě|{n} MM odeslaných — na cestě", "{n} MM dispatched — in transit|{n} MM dispatched — in transit"],
+  "Czeka na przyjęcie przez magazyn docelowy.": ["Čeká na přijetí cílovým skladem.", "Awaiting receipt by the destination warehouse."],
+  "Przyjęcie MM na magazynie docelowym": ["Přijetí MM v cílovém skladu", "MM receipt at the destination warehouse"],
+  "Jednoetapowy — przychód w magazynie docelowym przy zatwierdzeniu": ["Jednofázový — příjem v cílovém skladu při schválení", "One-step — stock added at the destination on approval"],
+  "Dwuetapowy — wysłanie, „W drodze”, przyjęcie przez magazyn docelowy": ["Dvoufázový — odeslání, „Na cestě“, přijetí cílovým skladem", "Two-step — dispatch, “In transit”, receipt by the destination warehouse"],
+  "W DRODZE — oczekuje na przyjęcie": ["NA CESTĚ — čeká na přijetí", "IN TRANSIT — awaiting receipt"],
+  "PRZYJĘTE": ["PŘIJATO", "RECEIVED"],
+  "ANULOWANE": ["STORNOVÁNO", "CANCELLED"],
+  "Ubytek w transporcie": ["Úbytek při přepravě", "Loss in transit"],
+  "Uszkodzenie / zanieczyszczenie": ["Poškození / znečištění", "Damage / contamination"],
+  "Nadwyżka przy przyjęciu": ["Přebytek při přijetí", "Surplus on receipt"],
+  "Schemat 6 → 7: przesunięcia MM dwuetapowe (W drodze → przyjęcie), uprawnienie przyjęcia MM, tonaż MM": ["Schéma 6 → 7: dvoufázové převody MM (Na cestě → přijetí), oprávnění k přijetí MM, tonáž MM", "Schema 6 → 7: two-step MM transfers (In transit → receipt), MM receipt permission, MM tonnage"],
+  "Nieznany magazyn źródłowy": ["Neznámý zdrojový sklad", "Unknown source warehouse"],
+  "Magazyn źródłowy jest nieaktywny": ["Zdrojový sklad je neaktivní", "The source warehouse is inactive"],
+  "Magazyn źródłowy i docelowy nie mogą być takie same": ["Zdrojový a cílový sklad nesmí být stejný", "The source and destination warehouses cannot be the same"],
+  "tonaż": ["tonáž", "tonnage"],
+  "Tonaż {a} t różni się o ponad 25% od wyliczonego z przelicznika {b} t — sprawdź kwit wagowy.": ["Tonáž {a} t se liší o více než 25 % od vypočtené z přepočtu {b} t — zkontrolujte vážní lístek.", "Tonnage {a} t differs by more than 25% from the calculated {b} t — check the weighbridge ticket."],
+  "Produkt liczony w tonach: stan zmieni się o {a} t (ilość), tonaż z wagi {b} t jest informacyjny.": ["Produkt vedený v tunách: zásoba se změní o {a} t (množství), tonáž z váhy {b} t je informativní.", "Product kept in tonnes: stock changes by {a} t (quantity); the weighed tonnage {b} t is informational."],
+  "Wybierz sposób ustalenia tonażu": ["Vyberte způsob určení tonáže", "Choose how tonnage is determined"],
+  "Wysłanie MM do magazynu {w} — w drodze, oczekuje na przyjęcie": ["Odeslání MM do skladu {w} — na cestě, čeká na přijetí", "MM dispatched to warehouse {w} — in transit, awaiting receipt"],
+  "Nie znaleziono dokumentu MM": ["Doklad MM nebyl nalezen", "MM document not found"],
+  "Dokument {no} jest anulowany — nie można go przyjąć": ["Doklad {no} je stornován — nelze jej přijmout", "Document {no} is cancelled — it cannot be received"],
+  "Dokument {no} został przyjęty automatycznie (MM jednoetapowe)": ["Doklad {no} byl přijat automaticky (jednofázové MM)", "Document {no} was received automatically (one-step MM)"],
+  "Dokument {no} został już przyjęty ({d}, {u})": ["Doklad {no} již byl přijat ({d}, {u})", "Document {no} has already been received ({d}, {u})"],
+  "MM przyjmuje użytkownik magazynu docelowego ({w}) albo Administrator": ["MM přijímá uživatel cílového skladu ({w}) nebo správce", "The MM is received by a user of the destination warehouse ({w}) or an Administrator"],
+  "Data przyjęcia nie może być z przyszłości": ["Datum přijetí nesmí být v budoucnosti", "The receipt date cannot be in the future"],
+  "Data przyjęcia nie może być wcześniejsza niż data wysłania ({d})": ["Datum přijetí nesmí být dřívější než datum odeslání ({d})", "The receipt date cannot be earlier than the dispatch date ({d})"],
+  "Ilość przyjęta różni się od wysłanej o {a} {u} — wskaż przyczynę": ["Přijaté množství se liší od odeslaného o {a} {u} — uveďte důvod", "The received quantity differs from the dispatched one by {a} {u} — give a reason"],
+  "Opisz przyczynę różnicy": ["Popište důvod rozdílu", "Describe the reason for the difference"],
+  "Przyjęcie zerowe (cała dostawa utracona) wymaga opisu": ["Nulové přijetí (celá dodávka ztracena) vyžaduje popis", "A zero receipt (entire delivery lost) requires a description"],
+  "Przyjęcie MM z różnicą {q} {u}": ["Přijetí MM s rozdílem {q} {u}", "MM received with a difference of {q} {u}"],
+  "Przyjęcie MM na magazyn {w}": ["Přijetí MM do skladu {w}", "MM received into warehouse {w}"],
+  "Przyjęcie MM": ["Přijetí MM", "MM receipt"],
+  "Tonaż MM": ["Tonáž MM", "MM tonnage"],
+  "Korekta MM nie zmienia magazynów ani towaru — anuluj dokument i wprowadź nowy": ["Oprava MM nemění sklady ani zboží — stornujte doklad a zadejte nový", "An MM correction cannot change warehouses or goods — cancel the document and enter a new one"],
+  "Nieprawidłowa wartość ustawienia „{k}”": ["Neplatná hodnota nastavení „{k}“", "Invalid value for setting “{k}”"],
+  "<b>Co:</b> magazyn, z którego towar wychodzi. Lista zawiera magazyny, do których masz dostęp.": ["<b>Co:</b> sklad, ze kterého zboží odchází. Seznam obsahuje sklady, ke kterým máte přístup.", "<b>What:</b> the warehouse the goods leave from. The list shows warehouses you have access to."],
+  "<b>Co:</b> magazyn, do którego towar jest wysyłany. Musi być inny niż magazyn źródłowy.": ["<b>Co:</b> sklad, do kterého se zboží odesílá. Musí být jiný než zdrojový sklad.", "<b>What:</b> the warehouse the goods are sent to. It must differ from the source warehouse."],
+  "<b>Automatyczny</b> = przelicznik produktu (np. zrębka 0,33 t/MP). <b>Ręczny</b> = tonaż z kwitu wagowego. Tonaż nie zmienia ilości na stanie.": ["<b>Automatická</b> = přepočet produktu (např. štěpka 0,33 t/MP). <b>Ruční</b> = tonáž z vážního lístku. Tonáž nemění množství na skladě.", "<b>Automatic</b> = product factor (e.g. chips 0.33 t/MP). <b>Manual</b> = tonnage from the weighbridge ticket. Tonnage does not change the stock quantity."],
+  "<b>Co:</b> tonaż ładunku z wagi (kwit wagowy), w tonach. <b>Przykład:</b> 16,40.": ["<b>Co:</b> tonáž nákladu z váhy (vážní lístek), v tunách. <b>Příklad:</b> 16,40.", "<b>What:</b> load tonnage from the weighbridge (ticket), in tonnes. <b>Example:</b> 16.40."],
+  "Magazyn źródłowy i docelowy wybierasz w sekcji przesunięcia.": ["Zdrojový a cílový sklad vyberete v sekci převodu.", "Choose the source and destination warehouses in the transfer section."],
+  "Wysłanie z magazynu źródłowego; magazyn docelowy przyjmuje towar przyciskiem „Przyjmij MM”.": ["Odeslání ze zdrojového skladu; cílový sklad přijme zboží tlačítkem „Přijmout MM“.", "Dispatch from the source warehouse; the destination receives the goods with “Receive MM”."],
+  "Tryb <b>dwuetapowy</b>: po zatwierdzeniu towar schodzi ze stanu źródła, a dokument ma status <b>W DRODZE</b>. Stan magazynu docelowego wzrośnie dopiero po przyjęciu MM (z ilością faktycznie przyjętą).": ["<b>Dvoufázový</b> režim: po schválení zboží odejde ze zásoby zdroje a doklad má stav <b>NA CESTĚ</b>. Zásoba cílového skladu vzroste až po přijetí MM (se skutečně přijatým množstvím).", "<b>Two-step</b> mode: on approval the goods leave the source stock and the document is <b>IN TRANSIT</b>. The destination stock grows only after the MM is received (with the quantity actually received)."],
+  "Tryb <b>jednoetapowy</b>: zatwierdzenie jednocześnie zmniejsza stan źródła i zwiększa stan magazynu docelowego.": ["<b>Jednofázový</b> režim: schválení současně sníží zásobu zdroje a zvýší zásobu cílového skladu.", "<b>One-step</b> mode: approval reduces the source stock and increases the destination stock at the same time."],
+  "magazyn źródłowy": ["zdrojový sklad", "source warehouse"],
+  "Automatyczny (przelicznik)": ["Automatická (přepočet)", "Automatic (factor)"],
+  "Ręczny — z kwitu wagowego": ["Ruční — z vážního lístku", "Manual — from the weighbridge ticket"],
+  "Tonaż z wagi (t)": ["Tonáž z váhy (t)", "Weighed tonnage (t)"],
+  "Tonaż wyliczony": ["Vypočtená tonáž", "Calculated tonnage"],
+  "Cel: stan teraz → po przyjęciu": ["Cíl: zásoba nyní → po přijetí", "Destination: stock now → after receipt"],
+  "po przyjęciu": ["po přijetí", "after receipt"],
+  "z przelicznika: {q} t — ilość na stanie się nie zmienia": ["z přepočtu: {q} t — množství na skladě se nemění", "from the factor: {q} t — stock quantity does not change"],
+  "(z wagi)": ["(z váhy)", "(weighed)"],
+  "(z przelicznika)": ["(z přepočtu)", "(from factor)"],
+  "Tryb MM": ["Režim MM", "MM mode"],
+  "W DRODZE": ["NA CESTĚ", "IN TRANSIT"],
+  "stan magazynu docelowego wzrośnie po przyjęciu MM": ["zásoba cílového skladu vzroste po přijetí MM", "destination stock increases after the MM is received"],
+  "jednoetapowy — przychód w magazynie docelowym od razu": ["jednofázový — příjem v cílovém skladu ihned", "one-step — stock added at the destination immediately"],
+  "w drodze": ["na cestě", "in transit"],
+  "przyjęto {q} ({d})": ["přijato {q} ({d})", "received {q} ({d})"],
+  "dwuetapowy (wysłanie → przyjęcie)": ["dvoufázový (odeslání → přijetí)", "two-step (dispatch → receipt)"],
+  "jednoetapowy": ["jednofázový", "one-step"],
+  "Stan przesunięcia": ["Stav převodu", "Transfer status"],
+  "Tonaż wysłany": ["Odeslaná tonáž", "Dispatched tonnage"],
+  "Przyjęto": ["Přijato", "Received"],
+  "Tonaż przyjęty": ["Přijatá tonáž", "Received tonnage"],
+  "Różnica (wysłano − przyjęto)": ["Rozdíl (odesláno − přijato)", "Difference (dispatched − received)"],
+  "Uwagi do przyjęcia": ["Poznámky k přijetí", "Receipt notes"],
+  "Wydał (magazyn źródłowy)": ["Vydal (zdrojový sklad)", "Issued by (source warehouse)"],
+  "Przyjął (magazyn docelowy)": ["Přijal (cílový sklad)", "Received by (destination warehouse)"],
+  "dwuetapowy": ["dvoufázový", "two-step"],
+  "jednoetapowy — przychód przy zatwierdzeniu": ["jednofázový — příjem při schválení", "one-step — stock added on approval"],
+  "Przyjęcie": ["Přijetí", "Receipt"],
+  "różnica {q} {u}": ["rozdíl {q} {u}", "difference {q} {u}"],
+  "Towar w drodze do magazynu {w}. Stan magazynu docelowego wzrośnie po przyjęciu MM.": ["Zboží na cestě do skladu {w}. Zásoba cílového skladu vzroste po přijetí MM.", "Goods in transit to warehouse {w}. The destination stock increases after the MM is received."],
+  "Przyjmij MM…": ["Přijmout MM…", "Receive MM…"],
+  "Nie można przyjąć MM": ["MM nelze přijmout", "The MM cannot be received"],
+  "Wysłano {q} {u} {p} z magazynu {a} ({d}). Wpisz ilość faktycznie przyjętą — różnica zostanie zapisana z przyczyną.": ["Odesláno {q} {u} {p} ze skladu {a} ({d}). Zadejte skutečně přijaté množství — rozdíl se uloží s důvodem.", "Dispatched {q} {u} {p} from warehouse {a} ({d}). Enter the quantity actually received — any difference is saved with a reason."],
+  "Data przyjęcia": ["Datum přijetí", "Receipt date"],
+  "Ilość przyjęta": ["Přijaté množství", "Quantity received"],
+  "np. nr kwitu wagowego, stan ładunku": ["např. č. vážního lístku, stav nákladu", "e.g. weighbridge ticket no., load condition"],
+  "Podsumowanie przyjęcia": ["Souhrn přijetí", "Receipt summary"],
+  "Przyjęcie MM {no}": ["Přijetí MM {no}", "MM receipt {no}"],
+  "Przyjmij MM": ["Přijmout MM", "Receive MM"],
+  "Wysłano": ["Odesláno", "Dispatched"],
+  "ubytek {q} {u}": ["úbytek {q} {u}", "loss {q} {u}"],
+  "nadwyżka {q} {u}": ["přebytek {q} {u}", "surplus {q} {u}"],
+  "brak — zgodne z wysłaniem": ["žádný — shodné s odesláním", "none — matches the dispatch"],
+  "Stan {w}": ["Zásoba {w}", "Stock {w}"],
+  "Popraw dane przyjęcia": ["Opravte údaje přijetí", "Correct the receipt data"],
+  "Nie przyjęto MM — nic nie zostało zaksięgowane": ["MM nebylo přijato — nic nebylo zaúčtováno", "MM not received — nothing was posted"],
+  "MM przyjęte": ["MM přijato", "MM received"],
+  "{no}: stan magazynu {w} zwiększony o {q}": ["{no}: zásoba skladu {w} zvýšena o {q}", "{no}: stock of warehouse {w} increased by {q}"],
+  "oczekuje na przyjęcie": ["čeká na přijetí", "awaiting receipt"],
+  "Brak przesunięć w drodze dla aktywnego magazynu.": ["Pro aktivní sklad nejsou žádné převody na cestě.", "No transfers in transit for the active warehouse."],
+  "Przesunięcia w drodze": ["Převody na cestě", "Transfers in transit"],
+  "{n} MM wysłane — czeka na przyjęcie|{n} MM wysłane — czekają na przyjęcie|{n} MM wysłanych — czeka na przyjęcie": ["{n} MM odeslané — čeká na přijetí|{n} MM odeslaná — čekají na přijetí|{n} MM odeslaných — čeká na přijetí", "{n} MM dispatched — awaiting receipt|{n} MM dispatched — awaiting receipt"],
+  "Rozchód z magazynu źródłowego i przychód w docelowym. W trybie dwuetapowym towar jest „w drodze” do czasu przyjęcia MM przez magazyn docelowy.": ["Výdej ze zdrojového skladu a příjem v cílovém. V dvoufázovém režimu je zboží „na cestě“, dokud MM nepřijme cílový sklad.", "Issue from the source warehouse and receipt at the destination. In two-step mode the goods are “in transit” until the destination warehouse receives the MM."]
+}); })(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
 /* engine.js */
 /* =========================================================================
    ResInvest ERP 3.0 (FAZA 2)
@@ -3050,8 +3155,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.2.0";
-  const SCHEMA = 6;
+  const VERSION = "3.3.0";
+  const SCHEMA = 7;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -3248,6 +3353,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const PERMS = {
     "receipts.create": N_("Przyjęcia i zakupy — wprowadzanie"), "issues.create": N_("Wydania i sprzedaż — wprowadzanie"),
     "production.create": N_("Produkcja — wprowadzanie"), "mm.create": N_("Przesunięcia MM — wprowadzanie"),
+    "mm.receive": N_("Przyjęcie MM na magazynie docelowym"),
     "op.approve": N_("Zatwierdzanie operacji (gdy obieg zatwierdzania jest włączony)"),
     "documents.cancel": N_("Anulowanie dokumentów"), "documents.correct": N_("Korekty dokumentów"),
     "inventory.correct": N_("Korekty stanów / MM"), "production.correct": N_("Korekty produkcji"), "sales.correct": N_("Korekty sprzedaży"),
@@ -3262,8 +3368,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const CREATE_PERMS = ["receipts.create", "issues.create", "production.create", "mm.create"];
   const ROLE_DEFAULTS = {
     admin: ["*"],
-    kierownik: [...CREATE_PERMS, "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
-    magazynier: [...CREATE_PERMS, "inv.count", "report.view", "history.read"],
+    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
+    magazynier: [...CREATE_PERMS, "mm.receive", "inv.count", "report.view", "history.read"],
     obserwator: ["report.view", "history.read"],
     audytor: ["report.view", "reports.export", "history.read", "audit.read", "users.read"]
   };
@@ -3334,6 +3440,18 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   };
   const DIFF_REASONS = { wilgotnosc: N_("Wilgotność / osiadanie"), jakosc: N_("Jakość surowca"), straty: N_("Straty przy rębaniu"), pomiar: N_("Różnica pomiaru"), inna: N_("Inna przyczyna") };
   const CORRECTION_REASONS = [N_("błędnie wpisana ilość"), N_("błędna cena"), N_("błędna jednostka"), N_("błędny kontrahent"), N_("błędny magazyn"), N_("błędne zużycie surowca"), N_("błędny transport"), N_("pomyłka operatora"), N_("korekta dokumentu zewnętrznego"), N_("inny")];
+  /** Tryb przesunięć MM: jednoetapowy (rozchód i przychód jednym zatwierdzeniem) albo dwuetapowy (wysłanie → „W drodze” → przyjęcie). */
+  const MM_MODES = { one: N_("Jednoetapowy — przychód w magazynie docelowym przy zatwierdzeniu"), two: N_("Dwuetapowy — wysłanie, „W drodze”, przyjęcie przez magazyn docelowy") };
+  const mmMode = cfg => (cfg && cfg.mmMode === "one") ? "one" : "two";
+  /** Stan przesunięcia: W_DRODZE (wysłane, czeka na przyjęcie), PRZYJETE, ANULOWANE; null — nie MM. */
+  const MM_STATES = { W_DRODZE: N_("W DRODZE — oczekuje na przyjęcie"), PRZYJETE: N_("PRZYJĘTE"), ANULOWANE: N_("ANULOWANE") };
+  function mmState(op) {
+    if (!op || op.type !== "MM" || !op.mm) return null;
+    if (op.status === "CANCELLED") return "ANULOWANE";
+    return op.mm.twoStage && !op.mm.receipt ? "W_DRODZE" : "PRZYJETE";
+  }
+  /** Przyczyny różnicy między ilością wysłaną a przyjętą. */
+  const MM_DIFF_REASONS = { ubytek: N_("Ubytek w transporcie"), pomiar: N_("Różnica pomiaru"), wilgotnosc: N_("Wilgotność / osiadanie"), uszkodzenie: N_("Uszkodzenie / zanieczyszczenie"), nadwyzka: N_("Nadwyżka przy przyjęciu"), inna: N_("Inna przyczyna") };
   const TRANSPORT_MODES = { none: N_("Brak transportu"), own: N_("Transport własny"), external: N_("Transport zewnętrzny"), mixed: N_("Transport własny + zewnętrzny"), train: N_("Pociąg"), supplier: N_("Transport w cenie zakupu — zapewnia dostawca") };
   const VEHICLE_TYPES = { ruchoma_podloga: N_("Ruchoma podłoga"), ciezarowy: N_("Samochód ciężarowy"), wywrotka: N_("Wywrotka") };
   const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
@@ -3374,7 +3492,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   function emptyState(config) {
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
-      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false }, config || {}),
+      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
       operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {},
@@ -3451,6 +3569,13 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       s.schema = 6; s.version = VERSION;
       notes.push(t("Schemat 5 → 6: statusy kont, wiele magazynów na użytkownika, role AUDYTOR i edytowalne uprawnienia"));
     }
+    if (s.schema === 6) {
+      // przesunięcia MM: tryb dwuetapowy (wysłanie → W drodze → przyjęcie); role z „mm.create” dostają „mm.receive”
+      if (s.config.mmMode !== "one" && s.config.mmMode !== "two") s.config.mmMode = "two";
+      for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("mm.create") && !list.includes("mm.receive")) s.rolePerms[role] = list.concat("mm.receive");
+      s.schema = 7; s.version = VERSION;
+      notes.push(t("Schemat 6 → 7: przesunięcia MM dwuetapowe (W drodze → przyjęcie), uprawnienie przyjęcia MM, tonaż MM"));
+    }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
   }
@@ -3520,7 +3645,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", priceUnit: "", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
-      mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
+      mm: { fromWhId: "", productId: "", qty: "", unit: "MP", toWhId: "", weightMode: "auto", weightManual: "" },
       transport: {
         mode: "none", place: "", placeTouched: false,
         own: { runCount: "1", runs: [blankRun()] },
@@ -3555,8 +3680,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
     if (!user) err("_user", t("Brak zalogowanego użytkownika"));
     else if (!can(user, "op.create")) err("_user", t("Twoja rola nie pozwala tworzyć operacji"));
-    const wh = user ? byId(state.warehouses, user.whId) : null;
-    if (user && !wh) err("_wh", t("Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu"));
+    // magazyn operacji: dla MM — magazyn źródłowy wybrany w formularzu (dostęp sprawdzany niżej), dla pozostałych — magazyn użytkownika
+    const srcPick = draft.type === "MM" && draft.mm && str(draft.mm.fromWhId) ? str(draft.mm.fromWhId) : "";
+    const wh = user ? byId(state.warehouses, srcPick || user.whId) : null;
+    if (user && !wh) err(srcPick ? "mm.fromWhId" : "_wh", srcPick ? t("Nieznany magazyn źródłowy") : t("Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu"));
     const whId = wh ? wh.id : null;
     const stockAt = (w, pid) => (w && pid ? Stock.balance(state, w, pid) : 0);
     const stockOf = pid => stockAt(whId, pid);
@@ -3564,7 +3691,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const type = OP_TYPES[draft.type] ? draft.type : null;
     if (!type) err("type", t("Wybierz rodzaj operacji"));
     else if (user && !can(user, OP_TYPES[type].createPerm)) err("type", t("Twoja rola nie pozwala wprowadzać operacji tego rodzaju"), "FORBIDDEN");
-    if (user && wh && !canAccessWh(user, wh.id)) err("_wh", t("Brak dostępu do magazynu {w}", { w: wh.name }), "FORBIDDEN");
+    if (user && wh && !canAccessWh(user, wh.id)) err(srcPick ? "mm.fromWhId" : "_wh", t("Brak dostępu do magazynu {w}", { w: wh.name }), "FORBIDDEN");
+    if (srcPick && wh && wh.active === false && !(ctx && ctx.correction)) err("mm.fromWhId", t("Magazyn źródłowy jest nieaktywny"));
     const date = str(draft.date);
     if (!Dates.isISO(date)) err("date", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (!(ctx && ctx.correction)) {
@@ -3807,7 +3935,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
       }
     } else if (type === "MM") {
-      /* ================= E. MM — przesunięcie międzymagazynowe ================= */
+      /* ================= E. MM — przesunięcie międzymagazynowe =================
+         Jednoetapowe: rozchód w źródle i przychód w celu przy zatwierdzeniu.
+         Dwuetapowe: zatwierdzenie = wysłanie (rozchód w źródle, status „W drodze”); przychód w celu dopiero
+         po „Przyjmij MM” (receiveTransfer) — z ilością faktycznie przyjętą.                                  */
+      const twoStage = ctx && typeof ctx.mmTwoStage === "boolean" ? ctx.mmTwoStage : mmMode(cfg) === "two";
       const product = prodOf(M.productId);
       if (!M.productId) err("mm.productId", t("Wybierz produkt"));
       else if (!product) err("mm.productId", t("Nieznany produkt"));
@@ -3816,18 +3948,31 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const toWh = byId(state.warehouses, M.toWhId);
       if (!M.toWhId) err("mm.toWhId", t("Wybierz magazyn docelowy przesunięcia"));
       else if (!toWh) err("mm.toWhId", t("Nieznany magazyn"));
-      else if (toWh.id === whId) err("mm.toWhId", t("Magazyn docelowy musi być inny niż magazyn źródłowy"));
-      else if (toWh.active === false) err("mm.toWhId", t("Magazyn docelowy jest nieaktywny"));
-      if (toWh && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: toWh.name, ym: lockedMonth(state, toWh.id) }), "LOCKED");
+      else if (toWh.id === whId) err("mm.toWhId", t("Magazyn źródłowy i docelowy nie mogą być takie same"), "SAME_WH");
+      else if (toWh.active === false && !(ctx && ctx.correction)) err("mm.toWhId", t("Magazyn docelowy jest nieaktywny"));
+      if (toWh && !twoStage && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: toWh.name, ym: lockedMonth(state, toWh.id) }), "LOCKED");
       const qty = num("mm.qty", M.qty, { gt: 0, label: N_("ilość") });
       const stockQty = qty !== null && unitOk ? Units.convert(qty, M.unit, product.unit, product, cfg) : 0;
       const onStock = product ? stockOf(product.id) : 0;
       if (product && qty !== null && stockQty > onStock + EPS) err("mm.qty", t("Nie można przesunąć {a} {u}. Dostępny stan: {b} {u}.", { a: fmtQ(stockQty), b: fmtQ(onStock), u: U(product.unit) }), "STOCK");
-      norm.mm = { productId: M.productId, qty, unit: M.unit, stockQty, stockUnit: product ? product.unit : null, toWhId: toWh ? toWh.id : "", toWhName: toWh ? toWh.name : "", fromWhName: wh ? wh.name : "", onStock };
+      // tonaż: automatycznie z przelicznika produktu albo ręcznie (np. z kwitu wagowego) — nie zmienia ilości na stanie
+      const wMode = M.weightMode || "auto";
+      const autoWeight = product && stockQty > 0 ? Units.mass(stockQty, product, cfg) : 0;
+      let weightT = autoWeight;
+      if (wMode === "manual") {
+        const w = num("mm.weightManual", M.weightManual, { gt: 0, label: N_("tonaż") });
+        if (w !== null) {
+          weightT = rq(w);
+          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(t("Tonaż {a} t różni się o ponad 25% od wyliczonego z przelicznika {b} t — sprawdź kwit wagowy.", { a: fmtQ(weightT), b: fmtQ(autoWeight) }));
+          if (product && product.unit === "t" && Math.abs(weightT - stockQty) > EPS) warnings.push(t("Produkt liczony w tonach: stan zmieni się o {a} t (ilość), tonaż z wagi {b} t jest informacyjny.", { a: fmtQ(stockQty), b: fmtQ(weightT) }));
+        }
+      } else if (wMode !== "auto") err("mm.weightMode", t("Wybierz sposób ustalenia tonażu"));
+      norm.mm = { productId: M.productId, qty, unit: M.unit, stockQty, stockUnit: product ? product.unit : null, fromWhId: whId || "", toWhId: toWh ? toWh.id : "", toWhName: toWh ? toWh.name : "", fromWhName: wh ? wh.name : "", onStock,
+        weightMode: wMode, weightT, autoWeight, twoStage, receipt: null };
       if (product && toWh && toWh.id !== whId && stockQty > 0) {
         push("MM", product.id, -stockQty);
-        push("MM", product.id, stockQty, { whId: toWh.id });
-        documents.push({ type: "MM", kind: "MM", productId: product.id, qty, unit: M.unit, stockQty, stockUnit: product.unit, weightT: Units.mass(stockQty, product, cfg), value: 0, stock: "±", fromWh: wh ? wh.name : "", toWh: toWh.name, toWhId: toWh.id });
+        if (!twoStage) push("MM", product.id, stockQty, { whId: toWh.id });
+        documents.push({ type: "MM", kind: "MM", productId: product.id, qty, unit: M.unit, stockQty, stockUnit: product.unit, weightT, weightMode: wMode, value: 0, stock: "±", fromWh: wh ? wh.name : "", toWh: toWh.name, toWhId: toWh.id, twoStage });
       }
     }
 
@@ -3854,7 +3999,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (norm.mm && norm.mm.productId) return { productId: norm.mm.productId, qty: norm.mm.stockQty || 0, unit: norm.mm.stockUnit };
         return { productId: null, qty: 0, unit: null };
       };
-      const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
+      const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? norm.mm.weightT : 0;
       /* Kursy transportu własnego / zewnętrznego — liczone osobno, łączone w trybie „mixed”. */
       /* Kwity wywozowe (produkcja leśna z nadleśnictwa): numer kwitu i m³ wpisywane w każdym kursie.
          m³ × 4 = MP na aucie; suma kursów nie może przekroczyć produkcji (MP) ani zużytego drewna (m³). */
@@ -4147,20 +4292,101 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     state.rev += 1;
     audit(state, ctx, {
       entity: "operation", entityId: op.id, opNo: op.no, event: "create", act: opts.author && opts.author.id !== ctx.user.id
-        ? Lx("Zatwierdzenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[op.type].label }, a: opts.author.name }) : op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
-      before: { stan: before }, after: { stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals },
+        ? Lx("Zatwierdzenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[op.type].label }, a: opts.author.name }) : mmState(op) === "W_DRODZE" ? Lx("Wysłanie MM do magazynu {w} — w drodze, oczekuje na przyjęcie", { w: n.mm.toWhName }) : op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
+      before: { stan: before }, after: Object.assign({ stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals }, op.mm ? { mm: MM_STATES[mmState(op)], tonaz: op.mm.weightT } : {}),
       source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”")
     });
     return { ok: true, op, plan };
   }
 
   /* ------------------------------------------------------------------ */
+  /* PRZYJĘCIE MM (tryb dwuetapowy) — magazyn docelowy potwierdza dostawę */
+  /* ------------------------------------------------------------------ */
+  /**
+   * Plan przyjęcia: ilość faktycznie przyjęta (w dowolnej dozwolonej jednostce), data przyjęcia, tonaż (auto / ręczny)
+   * i przyczyna różnicy. Nie zmienia stanu — commit robi receiveTransfer.
+   * rec = { qty, unit, date, weightMode, weightManual, reason, note, key }
+   */
+  function planReceive(state, opId, rec, ctx) {
+    const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday(), cfg = state.config;
+    const errors = {}, err = (k, m) => { if (!errors[k]) errors[k] = m; };
+    const op = byId(state.operations, opId);
+    if (!op || op.type !== "MM") return { ok: false, error: t("Nie znaleziono dokumentu MM") };
+    if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest anulowany — nie można go przyjąć", { no: op.no }) };
+    if (!op.mm.twoStage) return { ok: false, error: t("Dokument {no} został przyjęty automatycznie (MM jednoetapowe)", { no: op.no }) };
+    if (op.mm.receipt) return { ok: false, code: "RECEIVED", error: t("Dokument {no} został już przyjęty ({d}, {u})", { no: op.no, d: Dates.pl(op.mm.receipt.date), u: op.mm.receipt.userName }) };
+    if (!can(user, "mm.receive")) return { ok: false, code: "FORBIDDEN", error: t("Brak uprawnienia „{p}”", { p: "mm.receive" }) };
+    if (!canAccessWh(user, op.toWhId)) return { ok: false, code: "FORBIDDEN", error: t("MM przyjmuje użytkownik magazynu docelowego ({w}) albo Administrator", { w: op.mm.toWhName }) };
+    const r = rec || {};
+    const product = byId(state.products, op.mm.productId);
+    const unit = r.unit || op.mm.unit;
+    if (!Units.allowed(product).includes(unit)) err("unit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(Units.label).join(", ") }));
+    const date = str(r.date) || today;
+    if (!Dates.isISO(date)) err("date", t("Podaj datę w formacie RRRR-MM-DD"));
+    else if (date > today) err("date", t("Data przyjęcia nie może być z przyszłości"));
+    else if (date < op.date) err("date", t("Data przyjęcia nie może być wcześniejsza niż data wysłania ({d})", { d: Dates.pl(op.date) }));
+    else if (isLocked(state, op.toWhId, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: op.mm.toWhName, ym: lockedMonth(state, op.toWhId) }));
+    const q = str(r.qty) === "" ? { ok: true, value: Units.convert(op.mm.stockQty, product.unit, unit, product, cfg) } : NumParse.parse(r.qty);
+    let qty = null;
+    if (!q.ok) err("qty", t("{e} — wpisz np. {x}", { e: q.error, x: fmt(1000.5, 1) }));
+    else if (q.value < 0) err("qty", t("Wartość nie może być ujemna"));
+    else qty = q.value;
+    const stockQty = qty !== null && !errors.unit ? Units.convert(qty, unit, product.unit, product, cfg) : 0;
+    const diff = rq(op.mm.stockQty - stockQty);               // > 0 — ubytek, < 0 — nadwyżka (jednostka magazynowa)
+    const reason = str(r.reason), note = str(r.note).slice(0, 300);
+    if (qty !== null && Math.abs(diff) > EPS) {
+      if (!MM_DIFF_REASONS[reason]) err("reason", t("Ilość przyjęta różni się od wysłanej o {a} {u} — wskaż przyczynę", { a: fmtQ(Math.abs(diff)), u: Units.label(product.unit) }));
+      else if (reason === "inna" && !note) err("note", t("Opisz przyczynę różnicy"));
+    }
+    if (qty !== null && qty === 0 && !note) err("note", t("Przyjęcie zerowe (cała dostawa utracona) wymaga opisu"));
+    const wMode = r.weightMode === "manual" ? "manual" : "auto";
+    const autoWeight = stockQty > 0 ? Units.mass(stockQty, product, cfg) : 0;
+    let weightT = autoWeight;
+    if (wMode === "manual") {
+      const w = NumParse.parse(r.weightManual);
+      if (w.empty) err("weightManual", t("Podaj {x}", { x: t("tonaż") }));
+      else if (!w.ok || !(w.value > 0)) err("weightManual", t("Wartość musi być większa od 0"));
+      else weightT = rq(w.value);
+    }
+    const bal = Stock.balance(state, op.toWhId, product.id);
+    const list = Object.keys(errors).map(k => ({ field: k, msg: errors[k] }));
+    return { ok: list.length === 0, errors, errorList: list, error: list.length ? list[0].msg : null, op, product, date, qty, unit, stockQty, sentQty: op.mm.stockQty, diff, reason, note, weightMode: wMode, weightT, autoWeight,
+      sentWeightT: op.mm.weightT, before: bal, after: rq(bal + stockQty) };
+  }
+  function receiveTransfer(state, opId, rec, ctx) {
+    const op0 = byId(state.operations, opId);
+    if (op0 && op0.mm && op0.mm.receipt && rec && rec.key && op0.mm.receipt.key === rec.key) return { ok: true, duplicate: true, op: op0 };
+    const p = planReceive(state, opId, rec, ctx);
+    if (!p.ok) return Object.assign({ ok: false }, p.errorList ? { plan: p, error: p.error } : p);
+    const op = p.op, key = `${op.toWhId}|${p.product.id}`, before = snap(state, [key]);
+    if (p.stockQty > EPS) state.ledger.push(ledgerEntry(state, nextLedgerSeq(state), ctx, { opId: op.id, step: 50, date: p.date, whId: op.toWhId, productId: p.product.id, kind: "MM", cat: "MM", qty: p.stockQty, docNo: op.no, receipt: true }));
+    op.mm.receipt = { date: p.date, ts: nowIso(ctx), userId: ctx.user.id, userName: ctx.user.name, qty: p.qty, unit: p.unit, stockQty: p.stockQty, diff: p.diff,
+      reason: p.reason, reasonLabel: p.reason ? MM_DIFF_REASONS[p.reason] : "", note: p.note, weightMode: p.weightMode, weightT: p.weightT, key: (rec && rec.key) || null };
+    state.rev += 1;
+    audit(state, Object.assign({}, ctx, { user: Object.assign({}, ctx.user, { whId: op.toWhId }) }), {
+      entity: "operation", entityId: op.id, opNo: op.no, event: "mm-receive", code: "MM_RECEIVED",
+      act: Math.abs(p.diff) > EPS ? Lx("Przyjęcie MM z różnicą {q} {u}", { q: fmtQ(-p.diff), u: Units.label(p.product.unit) }) : Lx("Przyjęcie MM na magazyn {w}", { w: op.mm.toWhName }),
+      reason: p.reason ? [MM_DIFF_REASONS[p.reason], p.note].filter(Boolean).join(" — ") : p.note || undefined,
+      before: { mm: MM_STATES.W_DRODZE, wyslano: p.sentQty, stan: before }, after: { mm: MM_STATES.PRZYJETE, przyjeto: p.stockQty, roznica: p.diff, tonaz: p.weightT, stan: snap(state, [key]) },
+      source: (ctx && ctx.source) || N_("Przyjęcie MM")
+    });
+    return { ok: true, op, receipt: op.mm.receipt };
+  }
+  /** Przesunięcia w drodze (dwuetapowe, nieprzyjęte): whId — źródło lub cel; dir "in" (do przyjęcia) / "out" (wysłane). */
+  function mmInTransit(state, whId, dir) {
+    return state.operations.filter(op => mmState(op) === "W_DRODZE" && (!whId || (dir === "in" ? op.toWhId === whId : dir === "out" ? op.whId === whId : op.whId === whId || op.toWhId === whId)))
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Wersje robocze (DRAFT) — bez wpływu na stan i bez numeru            */
   /* ------------------------------------------------------------------ */
+  /** Magazyn szkicu / operacji przekazanej: dla MM — magazyn źródłowy (jeśli wybrany), inaczej magazyn użytkownika. */
+  const draftWhId = (draft, user) => draft && draft.type === "MM" && draft.mm && str(draft.mm.fromWhId) ? str(draft.mm.fromWhId) : (user ? user.whId : null);
   function saveDraft(state, draft, ctx) {
     if (!can(ctx && ctx.user, "op.create")) return { ok: false, error: t("Twoja rola nie pozwala tworzyć operacji"), code: "FORBIDDEN" };
     const id = draft.draftId || uid("dr");
-    const rec = { id, status: "DRAFT", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: ctx.user.id, userName: ctx.user.name, whId: ctx.user.whId, savedAt: nowIso(ctx) };
+    const rec = { id, status: "DRAFT", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: ctx.user.id, userName: ctx.user.name, whId: draftWhId(draft, ctx.user), savedAt: nowIso(ctx) };
     const i = state.drafts.findIndex(d => d.id === id);
     const before = i >= 0 ? { zapisano: state.drafts[i].savedAt } : null;
     if (i >= 0) state.drafts[i] = rec; else state.drafts.push(rec);
@@ -4194,7 +4420,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const id = draft.draftId || uid("dr");
     const prev = byId(state.drafts, id);
     if (prev && prev.userId !== user.id) return { ok: false, error: t("Operację przekazuje do zatwierdzenia jej autor"), code: "FORBIDDEN" };
-    const rec = { id, status: "PENDING", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: user.id, userName: user.name, whId: user.whId,
+    const rec = { id, status: "PENDING", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: user.id, userName: user.name, whId: draftWhId(draft, user),
       savedAt: nowIso(ctx), submittedAt: nowIso(ctx), totals: plan.totals, summary: planSummary(state, plan) };
     if (prev) state.drafts = state.drafts.map(d => d.id === id ? rec : d); else state.drafts.push(rec);
     state.rev += 1;
@@ -4316,6 +4542,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     ["production.consumeQty", N_("Zużycie surowca"), o => o.production && o.production.consumeQty, o => o.production && Units.label(o.production.consumeUnit)],
     ["production.chipRate", N_("Cena za rąbanie"), o => o.production && o.production.chipRate, () => "zł/MP"],
     ["mm.qty", N_("Ilość MM"), o => o.mm && o.mm.qty, o => o.mm && Units.label(o.mm.unit)],
+    ["mm.weightT", N_("Tonaż MM"), o => o.mm && o.mm.weightT, () => "t"],
     ["transport.place", N_("Miejsce dostawy"), o => o.transport && o.transport.place],
     ["transport.reg", N_("Nr rejestracyjny"), o => o.transport && o.transport.reg],
     ["transport.driverName", N_("Kierowca"), o => o.transport && o.transport.driverName],
@@ -4333,13 +4560,22 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     if (!canAccessWh(user, op.whId)) return { ok: false, error: t("Brak dostępu do magazynu tej operacji"), code: "FORBIDDEN" };
     if (newDraft.type !== op.type || !!(newDraft.sale && newDraft.sale.direct) !== !!op.direct) return { ok: false, error: t("Korekta nie może zmienić rodzaju operacji — anuluj i wprowadź nową") };
     const d = Object.assign(clone(newDraft), { date: op.date, idemKey: "corr" });
+    if (op.type === "MM") {
+      const nm = d.mm || {};
+      if ((nm.toWhId && nm.toWhId !== op.toWhId) || (nm.productId && nm.productId !== op.mm.productId) || (str(nm.fromWhId) && str(nm.fromWhId) !== op.whId))
+        return { ok: false, error: t("Korekta MM nie zmienia magazynów ani towaru — anuluj dokument i wprowadź nowy") };
+      d.mm = Object.assign({}, nm, { fromWhId: op.whId, toWhId: op.toWhId, productId: op.mm.productId });
+    }
+    const mmTwo = op.type === "MM" && !!(op.mm && op.mm.twoStage);
     // stan „bez tej operacji” — nowa wersja przechodzi te same zabezpieczenia co zwykła operacja
     const view = Object.assign({}, state, { ledger: state.ledger.filter(l => l.opId !== op.id) });
-    const p = planOperation(view, d, Object.assign({}, ctx, { user: Object.assign({}, user, { whId: op.whId }), correction: true }));
+    const p = planOperation(view, d, Object.assign({}, ctx, { user: Object.assign({}, user, { whId: op.whId }), correction: true }, op.type === "MM" ? { mmTwoStage: mmTwo } : {}));
     if (!p.ok) return { ok: false, plan: p, error: p.errorList[0].msg };
     const cur = new Map(), tgt = new Map();
     for (const e of state.ledger.filter(l => l.opId === op.id)) { const k = netKey(e); const c = cur.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); cur.set(k, c); }
     for (const e of p.postings) { const k = netKey(e); const c = tgt.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); tgt.set(k, c); }
+    // MM dwuetapowe: korekta dotyczy wysłania — przyjęcie (ruch w magazynie docelowym) pozostaje bez zmian
+    if (mmTwo) for (const [k, c] of cur) if (c.whId === op.toWhId) tgt.set(k, Object.assign({}, c));
     const deltas = [];
     for (const k of new Set([...cur.keys(), ...tgt.keys()])) {
       const a = cur.get(k), b = tgt.get(k), base = a || b;
@@ -4354,7 +4590,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       x.after = rq(x.before + x.qty); sim.set(k, x.after);
       if (x.after < -EPS) { const pr = byId(state.products, x.productId); return { ok: false, code: "STOCK", error: t("Korekta niemożliwa: stan „{p}” spadłby do {a} {u}. Dostępny stan: {b} {u}.", { p: pr.name, a: fmtQ(x.after), b: fmtQ(x.before), u: Units.label(pr.unit) }) }; }
     }
-    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: p.norm.mm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
+    const nextMm = p.norm.mm && op.mm ? Object.assign({}, p.norm.mm, { twoStage: !!op.mm.twoStage, receipt: op.mm.receipt ? Object.assign({}, op.mm.receipt, { diff: rq(p.norm.mm.stockQty - op.mm.receipt.stockQty) }) : null }) : p.norm.mm;
+    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: nextMm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
     const partner = id => (byId(state.partners, id) || {}).name || id || "";
     const changes = [];
     for (const [f, label, get, unit] of CORR_FIELDS) {
@@ -4901,11 +5138,16 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   };
   /** Konfiguracja systemu (obieg zatwierdzania, rejestracja samodzielna). */
   const Settings = {
-    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool" },
+    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool", mmMode: ["one", "two"] },
     save(state, next, ctx) {
       if (!can(ctx && ctx.user, "settings.edit")) return { ok: false, error: t("Konfigurację zmienia administrator"), code: "FORBIDDEN" };
       const before = {}, after = {};
-      for (const [k, ty] of Object.entries(this.KEYS)) if (next[k] !== undefined) { const v = ty === "bool" ? !!next[k] && next[k] !== "false" : next[k]; if (state.config[k] !== v) { before[k] = state.config[k]; after[k] = v; state.config[k] = v; } }
+      for (const [k, ty] of Object.entries(this.KEYS)) if (next[k] !== undefined) {
+        if (Array.isArray(ty) && !ty.includes(next[k])) return { ok: false, error: t("Nieprawidłowa wartość ustawienia „{k}”", { k }) };
+        const v = ty === "bool" ? !!next[k] && next[k] !== "false" : next[k];
+        const cur = k === "mmMode" ? mmMode(state.config) : state.config[k];
+        if (cur !== v) { before[k] = cur; after[k] = v; state.config[k] = v; }
+      }
       if (!Object.keys(after).length) return { ok: true, unchanged: true };
       state.rev += 1;
       audit(state, ctx, { entity: "system", entityId: "settings", opNo: "—", event: "settings", code: "SETTINGS_CHANGED", act: Lx(N_("Zmiana konfiguracji systemu")), before, after, source: (ctx && ctx.source) || N_("Administracja") });
@@ -5047,7 +5289,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const mm = ops.filter(op => op.type === "MM" && LR.some(l => l.opId === op.id)).map(op => {
         const ins = LR.filter(l => l.opId === op.id && l.cat === "MM");
         const moved = rq(ins.filter(l => l.whId === op.toWhId).reduce((a, l) => a + l.qty, 0));
-        return { opId: op.id, no: op.no, date: op.date, from: (byId(state.warehouses, op.whId) || {}).name, to: (byId(state.warehouses, op.toWhId) || {}).name, productId: op.mm.productId, name: pr(op.mm.productId).name, unit: pr(op.mm.productId).unit, qty: moved, status: op.status };
+        const sent = rq(-ins.filter(l => l.whId === op.whId).reduce((a, l) => a + l.qty, 0));
+        const st = mmState(op), rc = op.mm.receipt;
+        return { opId: op.id, no: op.no, date: op.date, from: (byId(state.warehouses, op.whId) || {}).name, to: (byId(state.warehouses, op.toWhId) || {}).name, productId: op.mm.productId, name: pr(op.mm.productId).name, unit: pr(op.mm.productId).unit,
+          qty: moved, sent, received: moved, diff: st === "PRZYJETE" && op.mm.twoStage && rc ? rc.diff : 0, weightT: op.mm.weightT != null ? op.mm.weightT : null, receivedDate: rc ? rc.date : null, mmState: st, twoStage: !!op.mm.twoStage, status: op.status };
       });
       const trOps = ops.filter(op => op.transport && op.transport.mode !== "none" && inR(op.date) && opLiveAt(op, to));
       const transport = {
@@ -5141,6 +5386,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,
+    MM_MODES, MM_STATES, MM_DIFF_REASONS, mmMode, mmState, planReceive, receiveTransfer, mmInTransit, draftWhId,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Master, Users, Reports, audit
   };
@@ -5209,6 +5455,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     "op.reject": { perm: "op.approve", run: (s, a, c) => R.rejectPending(s, a.id, a.reason, c) },
     "op.correct": { perm: "documents.correct", run: (s, a, c) => R.correctOperation(s, a.opId, a.draft, a.reason, c, { corrKey: a.corrKey || null }) },
     "op.reverseCorrection": { perm: "documents.correct", run: (s, a, c) => R.reverseCorrection(s, a.opId, a.corrNo, a.reason, c) },
+    /** Przyjęcie MM (tryb dwuetapowy) — użytkownik magazynu docelowego; ilość faktyczna, tonaż, przyczyna różnicy. */
+    "mm.receive": { perm: "mm.receive", run: (s, a, c) => R.receiveTransfer(s, str(a.opId), a.receipt || {}, c) },
     "op.cancel": { perm: "documents.cancel", run: (s, a, c) => R.cancelOperation(s, a.opId, c, a.reason, { ack: !!a.ack }) },
     "print.register": { perm: "report.view", run: (s, a, c) => R.registerPrint(s, c, { kind: a.kind, title: a.title, range: a.range, wh: a.wh, format: a.format }) },
     /* ---- inwentaryzacja ---- */
@@ -5530,9 +5778,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }]
     ];
     ops.push(
-      // przesunięcie międzymagazynowe (MM): Zabrze → Brąszewice
+      // przesunięcie międzymagazynowe (MM, dwuetapowe): wysłanie Zabrze → Brąszewice, przyjęcie w Brąszewicach tego samego dnia
       ["u_kier", "2026-09-16", {
-        type: "MM", mm: { productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_bra" },
+        type: "MM", mm: { fromWhId: "wh_zab", productId: "pr_zr_tow", qty: "50", unit: "MP", toWhId: "wh_bra", weightMode: "manual", weightManual: "16,4" },
         transport: { mode: "own", place: "RiC Brąszewice", own: { vehicleId: "ve_scania", km: "28", rate: "5" } }
       }],
       // zakup wprowadzony omyłkowo — w danych przykładowych jest później anulowany
@@ -5553,6 +5801,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
+    }
+    // przyjęcie MM przez magazyn docelowy (Brąszewice): pełna ilość, tonaż z wagi
+    const mm = byNo["MM@2026-09-16"];
+    if (RIW.mmState(mm) === "W_DRODZE") {
+      const rr = RIW.receiveTransfer(s, mm.id, { qty: "50", unit: "MP", date: "2026-09-16", weightMode: "manual", weightManual: "16,2", note: "Kwit wagowy BR 0916/1" }, ctx("u_bra", "2026-09-16"));
+      if (!rr.ok) throw new Error("Dane przykładowe (przyjęcie MM): " + rr.error);
     }
     // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
     const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);
@@ -7267,7 +7521,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     "sale.priceUnit": N_("<b>Co:</b> jednostka ceny. Przy cenie za tonę przychód liczony jest z masy (MP × 0,33 t)."),
     "mm.productId": N_("<b>Co:</b> towar przesuwany między magazynami. Stan ogółem firmy się nie zmienia."),
     "mm.qty": N_("<b>Co:</b> ilość do przesunięcia. Nie więcej niż stan w magazynie źródłowym."),
-    "mm.toWhId": N_("<b>Co:</b> magazyn docelowy. Musi być inny niż magazyn aktywny (źródłowy)."),
+    "mm.fromWhId": N_("<b>Co:</b> magazyn, z którego towar wychodzi. Lista zawiera magazyny, do których masz dostęp."),
+    "mm.toWhId": N_("<b>Co:</b> magazyn, do którego towar jest wysyłany. Musi być inny niż magazyn źródłowy."),
+    "mm.weightMode": N_("<b>Automatyczny</b> = przelicznik produktu (np. zrębka 0,33 t/MP). <b>Ręczny</b> = tonaż z kwitu wagowego. Tonaż nie zmienia ilości na stanie."),
+    "mm.weightManual": N_("<b>Co:</b> tonaż ładunku z wagi (kwit wagowy), w tonach. <b>Przykład:</b> 16,40."),
     "transport.place": N_("<b>Co:</b> dokąd jedzie ładunek (miejsce dostawy). Trafia na dokumenty jako „Miejsce transportu”."),
     "transport.mode": N_("<b>Co:</b> kto wiezie ładunek. <b>Transport nie zmienia stanu</b> — to wyłącznie koszt i karta transportu (TR)."),
     "transport.external.company": N_("<b>Co:</b> firma przewozowa. <b>Przykład:</b> ESI Logistics."),
@@ -7329,7 +7586,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     wz: d => { d.type = "SPRZEDAZ"; d.sale.direct = false; },
     produkcja: d => { d.type = "PRODUKCJA"; d.production.rawProductId = "pr_drewno"; d.production.outProductId = "pr_zr_lesna"; },
     bezposrednia: d => { d.type = "SPRZEDAZ"; d.sale.direct = true; d.production.rawProductId = "pr_drewno"; d.production.outProductId = "pr_zr_lesna"; },
-    mm: d => { d.type = "MM"; }
+    mm: d => { d.type = "MM"; d.mm.fromWhId = App.user().whId; }
   };
   const CANCEL_REASONS = [N_("pomyłka operatora"), N_("dokument wprowadzony podwójnie"), N_("dostawa nie dotarła"), N_("błędny kontrahent"), N_("błędny magazyn"), N_("inny")];
   const errorsWord = n => tp("{n} błąd|{n} błędy|{n} błędów", n);
@@ -7387,9 +7644,21 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     },
     /** Zasoby floty dostępne w magazynie operacji: przypisane do niego i wspólne (oraz już wybrany — dane historyczne). */
     fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
-    whId() { return this.mode === "correct" && this.op ? this.op.whId : this.review ? this.review.whId : App.user().whId; },
+    whId() {
+      if (this.mode === "correct" && this.op) return this.op.whId;
+      if (this.review) return this.review.whId;
+      // MM: magazyn źródłowy wybrany w formularzu (domyślnie — magazyn aktywny użytkownika)
+      const d = this.draft;
+      if (d && d.type === "MM" && d.mm && d.mm.fromWhId && R.byId(Store.state.warehouses, d.mm.fromWhId)) return d.mm.fromWhId;
+      return App.user().whId;
+    },
+    /** Magazyny, z których użytkownik może wysłać MM: dostępne dla niego i aktywne (oraz już wybrany — dane historyczne). */
+    sourceWarehouses(keepId) {
+      const acc = R.whAccess(App.user());
+      return Store.state.warehouses.filter(w => (acc === null || acc.includes(w.id)) && (w.active !== false || w.id === keepId));
+    },
     /** Co zrobi przycisk główny: przegląd (zatwierdź przekazaną), zatwierdzenie bezpośrednie albo przekazanie do zatwierdzenia. */
-    action() { return this.review ? "approve" : (!Store.state.config.requireApproval || R.canApprove(App.user(), App.user().whId)) ? "commit" : "submit"; },
+    action() { return this.review ? "approve" : (!Store.state.config.requireApproval || R.canApprove(App.user(), this.whId())) ? "commit" : "submit"; },
     /** Tekst w polu dostawcy: wpisana nazwa albo nazwa wybranego kontrahenta (starsze szkice / korekta). */
     supplierText() {
       const P = this.draft.purchase;
@@ -7518,7 +7787,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           ${typeCard("PRODUKCJA", t("Produkcja na magazyn"), t("Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu."))}
           ${typeCard("MM", t("Przesunięcie MM"), t("Magazyn → inny magazyn firmy. Stan firmy bez zmian."))}
         </div>
-        <div class="info-line mt3">${ic("layers", 15)}<span>${corr ? t("Magazyn: <b>{w}</b> — magazyn dokumentu.", { w: esc(wh ? wh.name : "—") }) : t("Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).", { w: esc(wh ? wh.name : "—"), u: esc(App.user().name) })}</span></div>
+        <div class="info-line mt3">${ic("layers", 15)}<span>${corr ? t("Magazyn: <b>{w}</b> — magazyn dokumentu.", { w: esc(wh ? wh.name : "—") }) : type === "MM" ? t("Magazyn źródłowy i docelowy wybierasz w sekcji przesunięcia.") : t("Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).", { w: esc(wh ? wh.name : "—"), u: esc(App.user().name) })}</span></div>
         <div class="fgrid four mt4">${field({ key: "date", label: t("Data operacji"), req: true, control: `<input class="ctrl" type="date" id="${fid("date")}" data-bind="date" value="${esc(d.date)}" max="${esc(App.today())}" ${corr ? "disabled" : ""}>` })}</div>`);
 
       if (type === "ZAKUP") {
@@ -7588,15 +7857,28 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const prods = S.products.filter(p => (stock.get(p.id) || 0) > R.EPS || p.id === M.productId);
         const prod = App.product(M.productId);
         const u = Units.label(M.unit);
-        html += section(n++, "mm", t("Przesunięcie międzymagazynowe (MM)"), t("Rozchód z magazynu źródłowego i przychód w docelowym — jednym dokumentem MM."), `
+        const src = this.whId(), wMode = M.weightMode === "manual" ? "manual" : "auto";
+        const twoStage = corr ? !!(this.op.mm && this.op.mm.twoStage) : R.mmMode(S.config) === "two";
+        const srcList = corr ? S.warehouses.filter(w => w.id === src) : this.sourceWarehouses(src);
+        const dstList = S.warehouses.filter(w => w.active !== false || w.id === M.toWhId);
+        html += section(n++, "mm", t("Przesunięcie międzymagazynowe (MM)"), twoStage
+          ? t("Wysłanie z magazynu źródłowego; magazyn docelowy przyjmuje towar przyciskiem „Przyjmij MM”.")
+          : t("Rozchód z magazynu źródłowego i przychód w docelowym — jednym dokumentem MM."), `
+          <div class="info-line ${twoStage ? "warn" : ""} mb3" id="mm-mode-info">${ic(twoStage ? "truck" : "swap", 15)}<span>${twoStage
+            ? t("Tryb <b>dwuetapowy</b>: po zatwierdzeniu towar schodzi ze stanu źródła, a dokument ma status <b>W DRODZE</b>. Stan magazynu docelowego wzrośnie dopiero po przyjęciu MM (z ilością faktycznie przyjętą).")
+            : t("Tryb <b>jednoetapowy</b>: zatwierdzenie jednocześnie zmniejsza stan źródła i zwiększa stan magazynu docelowego.")}</span></div>
           <div class="fgrid four">
-            ${field({ key: "mm.from", label: t("Magazyn źródłowy"), control: outBox("mm.from", esc(wh ? wh.name : "—")), help: false })}
-            ${field({ key: "mm.toWhId", label: t("Magazyn docelowy"), req: true, control: selIn("mm.toWhId", [pick(t("wybierz magazyn"))].concat(S.warehouses.filter(w => w.id !== this.whId() && (w.active !== false || w.id === M.toWhId)).map(w => ({ v: w.id, l: w.name }))), M.toWhId, { struct: true, disabled: corr }) })}
+            ${field({ key: "mm.fromWhId", label: t("Magazyn źródłowy"), req: true, control: selIn("mm.fromWhId", srcList.map(w => ({ v: w.id, l: w.name })), src, { struct: true, disabled: corr || srcList.length < 2 && srcList.some(w => w.id === src) }) })}
+            ${field({ key: "mm.toWhId", label: t("Magazyn docelowy"), req: true, control: selIn("mm.toWhId", [pick(t("wybierz magazyn"))].concat(dstList.map(w => ({ v: w.id, l: w.id === src ? `${w.name} — ${t("magazyn źródłowy")}` : w.name }))), M.toWhId, { struct: true, disabled: corr }) })}
             ${field({ key: "mm.productId", label: t("Towar"), req: true, span: "span2", control: selIn("mm.productId", [pick(t("wybierz towar"))].concat(prods.map(p => ({ v: p.id, l: `${p.name} — ${fmtQ(stock.get(p.id) || 0)} ${Units.label(p.unit)}` }))), M.productId, { struct: true, disabled: corr }) })}
             ${field({ key: "mm.qty", label: t("Ilość"), req: true, control: numIn("mm.qty", M.qty, { suffix: u, placeholder: eg("300") }) })}
             ${field({ key: "mm.unit", label: t("Jednostka"), req: true, control: prod ? selIn("mm.unit", Units.allowed(prod).map(x => ({ v: x, l: Units.label(x) })), M.unit, { struct: true }) : outBox("mm.unit", esc(t("wybierz towar"))) })}
-            ${field({ key: "mm.srcBal", label: t("Źródło: stan przed → po"), control: outBox("mm.srcBal", "—"), help: false })}
-            ${field({ key: "mm.dstBal", label: t("Cel: stan przed → po"), control: outBox("mm.dstBal", "—"), help: false })}
+            ${field({ key: "mm.weightMode", label: t("Tonaż"), req: true, control: selIn("mm.weightMode", [{ v: "auto", l: t("Automatyczny (przelicznik)") }, { v: "manual", l: t("Ręczny — z kwitu wagowego") }], wMode, { struct: true }) })}
+            ${wMode === "manual"
+              ? field({ key: "mm.weightManual", label: t("Tonaż z wagi (t)"), req: true, control: numIn("mm.weightManual", M.weightManual, { suffix: "t", placeholder: eg(fmt(16.4, 2)) }) })
+              : field({ key: "mm.weightAuto", label: t("Tonaż wyliczony"), control: outBox("mm.weightAuto", "—"), help: false })}
+            ${field({ key: "mm.srcBal", label: t("Źródło: stan przed → po"), span: "span2", control: outBox("mm.srcBal", "—"), help: false })}
+            ${field({ key: "mm.dstBal", label: twoStage ? t("Cel: stan teraz → po przyjęciu") : t("Cel: stan przed → po"), span: "span2", control: outBox("mm.dstBal", "—"), help: false })}
           </div>`);
       }
 
@@ -7882,6 +8164,16 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }
       if (key === "sale.productId") { const p = App.product(v); if (p) d.sale.unit = p.unit; }
       if (key === "mm.productId") { const p = App.product(v); if (p) d.mm.unit = p.unit; }
+      if (key === "mm.unit" && prev && prev !== v) {
+        // zmiana jednostki przelicza wpisaną ilość (ta sama fizyczna ilość)
+        const p = App.product(d.mm.productId), r = NumParse.parse(d.mm.qty);
+        if (p && r.ok) { try { d.mm.qty = fmtQ(Units.convert(r.value, prev, v, p, S.config), 6); } catch (e) {} }
+      }
+      if (key === "mm.fromWhId") {
+        // inny magazyn źródłowy = inny stan; towar spoza stanu nowego źródła zostaje (walidacja pokaże brak stanu)
+        const p = App.product(d.mm.productId);
+        if (p && !(Stock.balance(S, v, p.id) > R.EPS) && !String(d.mm.qty).trim()) d.mm.productId = "";
+      }
       if (key === "production.type" && R.PROD_TYPES[v] && d.type !== "PRODUKCJA") d.production.outProductId = R.PROD_TYPES[v].productId;
       if (key === "production.enabled" && !v) d.sale.enabled = false;
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
@@ -8029,8 +8321,14 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const b = w => plan.balances.find(x => x.whId === w && x.productId === M.productId);
         const src = b(this.whId()), dst = b(M.toWhId);
         out("mm.srcBal", p && src ? `${esc(qn(src.before, p.id))} → <b>${esc(qn(src.after, p.id))}</b>` : p ? esc(qn(M.onStock, p.id)) : "—");
-        out("mm.dstBal", p && dst ? `${esc(qn(dst.before, p.id))} → <b>${esc(qn(dst.after, p.id))}</b>` : "—");
+        if (M.twoStage) {
+          const toWh = R.byId(S.warehouses, M.toWhId);
+          const now = p && toWh ? (this.mode === "correct" ? Stock.balance(Object.assign({}, S, { ledger: S.ledger.filter(l => l.opId !== this.op.id) }), toWh.id, p.id) : Stock.balance(S, toWh.id, p.id)) : null;
+          out("mm.dstBal", p && toWh && toWh.id !== this.whId() ? `${esc(qn(now, p.id))} → <b>${esc(qn(R.rq(now + (M.stockQty || 0)), p.id))}</b> <small class="dim" style="margin-left:6px">${esc(t("po przyjęciu"))}</small>` : "—");
+        } else out("mm.dstBal", p && dst ? `${esc(qn(dst.before, p.id))} → <b>${esc(qn(dst.after, p.id))}</b>` : "—");
         if (p && M.qty !== null && M.unit !== p.unit) add("mm.qty", `= ${esc(qn(M.stockQty, p.id))}`);
+        out("mm.weightAuto", p && M.qty !== null ? `${p.unit === "t" ? "" : "≈ "}<b>${esc(fmt(M.autoWeight, 2))} t</b>` : "—");
+        if (M.weightMode === "manual" && M.qty !== null && p) add("mm.weightManual", esc(t("z przelicznika: {q} t — ilość na stanie się nie zmienia", { q: fmtQ(M.autoWeight) })));
       }
       const T = n.transport;
       const ownP = T.mode === "own" ? T : T.mode === "mixed" ? T.own : null;
@@ -8198,9 +8496,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       else Toast.ok(t("Dokument zatwierdzony"), res.op.documents.map(x => x.no).join(" · "));
       const op = res.op;
       if (action === "approve") { location.hash = "#/operacje"; App.render(); root.OpDetail.open(op.id, { justSaved: true }); return; }
-      const keep = { type: this.draft.type, direct: this.draft.sale.direct };
+      const keep = { type: this.draft.type, direct: this.draft.sale.direct, from: this.draft.mm && this.draft.mm.fromWhId };
       this.reset();
       this.draft.type = keep.type; this.draft.sale.direct = keep.direct;
+      if (keep.type === "MM") this.draft.mm.fromWhId = keep.from || App.user().whId;
       if (keep.type === "PRODUKCJA" || keep.direct) PRESETS[keep.type === "PRODUKCJA" ? "produkcja" : "bezposrednia"](this.draft);
       this.draft.transport.place = this.defaultPlace();
       this.persist();
@@ -8239,7 +8538,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           if (X.outUnit === "MP") add(t("Cena za rąbanie / koszt"), `${fmt(X.chipRate)} zł/MP → <b>${money(X.chippingCost)}</b>`);
         }
         if (n.sale) { add(t("Odbiorca"), esc((App.partner(n.sale.buyerId) || {}).name)); add(t("Sprzedaż"), `${esc(fmtQ(n.sale.qty))} ${Units.label(n.sale.unit)} → <b>${money(n.sale.revenue)}</b>`); }
-        if (n.mm) add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);
+        if (n.mm) {
+          add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);
+          add(t("Tonaż"), `${esc(fmtQ(n.mm.weightT))} t ${n.mm.weightMode === "manual" ? esc(t("(z wagi)")) : esc(t("(z przelicznika)"))}`);
+          add(t("Tryb MM"), n.mm.twoStage ? `<span class="badge warn">${esc(t("W DRODZE"))}</span> ${esc(t("stan magazynu docelowego wzrośnie po przyjęciu MM"))}` : esc(t("jednoetapowy — przychód w magazynie docelowym od razu")));
+        }
         if (n.transport.mode !== "none") add(t("Transport"), `${esc(t(R.TRANSPORT_MODES[n.transport.mode]))} — ${esc(transportText(n.transport))} · ${money(n.transport.cost)}`);
         if (plan.type !== "PRODUKCJA") add(t("Miejsce transportu"), esc(n.transport.place));
         add(t("Wynik operacji"), `<b>${money(plan.totals.result)}</b>`);
@@ -8362,13 +8665,23 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const qtyByUnit = m => Object.entries(m || {}).filter(([, v]) => Math.abs(v) > R.EPS).map(([u, v]) => `${fmtQ(v)} ${Units.label(u)}`).join(" · ") || "—";
   const statusText = st => st === "CANCELLED" ? t("ANULOWANY") : t(R.STATUS[st] || st);
   const allWh = () => t("wszystkie magazyny");
+  /** Znacznik stanu przesunięcia MM (dwuetapowe): W DRODZE / PRZYJĘTE; jednoetapowe — bez znacznika. */
+  const mmBadge = o => {
+    const st = o && (o.mmState !== undefined ? o.mmState : R.mmState(o));
+    const two = o && (o.twoStage !== undefined ? o.twoStage : o.mm && o.mm.twoStage);
+    if (st === "W_DRODZE") return `<span class="badge warn" data-mm-state="W_DRODZE">${ic("truck", 12)} ${th("W DRODZE")}</span>`;
+    if (st === "PRZYJETE" && two) return `<span class="badge ok" data-mm-state="PRZYJETE">${th("PRZYJĘTE")}</span>`;
+    return "";
+  };
+  const canReceive = op => R.mmState(op) === "W_DRODZE" && App.can("mm.receive") && R.canAccessWh(App.user(), op.toWhId);
 
   /** Wszystkie dokumenty: operacji, korekt (KOR), anulowań (AN), bilansu otwarcia i inwentaryzacji. */
   function allDocuments(S, whId) {
     const rows = [];
     for (const op of S.operations) {
       if (whId && op.whId !== whId && op.toWhId !== whId) continue;
-      for (const d of op.documents) rows.push(Object.assign({}, d, { date: op.date, opId: op.id, opNo: op.no, opType: op.type, direct: op.direct, status: op.status, whId: op.whId, userName: op.userName }));
+      const mmx = op.type === "MM" && op.mm ? { mmState: R.mmState(op), twoStage: !!op.mm.twoStage, receipt: op.mm.receipt || null } : {};
+      for (const d of op.documents) rows.push(Object.assign({}, d, { date: op.date, opId: op.id, opNo: op.no, opType: op.type, direct: op.direct, status: op.status, whId: op.whId, userName: op.userName }, d.type === "MM" ? mmx : {}));
       op.corrections.forEach(c => rows.push({ type: "KOR", no: c.no, date: c.date, opId: op.id, opNo: op.no, status: "POSTED", whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: c.deltas.length ? "±" : "brak", userName: c.userName, note: t("KOREKTA dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(c.reason) }), corr: c }));
       if (op.cancel) rows.push({ type: "AN", no: op.cancel.no, date: op.cancel.date, opId: op.id, opNo: op.no, status: "POSTED", whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: "±", userName: op.cancel.userName, note: t("ANULOWANIE dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(op.cancel.reason) }) });
     }
@@ -8387,7 +8700,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     if (d.type === "KOR" || d.type === "AN") return d.note;
     if (d.type === "IN") return t("Różnice inwentaryzacyjne ({n} poz.)", { n: d.lines });
     if (d.type === "BO") return t("Bilans otwarcia ({n} poz.)", { n: d.lines });
-    if (d.type === "MM") return `${pName(d.productId)} · ${d.fromWh} → ${d.toWh}`;
+    if (d.type === "MM") return `${pName(d.productId)} · ${d.fromWh} → ${d.toWh}` + (d.mmState === "W_DRODZE" ? " · " + t("w drodze") : d.receipt ? " · " + t("przyjęto {q} ({d})", { q: `${fmtQ(d.receipt.qty)} ${Units.label(d.receipt.unit)}`, d: Dates.pl(d.receipt.date) }) : "");
     return pName(d.productId) + (d.meta && d.meta.direct ? " · " + t("bezpośrednio") : "");
   }
   const stockLbl = d => d.stock === "+" ? `<span class="badge ok">${th("+ przychód")}</span>` : d.stock === "−" ? `<span class="badge warn">${th("− rozchód")}</span>` : d.stock === "brak" ? `<span class="badge info">${th("brak")}</span>` : `<span class="badge">${th("± zmiana")}</span>`;
@@ -8441,6 +8754,18 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       add(t("Masa · energia"), `${d.weightMode === "manual" ? t("{q} t (waga rzeczywista)", { q: fmtQ(d.weightT) }) : `≈ ${fmt(o.t, 2)} t`} · ≈ ${fmt(o.gj, 1)} GJ ${t("(orientacyjnie)")}`);
     }
     if (d.fromWh) { add(t("Z magazynu"), d.fromWh); add(t("Do magazynu"), d.toWh); }
+    if (d.type === "MM" && op && op.mm) {
+      const M = op.mm, st = R.mmState(op), rc = M.receipt, p = App.product(M.productId);
+      add(t("Tryb MM"), M.twoStage ? t("dwuetapowy (wysłanie → przyjęcie)") : t("jednoetapowy"));
+      if (M.twoStage) add(t("Stan przesunięcia"), t(R.MM_STATES[st]));
+      if (M.weightT != null) add(t("Tonaż wysłany"), `${fmtQ(M.weightT)} t ${M.weightMode === "manual" ? t("(z wagi)") : t("(z przelicznika)")}`);
+      if (rc) {
+        add(t("Przyjęto"), `${fmtQ(rc.qty, 6)} ${Units.label(rc.unit)}${rc.unit !== p.unit ? ` (= ${fmtQ(rc.stockQty, 6)} ${Units.label(p.unit)})` : ""} · ${Dates.pl(rc.date)} · ${rc.userName}`);
+        add(t("Tonaż przyjęty"), `${fmtQ(rc.weightT)} t ${rc.weightMode === "manual" ? t("(z wagi)") : t("(z przelicznika)")}`);
+        if (Math.abs(rc.diff) > R.EPS) add(t("Różnica (wysłano − przyjęto)"), `${fmtQ(rc.diff, 6)} ${Units.label(p.unit)} · ${t(R.MM_DIFF_REASONS[rc.reason] || rc.reason)}`);
+        if (rc.note) add(t("Uwagi do przyjęcia"), rc.note);
+      }
+    }
     if (d.partner) add(d.type === "PZ" ? t("Dostawca") : t("Odbiorca"), d.partner);
     if (d.basis) add(t("Podstawa"), t(R.BASIS[d.basis]));
     if (d.type === "PZ" && d.price != null) add(t("Cena jednostkowa"), `${fmt(d.price)} zł/${Units.label(d.priceUnit || d.unit)}${d.priceUnit && d.priceUnit !== d.unit && d.priceQty != null ? " · " + t("ilość do ceny: {q} {u}", { q: fmtQ(d.priceQty, 6), u: Units.label(d.priceUnit) }) : ""}`);
@@ -8465,7 +8790,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       blocks.push({ type: "table", columns: [{ label: t("Produkt"), w: 3 }, { label: t("Magazyn"), w: 2 }, { label: t("Zmiana"), w: 2, align: "right" }, { label: t("Stan przed"), w: 2, align: "right" }, { label: t("Stan po"), w: 2, align: "right" }], rows: op.cancel.effect.map(x => [pName(x.productId), App.whName(x.whId), (x.qty > 0 ? "+" : "") + App.qtyNative(x.qty, x.productId, 6), App.qtyNative(x.before, x.productId), App.qtyNative(x.after, x.productId)]) });
     }
     if (op) blocks.push({ type: "p", muted: true, text: t("Operacja {no} · {type} · wystawił: {u}", { no: op.no, type: opTypeLabel(op), u: op.userName }) + (op.extDoc ? " · " + t("dokument zewnętrzny: {x}", { x: op.extDoc }) : "") + (op.notes ? " · " + t("uwagi: {x}", { x: op.notes }) : "") });
-    blocks.push({ type: "signatures", labels: d.type === "WZ" || d.type === "PZ" ? [t("Wydał / przyjął (magazyn)"), t("Kierowca / odbiorca")] : [t("Sporządził"), t("Zatwierdził")] });
+    blocks.push({ type: "signatures", labels: d.type === "WZ" || d.type === "PZ" ? [t("Wydał / przyjął (magazyn)"), t("Kierowca / odbiorca")] : d.type === "MM" ? [t("Wydał (magazyn źródłowy)"), t("Kierowca"), t("Przyjął (magazyn docelowy)")] : [t("Sporządził"), t("Zatwierdził")] });
     return { title: `${t(R.DOC_LABEL[d.type])} ${d.no}`, number: d.no, headerRight: App.whName(d.whId), rangeText: Dates.pl(d.date), whText: App.whName(d.whId), blocks };
   }
 
@@ -8516,7 +8841,13 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (X.outUnit === "MP") add(t("Rąbanie"), `${fmt(X.chipRate)} zł/MP = ${money(X.chippingCost)}${X.chipperName ? ` · ${esc(X.chipperName)} (${esc(X.operatorName)})` : ""}`);
       }
       if (op.sale) add(t("Sprzedaż"), `${esc(partnerName(op.sale.buyerId))} · ${esc(fmtQ(op.sale.qty))} ${Units.label(op.sale.unit)} → ${money(op.sale.revenue)}`);
-      if (op.mm) add(t("Przesunięcie"), `${esc(fmtQ(op.mm.qty))} ${Units.label(op.mm.unit)} ${esc(pName(op.mm.productId))}: ${esc(op.mm.fromWhName)} → ${esc(op.mm.toWhName)}`);
+      if (op.mm) {
+        const M = op.mm, rc = M.receipt, p = App.product(M.productId);
+        add(t("Przesunięcie"), `${esc(fmtQ(M.qty))} ${Units.label(M.unit)} ${esc(pName(M.productId))}: ${esc(M.fromWhName)} → ${esc(M.toWhName)}`);
+        if (M.weightT != null) add(t("Tonaż"), `${esc(fmtQ(M.weightT))} t ${esc(M.weightMode === "manual" ? t("(z wagi)") : t("(z przelicznika)"))}`);
+        add(t("Tryb MM"), M.twoStage ? `${esc(t("dwuetapowy"))} ${mmBadge(op)}` : esc(t("jednoetapowy — przychód przy zatwierdzeniu")));
+        if (rc) add(t("Przyjęcie"), `${esc(fmtQ(rc.qty, 6))} ${Units.label(rc.unit)} · ${esc(Dates.pl(rc.date))} · ${esc(rc.userName)} · ${esc(fmtQ(rc.weightT))} t${Math.abs(rc.diff) > R.EPS ? ` · <span class="neg">${esc(t("różnica {q} {u}", { q: fmtQ(-rc.diff, 6), u: Units.label(p.unit) }))}</span> (${esc(t(R.MM_DIFF_REASONS[rc.reason] || rc.reason))})` : ""}${rc.note ? ` · ${esc(rc.note)}` : ""}`);
+      }
       if (op.transport && op.transport.mode !== "none") add(t("Transport"), `${esc(t(R.TRANSPORT_MODES[op.transport.mode]))} · ${esc(transportText(op.transport))} · ${money(op.transport.cost)}`);
       add(t("Miejsce"), esc(op.place)); add(t("Dokument zewnętrzny"), esc(op.extDoc)); add(t("Uwagi"), esc(op.notes));
       add(t("Wynik operacji"), `<b>${money(op.totals.result)}</b>`);
@@ -8535,6 +8866,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (op.cancel && op.cancel.dependents.length) rel.push(`${th("Operacje późniejsze na tym samym towarze (potwierdzone przy anulowaniu):")} ${op.cancel.dependents.map(d => `<a href="#" data-op="${esc(d.id)}">${esc(d.no)}</a>`).join(", ")}`);
       const body = `
         ${opts.justSaved ? `<div class="info-line ok mb3">${ic("check", 15)}<span>${t("Dokument zatwierdzony: <b>{list}</b>. Status: ZATWIERDZONY.", { list: docs.map(d => esc(d.no)).join(", ") })}</span></div>` : ""}
+        ${R.mmState(op) === "W_DRODZE" ? `<div class="info-line warn mb3" id="mm-transit-info">${ic("truck", 15)}<span>${esc(t("Towar w drodze do magazynu {w}. Stan magazynu docelowego wzrośnie po przyjęciu MM.", { w: op.mm.toWhName }))}</span></div>` : ""}
         ${op.status === "CANCELLED" ? `<div class="info-line err mb3">${ic("ban", 15)}<span>${esc(t("Dokument anulowany {d} przez {u} — dokument {no}. Przyczyna: {r}. Skutki magazynowe zostały odwrócone; dokument pozostaje w historii.", { d: Dates.pl(op.cancel.date), u: op.cancel.userName, no: op.cancel.no, r: R.trReason(op.cancel.reason) }))}</span></div>` : ""}
         <div class="grid g2 detail-grid"><dl class="money-list" id="op-kv">${kv.join("")}</dl>
           <div><h4 class="mini-h">${th("Dokumenty")}</h4><div class="tbl-wrap"><table class="tbl" id="op-docs"><thead><tr><th>${th("Nr")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th>${th("Stan")}</th><th></th></tr></thead><tbody>
@@ -8549,8 +8881,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <h4 class="mini-h">${th("Historia zdarzeń")}</h4>
         <ul class="timeline" id="op-events">${events.map(a => `<li>${auditLine(a)}</li>`).join("")}</ul>`;
       const m = Modal.open({
-        title: `${op.no} — ${opTypeLabel(op)}`, sub: `${statusBadge(op.status)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
-        footer: `${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}
+        title: `${op.no} — ${opTypeLabel(op)}`, sub: `${statusBadge(op.status)} ${mmBadge(op)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
+        footer: `${canReceive(op) ? `<button class="btn primary" type="button" data-receive id="mm-receive-btn">${ic("inbox", 15)} ${th("Przyjmij MM…")}</button>` : ""}${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}
           ${canCorr ? `<a class="btn" href="#/korekta?op=${esc(op.id)}" data-correct>${ic("edit", 15)} ${th("Koryguj…")}</a>` : ""}
           <span class="spacer"></span>
           <button class="btn primary" type="button" data-close>${th("Zamknij")}</button>`
@@ -8558,6 +8890,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       $("[data-close]", m.el).onclick = () => m.close();
       const cc = $("[data-correct]", m.el); if (cc) cc.addEventListener("click", () => m.close());
       const cb = $("[data-cancel]", m.el); if (cb) cb.onclick = () => { m.close(); CancelDialog.open(op.id); };
+      const rb = $("[data-receive]", m.el); if (rb) rb.onclick = () => { m.close(); ReceiveDialog.open(op.id); };
       $$("[data-doc]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); const d = allDocuments(Store.state).find(x => x.no === b.dataset.doc); if (d) DocPreview.open(d); });
       $$("[data-op]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); m.close(); OpDetail.open(b.dataset.op); });
       $$("[data-reverse]", m.el).forEach(b => b.onclick = async () => {
@@ -8566,6 +8899,68 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const res = await Store.exec("op.reverseCorrection", { opId: op.id, corrNo: b.dataset.reverse, reason: r.value }, N_("Odwrócenie korekty"));
         if (res.ok) { Toast.ok(t("Korekta odwrócona"), res.no); m.close(); App.render(); OpDetail.open(op.id); } else Toast.err(t("Nie odwrócono"), res.error);
       });
+      return m;
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Przyjęcie MM (tryb dwuetapowy) — magazyn docelowy                    */
+  /* ------------------------------------------------------------------ */
+  const ReceiveDialog = {
+    open(opId) {
+      const S = Store.state, op = R.byId(S.operations, opId);
+      if (!op || !canReceive(op)) { Toast.err(t("Nie można przyjąć MM"), op ? (R.planReceive(S, opId, {}, App.ctx(N_("Przyjęcie MM"))).error || "") : t("Nie znaleziono operacji")); return; }
+      const M = op.mm, p = App.product(M.productId), units = Units.allowed(p);
+      const key = R.uid("rcv");
+      const f = { date: App.today(), qty: fmtQ(M.qty, 6), unit: M.unit, weightMode: "auto", weightManual: "", reason: "", note: "" };
+      const opt = (v, l, cur) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`;
+      const body = `<div class="info-line mb3">${ic("truck", 15)}<span>${esc(t("Wysłano {q} {u} {p} z magazynu {a} ({d}). Wpisz ilość faktycznie przyjętą — różnica zostanie zapisana z przyczyną.", { q: fmtQ(M.qty, 6), u: Units.label(M.unit), p: p.name, a: M.fromWhName, d: Dates.pl(op.date) }))}</span></div>
+        <div class="fgrid four" id="rcv-form">
+          <div class="field"><label for="rcv-date">${th("Data przyjęcia")} <span class="req">*</span></label><input class="ctrl" type="date" id="rcv-date" value="${esc(f.date)}" min="${esc(op.date)}" max="${esc(App.today())}"><div class="msg hidden" data-rmsg="date"></div></div>
+          <div class="field"><label for="rcv-qty">${th("Ilość przyjęta")} <span class="req">*</span></label><input class="ctrl num-in" type="text" inputmode="decimal" id="rcv-qty" value="${esc(f.qty)}" autocomplete="off"><div class="msg hidden" data-rmsg="qty"></div></div>
+          <div class="field"><label for="rcv-unit">${th("Jednostka")}</label><select class="ctrl" id="rcv-unit">${units.map(u => opt(u, Units.label(u), f.unit)).join("")}</select><div class="msg hidden" data-rmsg="unit"></div></div>
+          <div class="field"><label for="rcv-wmode">${th("Tonaż")}</label><select class="ctrl" id="rcv-wmode">${opt("auto", t("Automatyczny (przelicznik)"), f.weightMode)}${opt("manual", t("Ręczny — z kwitu wagowego"), f.weightMode)}</select></div>
+          <div class="field hidden" id="rcv-wman-f"><label for="rcv-wman">${th("Tonaż z wagi (t)")} <span class="req">*</span></label><input class="ctrl num-in" type="text" inputmode="decimal" id="rcv-wman" autocomplete="off"><div class="msg hidden" data-rmsg="weightManual"></div></div>
+          <div class="field hidden span2" id="rcv-reason-f"><label for="rcv-reason">${th("Przyczyna różnicy")} <span class="req">*</span></label><select class="ctrl" id="rcv-reason"><option value="">— ${th("wybierz")} —</option>${Object.entries(R.MM_DIFF_REASONS).map(([k, l]) => opt(k, t(l), "")).join("")}</select><div class="msg hidden" data-rmsg="reason"></div></div>
+          <div class="field span-all"><label for="rcv-note">${th("Uwagi do przyjęcia")}</label><input class="ctrl" type="text" id="rcv-note" maxlength="300" placeholder="${th("np. nr kwitu wagowego, stan ładunku")}"><div class="msg hidden" data-rmsg="note"></div></div>
+        </div>
+        <h4 class="mini-h">${th("Podsumowanie przyjęcia")}</h4><dl class="money-list" id="rcv-summary"></dl>`;
+      const m = Modal.open({ title: t("Przyjęcie MM {no}", { no: op.no }), sub: esc(`${M.fromWhName} → ${M.toWhName}`), wide: true, id: "mm-receive", body,
+        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><span class="spacer"></span><button class="btn primary" type="button" data-yes id="rcv-yes">${ic("check", 15)} ${th("Przyjmij MM")}</button>` });
+      const val = id => $(id, m.el).value;
+      const read = () => ({ date: val("#rcv-date"), qty: val("#rcv-qty"), unit: val("#rcv-unit"), weightMode: val("#rcv-wmode"), weightManual: val("#rcv-wman"), reason: val("#rcv-reason"), note: val("#rcv-note").trim(), key });
+      let shown = false;
+      const upd = () => {
+        const rec = read(), pr = R.planReceive(Store.state, opId, rec, App.ctx(N_("Przyjęcie MM")));
+        $("#rcv-wman-f", m.el).classList.toggle("hidden", rec.weightMode !== "manual");
+        const hasDiff = pr.qty !== null && pr.qty !== undefined && Math.abs(pr.diff) > R.EPS;
+        $("#rcv-reason-f", m.el).classList.toggle("hidden", !hasDiff);
+        $$("[data-rmsg]", m.el).forEach(x => { const e = shown && pr.errors ? pr.errors[x.dataset.rmsg] : ""; x.textContent = e || ""; x.classList.toggle("hidden", !e); });
+        const U = Units.label(p.unit);
+        const rows = pr.op ? [
+          [t("Wysłano"), `${fmtQ(pr.sentQty, 6)} ${U} · ${fmtQ(M.weightT)} t`],
+          [t("Przyjęto"), pr.qty !== null ? `<b>${esc(fmtQ(pr.stockQty, 6))} ${U}</b> · ${esc(fmtQ(pr.weightT))} t` : "—"],
+          [t("Różnica"), hasDiff ? `<span class="${pr.diff > 0 ? "neg" : "pos"}">${pr.diff > 0 ? esc(t("ubytek {q} {u}", { q: fmtQ(pr.diff, 6), u: U })) : esc(t("nadwyżka {q} {u}", { q: fmtQ(-pr.diff, 6), u: U }))}</span>` : esc(t("brak — zgodne z wysłaniem"))],
+          [t("Stan {w}", { w: M.toWhName }), pr.qty !== null ? `${esc(App.qtyNative(pr.before, p.id))} → <b>${esc(App.qtyNative(pr.after, p.id))}</b>` : "—"]
+        ] : [];
+        $("#rcv-summary", m.el).innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("");
+        return pr;
+      };
+      $$("input,select", m.el).forEach(el => { el.oninput = upd; el.onchange = upd; });
+      upd();
+      $("[data-no]", m.el).onclick = () => m.close();
+      const yes = $("[data-yes]", m.el);
+      yes.onclick = async () => {
+        shown = true;
+        const pr = upd();
+        if (!pr.ok) { Toast.err(t("Popraw dane przyjęcia"), pr.error || ""); return; }
+        yes.disabled = true;
+        const res = await Store.exec("mm.receive", { opId, receipt: read() }, N_("Przyjęcie MM"));
+        yes.disabled = false;
+        if (!res.ok) { Toast.err(t("Nie przyjęto MM — nic nie zostało zaksięgowane"), res.error); return; }
+        Toast.ok(t("MM przyjęte"), t("{no}: stan magazynu {w} zwiększony o {q}", { no: op.no, w: M.toWhName, q: App.qtyNative(res.op.mm.receipt.stockQty, p.id) }));
+        m.close(); App.render(); OpDetail.open(opId);
+      };
       return m;
     }
   };
@@ -8683,9 +9078,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   function opsTable(ops, { id = "ops-table", showWh = false, compact = false } = {}) {
     if (!ops.length) return `<div class="empty">${th("Brak operacji dla wybranych filtrów.")}</div>`;
     if (compact) return `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Data")}</th><th>${th("Rodzaj / produkt")}</th><th>${th("Status")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th></tr></thead><tbody>
-      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}<br><small class="dim">${esc(opProduct(o))}</small></td><td>${statusBadge(o.status)}</td><td class="r nowrap">${esc(opQty(o))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td></tr>`).join("")}</tbody></table></div>`;
+      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}<br><small class="dim">${esc(opProduct(o))}</small></td><td>${statusBadge(o.status)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td><td class="r nowrap">${esc(opQty(o))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td></tr>`).join("")}</tbody></table></div>`;
     return `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Data")}</th><th>${th("Rodzaj")}</th><th>${th("Status")}</th>${showWh ? `<th>${th("Magazyn")}</th>` : ""}<th>${th("Produkt")}</th><th class="r">${th("Ilość")}</th><th>${th("Kontrahent")}</th><th class="r">${th("Wartość")}</th><th>${th("Użytkownik")}</th><th></th></tr></thead><tbody>
-      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}</td><td>${statusBadge(o.status)}</td>${showWh ? `<td>${esc(App.whName(o.whId))}${o.toWhId ? ` → ${esc(App.whName(o.toWhId))}` : ""}</td>` : ""}
+      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}</td><td>${statusBadge(o.status)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td>${showWh ? `<td>${esc(App.whName(o.whId))}${o.toWhId ? ` → ${esc(App.whName(o.toWhId))}` : ""}</td>` : ""}
         <td>${esc(opProduct(o))}</td><td class="r nowrap">${esc(opQty(o))}</td><td>${esc(partnerName(opPartnerId(o)) || (o.mm ? o.mm.toWhName : ""))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td><td>${esc(o.userName)}</td>
         <td class="r"><button class="btn sm" type="button">${th("Szczegóły")}</button></td></tr>`).join("")}</tbody></table></div>`;
   }
@@ -8802,10 +9197,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const f = App.tabs[cfg.id] || (App.tabs[cfg.id] = { type: "", status: "", ym: "", q: "" });
         const rows = this.filtered();
         const perUnit = {};
-        rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + d.stockQty); });
+        const qOf = d => cfg.id === "przyjecia" && d.type === "MM" && d.twoStage ? (d.receipt ? d.receipt.stockQty : 0) : d.stockQty;
+        rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + qOf(d)); });
         const value = rows.filter(d => d.status !== "CANCELLED").reduce((a, d) => a + (d.value || 0), 0);
         return `<div class="page-head"><div class="titles"><h2>${th(cfg.title)}</h2><p>${th(cfg.desc)}</p></div>
             <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button></div></div>
+          ${cfg.pre ? cfg.pre() : ""}
           <div class="card"><div class="toolbar">
             ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${cfg.typeOptions.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
             <div class="field"><label for="r-status">${th("Status")}</label><select class="ctrl" id="r-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(t(R.STATUS[s]))}</option>`).join("")}</select></div>
@@ -8815,7 +9212,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
               ${rows.map((d, i) => `<tr class="${d.status === "CANCELLED" ? "void" : ""}"><td class="mono nowrap">${esc(d.no)}</td><td><span class="badge">${d.type}</span></td><td class="nowrap">${esc(Dates.pl(d.date))}</td>
                 <td>${esc(docContent(d))}</td><td class="r nowrap">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td>
                 <td class="r nowrap">${d.value ? esc(money(d.value)) : "—"}</td><td>${esc(d.partner || (d.transport && (d.transport.company || d.transport.carrier)) || "")}</td>
-                <td>${esc(d.place || "—")}</td><td>${stockLbl(d)}</td><td>${statusBadge(d.status)}</td>
+                <td>${esc(d.place || "—")}</td><td>${d.type === "MM" && d.mmState === "W_DRODZE" && cfg.id === "przyjecia" ? `<span class="badge warn">${th("oczekuje na przyjęcie")}</span>` : stockLbl(d)}</td><td>${statusBadge(d.status)}${d.type === "MM" ? " " + mmBadge(d) : ""}</td>
                 <td class="r nowrap"><button class="btn sm" type="button" data-view="${i}">${th("Podgląd")}</button>${d.opId ? ` <button class="btn sm" type="button" data-opd="${esc(d.opId)}">${th("Operacja")}</button>` : ""}</td></tr>`).join("")}
               </tbody><tfoot><tr><td colspan="4">${th("Razem (bez anulowanych)")}</td><td class="r">${esc(Object.entries(perUnit).map(([u, q]) => `${fmtQ(q)} ${Units.label(u)}`).join(" · ") || "—")}</td><td class="r">${esc(money(value))}</td><td colspan="5"></td></tr></tfoot></table></div>` : `<div class="empty">${th("Brak dokumentów dla wybranych filtrów.")}</div>`}
           </div>`;
@@ -8827,8 +9224,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         bindSearch(page, "#r-q", f, "q", this);
         $$("[data-view]", page).forEach(b => b.onclick = () => DocPreview.open(rows[+b.dataset.view]));
         $$("[data-opd]", page).forEach(b => b.onclick = () => OpDetail.open(b.dataset.opd));
+        $$("[data-receive]", page).forEach(b => b.onclick = () => ReceiveDialog.open(b.dataset.receive));
         $("#reg-csv", page).onclick = () => download(`${cfg.id}_${App.today()}.csv`, toCSV([t("Nr dokumentu"), t("Typ"), t("Data"), t("Treść"), t("Ilość"), t("Jednostka"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja")],
-          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.status), d.opNo || ""])), "text/csv;charset=utf-8");
+          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || ""])), "text/csv;charset=utf-8");
       }
     };
   }
@@ -8838,7 +9236,22 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   Views.wz = docRegister({ id: "wz", title: N_("Wydania / WZ"), types: ["WZ", "RW", "MM"], filter: (d, wh) => d.type !== "MM" || d.whId === wh, typeOptions: [["WZ", N_("sprzedaż")], ["RW", N_("zużycie do produkcji")], ["MM", N_("rozchód do innego magazynu")]],
     desc: N_("Dokumenty zmniejszające stan: sprzedaż (WZ), zużycie surowca (RW) i przesunięcia wychodzące (MM). WZ nie może przekroczyć stanu dostępnego."),
     buttons: [{ label: N_("Nowa sprzedaż (WZ)"), href: "#/nowa?preset=wz", primary: true }] });
-  Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym jednym dokumentem. Stan firmy ogółem się nie zmienia."),
+  /** Panel MM w drodze: do przyjęcia w aktywnym magazynie i wysłane z niego (tryb dwuetapowy). */
+  function mmTransitPanel() {
+    const S = Store.state, wh = App.user().whId;
+    const inc = R.mmInTransit(S, wh, "in"), out = R.mmInTransit(S, wh, "out");
+    const two = R.mmMode(S.config) === "two";
+    if (!inc.length && !out.length) return two ? `<div class="info-line mb3" id="mm-transit-empty">${ic("check", 15)}<span>${th("Brak przesunięć w drodze dla aktywnego magazynu.")}</span></div>` : "";
+    const row = (op, dir) => `<tr data-mm-row="${esc(op.id)}"><td class="mono nowrap">${esc(op.no)}</td><td class="nowrap">${esc(Dates.pl(op.date))}</td><td>${esc(dir === "in" ? op.mm.fromWhName : op.mm.toWhName)}</td><td>${esc(pName(op.mm.productId))}</td>
+      <td class="r nowrap">${esc(fmtQ(op.mm.qty, 6))} ${esc(Units.label(op.mm.unit))}</td><td class="r nowrap">${op.mm.weightT != null ? esc(fmtQ(op.mm.weightT)) + " t" : "—"}</td><td>${esc(op.userName)}</td>
+      <td class="r nowrap">${dir === "in" && canReceive(op) ? `<button class="btn sm primary" type="button" data-receive="${esc(op.id)}">${ic("inbox", 13)} ${th("Przyjmij MM")}</button> ` : ""}<button class="btn sm" type="button" data-opd="${esc(op.id)}">${th("Szczegóły")}</button></td></tr>`;
+    const tbl = (list, dir, id) => `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Wysłano")}</th><th>${dir === "in" ? th("Z magazynu") : th("Do magazynu")}</th><th>${th("Towar")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Tonaż")}</th><th>${th("Wystawił")}</th><th></th></tr></thead><tbody>${list.map(op => row(op, dir)).join("")}</tbody></table></div>`;
+    return `<div class="card mb4" id="mm-transit"><div class="card-h"><h3>${ic("truck", 16)} ${th("Przesunięcia w drodze")}</h3><span class="sub">${esc(App.whName(wh))}</span></div>
+      ${inc.length ? `<h4 class="mini-h" style="padding:0 16px">${esc(tp("{n} MM do przyjęcia|{n} MM do przyjęcia|{n} MM do przyjęcia", inc.length))}</h4>${tbl(inc, "in", "mm-incoming")}` : ""}
+      ${out.length ? `<h4 class="mini-h" style="padding:0 16px">${esc(tp("{n} MM wysłane — czeka na przyjęcie|{n} MM wysłane — czekają na przyjęcie|{n} MM wysłanych — czeka na przyjęcie", out.length))}</h4>${tbl(out, "out", "mm-outgoing")}` : ""}</div>`;
+  }
+  Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], pre: mmTransitPanel,
+    desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym. W trybie dwuetapowym towar jest „w drodze” do czasu przyjęcia MM przez magazyn docelowy."),
     buttons: [{ label: N_("Nowe przesunięcie MM"), href: "#/nowa?preset=mm", primary: true }] });
   Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
     desc: N_("Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje nienaruszony."),
@@ -9151,7 +9564,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         { type: "h", text: t("Sprzedaż") },
         { type: "table", columns: [{ label: t("Odbiorca"), w: 3 }, { label: t("Ilość"), w: 2, align: "right" }, { label: t("Wartość"), w: 1.5, align: "right" }, { label: t("Operacje"), w: 1, align: "right" }], rows: rep.sales.buyers.map(b => [b.name, qtyByUnit(b.byUnit), money(b.value), String(b.opIds.length)]), foot: [t("Razem (WZ + bezpośrednia)"), "", money(rep.sales.value + rep.sales.valueDirect), String(rep.sales.count)] },
         { type: "h", text: t("Przesunięcia międzymagazynowe (MM)") },
-        { type: "table", columns: [{ label: t("Dokument"), w: 1.5 }, { label: t("Data"), w: 1 }, { label: t("Z magazynu"), w: 2 }, { label: t("Do magazynu"), w: 2 }, { label: t("Produkt"), w: 2 }, { label: t("Ilość"), w: 1.3, align: "right" }, { label: t("Status"), w: 1.2 }], rows: rep.mm.map(m => [m.no, Dates.pl(m.date), m.from, m.to, m.name, `${fmtQ(m.qty)} ${Units.label(m.unit)}`, statusText(m.status)]) },
+        { type: "table", columns: [{ label: t("Dokument"), w: 1.5 }, { label: t("Data"), w: 1 }, { label: t("Z magazynu"), w: 1.7 }, { label: t("Do magazynu"), w: 1.7 }, { label: t("Produkt"), w: 1.8 }, { label: t("Wysłano"), w: 1.2, align: "right" }, { label: t("Przyjęto"), w: 1.2, align: "right" }, { label: t("Różnica"), w: 1, align: "right" }, { label: t("Tonaż"), w: 0.9, align: "right" }, { label: t("Status"), w: 1.4 }],
+          rows: rep.mm.map(m => [m.no, Dates.pl(m.date), m.from, m.to, m.name, `${fmtQ(m.sent)} ${Units.label(m.unit)}`, m.mmState === "W_DRODZE" ? t("w drodze") : `${fmtQ(m.received)} ${Units.label(m.unit)}`, Math.abs(m.diff) > R.EPS ? fmtQ(-m.diff) : "—", m.weightT != null ? fmtQ(m.weightT) : "—", statusText(m.status) + (m.twoStage && m.mmState !== "ANULOWANE" ? " · " + t(R.MM_STATES[m.mmState]) : "")]) },
         { type: "h", text: t("Transport") },
         { type: "table", columns: [{ label: t("Przewoźnik / tryb"), w: 3 }, { label: t("Kursy"), w: 1, align: "right" }, { label: "km", w: 1, align: "right" }, { label: t("Koszt"), w: 1.5, align: "right" }], rows: rep.transport.carriers.map(x => [x.name, String(x.count), fmtQ(x.km, 0), money(x.cost)]), foot: [t("Razem"), String(rep.transport.count), fmtQ(rep.transport.km, 0), money(rep.transport.cost)], note: rep.transport.wagons ? t("Pociągi: {w} wagonów · {q} t.", { w: rep.transport.wagons, q: fmtQ(rep.transport.trainT) }) : "" },
         { type: "h", text: t("Wycena stanu (orientacyjna — średnia cena zakupu)") },
@@ -9400,7 +9814,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   };
 
   root.OpDetail = OpDetail;
-  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
+  root.ReceiveDialog = ReceiveDialog;
+  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
   root.RIWViews = { allDocuments, docModel, kwitModel, historyModel, Reports, Printer, CancelDialog, DocPreview, OpDetail };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
@@ -9560,6 +9975,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const alerts = [];
       const pendingForMe = S.drafts.filter(d => d.status === "PENDING" && R.canApprove(u, d.whId)).length;
       if (pendingForMe) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja czeka na zatwierdzenie|{n} operacje czekają na zatwierdzenie|{n} operacji czeka na zatwierdzenie", pendingForMe), text: t("Sprawdź i zatwierdź albo odrzuć z podaniem powodu.") });
+      const mmIn = R.mmInTransit(S, wh.id, "in"), mmOut = R.mmInTransit(S, wh.id, "out");
+      if (mmIn.length) alerts.push({ cls: "warn", href: "#/mm", title: tp("{n} MM do przyjęcia|{n} MM do przyjęcia|{n} MM do przyjęcia", mmIn.length), text: t("Towar w drodze do magazynu {w} — przyjmij MM, aby zwiększyć stan.", { w: wh.name }) });
+      if (mmOut.length) alerts.push({ cls: "info", href: "#/mm", title: tp("{n} MM wysłane — w drodze|{n} MM wysłane — w drodze|{n} MM wysłanych — w drodze", mmOut.length), text: t("Czeka na przyjęcie przez magazyn docelowy.") });
       const myRejected = S.drafts.filter(d => d.userId === u.id && d.rejectReason && d.status !== "PENDING").length;
       if (myRejected) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja odrzucona|{n} operacje odrzucone|{n} operacji odrzuconych", myRejected), text: t("Popraw według uwag kierownika i przekaż ponownie.") });
       const myPending = S.drafts.filter(d => d.userId === u.id && d.status === "PENDING").length;
@@ -9985,7 +10403,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /* Role i uprawnienia                                                   */
   /* ================================================================== */
   const PERM_GROUPS = [
-    [N_("Operacje"), ["receipts.create", "issues.create", "production.create", "mm.create", "op.approve"]],
+    [N_("Operacje"), ["receipts.create", "issues.create", "production.create", "mm.create", "mm.receive", "op.approve"]],
     [N_("Korekty i anulowania"), ["documents.cancel", "documents.correct", "purchases.correct", "sales.correct", "production.correct", "inventory.correct"]],
     [N_("Inwentaryzacja"), ["inv.open", "inv.count", "inv.close"]],
     [N_("Kartoteki"), ["fleet.edit", "master.edit", "warehouses.edit"]],
@@ -10146,6 +10564,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           ${App.can("settings.edit") ? `<div class="card" id="access-card"><div class="card-h"><h3>${th("Konfiguracja dostępu")}</h3></div><div class="card-b stack">
             <label class="inline-opt"><input type="checkbox" id="cfg-approval" ${S.config.requireApproval ? "checked" : ""}> ${th("Obieg zatwierdzania operacji")}</label>
             <p class="help">${th("Wyłączony (domyślnie): osoba z uprawnieniem do wprowadzania zatwierdza operację sama. Włączony: operacje osób bez uprawnienia „op.approve” czekają na zatwierdzenie kierownika magazynu.")}</p>
+            <div class="field"><label for="cfg-mmmode">${th("Przesunięcia międzymagazynowe (MM)")}</label>
+              <select class="ctrl" id="cfg-mmmode">${Object.entries(R.MM_MODES).map(([k, l]) => `<option value="${k}" ${R.mmMode(S.config) === k ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+            <p class="help">${th("Dwuetapowy (domyślnie): wysłanie zmniejsza stan źródła, dokument ma status „W drodze”, a stan magazynu docelowego rośnie dopiero po „Przyjmij MM” (z ilością faktyczną i przyczyną różnicy). Zmiana dotyczy nowych dokumentów — MM już wysłane zachowują swój tryb.")}</p>
             <label class="inline-opt"><input type="checkbox" id="cfg-selfreg" ${S.config.allowSelfRegistration ? "checked" : ""}> ${th("Samodzielna rejestracja z ekranu logowania")}</label>
             <p class="help">${th("Wyłączona (zalecane): konta zakłada wyłącznie administrator — zaproszeniem e-mail. Włączona: zgłoszenie czeka na nadanie roli i magazynu przez administratora.")}</p>
             <p class="help">${esc(t("Dozwolone domeny e-mail: {d} (config/app.config.json).", { d: (S.config.companyDomains || []).map(d => "@" + d).join(", ") }))}</p>
@@ -10185,6 +10606,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         App.render();
       };
       const ca = $("#cfg-approval", page); if (ca) ca.onchange = e => setCfg("requireApproval", e.target.checked);
+      const cm = $("#cfg-mmmode", page); if (cm) cm.onchange = e => setCfg("mmMode", e.target.value);
       const cs = $("#cfg-selfreg", page); if (cs) cs.onchange = e => setCfg("allowSelfRegistration", e.target.checked);
       $("#bk-export", page).onclick = async () => {
         download(`resinvest_kopia_${App.today()}.json`, JSON.stringify(Store.state, null, 1), "application/json");

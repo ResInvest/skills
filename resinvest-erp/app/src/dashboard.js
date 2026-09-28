@@ -151,6 +151,9 @@
       const alerts = [];
       const pendingForMe = S.drafts.filter(d => d.status === "PENDING" && R.canApprove(u, d.whId)).length;
       if (pendingForMe) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja czeka na zatwierdzenie|{n} operacje czekają na zatwierdzenie|{n} operacji czeka na zatwierdzenie", pendingForMe), text: t("Sprawdź i zatwierdź albo odrzuć z podaniem powodu.") });
+      const mmIn = R.mmInTransit(S, wh.id, "in"), mmOut = R.mmInTransit(S, wh.id, "out");
+      if (mmIn.length) alerts.push({ cls: "warn", href: "#/mm", title: tp("{n} MM do przyjęcia|{n} MM do przyjęcia|{n} MM do przyjęcia", mmIn.length), text: t("Towar w drodze do magazynu {w} — przyjmij MM, aby zwiększyć stan.", { w: wh.name }) });
+      if (mmOut.length) alerts.push({ cls: "info", href: "#/mm", title: tp("{n} MM wysłane — w drodze|{n} MM wysłane — w drodze|{n} MM wysłanych — w drodze", mmOut.length), text: t("Czeka na przyjęcie przez magazyn docelowy.") });
       const myRejected = S.drafts.filter(d => d.userId === u.id && d.rejectReason && d.status !== "PENDING").length;
       if (myRejected) alerts.push({ cls: "warn", href: "#/operacje", title: tp("{n} operacja odrzucona|{n} operacje odrzucone|{n} operacji odrzuconych", myRejected), text: t("Popraw według uwag kierownika i przekaż ponownie.") });
       const myPending = S.drafts.filter(d => d.userId === u.id && d.status === "PENDING").length;

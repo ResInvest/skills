@@ -107,7 +107,6 @@
   "Wybierz produkt": ["Vyberte produkt", "Select a product"],
   "Wybierz magazyn docelowy przesunięcia": ["Vyberte cílový sklad převodu", "Select the target warehouse for the transfer"],
   "Nieznany magazyn": ["Neznámý sklad", "Unknown warehouse"],
-  "Magazyn docelowy musi być inny niż magazyn źródłowy": ["Cílový sklad musí být jiný než zdrojový", "The target warehouse must differ from the source warehouse"],
   "Magazyn docelowy jest nieaktywny": ["Cílový sklad je neaktivní", "The target warehouse is inactive"],
   "W magazynie {w} okres {ym} jest zamknięty": ["Ve skladu {w} je období {ym} uzavřené", "Period {ym} is closed in warehouse {w}"],
   "Nie można przesunąć {a} {u}. Dostępny stan: {b} {u}.": ["Nelze převést {a} {u}. Dostupná zásoba: {b} {u}.", "Cannot transfer {a} {u}. Available stock: {b} {u}."],

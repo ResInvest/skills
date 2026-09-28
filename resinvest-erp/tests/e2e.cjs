@@ -210,15 +210,44 @@ async function fillForestDirect(page) {
     const trs = nb(await page.textContent("#train-summary"));
     check("Pociąg: podsumowanie składu z przewoźnikiem, dokumentem, kosztem", ["Liczba wagonów", "Łączny tonaż składu", "Przewoźnik", "Nr dokumentu", "Koszt transportu"].every(x => trs.includes(x)));
 
-    /* ------------- MM ------------- */
+    /* ------------- MM: wybór źródła i celu, walidacja, tonaż, tryb dwuetapowy, przyjęcie ------------- */
     await preset(page, "mm");
-    await page.selectOption("#f-mm-toWhId", "wh_bra"); await page.waitForTimeout(100);
+    check("MM: pole magazynu źródłowego aktywne, domyślnie magazyn użytkownika", !(await page.isDisabled("#f-mm-fromWhId")) && (await page.inputValue("#f-mm-fromWhId")) === "wh_zab");
+    const srcOpts = await page.$$eval("#f-mm-fromWhId option", o => o.map(x => x.value));
+    const dstOpts = await page.$$eval("#f-mm-toWhId option", o => o.map(x => x.value).filter(Boolean));
+    check("MM: listy magazynów z danych — źródło: dostępne użytkownikowi, cel: wszystkie aktywne", srcOpts.join() === "wh_zab,wh_bra" && ["wh_zab", "wh_bra", "wh_rok"].every(w => dstOpts.includes(w)), [srcOpts, dstOpts]);
+    check("MM: informacja o trybie dwuetapowym", nb(await page.textContent("#mm-mode-info")).includes("dwuetapowy"));
     await page.selectOption("#f-mm-productId", "pr_zr_lesna"); await page.waitForTimeout(100);
     await fillTab(page, "#f-mm-qty", "300");
-    check("MM: źródło 8 293 → 7 993 MP, cel 220 → 520 MP", (await out(page, "mm.srcBal")) === "8 293 MP → 7 993 MP" && (await out(page, "mm.dstBal")) === "220 MP → 520 MP", [await out(page, "mm.srcBal"), await out(page, "mm.dstBal")]);
-    check("MM: zatwierdzenie", (await approve(page)) === 1);
+    await page.selectOption("#f-mm-toWhId", "wh_zab"); await page.waitForTimeout(120);
+    await page.click("#summary [data-save]"); await page.waitForTimeout(200);
+    check("MM: ten sam magazyn źródłowy i docelowy — błąd walidacji", (await msg(page, "mm.toWhId")).includes("nie mogą być takie same") && !(await page.$("#confirm-op")), await msg(page, "mm.toWhId"));
+    await page.selectOption("#f-mm-toWhId", "wh_bra"); await page.waitForTimeout(120);
+    check("MM: źródło 8 293 → 7 993 MP, cel 220 → 520 MP po przyjęciu", (await out(page, "mm.srcBal")) === "8 293 MP → 7 993 MP" && (await out(page, "mm.dstBal")) === "220 MP → 520 MP po przyjęciu", [await out(page, "mm.srcBal"), await out(page, "mm.dstBal")]);
+    check("MM: tonaż automatyczny z przelicznika (300 MP × 0,33 = 99 t)", (await out(page, "mm.weightAuto")) === "≈ 99,00 t", await out(page, "mm.weightAuto"));
+    await page.selectOption("#f-mm-weightMode", "manual"); await page.waitForSelector("#f-mm-weightManual");
+    await fillTab(page, "#f-mm-weightManual", "98,6");
+    check("MM: zatwierdzenie (wysłanie)", (await approve(page)) === 1);
     const mmOp = await lastOp(page);
-    check("MM: stany po przesunięciu, stan firmy bez zmian", (await bal(page, "pr_zr_lesna")) === 7993 && (await bal(page, "pr_zr_lesna", "wh_bra")) === 520 && mmOp.no.startsWith("MM/"));
+    const mmSt = () => page.evaluate(id => { const o = RIW_DEBUG.store.state.operations.find(x => x.id === id); return { st: RIW_DEBUG.R.mmState(o), w: o.mm.weightT, rc: o.mm.receipt }; }, mmOp.id);
+    await openOp(page, mmOp.id);
+    const st1 = await mmSt();
+    check("MM: W DRODZE — źródło 7 993 MP, cel bez zmian (220 MP), tonaż 98,6 t", (await bal(page, "pr_zr_lesna")) === 7993 && (await bal(page, "pr_zr_lesna", "wh_bra")) === 220 && st1.st === "W_DRODZE" && st1.w === 98.6 && mmOp.no.startsWith("MM/") && !!(await page.$("#op-detail #mm-transit-info")),
+      [await bal(page, "pr_zr_lesna"), await bal(page, "pr_zr_lesna", "wh_bra"), st1.st, st1.w, mmOp.no, !!(await page.$("#op-detail #mm-transit-info"))]);
+    await closeModals(page);
+    await setUser(page, "u_bra"); await go(page, "mm"); await page.waitForSelector("#mm-incoming");
+    check("MM: magazyn docelowy widzi MM do przyjęcia", nb(await page.textContent("#mm-incoming")).includes(mmOp.no));
+    await page.click(`#mm-incoming [data-receive="${mmOp.id}"]`); await page.waitForSelector("#mm-receive");
+    await page.fill("#rcv-qty", "295"); await page.dispatchEvent("#rcv-qty", "input"); await page.waitForTimeout(80);
+    await page.click("#rcv-yes"); await page.waitForTimeout(200);
+    check("MM: różnica przy przyjęciu wymaga przyczyny", !(await page.isHidden("#rcv-reason-f")) && nb(await page.textContent('[data-rmsg="reason"]')).includes("wskaż przyczynę") && (await bal(page, "pr_zr_lesna", "wh_bra")) === 220);
+    await page.selectOption("#rcv-reason", "ubytek"); await page.fill("#rcv-note", "kwit BR 0923"); await page.dispatchEvent("#rcv-note", "input");
+    check("MM: podsumowanie przyjęcia — ubytek 5 MP, stan 220 → 515", nb(await page.textContent("#rcv-summary")).includes("ubytek 5 MP") && nb(await page.textContent("#rcv-summary")).includes("515 MP"), nb(await page.textContent("#rcv-summary")));
+    await page.click("#rcv-yes"); await page.waitForSelector("#op-detail", { timeout: 3000 }).catch(() => {}); await page.waitForTimeout(250);
+    const rcv = await mmSt();
+    check("MM: przyjęte — cel 515 MP, różnica 5 MP z przyczyną, status PRZYJĘTE", (await bal(page, "pr_zr_lesna", "wh_bra")) === 515 && rcv.st === "PRZYJETE" && rcv.rc && rcv.rc.diff === 5 && rcv.rc.reason === "ubytek" && nb(await page.textContent("#op-detail")).includes("PRZYJĘTE"));
+    await closeModals(page);
+    await setUser(page, "u_kier");
 
     /* ------------- wersja robocza ------------- */
     await preset(page, "zakup");

@@ -199,8 +199,9 @@ test("§31.16 J: walidacja w logice biznesowej — zapis z pominięciem formular
 });
 
 /* ======================================== MM ======================================== */
-test("MM: Zabrze → Brąszewice 300 MP — stan ogółem bez zmian, blokada ponad stan i na ten sam magazyn", () => {
+test("MM jednoetapowe: Zabrze → Brąszewice 300 MP — stan ogółem bez zmian, blokada ponad stan i na ten sam magazyn", () => {
   const s = fresh();
+  s.config.mmMode = "one";
   const tot0 = R.Stock.balance(s, null, "pr_zr_lesna");
   const op = commit(s, MM());
   assert.deepEqual([bal(s, "pr_zr_lesna"), bal(s, "pr_zr_lesna", "wh_bra")], [7993, 520]);
@@ -208,6 +209,137 @@ test("MM: Zabrze → Brąszewice 300 MP — stan ogółem bez zmian, blokada pon
   assert.deepEqual(op.documents.map(d => d.type), ["MM"]);
   assert.match(R.planOperation(s, MM({ qty: "8000" }), ctx(s)).errors["mm.qty"], /Nie można przesunąć/);
   assert.ok(R.planOperation(s, MM({ toWhId: "wh_zab" }), ctx(s)).errors["mm.toWhId"]);
+});
+
+/* ============================ MM: magazyn źródłowy, tryb dwuetapowy, przyjęcie, tonaż ============================ */
+const RCV = (s, op, rec, uid = "u_bra") => R.receiveTransfer(s, op.id, rec || {}, ctx(s, uid));
+test("MM dwuetapowe: wysłanie → W DRODZE (cel bez zmian) → Przyjmij MM → stan celu rośnie", () => {
+  const s = fresh();
+  assert.equal(R.mmMode(s.config), "two");
+  const tot0 = R.Stock.balance(s, null, "pr_zr_lesna"), dst0 = bal(s, "pr_zr_lesna", "wh_bra");
+  const op = commit(s, MM());
+  assert.equal(R.mmState(op), "W_DRODZE");
+  assert.equal(bal(s, "pr_zr_lesna"), 7993, "źródło zmniejszone przy wysłaniu");
+  assert.equal(bal(s, "pr_zr_lesna", "wh_bra"), dst0, "cel bez zmian do przyjęcia");
+  assert.equal(R.Stock.balance(s, null, "pr_zr_lesna"), tot0 - 300, "towar w drodze poza stanami magazynów");
+  assert.deepEqual(R.mmInTransit(s, "wh_bra", "in").map(o => o.id), [op.id]);
+  assert.deepEqual(R.mmInTransit(s, "wh_zab", "out").map(o => o.id), [op.id]);
+  const r = RCV(s, op, { qty: "300", unit: "MP", key: "k1" });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(R.mmState(op), "PRZYJETE");
+  assert.equal(bal(s, "pr_zr_lesna", "wh_bra"), dst0 + 300);
+  assert.equal(R.Stock.balance(s, null, "pr_zr_lesna"), tot0, "po przyjęciu stan firmy bez zmian");
+  assert.equal(RCV(s, op, { qty: "300", key: "k1" }).duplicate, true, "ponowienie z tym samym kluczem — bez drugiego zapisu");
+  assert.equal(RCV(s, op, { qty: "300", key: "k2" }).code, "RECEIVED", "drugie przyjęcie odrzucone");
+  assert.equal(s.ledger.filter(l => l.opId === op.id && l.whId === "wh_bra").length, 1);
+  assert.ok(s.audit.some(a => a.entityId === op.id && a.event === "mm-receive" && a.code === "MM_RECEIVED"));
+  assert.equal(R.mmInTransit(s, "wh_bra", "in").length, 0);
+});
+test("MM: przyjęcie z ilością faktyczną — różnica wymaga przyczyny, raport pokazuje wysłano / przyjęto / różnicę", () => {
+  const s = fresh(), dst0 = bal(s, "pr_zr_lesna", "wh_bra");
+  const op = commit(s, MM());
+  const bad = RCV(s, op, { qty: "290" });
+  assert.equal(bad.ok, false);
+  assert.match(bad.plan.errors.reason, /wskaż przyczynę/);
+  assert.equal(RCV(s, op, { qty: "290", reason: "inna" }).plan.errors.note !== undefined, true, "„inna” wymaga opisu");
+  assert.equal(RCV(s, op, { qty: "300", date: "2026-09-24" }).plan.errors.date !== undefined, true, "data z przyszłości");
+  assert.equal(RCV(s, op, { qty: "300", date: "2026-09-01" }).plan.errors.date !== undefined, true, "przed wysłaniem");
+  const r = RCV(s, op, { qty: "290", reason: "ubytek", note: "osiadanie w transporcie", weightMode: "manual", weightManual: "95,5" });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(op.mm.receipt.diff, 10);
+  assert.equal(op.mm.receipt.weightT, 95.5);
+  assert.equal(bal(s, "pr_zr_lesna", "wh_bra"), dst0 + 290);
+  const rep = R.Reports.business(s, { mode: "custom", from: "2026-09-01", to: TODAY });
+  const row = rep.mm.find(m => m.opId === op.id);
+  assert.deepEqual([row.sent, row.received, row.diff, row.mmState], [300, 290, 10, "PRZYJETE"]);
+  assert.equal(rep.consistent, true, "bilans spójny także z ubytkiem w transporcie");
+});
+test("MM: przyjęcie w innej jednostce (t → MP) i przyjęcie tylko przez magazyn docelowy z uprawnieniem", () => {
+  const s = fresh();
+  const op = commit(s, MM({ qty: "100" }));
+  assert.equal(RCV(s, op, { qty: "100" }, "u_mag").code, "FORBIDDEN", "magazynier źródła nie przyjmuje MM do Brąszewic");
+  const obs = Object.assign({}, U(s, "u_bra"), { role: "obserwator" });
+  assert.equal(R.receiveTransfer(s, op.id, { qty: "100" }, { user: obs, today: TODAY }).code, "FORBIDDEN", "obserwator bez „mm.receive”");
+  const r = RCV(s, op, { qty: "33", unit: "t" });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(op.mm.receipt.stockQty, 100, "33 t ÷ 0,33 t/MP = 100 MP");
+  assert.equal(op.mm.receipt.diff, 0);
+});
+test("MM: wybór magazynu źródłowego — dostęp sprawdzany na serwerze, ten sam magazyn odrzucony", () => {
+  const s = fresh();
+  // kierownik ma dostęp do Zabrza i Brąszewic — może wysłać z Brąszewic, choć jego magazyn aktywny to Zabrze
+  const op = commit(s, MM({ fromWhId: "wh_bra", toWhId: "wh_zab", qty: "50" }));
+  assert.equal(op.whId, "wh_bra");
+  assert.equal(op.toWhId, "wh_zab");
+  assert.equal(op.mm.fromWhName, "RiC Brąszewice");
+  // magazynier Zabrza nie ma dostępu do Brąszewic — manipulacja polem fromWhId odrzucona
+  const p = R.planOperation(s, MM({ fromWhId: "wh_bra", toWhId: "wh_zab", qty: "10" }), ctx(s, "u_mag"));
+  assert.equal(p.errorCodes["mm.fromWhId"], "FORBIDDEN");
+  const same = R.planOperation(s, MM({ fromWhId: "wh_zab", toWhId: "wh_zab" }), ctx(s));
+  assert.match(same.errors["mm.toWhId"], /nie mogą być takie same/);
+  assert.equal(same.errorCodes["mm.toWhId"], "SAME_WH");
+  assert.ok(R.planOperation(s, MM({ fromWhId: "wh_xxx" }), ctx(s)).errors["mm.fromWhId"], "nieznany magazyn źródłowy");
+  // szkic i operacja przekazana zapamiętują magazyn źródłowy MM
+  const sv = R.saveDraft(s, MM({ fromWhId: "wh_bra", toWhId: "wh_zab" }), ctx(s));
+  assert.equal(R.byId(s.drafts, sv.id).whId, "wh_bra");
+});
+test("MM: tonaż automatyczny z przelicznika albo ręczny z kwitu wagowego (ilość na stanie bez zmian)", () => {
+  const s = fresh();
+  const a = R.planOperation(s, MM({ qty: "300" }), ctx(s));
+  assert.equal(a.norm.mm.weightT, R.rq(300 * s.config.mp_t));
+  const m = R.planOperation(s, MM({ qty: "300", weightMode: "manual", weightManual: "" }), ctx(s));
+  assert.ok(m.errors["mm.weightManual"], "ręczny tonaż wymagany");
+  const op = commit(s, MM({ qty: "300", weightMode: "manual", weightManual: "101,2" }));
+  assert.equal(op.mm.weightT, 101.2);
+  assert.equal(op.documents[0].weightT, 101.2);
+  assert.equal(bal(s, "pr_zr_lesna"), 7993, "tonaż nie zmienia ilości");
+  const far = R.planOperation(s, MM({ qty: "300", weightMode: "manual", weightManual: "300" }), ctx(s));
+  assert.ok(far.warnings.some(w => /25%/.test(w)), "ostrzeżenie o dużej rozbieżności");
+});
+test("MM: anulowanie w drodze przywraca źródło i blokuje przyjęcie; anulowanie po przyjęciu cofa oba magazyny", () => {
+  const s = fresh(), src0 = bal(s, "pr_zr_lesna"), dst0 = bal(s, "pr_zr_lesna", "wh_bra");
+  const op = commit(s, MM());
+  const c = R.cancelOperation(s, op.id, ctx(s), "pomyłka operatora");
+  assert.equal(c.ok, true, c.error);
+  assert.equal(bal(s, "pr_zr_lesna"), src0);
+  assert.equal(R.mmState(op), "ANULOWANE");
+  assert.match(RCV(s, op, { qty: "300" }).error, /anulowany/);
+  const op2 = commit(s, MM({ qty: "100" }));
+  assert.equal(RCV(s, op2, { qty: "100" }).ok, true);
+  assert.equal(R.cancelOperation(s, op2.id, ctx(s), "pomyłka operatora").ok, true);
+  assert.deepEqual([bal(s, "pr_zr_lesna"), bal(s, "pr_zr_lesna", "wh_bra")], [src0, dst0]);
+});
+test("MM: korekta wysłanej ilości — w drodze zmienia źródło; po przyjęciu przyjęcie zostaje, różnica przeliczona", () => {
+  const s = fresh(), dst0 = bal(s, "pr_zr_lesna", "wh_bra");
+  const op = commit(s, MM());
+  const d1 = R.clone(op.input); d1.mm.qty = "250";
+  let r = R.correctOperation(s, op.id, d1, "błędnie wpisana ilość", ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(bal(s, "pr_zr_lesna"), 8043);
+  assert.equal(R.mmState(op), "W_DRODZE", "korekta nie przyjmuje MM");
+  assert.equal(op.mm.twoStage, true);
+  assert.equal(RCV(s, op, { qty: "250" }).ok, true);
+  const d2 = R.clone(op.input); d2.mm.qty = "260";
+  r = R.correctOperation(s, op.id, d2, "korekta dokumentu zewnętrznego", ctx(s));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(bal(s, "pr_zr_lesna", "wh_bra"), dst0 + 250, "przyjęcie bez zmian");
+  assert.equal(op.mm.receipt.diff, 10, "wysłano 260, przyjęto 250");
+  const d3 = R.clone(op.input); d3.mm.toWhId = "wh_zab";
+  assert.match(R.correctOperation(s, op.id, d3, "inny", ctx(s)).error, /nie zmienia magazynów/);
+});
+test("MM: przełącznik trybu w konfiguracji (administrator) i migracja 6 → 7", () => {
+  const s = fresh();
+  assert.equal(R.Settings.save(s, { mmMode: "x" }, ctx(s, "u_admin")).ok, false);
+  assert.equal(R.Settings.save(s, { mmMode: "one" }, ctx(s, "u_kier")).code, "FORBIDDEN");
+  assert.equal(R.Settings.save(s, { mmMode: "one" }, ctx(s, "u_admin")).ok, true);
+  const op = commit(s, MM({ qty: "10" }));
+  assert.equal(R.mmState(op), "PRZYJETE");
+  assert.equal(op.mm.twoStage, false);
+  const old = R.clone(s); old.schema = 6; delete old.config.mmMode; old.rolePerms = { magazynier: ["mm.create", "report.view"] };
+  const m = R.migrate(old);
+  assert.equal(m.to, 7);
+  assert.equal(m.state.config.mmMode, "two");
+  assert.ok(m.state.rolePerms.magazynier.includes("mm.receive"));
 });
 
 /* ==================================== §32.23 ==================================== */

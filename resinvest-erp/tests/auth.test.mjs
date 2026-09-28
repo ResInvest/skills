@@ -383,6 +383,30 @@ test("§35.3 manipulacja warehouse_id w żądaniu — serwer ignoruje / odrzuca"
   const st = await mag.state(), me = st.users.find(u => u.login === "pawel.kaczmarek@resinvest.group");
   assert.equal((await mag.cmd("user.save", { rec: Object.assign({}, me, { warehouseIds: ["wh_bra", "wh_zab"] }) })).status, 403, "własny dostęp do magazynów");
 });
+test("MM dwuetapowe przez serwer — wybór magazynu źródłowego, W DRODZE u odbiorcy, przyjęcie tylko przez magazyn docelowy", async () => {
+  const mm = R.Seed.draftOf(TODAY, { type: "MM", mm: { fromWhId: "wh_zab", productId: "pr_zr_lesna", qty: "40", unit: "MP", toWhId: "wh_bra", weightMode: "manual", weightManual: "13,1" }, transport: { mode: "none", place: "RiC Brąszewice" } });
+  // magazynier Brąszewic nie może wysłać towaru z Zabrza (fromWhId z przeglądarki nie daje dostępu)
+  const forged = await mag.cmd("op.commit", { draft: Object.assign({}, mm, { idemKey: "idem_forged_mm" }) });
+  assert.equal(forged.json.res.ok, false);
+  assert.equal(forged.json.res.plan.errorCodes["mm.fromWhId"], "FORBIDDEN");
+  const sent = await mgr.cmd("op.commit", { draft: mm });
+  assert.equal(sent.json.res.ok, true, sent.json.res.error);
+  const op = sent.json.res.op;
+  assert.equal(op.whId, "wh_zab"); assert.equal(op.mm.twoStage, true); assert.equal(op.mm.weightT, 13.1);
+  const st = await mag.state();
+  const seen = st.operations.find(o => o.id === op.id);
+  assert.ok(seen, "odbiorca widzi MM w drodze");
+  assert.equal(R.mmState(seen), "W_DRODZE");
+  const before = R.Stock.balance(st, "wh_bra", "pr_zr_lesna");
+  assert.equal((await view.cmd("mm.receive", { opId: op.id, receipt: { qty: "40" } })).status, 403, "obserwator bez uprawnienia");
+  const rc = await mag.cmd("mm.receive", { opId: op.id, receipt: { qty: "39", unit: "MP", reason: "ubytek", note: "kwit BR 77", key: "rcv_srv_1" } });
+  assert.equal(rc.json.res.ok, true, rc.json.res.error);
+  const st2 = await mag.state();
+  assert.equal(R.Stock.balance(st2, "wh_bra", "pr_zr_lesna"), before + 39);
+  assert.equal(R.mmState(st2.operations.find(o => o.id === op.id)), "PRZYJETE");
+  const again = await mag.cmd("mm.receive", { opId: op.id, receipt: { qty: "39", key: "rcv_srv_2" } });
+  assert.equal(again.json.res.ok, false, "drugie przyjęcie odrzucone");
+});
 test("Błąd wysyłki zaproszenia — konto pozostaje INVITED, błąd dla administratora, audyt, możliwe ponowienie", async () => {
   const a = S2.client(); await a.login(ADMIN, ADMIN_PW);
   const inv = await a.post("/api/users/invite", { rec: { firstName: "Piotr", lastName: "Bezpoczty", email: "piotr.bezpoczty@resinvest.group", role: "magazynier", whId: "wh_zab" } });

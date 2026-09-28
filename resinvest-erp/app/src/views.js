@@ -32,13 +32,23 @@
   const qtyByUnit = m => Object.entries(m || {}).filter(([, v]) => Math.abs(v) > R.EPS).map(([u, v]) => `${fmtQ(v)} ${Units.label(u)}`).join(" · ") || "—";
   const statusText = st => st === "CANCELLED" ? t("ANULOWANY") : t(R.STATUS[st] || st);
   const allWh = () => t("wszystkie magazyny");
+  /** Znacznik stanu przesunięcia MM (dwuetapowe): W DRODZE / PRZYJĘTE; jednoetapowe — bez znacznika. */
+  const mmBadge = o => {
+    const st = o && (o.mmState !== undefined ? o.mmState : R.mmState(o));
+    const two = o && (o.twoStage !== undefined ? o.twoStage : o.mm && o.mm.twoStage);
+    if (st === "W_DRODZE") return `<span class="badge warn" data-mm-state="W_DRODZE">${ic("truck", 12)} ${th("W DRODZE")}</span>`;
+    if (st === "PRZYJETE" && two) return `<span class="badge ok" data-mm-state="PRZYJETE">${th("PRZYJĘTE")}</span>`;
+    return "";
+  };
+  const canReceive = op => R.mmState(op) === "W_DRODZE" && App.can("mm.receive") && R.canAccessWh(App.user(), op.toWhId);
 
   /** Wszystkie dokumenty: operacji, korekt (KOR), anulowań (AN), bilansu otwarcia i inwentaryzacji. */
   function allDocuments(S, whId) {
     const rows = [];
     for (const op of S.operations) {
       if (whId && op.whId !== whId && op.toWhId !== whId) continue;
-      for (const d of op.documents) rows.push(Object.assign({}, d, { date: op.date, opId: op.id, opNo: op.no, opType: op.type, direct: op.direct, status: op.status, whId: op.whId, userName: op.userName }));
+      const mmx = op.type === "MM" && op.mm ? { mmState: R.mmState(op), twoStage: !!op.mm.twoStage, receipt: op.mm.receipt || null } : {};
+      for (const d of op.documents) rows.push(Object.assign({}, d, { date: op.date, opId: op.id, opNo: op.no, opType: op.type, direct: op.direct, status: op.status, whId: op.whId, userName: op.userName }, d.type === "MM" ? mmx : {}));
       op.corrections.forEach(c => rows.push({ type: "KOR", no: c.no, date: c.date, opId: op.id, opNo: op.no, status: "POSTED", whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: c.deltas.length ? "±" : "brak", userName: c.userName, note: t("KOREKTA dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(c.reason) }), corr: c }));
       if (op.cancel) rows.push({ type: "AN", no: op.cancel.no, date: op.cancel.date, opId: op.id, opNo: op.no, status: "POSTED", whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: "±", userName: op.cancel.userName, note: t("ANULOWANIE dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(op.cancel.reason) }) });
     }
@@ -57,7 +67,7 @@
     if (d.type === "KOR" || d.type === "AN") return d.note;
     if (d.type === "IN") return t("Różnice inwentaryzacyjne ({n} poz.)", { n: d.lines });
     if (d.type === "BO") return t("Bilans otwarcia ({n} poz.)", { n: d.lines });
-    if (d.type === "MM") return `${pName(d.productId)} · ${d.fromWh} → ${d.toWh}`;
+    if (d.type === "MM") return `${pName(d.productId)} · ${d.fromWh} → ${d.toWh}` + (d.mmState === "W_DRODZE" ? " · " + t("w drodze") : d.receipt ? " · " + t("przyjęto {q} ({d})", { q: `${fmtQ(d.receipt.qty)} ${Units.label(d.receipt.unit)}`, d: Dates.pl(d.receipt.date) }) : "");
     return pName(d.productId) + (d.meta && d.meta.direct ? " · " + t("bezpośrednio") : "");
   }
   const stockLbl = d => d.stock === "+" ? `<span class="badge ok">${th("+ przychód")}</span>` : d.stock === "−" ? `<span class="badge warn">${th("− rozchód")}</span>` : d.stock === "brak" ? `<span class="badge info">${th("brak")}</span>` : `<span class="badge">${th("± zmiana")}</span>`;
@@ -111,6 +121,18 @@
       add(t("Masa · energia"), `${d.weightMode === "manual" ? t("{q} t (waga rzeczywista)", { q: fmtQ(d.weightT) }) : `≈ ${fmt(o.t, 2)} t`} · ≈ ${fmt(o.gj, 1)} GJ ${t("(orientacyjnie)")}`);
     }
     if (d.fromWh) { add(t("Z magazynu"), d.fromWh); add(t("Do magazynu"), d.toWh); }
+    if (d.type === "MM" && op && op.mm) {
+      const M = op.mm, st = R.mmState(op), rc = M.receipt, p = App.product(M.productId);
+      add(t("Tryb MM"), M.twoStage ? t("dwuetapowy (wysłanie → przyjęcie)") : t("jednoetapowy"));
+      if (M.twoStage) add(t("Stan przesunięcia"), t(R.MM_STATES[st]));
+      if (M.weightT != null) add(t("Tonaż wysłany"), `${fmtQ(M.weightT)} t ${M.weightMode === "manual" ? t("(z wagi)") : t("(z przelicznika)")}`);
+      if (rc) {
+        add(t("Przyjęto"), `${fmtQ(rc.qty, 6)} ${Units.label(rc.unit)}${rc.unit !== p.unit ? ` (= ${fmtQ(rc.stockQty, 6)} ${Units.label(p.unit)})` : ""} · ${Dates.pl(rc.date)} · ${rc.userName}`);
+        add(t("Tonaż przyjęty"), `${fmtQ(rc.weightT)} t ${rc.weightMode === "manual" ? t("(z wagi)") : t("(z przelicznika)")}`);
+        if (Math.abs(rc.diff) > R.EPS) add(t("Różnica (wysłano − przyjęto)"), `${fmtQ(rc.diff, 6)} ${Units.label(p.unit)} · ${t(R.MM_DIFF_REASONS[rc.reason] || rc.reason)}`);
+        if (rc.note) add(t("Uwagi do przyjęcia"), rc.note);
+      }
+    }
     if (d.partner) add(d.type === "PZ" ? t("Dostawca") : t("Odbiorca"), d.partner);
     if (d.basis) add(t("Podstawa"), t(R.BASIS[d.basis]));
     if (d.type === "PZ" && d.price != null) add(t("Cena jednostkowa"), `${fmt(d.price)} zł/${Units.label(d.priceUnit || d.unit)}${d.priceUnit && d.priceUnit !== d.unit && d.priceQty != null ? " · " + t("ilość do ceny: {q} {u}", { q: fmtQ(d.priceQty, 6), u: Units.label(d.priceUnit) }) : ""}`);
@@ -135,7 +157,7 @@
       blocks.push({ type: "table", columns: [{ label: t("Produkt"), w: 3 }, { label: t("Magazyn"), w: 2 }, { label: t("Zmiana"), w: 2, align: "right" }, { label: t("Stan przed"), w: 2, align: "right" }, { label: t("Stan po"), w: 2, align: "right" }], rows: op.cancel.effect.map(x => [pName(x.productId), App.whName(x.whId), (x.qty > 0 ? "+" : "") + App.qtyNative(x.qty, x.productId, 6), App.qtyNative(x.before, x.productId), App.qtyNative(x.after, x.productId)]) });
     }
     if (op) blocks.push({ type: "p", muted: true, text: t("Operacja {no} · {type} · wystawił: {u}", { no: op.no, type: opTypeLabel(op), u: op.userName }) + (op.extDoc ? " · " + t("dokument zewnętrzny: {x}", { x: op.extDoc }) : "") + (op.notes ? " · " + t("uwagi: {x}", { x: op.notes }) : "") });
-    blocks.push({ type: "signatures", labels: d.type === "WZ" || d.type === "PZ" ? [t("Wydał / przyjął (magazyn)"), t("Kierowca / odbiorca")] : [t("Sporządził"), t("Zatwierdził")] });
+    blocks.push({ type: "signatures", labels: d.type === "WZ" || d.type === "PZ" ? [t("Wydał / przyjął (magazyn)"), t("Kierowca / odbiorca")] : d.type === "MM" ? [t("Wydał (magazyn źródłowy)"), t("Kierowca"), t("Przyjął (magazyn docelowy)")] : [t("Sporządził"), t("Zatwierdził")] });
     return { title: `${t(R.DOC_LABEL[d.type])} ${d.no}`, number: d.no, headerRight: App.whName(d.whId), rangeText: Dates.pl(d.date), whText: App.whName(d.whId), blocks };
   }
 
@@ -186,7 +208,13 @@
         if (X.outUnit === "MP") add(t("Rąbanie"), `${fmt(X.chipRate)} zł/MP = ${money(X.chippingCost)}${X.chipperName ? ` · ${esc(X.chipperName)} (${esc(X.operatorName)})` : ""}`);
       }
       if (op.sale) add(t("Sprzedaż"), `${esc(partnerName(op.sale.buyerId))} · ${esc(fmtQ(op.sale.qty))} ${Units.label(op.sale.unit)} → ${money(op.sale.revenue)}`);
-      if (op.mm) add(t("Przesunięcie"), `${esc(fmtQ(op.mm.qty))} ${Units.label(op.mm.unit)} ${esc(pName(op.mm.productId))}: ${esc(op.mm.fromWhName)} → ${esc(op.mm.toWhName)}`);
+      if (op.mm) {
+        const M = op.mm, rc = M.receipt, p = App.product(M.productId);
+        add(t("Przesunięcie"), `${esc(fmtQ(M.qty))} ${Units.label(M.unit)} ${esc(pName(M.productId))}: ${esc(M.fromWhName)} → ${esc(M.toWhName)}`);
+        if (M.weightT != null) add(t("Tonaż"), `${esc(fmtQ(M.weightT))} t ${esc(M.weightMode === "manual" ? t("(z wagi)") : t("(z przelicznika)"))}`);
+        add(t("Tryb MM"), M.twoStage ? `${esc(t("dwuetapowy"))} ${mmBadge(op)}` : esc(t("jednoetapowy — przychód przy zatwierdzeniu")));
+        if (rc) add(t("Przyjęcie"), `${esc(fmtQ(rc.qty, 6))} ${Units.label(rc.unit)} · ${esc(Dates.pl(rc.date))} · ${esc(rc.userName)} · ${esc(fmtQ(rc.weightT))} t${Math.abs(rc.diff) > R.EPS ? ` · <span class="neg">${esc(t("różnica {q} {u}", { q: fmtQ(-rc.diff, 6), u: Units.label(p.unit) }))}</span> (${esc(t(R.MM_DIFF_REASONS[rc.reason] || rc.reason))})` : ""}${rc.note ? ` · ${esc(rc.note)}` : ""}`);
+      }
       if (op.transport && op.transport.mode !== "none") add(t("Transport"), `${esc(t(R.TRANSPORT_MODES[op.transport.mode]))} · ${esc(transportText(op.transport))} · ${money(op.transport.cost)}`);
       add(t("Miejsce"), esc(op.place)); add(t("Dokument zewnętrzny"), esc(op.extDoc)); add(t("Uwagi"), esc(op.notes));
       add(t("Wynik operacji"), `<b>${money(op.totals.result)}</b>`);
@@ -205,6 +233,7 @@
       if (op.cancel && op.cancel.dependents.length) rel.push(`${th("Operacje późniejsze na tym samym towarze (potwierdzone przy anulowaniu):")} ${op.cancel.dependents.map(d => `<a href="#" data-op="${esc(d.id)}">${esc(d.no)}</a>`).join(", ")}`);
       const body = `
         ${opts.justSaved ? `<div class="info-line ok mb3">${ic("check", 15)}<span>${t("Dokument zatwierdzony: <b>{list}</b>. Status: ZATWIERDZONY.", { list: docs.map(d => esc(d.no)).join(", ") })}</span></div>` : ""}
+        ${R.mmState(op) === "W_DRODZE" ? `<div class="info-line warn mb3" id="mm-transit-info">${ic("truck", 15)}<span>${esc(t("Towar w drodze do magazynu {w}. Stan magazynu docelowego wzrośnie po przyjęciu MM.", { w: op.mm.toWhName }))}</span></div>` : ""}
         ${op.status === "CANCELLED" ? `<div class="info-line err mb3">${ic("ban", 15)}<span>${esc(t("Dokument anulowany {d} przez {u} — dokument {no}. Przyczyna: {r}. Skutki magazynowe zostały odwrócone; dokument pozostaje w historii.", { d: Dates.pl(op.cancel.date), u: op.cancel.userName, no: op.cancel.no, r: R.trReason(op.cancel.reason) }))}</span></div>` : ""}
         <div class="grid g2 detail-grid"><dl class="money-list" id="op-kv">${kv.join("")}</dl>
           <div><h4 class="mini-h">${th("Dokumenty")}</h4><div class="tbl-wrap"><table class="tbl" id="op-docs"><thead><tr><th>${th("Nr")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th>${th("Stan")}</th><th></th></tr></thead><tbody>
@@ -219,8 +248,8 @@
         <h4 class="mini-h">${th("Historia zdarzeń")}</h4>
         <ul class="timeline" id="op-events">${events.map(a => `<li>${auditLine(a)}</li>`).join("")}</ul>`;
       const m = Modal.open({
-        title: `${op.no} — ${opTypeLabel(op)}`, sub: `${statusBadge(op.status)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
-        footer: `${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}
+        title: `${op.no} — ${opTypeLabel(op)}`, sub: `${statusBadge(op.status)} ${mmBadge(op)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
+        footer: `${canReceive(op) ? `<button class="btn primary" type="button" data-receive id="mm-receive-btn">${ic("inbox", 15)} ${th("Przyjmij MM…")}</button>` : ""}${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}
           ${canCorr ? `<a class="btn" href="#/korekta?op=${esc(op.id)}" data-correct>${ic("edit", 15)} ${th("Koryguj…")}</a>` : ""}
           <span class="spacer"></span>
           <button class="btn primary" type="button" data-close>${th("Zamknij")}</button>`
@@ -228,6 +257,7 @@
       $("[data-close]", m.el).onclick = () => m.close();
       const cc = $("[data-correct]", m.el); if (cc) cc.addEventListener("click", () => m.close());
       const cb = $("[data-cancel]", m.el); if (cb) cb.onclick = () => { m.close(); CancelDialog.open(op.id); };
+      const rb = $("[data-receive]", m.el); if (rb) rb.onclick = () => { m.close(); ReceiveDialog.open(op.id); };
       $$("[data-doc]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); const d = allDocuments(Store.state).find(x => x.no === b.dataset.doc); if (d) DocPreview.open(d); });
       $$("[data-op]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); m.close(); OpDetail.open(b.dataset.op); });
       $$("[data-reverse]", m.el).forEach(b => b.onclick = async () => {
@@ -236,6 +266,68 @@
         const res = await Store.exec("op.reverseCorrection", { opId: op.id, corrNo: b.dataset.reverse, reason: r.value }, N_("Odwrócenie korekty"));
         if (res.ok) { Toast.ok(t("Korekta odwrócona"), res.no); m.close(); App.render(); OpDetail.open(op.id); } else Toast.err(t("Nie odwrócono"), res.error);
       });
+      return m;
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Przyjęcie MM (tryb dwuetapowy) — magazyn docelowy                    */
+  /* ------------------------------------------------------------------ */
+  const ReceiveDialog = {
+    open(opId) {
+      const S = Store.state, op = R.byId(S.operations, opId);
+      if (!op || !canReceive(op)) { Toast.err(t("Nie można przyjąć MM"), op ? (R.planReceive(S, opId, {}, App.ctx(N_("Przyjęcie MM"))).error || "") : t("Nie znaleziono operacji")); return; }
+      const M = op.mm, p = App.product(M.productId), units = Units.allowed(p);
+      const key = R.uid("rcv");
+      const f = { date: App.today(), qty: fmtQ(M.qty, 6), unit: M.unit, weightMode: "auto", weightManual: "", reason: "", note: "" };
+      const opt = (v, l, cur) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`;
+      const body = `<div class="info-line mb3">${ic("truck", 15)}<span>${esc(t("Wysłano {q} {u} {p} z magazynu {a} ({d}). Wpisz ilość faktycznie przyjętą — różnica zostanie zapisana z przyczyną.", { q: fmtQ(M.qty, 6), u: Units.label(M.unit), p: p.name, a: M.fromWhName, d: Dates.pl(op.date) }))}</span></div>
+        <div class="fgrid four" id="rcv-form">
+          <div class="field"><label for="rcv-date">${th("Data przyjęcia")} <span class="req">*</span></label><input class="ctrl" type="date" id="rcv-date" value="${esc(f.date)}" min="${esc(op.date)}" max="${esc(App.today())}"><div class="msg hidden" data-rmsg="date"></div></div>
+          <div class="field"><label for="rcv-qty">${th("Ilość przyjęta")} <span class="req">*</span></label><input class="ctrl num-in" type="text" inputmode="decimal" id="rcv-qty" value="${esc(f.qty)}" autocomplete="off"><div class="msg hidden" data-rmsg="qty"></div></div>
+          <div class="field"><label for="rcv-unit">${th("Jednostka")}</label><select class="ctrl" id="rcv-unit">${units.map(u => opt(u, Units.label(u), f.unit)).join("")}</select><div class="msg hidden" data-rmsg="unit"></div></div>
+          <div class="field"><label for="rcv-wmode">${th("Tonaż")}</label><select class="ctrl" id="rcv-wmode">${opt("auto", t("Automatyczny (przelicznik)"), f.weightMode)}${opt("manual", t("Ręczny — z kwitu wagowego"), f.weightMode)}</select></div>
+          <div class="field hidden" id="rcv-wman-f"><label for="rcv-wman">${th("Tonaż z wagi (t)")} <span class="req">*</span></label><input class="ctrl num-in" type="text" inputmode="decimal" id="rcv-wman" autocomplete="off"><div class="msg hidden" data-rmsg="weightManual"></div></div>
+          <div class="field hidden span2" id="rcv-reason-f"><label for="rcv-reason">${th("Przyczyna różnicy")} <span class="req">*</span></label><select class="ctrl" id="rcv-reason"><option value="">— ${th("wybierz")} —</option>${Object.entries(R.MM_DIFF_REASONS).map(([k, l]) => opt(k, t(l), "")).join("")}</select><div class="msg hidden" data-rmsg="reason"></div></div>
+          <div class="field span-all"><label for="rcv-note">${th("Uwagi do przyjęcia")}</label><input class="ctrl" type="text" id="rcv-note" maxlength="300" placeholder="${th("np. nr kwitu wagowego, stan ładunku")}"><div class="msg hidden" data-rmsg="note"></div></div>
+        </div>
+        <h4 class="mini-h">${th("Podsumowanie przyjęcia")}</h4><dl class="money-list" id="rcv-summary"></dl>`;
+      const m = Modal.open({ title: t("Przyjęcie MM {no}", { no: op.no }), sub: esc(`${M.fromWhName} → ${M.toWhName}`), wide: true, id: "mm-receive", body,
+        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><span class="spacer"></span><button class="btn primary" type="button" data-yes id="rcv-yes">${ic("check", 15)} ${th("Przyjmij MM")}</button>` });
+      const val = id => $(id, m.el).value;
+      const read = () => ({ date: val("#rcv-date"), qty: val("#rcv-qty"), unit: val("#rcv-unit"), weightMode: val("#rcv-wmode"), weightManual: val("#rcv-wman"), reason: val("#rcv-reason"), note: val("#rcv-note").trim(), key });
+      let shown = false;
+      const upd = () => {
+        const rec = read(), pr = R.planReceive(Store.state, opId, rec, App.ctx(N_("Przyjęcie MM")));
+        $("#rcv-wman-f", m.el).classList.toggle("hidden", rec.weightMode !== "manual");
+        const hasDiff = pr.qty !== null && pr.qty !== undefined && Math.abs(pr.diff) > R.EPS;
+        $("#rcv-reason-f", m.el).classList.toggle("hidden", !hasDiff);
+        $$("[data-rmsg]", m.el).forEach(x => { const e = shown && pr.errors ? pr.errors[x.dataset.rmsg] : ""; x.textContent = e || ""; x.classList.toggle("hidden", !e); });
+        const U = Units.label(p.unit);
+        const rows = pr.op ? [
+          [t("Wysłano"), `${fmtQ(pr.sentQty, 6)} ${U} · ${fmtQ(M.weightT)} t`],
+          [t("Przyjęto"), pr.qty !== null ? `<b>${esc(fmtQ(pr.stockQty, 6))} ${U}</b> · ${esc(fmtQ(pr.weightT))} t` : "—"],
+          [t("Różnica"), hasDiff ? `<span class="${pr.diff > 0 ? "neg" : "pos"}">${pr.diff > 0 ? esc(t("ubytek {q} {u}", { q: fmtQ(pr.diff, 6), u: U })) : esc(t("nadwyżka {q} {u}", { q: fmtQ(-pr.diff, 6), u: U }))}</span>` : esc(t("brak — zgodne z wysłaniem"))],
+          [t("Stan {w}", { w: M.toWhName }), pr.qty !== null ? `${esc(App.qtyNative(pr.before, p.id))} → <b>${esc(App.qtyNative(pr.after, p.id))}</b>` : "—"]
+        ] : [];
+        $("#rcv-summary", m.el).innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("");
+        return pr;
+      };
+      $$("input,select", m.el).forEach(el => { el.oninput = upd; el.onchange = upd; });
+      upd();
+      $("[data-no]", m.el).onclick = () => m.close();
+      const yes = $("[data-yes]", m.el);
+      yes.onclick = async () => {
+        shown = true;
+        const pr = upd();
+        if (!pr.ok) { Toast.err(t("Popraw dane przyjęcia"), pr.error || ""); return; }
+        yes.disabled = true;
+        const res = await Store.exec("mm.receive", { opId, receipt: read() }, N_("Przyjęcie MM"));
+        yes.disabled = false;
+        if (!res.ok) { Toast.err(t("Nie przyjęto MM — nic nie zostało zaksięgowane"), res.error); return; }
+        Toast.ok(t("MM przyjęte"), t("{no}: stan magazynu {w} zwiększony o {q}", { no: op.no, w: M.toWhName, q: App.qtyNative(res.op.mm.receipt.stockQty, p.id) }));
+        m.close(); App.render(); OpDetail.open(opId);
+      };
       return m;
     }
   };
@@ -353,9 +445,9 @@
   function opsTable(ops, { id = "ops-table", showWh = false, compact = false } = {}) {
     if (!ops.length) return `<div class="empty">${th("Brak operacji dla wybranych filtrów.")}</div>`;
     if (compact) return `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Data")}</th><th>${th("Rodzaj / produkt")}</th><th>${th("Status")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th></tr></thead><tbody>
-      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}<br><small class="dim">${esc(opProduct(o))}</small></td><td>${statusBadge(o.status)}</td><td class="r nowrap">${esc(opQty(o))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td></tr>`).join("")}</tbody></table></div>`;
+      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}<br><small class="dim">${esc(opProduct(o))}</small></td><td>${statusBadge(o.status)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td><td class="r nowrap">${esc(opQty(o))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td></tr>`).join("")}</tbody></table></div>`;
     return `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Data")}</th><th>${th("Rodzaj")}</th><th>${th("Status")}</th>${showWh ? `<th>${th("Magazyn")}</th>` : ""}<th>${th("Produkt")}</th><th class="r">${th("Ilość")}</th><th>${th("Kontrahent")}</th><th class="r">${th("Wartość")}</th><th>${th("Użytkownik")}</th><th></th></tr></thead><tbody>
-      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}</td><td>${statusBadge(o.status)}</td>${showWh ? `<td>${esc(App.whName(o.whId))}${o.toWhId ? ` → ${esc(App.whName(o.toWhId))}` : ""}</td>` : ""}
+      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}</td><td>${statusBadge(o.status)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td>${showWh ? `<td>${esc(App.whName(o.whId))}${o.toWhId ? ` → ${esc(App.whName(o.toWhId))}` : ""}</td>` : ""}
         <td>${esc(opProduct(o))}</td><td class="r nowrap">${esc(opQty(o))}</td><td>${esc(partnerName(opPartnerId(o)) || (o.mm ? o.mm.toWhName : ""))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td><td>${esc(o.userName)}</td>
         <td class="r"><button class="btn sm" type="button">${th("Szczegóły")}</button></td></tr>`).join("")}</tbody></table></div>`;
   }
@@ -472,10 +564,12 @@
         const f = App.tabs[cfg.id] || (App.tabs[cfg.id] = { type: "", status: "", ym: "", q: "" });
         const rows = this.filtered();
         const perUnit = {};
-        rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + d.stockQty); });
+        const qOf = d => cfg.id === "przyjecia" && d.type === "MM" && d.twoStage ? (d.receipt ? d.receipt.stockQty : 0) : d.stockQty;
+        rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + qOf(d)); });
         const value = rows.filter(d => d.status !== "CANCELLED").reduce((a, d) => a + (d.value || 0), 0);
         return `<div class="page-head"><div class="titles"><h2>${th(cfg.title)}</h2><p>${th(cfg.desc)}</p></div>
             <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button></div></div>
+          ${cfg.pre ? cfg.pre() : ""}
           <div class="card"><div class="toolbar">
             ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${cfg.typeOptions.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
             <div class="field"><label for="r-status">${th("Status")}</label><select class="ctrl" id="r-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(t(R.STATUS[s]))}</option>`).join("")}</select></div>
@@ -485,7 +579,7 @@
               ${rows.map((d, i) => `<tr class="${d.status === "CANCELLED" ? "void" : ""}"><td class="mono nowrap">${esc(d.no)}</td><td><span class="badge">${d.type}</span></td><td class="nowrap">${esc(Dates.pl(d.date))}</td>
                 <td>${esc(docContent(d))}</td><td class="r nowrap">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td>
                 <td class="r nowrap">${d.value ? esc(money(d.value)) : "—"}</td><td>${esc(d.partner || (d.transport && (d.transport.company || d.transport.carrier)) || "")}</td>
-                <td>${esc(d.place || "—")}</td><td>${stockLbl(d)}</td><td>${statusBadge(d.status)}</td>
+                <td>${esc(d.place || "—")}</td><td>${d.type === "MM" && d.mmState === "W_DRODZE" && cfg.id === "przyjecia" ? `<span class="badge warn">${th("oczekuje na przyjęcie")}</span>` : stockLbl(d)}</td><td>${statusBadge(d.status)}${d.type === "MM" ? " " + mmBadge(d) : ""}</td>
                 <td class="r nowrap"><button class="btn sm" type="button" data-view="${i}">${th("Podgląd")}</button>${d.opId ? ` <button class="btn sm" type="button" data-opd="${esc(d.opId)}">${th("Operacja")}</button>` : ""}</td></tr>`).join("")}
               </tbody><tfoot><tr><td colspan="4">${th("Razem (bez anulowanych)")}</td><td class="r">${esc(Object.entries(perUnit).map(([u, q]) => `${fmtQ(q)} ${Units.label(u)}`).join(" · ") || "—")}</td><td class="r">${esc(money(value))}</td><td colspan="5"></td></tr></tfoot></table></div>` : `<div class="empty">${th("Brak dokumentów dla wybranych filtrów.")}</div>`}
           </div>`;
@@ -497,8 +591,9 @@
         bindSearch(page, "#r-q", f, "q", this);
         $$("[data-view]", page).forEach(b => b.onclick = () => DocPreview.open(rows[+b.dataset.view]));
         $$("[data-opd]", page).forEach(b => b.onclick = () => OpDetail.open(b.dataset.opd));
+        $$("[data-receive]", page).forEach(b => b.onclick = () => ReceiveDialog.open(b.dataset.receive));
         $("#reg-csv", page).onclick = () => download(`${cfg.id}_${App.today()}.csv`, toCSV([t("Nr dokumentu"), t("Typ"), t("Data"), t("Treść"), t("Ilość"), t("Jednostka"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja")],
-          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.status), d.opNo || ""])), "text/csv;charset=utf-8");
+          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || ""])), "text/csv;charset=utf-8");
       }
     };
   }
@@ -508,7 +603,22 @@
   Views.wz = docRegister({ id: "wz", title: N_("Wydania / WZ"), types: ["WZ", "RW", "MM"], filter: (d, wh) => d.type !== "MM" || d.whId === wh, typeOptions: [["WZ", N_("sprzedaż")], ["RW", N_("zużycie do produkcji")], ["MM", N_("rozchód do innego magazynu")]],
     desc: N_("Dokumenty zmniejszające stan: sprzedaż (WZ), zużycie surowca (RW) i przesunięcia wychodzące (MM). WZ nie może przekroczyć stanu dostępnego."),
     buttons: [{ label: N_("Nowa sprzedaż (WZ)"), href: "#/nowa?preset=wz", primary: true }] });
-  Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym jednym dokumentem. Stan firmy ogółem się nie zmienia."),
+  /** Panel MM w drodze: do przyjęcia w aktywnym magazynie i wysłane z niego (tryb dwuetapowy). */
+  function mmTransitPanel() {
+    const S = Store.state, wh = App.user().whId;
+    const inc = R.mmInTransit(S, wh, "in"), out = R.mmInTransit(S, wh, "out");
+    const two = R.mmMode(S.config) === "two";
+    if (!inc.length && !out.length) return two ? `<div class="info-line mb3" id="mm-transit-empty">${ic("check", 15)}<span>${th("Brak przesunięć w drodze dla aktywnego magazynu.")}</span></div>` : "";
+    const row = (op, dir) => `<tr data-mm-row="${esc(op.id)}"><td class="mono nowrap">${esc(op.no)}</td><td class="nowrap">${esc(Dates.pl(op.date))}</td><td>${esc(dir === "in" ? op.mm.fromWhName : op.mm.toWhName)}</td><td>${esc(pName(op.mm.productId))}</td>
+      <td class="r nowrap">${esc(fmtQ(op.mm.qty, 6))} ${esc(Units.label(op.mm.unit))}</td><td class="r nowrap">${op.mm.weightT != null ? esc(fmtQ(op.mm.weightT)) + " t" : "—"}</td><td>${esc(op.userName)}</td>
+      <td class="r nowrap">${dir === "in" && canReceive(op) ? `<button class="btn sm primary" type="button" data-receive="${esc(op.id)}">${ic("inbox", 13)} ${th("Przyjmij MM")}</button> ` : ""}<button class="btn sm" type="button" data-opd="${esc(op.id)}">${th("Szczegóły")}</button></td></tr>`;
+    const tbl = (list, dir, id) => `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Wysłano")}</th><th>${dir === "in" ? th("Z magazynu") : th("Do magazynu")}</th><th>${th("Towar")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Tonaż")}</th><th>${th("Wystawił")}</th><th></th></tr></thead><tbody>${list.map(op => row(op, dir)).join("")}</tbody></table></div>`;
+    return `<div class="card mb4" id="mm-transit"><div class="card-h"><h3>${ic("truck", 16)} ${th("Przesunięcia w drodze")}</h3><span class="sub">${esc(App.whName(wh))}</span></div>
+      ${inc.length ? `<h4 class="mini-h" style="padding:0 16px">${esc(tp("{n} MM do przyjęcia|{n} MM do przyjęcia|{n} MM do przyjęcia", inc.length))}</h4>${tbl(inc, "in", "mm-incoming")}` : ""}
+      ${out.length ? `<h4 class="mini-h" style="padding:0 16px">${esc(tp("{n} MM wysłane — czeka na przyjęcie|{n} MM wysłane — czekają na przyjęcie|{n} MM wysłanych — czeka na przyjęcie", out.length))}</h4>${tbl(out, "out", "mm-outgoing")}` : ""}</div>`;
+  }
+  Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], pre: mmTransitPanel,
+    desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym. W trybie dwuetapowym towar jest „w drodze” do czasu przyjęcia MM przez magazyn docelowy."),
     buttons: [{ label: N_("Nowe przesunięcie MM"), href: "#/nowa?preset=mm", primary: true }] });
   Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
     desc: N_("Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje nienaruszony."),
@@ -821,7 +931,8 @@
         { type: "h", text: t("Sprzedaż") },
         { type: "table", columns: [{ label: t("Odbiorca"), w: 3 }, { label: t("Ilość"), w: 2, align: "right" }, { label: t("Wartość"), w: 1.5, align: "right" }, { label: t("Operacje"), w: 1, align: "right" }], rows: rep.sales.buyers.map(b => [b.name, qtyByUnit(b.byUnit), money(b.value), String(b.opIds.length)]), foot: [t("Razem (WZ + bezpośrednia)"), "", money(rep.sales.value + rep.sales.valueDirect), String(rep.sales.count)] },
         { type: "h", text: t("Przesunięcia międzymagazynowe (MM)") },
-        { type: "table", columns: [{ label: t("Dokument"), w: 1.5 }, { label: t("Data"), w: 1 }, { label: t("Z magazynu"), w: 2 }, { label: t("Do magazynu"), w: 2 }, { label: t("Produkt"), w: 2 }, { label: t("Ilość"), w: 1.3, align: "right" }, { label: t("Status"), w: 1.2 }], rows: rep.mm.map(m => [m.no, Dates.pl(m.date), m.from, m.to, m.name, `${fmtQ(m.qty)} ${Units.label(m.unit)}`, statusText(m.status)]) },
+        { type: "table", columns: [{ label: t("Dokument"), w: 1.5 }, { label: t("Data"), w: 1 }, { label: t("Z magazynu"), w: 1.7 }, { label: t("Do magazynu"), w: 1.7 }, { label: t("Produkt"), w: 1.8 }, { label: t("Wysłano"), w: 1.2, align: "right" }, { label: t("Przyjęto"), w: 1.2, align: "right" }, { label: t("Różnica"), w: 1, align: "right" }, { label: t("Tonaż"), w: 0.9, align: "right" }, { label: t("Status"), w: 1.4 }],
+          rows: rep.mm.map(m => [m.no, Dates.pl(m.date), m.from, m.to, m.name, `${fmtQ(m.sent)} ${Units.label(m.unit)}`, m.mmState === "W_DRODZE" ? t("w drodze") : `${fmtQ(m.received)} ${Units.label(m.unit)}`, Math.abs(m.diff) > R.EPS ? fmtQ(-m.diff) : "—", m.weightT != null ? fmtQ(m.weightT) : "—", statusText(m.status) + (m.twoStage && m.mmState !== "ANULOWANE" ? " · " + t(R.MM_STATES[m.mmState]) : "")]) },
         { type: "h", text: t("Transport") },
         { type: "table", columns: [{ label: t("Przewoźnik / tryb"), w: 3 }, { label: t("Kursy"), w: 1, align: "right" }, { label: "km", w: 1, align: "right" }, { label: t("Koszt"), w: 1.5, align: "right" }], rows: rep.transport.carriers.map(x => [x.name, String(x.count), fmtQ(x.km, 0), money(x.cost)]), foot: [t("Razem"), String(rep.transport.count), fmtQ(rep.transport.km, 0), money(rep.transport.cost)], note: rep.transport.wagons ? t("Pociągi: {w} wagonów · {q} t.", { w: rep.transport.wagons, q: fmtQ(rep.transport.trainT) }) : "" },
         { type: "h", text: t("Wycena stanu (orientacyjna — średnia cena zakupu)") },
@@ -1070,6 +1181,7 @@
   };
 
   root.OpDetail = OpDetail;
-  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
+  root.ReceiveDialog = ReceiveDialog;
+  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
   root.RIWViews = { allDocuments, docModel, kwitModel, historyModel, Reports, Printer, CancelDialog, DocPreview, OpDetail };
 })(typeof globalThis !== "undefined" ? globalThis : this);

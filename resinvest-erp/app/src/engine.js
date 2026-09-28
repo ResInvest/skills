@@ -24,8 +24,8 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.2.0";
-  const SCHEMA = 6;
+  const VERSION = "3.3.0";
+  const SCHEMA = 7;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -222,6 +222,7 @@
   const PERMS = {
     "receipts.create": N_("Przyjęcia i zakupy — wprowadzanie"), "issues.create": N_("Wydania i sprzedaż — wprowadzanie"),
     "production.create": N_("Produkcja — wprowadzanie"), "mm.create": N_("Przesunięcia MM — wprowadzanie"),
+    "mm.receive": N_("Przyjęcie MM na magazynie docelowym"),
     "op.approve": N_("Zatwierdzanie operacji (gdy obieg zatwierdzania jest włączony)"),
     "documents.cancel": N_("Anulowanie dokumentów"), "documents.correct": N_("Korekty dokumentów"),
     "inventory.correct": N_("Korekty stanów / MM"), "production.correct": N_("Korekty produkcji"), "sales.correct": N_("Korekty sprzedaży"),
@@ -236,8 +237,8 @@
   const CREATE_PERMS = ["receipts.create", "issues.create", "production.create", "mm.create"];
   const ROLE_DEFAULTS = {
     admin: ["*"],
-    kierownik: [...CREATE_PERMS, "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
-    magazynier: [...CREATE_PERMS, "inv.count", "report.view", "history.read"],
+    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
+    magazynier: [...CREATE_PERMS, "mm.receive", "inv.count", "report.view", "history.read"],
     obserwator: ["report.view", "history.read"],
     audytor: ["report.view", "reports.export", "history.read", "audit.read", "users.read"]
   };
@@ -308,6 +309,18 @@
   };
   const DIFF_REASONS = { wilgotnosc: N_("Wilgotność / osiadanie"), jakosc: N_("Jakość surowca"), straty: N_("Straty przy rębaniu"), pomiar: N_("Różnica pomiaru"), inna: N_("Inna przyczyna") };
   const CORRECTION_REASONS = [N_("błędnie wpisana ilość"), N_("błędna cena"), N_("błędna jednostka"), N_("błędny kontrahent"), N_("błędny magazyn"), N_("błędne zużycie surowca"), N_("błędny transport"), N_("pomyłka operatora"), N_("korekta dokumentu zewnętrznego"), N_("inny")];
+  /** Tryb przesunięć MM: jednoetapowy (rozchód i przychód jednym zatwierdzeniem) albo dwuetapowy (wysłanie → „W drodze” → przyjęcie). */
+  const MM_MODES = { one: N_("Jednoetapowy — przychód w magazynie docelowym przy zatwierdzeniu"), two: N_("Dwuetapowy — wysłanie, „W drodze”, przyjęcie przez magazyn docelowy") };
+  const mmMode = cfg => (cfg && cfg.mmMode === "one") ? "one" : "two";
+  /** Stan przesunięcia: W_DRODZE (wysłane, czeka na przyjęcie), PRZYJETE, ANULOWANE; null — nie MM. */
+  const MM_STATES = { W_DRODZE: N_("W DRODZE — oczekuje na przyjęcie"), PRZYJETE: N_("PRZYJĘTE"), ANULOWANE: N_("ANULOWANE") };
+  function mmState(op) {
+    if (!op || op.type !== "MM" || !op.mm) return null;
+    if (op.status === "CANCELLED") return "ANULOWANE";
+    return op.mm.twoStage && !op.mm.receipt ? "W_DRODZE" : "PRZYJETE";
+  }
+  /** Przyczyny różnicy między ilością wysłaną a przyjętą. */
+  const MM_DIFF_REASONS = { ubytek: N_("Ubytek w transporcie"), pomiar: N_("Różnica pomiaru"), wilgotnosc: N_("Wilgotność / osiadanie"), uszkodzenie: N_("Uszkodzenie / zanieczyszczenie"), nadwyzka: N_("Nadwyżka przy przyjęciu"), inna: N_("Inna przyczyna") };
   const TRANSPORT_MODES = { none: N_("Brak transportu"), own: N_("Transport własny"), external: N_("Transport zewnętrzny"), mixed: N_("Transport własny + zewnętrzny"), train: N_("Pociąg"), supplier: N_("Transport w cenie zakupu — zapewnia dostawca") };
   const VEHICLE_TYPES = { ruchoma_podloga: N_("Ruchoma podłoga"), ciezarowy: N_("Samochód ciężarowy"), wywrotka: N_("Wywrotka") };
   const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
@@ -348,7 +361,7 @@
   function emptyState(config) {
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
-      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false }, config || {}),
+      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
       operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {},
@@ -425,6 +438,13 @@
       s.schema = 6; s.version = VERSION;
       notes.push(t("Schemat 5 → 6: statusy kont, wiele magazynów na użytkownika, role AUDYTOR i edytowalne uprawnienia"));
     }
+    if (s.schema === 6) {
+      // przesunięcia MM: tryb dwuetapowy (wysłanie → W drodze → przyjęcie); role z „mm.create” dostają „mm.receive”
+      if (s.config.mmMode !== "one" && s.config.mmMode !== "two") s.config.mmMode = "two";
+      for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("mm.create") && !list.includes("mm.receive")) s.rolePerms[role] = list.concat("mm.receive");
+      s.schema = 7; s.version = VERSION;
+      notes.push(t("Schemat 6 → 7: przesunięcia MM dwuetapowe (W drodze → przyjęcie), uprawnienie przyjęcia MM, tonaż MM"));
+    }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
   }
@@ -494,7 +514,7 @@
       purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", priceUnit: "", price: "", weightMode: "auto", weightManual: "" },
       production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
-      mm: { productId: "", qty: "", unit: "MP", toWhId: "" },
+      mm: { fromWhId: "", productId: "", qty: "", unit: "MP", toWhId: "", weightMode: "auto", weightManual: "" },
       transport: {
         mode: "none", place: "", placeTouched: false,
         own: { runCount: "1", runs: [blankRun()] },
@@ -529,8 +549,10 @@
 
     if (!user) err("_user", t("Brak zalogowanego użytkownika"));
     else if (!can(user, "op.create")) err("_user", t("Twoja rola nie pozwala tworzyć operacji"));
-    const wh = user ? byId(state.warehouses, user.whId) : null;
-    if (user && !wh) err("_wh", t("Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu"));
+    // magazyn operacji: dla MM — magazyn źródłowy wybrany w formularzu (dostęp sprawdzany niżej), dla pozostałych — magazyn użytkownika
+    const srcPick = draft.type === "MM" && draft.mm && str(draft.mm.fromWhId) ? str(draft.mm.fromWhId) : "";
+    const wh = user ? byId(state.warehouses, srcPick || user.whId) : null;
+    if (user && !wh) err(srcPick ? "mm.fromWhId" : "_wh", srcPick ? t("Nieznany magazyn źródłowy") : t("Nie wybrano magazynu — użytkownik nie ma przypisanego magazynu"));
     const whId = wh ? wh.id : null;
     const stockAt = (w, pid) => (w && pid ? Stock.balance(state, w, pid) : 0);
     const stockOf = pid => stockAt(whId, pid);
@@ -538,7 +560,8 @@
     const type = OP_TYPES[draft.type] ? draft.type : null;
     if (!type) err("type", t("Wybierz rodzaj operacji"));
     else if (user && !can(user, OP_TYPES[type].createPerm)) err("type", t("Twoja rola nie pozwala wprowadzać operacji tego rodzaju"), "FORBIDDEN");
-    if (user && wh && !canAccessWh(user, wh.id)) err("_wh", t("Brak dostępu do magazynu {w}", { w: wh.name }), "FORBIDDEN");
+    if (user && wh && !canAccessWh(user, wh.id)) err(srcPick ? "mm.fromWhId" : "_wh", t("Brak dostępu do magazynu {w}", { w: wh.name }), "FORBIDDEN");
+    if (srcPick && wh && wh.active === false && !(ctx && ctx.correction)) err("mm.fromWhId", t("Magazyn źródłowy jest nieaktywny"));
     const date = str(draft.date);
     if (!Dates.isISO(date)) err("date", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (!(ctx && ctx.correction)) {
@@ -781,7 +804,11 @@
         documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
       }
     } else if (type === "MM") {
-      /* ================= E. MM — przesunięcie międzymagazynowe ================= */
+      /* ================= E. MM — przesunięcie międzymagazynowe =================
+         Jednoetapowe: rozchód w źródle i przychód w celu przy zatwierdzeniu.
+         Dwuetapowe: zatwierdzenie = wysłanie (rozchód w źródle, status „W drodze”); przychód w celu dopiero
+         po „Przyjmij MM” (receiveTransfer) — z ilością faktycznie przyjętą.                                  */
+      const twoStage = ctx && typeof ctx.mmTwoStage === "boolean" ? ctx.mmTwoStage : mmMode(cfg) === "two";
       const product = prodOf(M.productId);
       if (!M.productId) err("mm.productId", t("Wybierz produkt"));
       else if (!product) err("mm.productId", t("Nieznany produkt"));
@@ -790,18 +817,31 @@
       const toWh = byId(state.warehouses, M.toWhId);
       if (!M.toWhId) err("mm.toWhId", t("Wybierz magazyn docelowy przesunięcia"));
       else if (!toWh) err("mm.toWhId", t("Nieznany magazyn"));
-      else if (toWh.id === whId) err("mm.toWhId", t("Magazyn docelowy musi być inny niż magazyn źródłowy"));
-      else if (toWh.active === false) err("mm.toWhId", t("Magazyn docelowy jest nieaktywny"));
-      if (toWh && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: toWh.name, ym: lockedMonth(state, toWh.id) }), "LOCKED");
+      else if (toWh.id === whId) err("mm.toWhId", t("Magazyn źródłowy i docelowy nie mogą być takie same"), "SAME_WH");
+      else if (toWh.active === false && !(ctx && ctx.correction)) err("mm.toWhId", t("Magazyn docelowy jest nieaktywny"));
+      if (toWh && !twoStage && Dates.isISO(date) && !(ctx && ctx.correction) && isLocked(state, toWh.id, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: toWh.name, ym: lockedMonth(state, toWh.id) }), "LOCKED");
       const qty = num("mm.qty", M.qty, { gt: 0, label: N_("ilość") });
       const stockQty = qty !== null && unitOk ? Units.convert(qty, M.unit, product.unit, product, cfg) : 0;
       const onStock = product ? stockOf(product.id) : 0;
       if (product && qty !== null && stockQty > onStock + EPS) err("mm.qty", t("Nie można przesunąć {a} {u}. Dostępny stan: {b} {u}.", { a: fmtQ(stockQty), b: fmtQ(onStock), u: U(product.unit) }), "STOCK");
-      norm.mm = { productId: M.productId, qty, unit: M.unit, stockQty, stockUnit: product ? product.unit : null, toWhId: toWh ? toWh.id : "", toWhName: toWh ? toWh.name : "", fromWhName: wh ? wh.name : "", onStock };
+      // tonaż: automatycznie z przelicznika produktu albo ręcznie (np. z kwitu wagowego) — nie zmienia ilości na stanie
+      const wMode = M.weightMode || "auto";
+      const autoWeight = product && stockQty > 0 ? Units.mass(stockQty, product, cfg) : 0;
+      let weightT = autoWeight;
+      if (wMode === "manual") {
+        const w = num("mm.weightManual", M.weightManual, { gt: 0, label: N_("tonaż") });
+        if (w !== null) {
+          weightT = rq(w);
+          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(t("Tonaż {a} t różni się o ponad 25% od wyliczonego z przelicznika {b} t — sprawdź kwit wagowy.", { a: fmtQ(weightT), b: fmtQ(autoWeight) }));
+          if (product && product.unit === "t" && Math.abs(weightT - stockQty) > EPS) warnings.push(t("Produkt liczony w tonach: stan zmieni się o {a} t (ilość), tonaż z wagi {b} t jest informacyjny.", { a: fmtQ(stockQty), b: fmtQ(weightT) }));
+        }
+      } else if (wMode !== "auto") err("mm.weightMode", t("Wybierz sposób ustalenia tonażu"));
+      norm.mm = { productId: M.productId, qty, unit: M.unit, stockQty, stockUnit: product ? product.unit : null, fromWhId: whId || "", toWhId: toWh ? toWh.id : "", toWhName: toWh ? toWh.name : "", fromWhName: wh ? wh.name : "", onStock,
+        weightMode: wMode, weightT, autoWeight, twoStage, receipt: null };
       if (product && toWh && toWh.id !== whId && stockQty > 0) {
         push("MM", product.id, -stockQty);
-        push("MM", product.id, stockQty, { whId: toWh.id });
-        documents.push({ type: "MM", kind: "MM", productId: product.id, qty, unit: M.unit, stockQty, stockUnit: product.unit, weightT: Units.mass(stockQty, product, cfg), value: 0, stock: "±", fromWh: wh ? wh.name : "", toWh: toWh.name, toWhId: toWh.id });
+        if (!twoStage) push("MM", product.id, stockQty, { whId: toWh.id });
+        documents.push({ type: "MM", kind: "MM", productId: product.id, qty, unit: M.unit, stockQty, stockUnit: product.unit, weightT, weightMode: wMode, value: 0, stock: "±", fromWh: wh ? wh.name : "", toWh: toWh.name, toWhId: toWh.id, twoStage });
       }
     }
 
@@ -828,7 +868,7 @@
         if (norm.mm && norm.mm.productId) return { productId: norm.mm.productId, qty: norm.mm.stockQty || 0, unit: norm.mm.stockUnit };
         return { productId: null, qty: 0, unit: null };
       };
-      const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? Units.mass(norm.mm.stockQty, prodOf(norm.mm.productId), cfg) : 0;
+      const shippedT = norm.sale ? norm.sale.weightT : norm.purchase ? norm.purchase.weightT : norm.mm && norm.mm.productId ? norm.mm.weightT : 0;
       /* Kursy transportu własnego / zewnętrznego — liczone osobno, łączone w trybie „mixed”. */
       /* Kwity wywozowe (produkcja leśna z nadleśnictwa): numer kwitu i m³ wpisywane w każdym kursie.
          m³ × 4 = MP na aucie; suma kursów nie może przekroczyć produkcji (MP) ani zużytego drewna (m³). */
@@ -1121,20 +1161,101 @@
     state.rev += 1;
     audit(state, ctx, {
       entity: "operation", entityId: op.id, opNo: op.no, event: "create", act: opts.author && opts.author.id !== ctx.user.id
-        ? Lx("Zatwierdzenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[op.type].label }, a: opts.author.name }) : op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
-      before: { stan: before }, after: { stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals },
+        ? Lx("Zatwierdzenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[op.type].label }, a: opts.author.name }) : mmState(op) === "W_DRODZE" ? Lx("Wysłanie MM do magazynu {w} — w drodze, oczekuje na przyjęcie", { w: n.mm.toWhName }) : op.direct ? Lx("Utworzenie i zatwierdzenie: {type} (bezpośrednia)", { type: { t: OP_TYPES[op.type].label } }) : Lx("Utworzenie i zatwierdzenie: {type}", { type: { t: OP_TYPES[op.type].label } }),
+      before: { stan: before }, after: Object.assign({ stan: snap(state, keys), dokumenty: docs.map(d => d.no), koszty: plan.totals }, op.mm ? { mm: MM_STATES[mmState(op)], tonaz: op.mm.weightT } : {}),
       source: (ctx && ctx.source) || N_("Formularz „Nowa operacja”")
     });
     return { ok: true, op, plan };
   }
 
   /* ------------------------------------------------------------------ */
+  /* PRZYJĘCIE MM (tryb dwuetapowy) — magazyn docelowy potwierdza dostawę */
+  /* ------------------------------------------------------------------ */
+  /**
+   * Plan przyjęcia: ilość faktycznie przyjęta (w dowolnej dozwolonej jednostce), data przyjęcia, tonaż (auto / ręczny)
+   * i przyczyna różnicy. Nie zmienia stanu — commit robi receiveTransfer.
+   * rec = { qty, unit, date, weightMode, weightManual, reason, note, key }
+   */
+  function planReceive(state, opId, rec, ctx) {
+    const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday(), cfg = state.config;
+    const errors = {}, err = (k, m) => { if (!errors[k]) errors[k] = m; };
+    const op = byId(state.operations, opId);
+    if (!op || op.type !== "MM") return { ok: false, error: t("Nie znaleziono dokumentu MM") };
+    if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest anulowany — nie można go przyjąć", { no: op.no }) };
+    if (!op.mm.twoStage) return { ok: false, error: t("Dokument {no} został przyjęty automatycznie (MM jednoetapowe)", { no: op.no }) };
+    if (op.mm.receipt) return { ok: false, code: "RECEIVED", error: t("Dokument {no} został już przyjęty ({d}, {u})", { no: op.no, d: Dates.pl(op.mm.receipt.date), u: op.mm.receipt.userName }) };
+    if (!can(user, "mm.receive")) return { ok: false, code: "FORBIDDEN", error: t("Brak uprawnienia „{p}”", { p: "mm.receive" }) };
+    if (!canAccessWh(user, op.toWhId)) return { ok: false, code: "FORBIDDEN", error: t("MM przyjmuje użytkownik magazynu docelowego ({w}) albo Administrator", { w: op.mm.toWhName }) };
+    const r = rec || {};
+    const product = byId(state.products, op.mm.productId);
+    const unit = r.unit || op.mm.unit;
+    if (!Units.allowed(product).includes(unit)) err("unit", t("Dla „{p}” dozwolone: {u}", { p: product.name, u: Units.allowed(product).map(Units.label).join(", ") }));
+    const date = str(r.date) || today;
+    if (!Dates.isISO(date)) err("date", t("Podaj datę w formacie RRRR-MM-DD"));
+    else if (date > today) err("date", t("Data przyjęcia nie może być z przyszłości"));
+    else if (date < op.date) err("date", t("Data przyjęcia nie może być wcześniejsza niż data wysłania ({d})", { d: Dates.pl(op.date) }));
+    else if (isLocked(state, op.toWhId, date)) err("date", t("W magazynie {w} okres {ym} jest zamknięty", { w: op.mm.toWhName, ym: lockedMonth(state, op.toWhId) }));
+    const q = str(r.qty) === "" ? { ok: true, value: Units.convert(op.mm.stockQty, product.unit, unit, product, cfg) } : NumParse.parse(r.qty);
+    let qty = null;
+    if (!q.ok) err("qty", t("{e} — wpisz np. {x}", { e: q.error, x: fmt(1000.5, 1) }));
+    else if (q.value < 0) err("qty", t("Wartość nie może być ujemna"));
+    else qty = q.value;
+    const stockQty = qty !== null && !errors.unit ? Units.convert(qty, unit, product.unit, product, cfg) : 0;
+    const diff = rq(op.mm.stockQty - stockQty);               // > 0 — ubytek, < 0 — nadwyżka (jednostka magazynowa)
+    const reason = str(r.reason), note = str(r.note).slice(0, 300);
+    if (qty !== null && Math.abs(diff) > EPS) {
+      if (!MM_DIFF_REASONS[reason]) err("reason", t("Ilość przyjęta różni się od wysłanej o {a} {u} — wskaż przyczynę", { a: fmtQ(Math.abs(diff)), u: Units.label(product.unit) }));
+      else if (reason === "inna" && !note) err("note", t("Opisz przyczynę różnicy"));
+    }
+    if (qty !== null && qty === 0 && !note) err("note", t("Przyjęcie zerowe (cała dostawa utracona) wymaga opisu"));
+    const wMode = r.weightMode === "manual" ? "manual" : "auto";
+    const autoWeight = stockQty > 0 ? Units.mass(stockQty, product, cfg) : 0;
+    let weightT = autoWeight;
+    if (wMode === "manual") {
+      const w = NumParse.parse(r.weightManual);
+      if (w.empty) err("weightManual", t("Podaj {x}", { x: t("tonaż") }));
+      else if (!w.ok || !(w.value > 0)) err("weightManual", t("Wartość musi być większa od 0"));
+      else weightT = rq(w.value);
+    }
+    const bal = Stock.balance(state, op.toWhId, product.id);
+    const list = Object.keys(errors).map(k => ({ field: k, msg: errors[k] }));
+    return { ok: list.length === 0, errors, errorList: list, error: list.length ? list[0].msg : null, op, product, date, qty, unit, stockQty, sentQty: op.mm.stockQty, diff, reason, note, weightMode: wMode, weightT, autoWeight,
+      sentWeightT: op.mm.weightT, before: bal, after: rq(bal + stockQty) };
+  }
+  function receiveTransfer(state, opId, rec, ctx) {
+    const op0 = byId(state.operations, opId);
+    if (op0 && op0.mm && op0.mm.receipt && rec && rec.key && op0.mm.receipt.key === rec.key) return { ok: true, duplicate: true, op: op0 };
+    const p = planReceive(state, opId, rec, ctx);
+    if (!p.ok) return Object.assign({ ok: false }, p.errorList ? { plan: p, error: p.error } : p);
+    const op = p.op, key = `${op.toWhId}|${p.product.id}`, before = snap(state, [key]);
+    if (p.stockQty > EPS) state.ledger.push(ledgerEntry(state, nextLedgerSeq(state), ctx, { opId: op.id, step: 50, date: p.date, whId: op.toWhId, productId: p.product.id, kind: "MM", cat: "MM", qty: p.stockQty, docNo: op.no, receipt: true }));
+    op.mm.receipt = { date: p.date, ts: nowIso(ctx), userId: ctx.user.id, userName: ctx.user.name, qty: p.qty, unit: p.unit, stockQty: p.stockQty, diff: p.diff,
+      reason: p.reason, reasonLabel: p.reason ? MM_DIFF_REASONS[p.reason] : "", note: p.note, weightMode: p.weightMode, weightT: p.weightT, key: (rec && rec.key) || null };
+    state.rev += 1;
+    audit(state, Object.assign({}, ctx, { user: Object.assign({}, ctx.user, { whId: op.toWhId }) }), {
+      entity: "operation", entityId: op.id, opNo: op.no, event: "mm-receive", code: "MM_RECEIVED",
+      act: Math.abs(p.diff) > EPS ? Lx("Przyjęcie MM z różnicą {q} {u}", { q: fmtQ(-p.diff), u: Units.label(p.product.unit) }) : Lx("Przyjęcie MM na magazyn {w}", { w: op.mm.toWhName }),
+      reason: p.reason ? [MM_DIFF_REASONS[p.reason], p.note].filter(Boolean).join(" — ") : p.note || undefined,
+      before: { mm: MM_STATES.W_DRODZE, wyslano: p.sentQty, stan: before }, after: { mm: MM_STATES.PRZYJETE, przyjeto: p.stockQty, roznica: p.diff, tonaz: p.weightT, stan: snap(state, [key]) },
+      source: (ctx && ctx.source) || N_("Przyjęcie MM")
+    });
+    return { ok: true, op, receipt: op.mm.receipt };
+  }
+  /** Przesunięcia w drodze (dwuetapowe, nieprzyjęte): whId — źródło lub cel; dir "in" (do przyjęcia) / "out" (wysłane). */
+  function mmInTransit(state, whId, dir) {
+    return state.operations.filter(op => mmState(op) === "W_DRODZE" && (!whId || (dir === "in" ? op.toWhId === whId : dir === "out" ? op.whId === whId : op.whId === whId || op.toWhId === whId)))
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Wersje robocze (DRAFT) — bez wpływu na stan i bez numeru            */
   /* ------------------------------------------------------------------ */
+  /** Magazyn szkicu / operacji przekazanej: dla MM — magazyn źródłowy (jeśli wybrany), inaczej magazyn użytkownika. */
+  const draftWhId = (draft, user) => draft && draft.type === "MM" && draft.mm && str(draft.mm.fromWhId) ? str(draft.mm.fromWhId) : (user ? user.whId : null);
   function saveDraft(state, draft, ctx) {
     if (!can(ctx && ctx.user, "op.create")) return { ok: false, error: t("Twoja rola nie pozwala tworzyć operacji"), code: "FORBIDDEN" };
     const id = draft.draftId || uid("dr");
-    const rec = { id, status: "DRAFT", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: ctx.user.id, userName: ctx.user.name, whId: ctx.user.whId, savedAt: nowIso(ctx) };
+    const rec = { id, status: "DRAFT", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: ctx.user.id, userName: ctx.user.name, whId: draftWhId(draft, ctx.user), savedAt: nowIso(ctx) };
     const i = state.drafts.findIndex(d => d.id === id);
     const before = i >= 0 ? { zapisano: state.drafts[i].savedAt } : null;
     if (i >= 0) state.drafts[i] = rec; else state.drafts.push(rec);
@@ -1168,7 +1289,7 @@
     const id = draft.draftId || uid("dr");
     const prev = byId(state.drafts, id);
     if (prev && prev.userId !== user.id) return { ok: false, error: t("Operację przekazuje do zatwierdzenia jej autor"), code: "FORBIDDEN" };
-    const rec = { id, status: "PENDING", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: user.id, userName: user.name, whId: user.whId,
+    const rec = { id, status: "PENDING", type: draft.type, draft: Object.assign(clone(draft), { draftId: id }), userId: user.id, userName: user.name, whId: draftWhId(draft, user),
       savedAt: nowIso(ctx), submittedAt: nowIso(ctx), totals: plan.totals, summary: planSummary(state, plan) };
     if (prev) state.drafts = state.drafts.map(d => d.id === id ? rec : d); else state.drafts.push(rec);
     state.rev += 1;
@@ -1290,6 +1411,7 @@
     ["production.consumeQty", N_("Zużycie surowca"), o => o.production && o.production.consumeQty, o => o.production && Units.label(o.production.consumeUnit)],
     ["production.chipRate", N_("Cena za rąbanie"), o => o.production && o.production.chipRate, () => "zł/MP"],
     ["mm.qty", N_("Ilość MM"), o => o.mm && o.mm.qty, o => o.mm && Units.label(o.mm.unit)],
+    ["mm.weightT", N_("Tonaż MM"), o => o.mm && o.mm.weightT, () => "t"],
     ["transport.place", N_("Miejsce dostawy"), o => o.transport && o.transport.place],
     ["transport.reg", N_("Nr rejestracyjny"), o => o.transport && o.transport.reg],
     ["transport.driverName", N_("Kierowca"), o => o.transport && o.transport.driverName],
@@ -1307,13 +1429,22 @@
     if (!canAccessWh(user, op.whId)) return { ok: false, error: t("Brak dostępu do magazynu tej operacji"), code: "FORBIDDEN" };
     if (newDraft.type !== op.type || !!(newDraft.sale && newDraft.sale.direct) !== !!op.direct) return { ok: false, error: t("Korekta nie może zmienić rodzaju operacji — anuluj i wprowadź nową") };
     const d = Object.assign(clone(newDraft), { date: op.date, idemKey: "corr" });
+    if (op.type === "MM") {
+      const nm = d.mm || {};
+      if ((nm.toWhId && nm.toWhId !== op.toWhId) || (nm.productId && nm.productId !== op.mm.productId) || (str(nm.fromWhId) && str(nm.fromWhId) !== op.whId))
+        return { ok: false, error: t("Korekta MM nie zmienia magazynów ani towaru — anuluj dokument i wprowadź nowy") };
+      d.mm = Object.assign({}, nm, { fromWhId: op.whId, toWhId: op.toWhId, productId: op.mm.productId });
+    }
+    const mmTwo = op.type === "MM" && !!(op.mm && op.mm.twoStage);
     // stan „bez tej operacji” — nowa wersja przechodzi te same zabezpieczenia co zwykła operacja
     const view = Object.assign({}, state, { ledger: state.ledger.filter(l => l.opId !== op.id) });
-    const p = planOperation(view, d, Object.assign({}, ctx, { user: Object.assign({}, user, { whId: op.whId }), correction: true }));
+    const p = planOperation(view, d, Object.assign({}, ctx, { user: Object.assign({}, user, { whId: op.whId }), correction: true }, op.type === "MM" ? { mmTwoStage: mmTwo } : {}));
     if (!p.ok) return { ok: false, plan: p, error: p.errorList[0].msg };
     const cur = new Map(), tgt = new Map();
     for (const e of state.ledger.filter(l => l.opId === op.id)) { const k = netKey(e); const c = cur.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); cur.set(k, c); }
     for (const e of p.postings) { const k = netKey(e); const c = tgt.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); tgt.set(k, c); }
+    // MM dwuetapowe: korekta dotyczy wysłania — przyjęcie (ruch w magazynie docelowym) pozostaje bez zmian
+    if (mmTwo) for (const [k, c] of cur) if (c.whId === op.toWhId) tgt.set(k, Object.assign({}, c));
     const deltas = [];
     for (const k of new Set([...cur.keys(), ...tgt.keys()])) {
       const a = cur.get(k), b = tgt.get(k), base = a || b;
@@ -1328,7 +1459,8 @@
       x.after = rq(x.before + x.qty); sim.set(k, x.after);
       if (x.after < -EPS) { const pr = byId(state.products, x.productId); return { ok: false, code: "STOCK", error: t("Korekta niemożliwa: stan „{p}” spadłby do {a} {u}. Dostępny stan: {b} {u}.", { p: pr.name, a: fmtQ(x.after), b: fmtQ(x.before), u: Units.label(pr.unit) }) }; }
     }
-    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: p.norm.mm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
+    const nextMm = p.norm.mm && op.mm ? Object.assign({}, p.norm.mm, { twoStage: !!op.mm.twoStage, receipt: op.mm.receipt ? Object.assign({}, op.mm.receipt, { diff: rq(p.norm.mm.stockQty - op.mm.receipt.stockQty) }) : null }) : p.norm.mm;
+    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: nextMm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
     const partner = id => (byId(state.partners, id) || {}).name || id || "";
     const changes = [];
     for (const [f, label, get, unit] of CORR_FIELDS) {
@@ -1875,11 +2007,16 @@
   };
   /** Konfiguracja systemu (obieg zatwierdzania, rejestracja samodzielna). */
   const Settings = {
-    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool" },
+    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool", mmMode: ["one", "two"] },
     save(state, next, ctx) {
       if (!can(ctx && ctx.user, "settings.edit")) return { ok: false, error: t("Konfigurację zmienia administrator"), code: "FORBIDDEN" };
       const before = {}, after = {};
-      for (const [k, ty] of Object.entries(this.KEYS)) if (next[k] !== undefined) { const v = ty === "bool" ? !!next[k] && next[k] !== "false" : next[k]; if (state.config[k] !== v) { before[k] = state.config[k]; after[k] = v; state.config[k] = v; } }
+      for (const [k, ty] of Object.entries(this.KEYS)) if (next[k] !== undefined) {
+        if (Array.isArray(ty) && !ty.includes(next[k])) return { ok: false, error: t("Nieprawidłowa wartość ustawienia „{k}”", { k }) };
+        const v = ty === "bool" ? !!next[k] && next[k] !== "false" : next[k];
+        const cur = k === "mmMode" ? mmMode(state.config) : state.config[k];
+        if (cur !== v) { before[k] = cur; after[k] = v; state.config[k] = v; }
+      }
       if (!Object.keys(after).length) return { ok: true, unchanged: true };
       state.rev += 1;
       audit(state, ctx, { entity: "system", entityId: "settings", opNo: "—", event: "settings", code: "SETTINGS_CHANGED", act: Lx(N_("Zmiana konfiguracji systemu")), before, after, source: (ctx && ctx.source) || N_("Administracja") });
@@ -2021,7 +2158,10 @@
       const mm = ops.filter(op => op.type === "MM" && LR.some(l => l.opId === op.id)).map(op => {
         const ins = LR.filter(l => l.opId === op.id && l.cat === "MM");
         const moved = rq(ins.filter(l => l.whId === op.toWhId).reduce((a, l) => a + l.qty, 0));
-        return { opId: op.id, no: op.no, date: op.date, from: (byId(state.warehouses, op.whId) || {}).name, to: (byId(state.warehouses, op.toWhId) || {}).name, productId: op.mm.productId, name: pr(op.mm.productId).name, unit: pr(op.mm.productId).unit, qty: moved, status: op.status };
+        const sent = rq(-ins.filter(l => l.whId === op.whId).reduce((a, l) => a + l.qty, 0));
+        const st = mmState(op), rc = op.mm.receipt;
+        return { opId: op.id, no: op.no, date: op.date, from: (byId(state.warehouses, op.whId) || {}).name, to: (byId(state.warehouses, op.toWhId) || {}).name, productId: op.mm.productId, name: pr(op.mm.productId).name, unit: pr(op.mm.productId).unit,
+          qty: moved, sent, received: moved, diff: st === "PRZYJETE" && op.mm.twoStage && rc ? rc.diff : 0, weightT: op.mm.weightT != null ? op.mm.weightT : null, receivedDate: rc ? rc.date : null, mmState: st, twoStage: !!op.mm.twoStage, status: op.status };
       });
       const trOps = ops.filter(op => op.transport && op.transport.mode !== "none" && inR(op.date) && opLiveAt(op, to));
       const transport = {
@@ -2115,6 +2255,7 @@
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,
+    MM_MODES, MM_STATES, MM_DIFF_REASONS, mmMode, mmState, planReceive, receiveTransfer, mmInTransit, draftWhId,
     emptyState, validateStateShape, Stock, lockedMonth, isLocked, blankDraft, planOperation, commitOperation, saveDraft, deleteDraft,
     planCancel, cancelOperation, planCorrection, correctOperation, reverseCorrection, registerPrint, openingBalance, Inventory, Fleet, Master, Users, Reports, audit
   };

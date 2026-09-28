@@ -56,6 +56,8 @@
     "op.reject": { perm: "op.approve", run: (s, a, c) => R.rejectPending(s, a.id, a.reason, c) },
     "op.correct": { perm: "documents.correct", run: (s, a, c) => R.correctOperation(s, a.opId, a.draft, a.reason, c, { corrKey: a.corrKey || null }) },
     "op.reverseCorrection": { perm: "documents.correct", run: (s, a, c) => R.reverseCorrection(s, a.opId, a.corrNo, a.reason, c) },
+    /** Przyjęcie MM (tryb dwuetapowy) — użytkownik magazynu docelowego; ilość faktyczna, tonaż, przyczyna różnicy. */
+    "mm.receive": { perm: "mm.receive", run: (s, a, c) => R.receiveTransfer(s, str(a.opId), a.receipt || {}, c) },
     "op.cancel": { perm: "documents.cancel", run: (s, a, c) => R.cancelOperation(s, a.opId, c, a.reason, { ack: !!a.ack }) },
     "print.register": { perm: "report.view", run: (s, a, c) => R.registerPrint(s, c, { kind: a.kind, title: a.title, range: a.range, wh: a.wh, format: a.format }) },
     /* ---- inwentaryzacja ---- */
