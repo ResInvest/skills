@@ -1,0 +1,19 @@
+{
+  "name": "@resinvest/e2e",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "description": "ResInvest ERP 4 — testy E2E (Playwright): przeglądarka → Vite preview → API NestJS → PostgreSQL (osobna baza *_e2e)",
+  "type": "module",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.20.4",
+    "@types/pg": "^8.23.1",
+    "dotenv": "^18.0.5",
+    "pg": "^8.23.1",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,4 +1,4 @@
-# ResInvest ERP 4 — ciągła integracja: lint, typecheck, testy (jednostkowe + integracyjne na PostgreSQL), build.
+# ResInvest ERP 4 — ciągła integracja: lint, typecheck, testy (jednostkowe + integracyjne na PostgreSQL), build, E2E (Playwright).
 name: ResInvest ERP 4 — CI
 
 on:
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: resinvest-erp-4
@@ -33,7 +33,7 @@ jobs:
           --health-cmd "pg_isready -U resinvest -d resinvest_ci"
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      # tylko baza efemeryczna runnera CI; testy tworzą osobną bazę <nazwa>_test
+      # tylko baza efemeryczna runnera CI; testy tworzą osobne bazy <nazwa>_test i <nazwa>_e2e
       DATABASE_URL: postgresql://resinvest:ci_only_password@127.0.0.1:5432/resinvest_ci?schema=public
     steps:
       - uses: actions/checkout@v5
@@ -56,4 +56,17 @@ jobs:
         with:
           name: resinvest-erp-4-web
           path: resinvest-erp-4/apps/web/dist
+          retention-days: 14
+      # E2E: Chromium → build frontendu (vite preview) → API (dist) → PostgreSQL; desktop 1280 px + telefon 390 px
+      - run: pnpm --filter @resinvest/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @resinvest/e2e e2e
+        env:
+          CI: "true"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resinvest-erp-4-e2e-report
+          path: |
+            resinvest-erp-4/e2e/playwright-report
+            resinvest-erp-4/e2e/test-results
           retention-days: 14
