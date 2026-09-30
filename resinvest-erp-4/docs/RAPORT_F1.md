@@ -57,6 +57,7 @@ Zastosowana na: bazie deweloperskiej, świeżej bazie „CI” oraz bazie testow
 | `apps/web` (jsdom) | 3/3 |
 | `pnpm build` | OK (frontend 223 kB JS / 70 kB gzip) |
 | Symulacja CI (czysta instalacja `--frozen-lockfile`, pusta baza, bez `.env`) | wszystkie kroki OK |
+| **GitHub Actions** (runner ubuntu-latest, PostgreSQL 16.15) | uruchomienie #1 — błąd testu zależnego od kolejności (pkt 6.8); po poprawce uruchomienie #2 — **wszystkie kroki zielone** (instalacja, walidacja schematu, migracja, lint, typecheck, testy, build, artefakt) |
 | Przepływ na żywo: przeglądarka → Vite → API (build) → PostgreSQL | OK; desktop 1280 px i telefon 390 px bez poziomego przewijania, konsola bez błędów |
 | Równoczesna sprzedaż tego samego towaru (dwie transakcje) | jedna zatwierdzona, druga odrzucona przez `CHECK qty >= 0`; saldo 30 |
 
@@ -90,7 +91,6 @@ Zastosowana na: bazie deweloperskiej, świeżej bazie „CI” oraz bazie testow
 |---|---|
 | Obrazy Docker i `docker compose up` nie zostały uruchomione | w środowisku budowania brak demona Docker; plik Compose zweryfikowany składniowo (`docker compose config`) |
 | Konfiguracja Nginx nie przeszła `nginx -t` | brak Nginx w środowisku budowania — do sprawdzenia w F9 na serwerze testowym |
-| CI w GitHub | pierwsze uruchomienie wykryło test zależny od kolejności (naprawione, pkt 6–7) — wynik kolejnego uruchomienia w historii Actions |
 | Wydajność modelu przy dużej liczbie ruchów | indeksy na (magazyn, materiał, data); testy obciążeniowe w F10 |
 | TypeScript 7 | migracja po wsparciu w typescript-eslint |
 
