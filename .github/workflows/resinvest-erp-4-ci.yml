@@ -1,0 +1,59 @@
+# ResInvest ERP 4 — ciągła integracja: lint, typecheck, testy (jednostkowe + integracyjne na PostgreSQL), build.
+name: ResInvest ERP 4 — CI
+
+on:
+  push:
+    paths: ["resinvest-erp-4/**", ".github/workflows/resinvest-erp-4-ci.yml"]
+  pull_request:
+    paths: ["resinvest-erp-4/**", ".github/workflows/resinvest-erp-4-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: riw4-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: resinvest-erp-4
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: resinvest
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: resinvest_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U resinvest -d resinvest_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      # tylko baza efemeryczna runnera CI; testy tworzą osobną bazę <nazwa>_test
+      DATABASE_URL: postgresql://resinvest:ci_only_password@127.0.0.1:5432/resinvest_ci?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: resinvest-erp-4/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: resinvest-erp-4/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma validate
+      - run: pnpm exec prisma migrate deploy
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resinvest-erp-4-web
+          path: resinvest-erp-4/apps/web/dist
+          retention-days: 14

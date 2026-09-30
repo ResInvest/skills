@@ -200,9 +200,11 @@ zmniejszony stan → odrzucenie z czytelnym błędem (brak stanu ujemnego; wyją
 
 ---
 
-## 7. Decyzje wymagane przed implementacją
+## 7. Decyzje (podjęte 2026-09-30)
 
-1. **Numery PZ/WZ (§10):** ręczny numer użytkownika jako numer dokumentu (unikalny w magazynie i roku) + wewnętrzny identyfikator systemowy — czy numer automatyczny ma pozostać jako podpowiedź?
-2. **„Usuń” (§11):** usunięcie dokumentu zatwierdzonego zmienia stan — czy „Usuń” = soft delete z automatycznym odwróceniem ruchów (jak dzisiejsze anulowanie), dostępny tylko dla wybranych ról?
-3. **Serwer produkcyjny:** Windows Server czy Linux (PostgreSQL + NestJS + Nginx jako usługi albo Docker)?
-4. **Build instalatora Windows (Tauri):** runner GitHub Actions `windows-latest` w tym repozytorium czy komputer z Windows w firmie?
+| Temat | Decyzja |
+|---|---|
+| Numery PZ/WZ (§10) | **ręczny numer + podpowiedź** kolejnego wolnego numeru; unikalność: typ + magazyn + rok; każdy dokument ma też wewnętrzny identyfikator UUID |
+| „Usuń” (§11) | **soft delete z automatycznym odwróceniem ruchów** magazynowych; tylko Administrator i Manager, z powodem; blokada, gdy towar z dokumentu został już wydany; dokument pozostaje w audycie i w zakładce „Usunięte” |
+| Serwer produkcyjny | **Windows Server** — PostgreSQL, API (NestJS) i Nginx jako usługi Windows; kopie na dysk firmowy |
+| Build instalatora `ResInvest ERP.exe` | **GitHub Actions** — workflow z runnerem `windows-latest` w tym repozytorium |
