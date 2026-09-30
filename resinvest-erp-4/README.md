@@ -6,9 +6,10 @@ Produkcyjny system ERP/WMS dla **ResInvest Commodities PL S.A.**: obrót i magaz
 wielu użytkowników jednocześnie, centralna baza **PostgreSQL**, dostęp przez przeglądarkę, telefon (PWA) i klienta
 Windows (Tauri) — w sieci firmy lub przez FortiClient VPN.
 
-> **Status: 4.0.0-alpha.1 — faza F1 (fundament) ukończona.** Wersja produkcyjna do dnia przełączenia to
-> **ResInvest ERP 3.3** (`../resinvest-erp`). Plan i decyzje: [`../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md`](../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md),
-> raport fazy: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md).
+> **Status: 4.0.0-alpha.1 — fazy F1 (fundament) i F2 (tożsamość: logowanie, sesje, konta, role, magazyny, audyt)
+> ukończone.** Wersja produkcyjna do dnia przełączenia to **ResInvest ERP 3.3** (`../resinvest-erp`).
+> Plan i decyzje: [`../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md`](../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md),
+> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md).
 
 ## Architektura
 
@@ -50,6 +51,17 @@ pnpm build
 node apps/api/dist/seed/seed.js    # dane słownikowe: role, uprawnienia, magazyny RiC, materiały, przeliczniki, operacje dodatkowe
 ```
 
+Pierwszy administrator (jednorazowo, lokalnie na serwerze — hasło ustawia sam administrator z linku):
+
+```bash
+node apps/api/dist/cli.js bootstrap-admin               # konto BOOTSTRAP_ADMIN_EMAIL + jednorazowy link aktywacyjny
+node apps/api/dist/cli.js unlock jan.kowalski@resinvest.group     # odblokowanie po nieudanych logowaniach
+node apps/api/dist/cli.js reset-link jan.kowalski@resinvest.group # awaryjny link ustawienia hasła
+```
+
+Kolejnych użytkowników zaprasza administrator w module **Użytkownicy** (e-mail z linkiem aktywacyjnym).
+Bez skonfigurowanej poczty (`EMAIL_TRANSPORT=file`) wiadomości trafiają jako pliki `.eml` do `MAIL_FILE_DIR`.
+
 Uruchomienie:
 
 ```bash
@@ -70,13 +82,18 @@ pnpm lint          # ESLint (TypeScript, React Hooks) — 0 ostrzeżeń
 pnpm typecheck     # TypeScript strict
 pnpm test          # jednostkowe + integracyjne na prawdziwym PostgreSQL (osobna baza <nazwa>_test tworzona od zera)
 pnpm build
+pnpm --filter @resinvest/e2e e2e   # E2E (Playwright): przeglądarka → build → API → PostgreSQL (osobna baza <nazwa>_e2e)
 ```
+
+E2E wymaga zbudowanego projektu (`pnpm build`) i przeglądarki Chromium (`pnpm --filter @resinvest/e2e exec playwright install chromium`).
 
 | Pakiet | Zakres |
 |---|---|
 | `apps/api` | konfiguracja, sieci LAN/VPN, healthcheck, nagłówki, CORS, format błędów, **ograniczenia bazy** (audyt i ruchy tylko do dopisywania, brak stanu ujemnego przy równoczesnej sprzedaży, MM, unikalność numerów PZ/WZ, e-mail, rębaki zewnętrzne, bilans otwarcia), dane słownikowe |
 | `packages/domain` | przeliczniki (1 m³ = 4 MP, 1 MP = 0,25 m³, 1 MP = 0,33 t), źródło AUTO / MANUAL / COMPANY_RATE, tonaż ręczny / automatyczny, liczby w formacie polskim |
-| `apps/web` | ekran stanu systemu: serwer, baza, brak VPN, sieć spoza firmy |
+| `apps/api` (F2) | logowanie, blokada, limity prób, sesje, CSRF, zaproszenia i reset (kolejka poczty), wymuszona zmiana hasła, role, ostatni administrator (także równoczesne operacje), izolacja magazynów, audyt, CLI |
+| `apps/web` | stan systemu; routing i strażnicy, logowanie, menu wg uprawnień, wylogowanie, wygaśnięcie sesji, wymuszona zmiana hasła, linki z e-maila |
+| `e2e` | 11 scenariuszy tożsamości na komputerze (1280 px) + telefon (390 px): aktywacja, zaproszenia z e-maila, izolacja magazynów, blokada, reset, audyt, równoczesna edycja |
 
 CI: [`.github/workflows/resinvest-erp-4-ci.yml`](../.github/workflows/resinvest-erp-4-ci.yml) — PostgreSQL 16 jako usługa, migracje, lint, typecheck, testy, build.
 
@@ -84,12 +101,13 @@ CI: [`.github/workflows/resinvest-erp-4-ci.yml`](../.github/workflows/resinvest-
 
 ```
 resinvest-erp-4/
-├── apps/api/            NestJS: src/{config,common,prisma,health,seed}, test/ (integracja), Dockerfile
-├── apps/web/            React + Vite: src/{api,app,styles}, public/ (manifest PWA), Dockerfile
+├── apps/api/            NestJS: src/{config,common,prisma,health,seed,auth,users,roles,warehouses,audit,mail,settings}, cli.ts, test/, Dockerfile
+├── apps/web/            React + Vite: src/{api,app,auth,pages,ui,styles}, public/ (manifest PWA), Dockerfile
+├── e2e/                 testy E2E (Playwright): start-api.mjs (baza *_e2e), tests/
 ├── packages/domain/     reguły domenowe (przeliczniki, tonaż, liczby)
 ├── prisma/              schema.prisma + migrations/
 ├── deploy/nginx/        konfiguracja Nginx (TLS, nagłówki, limity, proxy)
-├── docs/                RAPORT_F1.md, WDROZENIE.md
+├── docs/                RAPORT_F1.md, RAPORT_F2.md, WDROZENIE.md
 ├── docker-compose.yml   środowisko testowe / serwer Linux
 ├── .env.example         wzór konfiguracji
 └── LICENSE

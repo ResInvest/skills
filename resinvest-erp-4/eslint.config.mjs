@@ -19,6 +19,11 @@ export default tseslint.config(
     },
   },
   {
+    // skrypty uruchomieniowe (Node, ESM)
+    files: ["**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     files: ["apps/api/src/**/*.ts"],
     // NestJS wstrzykuje zależności po typie konstruktora — import typu klasy musi zostać wartością
     rules: { "@typescript-eslint/consistent-type-imports": "off" },

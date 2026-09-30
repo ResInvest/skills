@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { apiGet, ApiRequestError, type HealthReport } from "../api/client";
+import { api, ApiRequestError, type HealthReport } from "../api/client";
 
 /** Stan połączenia: serwer aplikacji → baza danych. Pierwszy ekran diagnostyczny (VPN, serwer, baza). */
 export function SystemStatus() {
   const q = useQuery({
     queryKey: ["health"],
-    queryFn: ({ signal }) => apiGet<HealthReport>("/health", { signal }),
+    queryFn: ({ signal }) => api.get<HealthReport>("/health", signal),
     retry: false,
     refetchInterval: 60_000,
   });
