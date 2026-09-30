@@ -4,6 +4,7 @@ import helmet from "helmet";
 import type { Express } from "express";
 import { ENV, type Env } from "./config/env.js";
 import { requestContext } from "./common/request-context.middleware.js";
+import { csrfGuard } from "./common/csrf.middleware.js";
 
 /** Wspólna konfiguracja aplikacji (serwer i testy): prefiks, nagłówki, CORS, proxy, ciasteczka. */
 export function configureApp(app: INestApplication): Env {
@@ -24,7 +25,8 @@ export function configureApp(app: INestApplication): Env {
   }));
   app.use(cookieParser());
   const origins = [env.APP_URL, ...env.CORS_ORIGINS];
-  app.enableCors({ origin: origins, credentials: true, methods: ["GET", "POST", "PUT", "PATCH", "DELETE"], allowedHeaders: ["Content-Type", "X-Requested-With", "Idempotency-Key", "X-Request-Id", "If-Match"], maxAge: 600 });
+  app.use(csrfGuard(origins));
+  app.enableCors({ origin: origins, credentials: true, methods: ["GET", "POST", "PUT", "PATCH", "DELETE"], allowedHeaders: ["Content-Type", "X-Requested-With", "Idempotency-Key", "X-Request-Id"], maxAge: 600 });
   app.enableShutdownHooks();
   return env;
 }

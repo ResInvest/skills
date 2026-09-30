@@ -22,9 +22,26 @@ export const EnvSchema = z.object({
   SESSION_IDLE_MINUTES: z.coerce.number().positive().max(1440).default(60),
   LOGIN_MAX_FAILS: z.coerce.number().int().min(3).max(20).default(5),
   LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
+  /** Limit prób logowania w 5 min: z jednego adresu IP i na jeden adres e-mail. */
+  LOGIN_RATE_PER_IP: z.coerce.number().int().min(1).max(100_000).default(20),
+  LOGIN_RATE_PER_EMAIL: z.coerce.number().int().min(1).max(100_000).default(8),
   EMAIL_TRANSPORT: z.enum(["resend", "smtp", "file"]).default("file"),
+  EMAIL_FROM: z.string().default("ResInvest ERP <erp@resinvest.group>"),
+  RESEND_API_KEY: z.string().default(""),
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASS: z.string().default(""),
+  /** Katalog plików .eml (transport "file": test, instalacja bez poczty). */
+  MAIL_FILE_DIR: z.string().default("./data/mail"),
+  /** Czy uruchamiać wysyłkę kolejki poczty w tym procesie (testy: false). */
+  MAIL_WORKER: z.enum(["on", "off"]).default("on"),
+  INVITE_HOURS: z.coerce.number().int().min(1).max(720).default(72),
+  RESET_MINUTES: z.coerce.number().int().min(5).max(1440).default(60),
 }).superRefine((e, ctx) => {
   if (e.NODE_ENV === "production" && !e.APP_URL.startsWith("https://")) ctx.addIssue({ code: "custom", path: ["APP_URL"], message: "W produkcji APP_URL musi używać HTTPS" });
+  if (e.EMAIL_TRANSPORT === "resend" && !e.RESEND_API_KEY) ctx.addIssue({ code: "custom", path: ["RESEND_API_KEY"], message: "Transport resend wymaga klucza RESEND_API_KEY" });
+  if (e.EMAIL_TRANSPORT === "smtp" && !e.SMTP_HOST) ctx.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "Transport smtp wymaga SMTP_HOST" });
   if (e.NODE_ENV === "production" && e.ALLOWED_NETWORKS.length === 0) ctx.addIssue({ code: "custom", path: ["ALLOWED_NETWORKS"], message: "W produkcji podaj sieci LAN i pulę VPN (ALLOWED_NETWORKS)" });
 });
 
