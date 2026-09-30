@@ -241,6 +241,8 @@ model User {
   passwordHash       String?         @map("password_hash")
   passwordChangedAt  DateTime?       @map("password_changed_at") @db.Timestamptz(3)
   mustChangePassword Boolean         @default(false) @map("must_change_password")
+  /// Konto zgłoszone z ekranu rejestracji (czeka na zatwierdzenie przez administratora).
+  selfRegistered     Boolean         @default(false) @map("self_registered")
   failedLogins       Int             @default(0) @map("failed_logins")
   lockedUntil        DateTime?       @map("locked_until") @db.Timestamptz(3)
   lastLoginAt        DateTime?       @map("last_login_at") @db.Timestamptz(3)

@@ -2,6 +2,7 @@ import { Controller, Get, HttpCode, HttpStatus, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { API_VERSION } from "../version.js";
+import { Public } from "../auth/decorators.js";
 
 interface HealthReport {
   ok: boolean;
@@ -15,6 +16,7 @@ interface HealthReport {
 export class HealthController {
   constructor(private readonly db: PrismaService) {}
 
+  @Public()
   @Get()
   @HttpCode(HttpStatus.OK)
   async health(@Res({ passthrough: true }) res: Response): Promise<HealthReport> {
