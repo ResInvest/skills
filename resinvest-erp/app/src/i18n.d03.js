@@ -26,7 +26,7 @@
   "dostawca → magazyn (PZ)": ["dodavatel → sklad (PZ)", "supplier → warehouse (PZ)"],
   "Sprzedaż z magazynu": ["Prodej ze skladu", "Sale from stock"],
   "magazyn → odbiorca (WZ)": ["sklad → odběratel (WZ)", "warehouse → customer (WZ)"],
-  "Produkcja na magazyn": ["Výroba na sklad", "Production to stock"],
+  "Produkcja na magazynie": ["Výroba na sklad", "Production to stock"],
   "podaj MP → zużycie liczy system": ["zadejte MP → spotřebu spočítá systém", "enter MP → the system calculates consumption"],
   "Produkcja + sprzedaż bezp.": ["Výroba + přímý prodej", "Production + direct sale"],
   "las → produkcja → odbiorca": ["les → výroba → odběratel", "forest → production → customer"],

@@ -19,7 +19,7 @@
   const partnerName = id => (App.partner(id) || {}).name || "";
   const opPartnerId = o => o.purchase ? o.purchase.supplierId : o.sale ? o.sale.buyerId : "";
   const opTypeLabel = o => o.type === "ZAKUP" ? t("Zakup") + (o.scope.includes("PRODUKCJA") ? " + " + t("produkcja") : "") + (o.scope.includes("SPRZEDAZ") ? " + " + t("sprzedaż") : "")
-    : o.type === "PRODUKCJA" ? t("Produkcja na magazyn") : o.type === "MM" ? t("Przesunięcie MM") : o.direct ? t("Produkcja + sprzedaż bezpośrednia") : t("Sprzedaż z magazynu (WZ)");
+    : o.type === "PRODUKCJA" ? t("Produkcja na magazynie") : o.type === "MM" ? t("Przesunięcie MM") : o.direct ? t("Produkcja + sprzedaż bezpośrednia") : t("Sprzedaż z magazynu (WZ)");
   const TYPE_BADGE = o => `<span class="badge ${o.type === "ZAKUP" ? "ok" : o.type === "PRODUKCJA" ? "brand" : o.type === "MM" ? "info" : "gold"}">${esc(opTypeLabel(o))}</span>`;
   const opProduct = o => o.type === "ZAKUP" ? pName(o.purchase.productId) : o.type === "MM" ? pName(o.mm.productId)
     : o.production ? pName(o.production.outProductId) : o.sale ? pName(o.sale.productId) : "—";
@@ -509,7 +509,7 @@
           ${drafts.map(d => `<tr><td>${esc(R.OP_TYPES[d.type] ? t(R.OP_TYPES[d.type].label) : d.type)}${d.type === "SPRZEDAZ" && d.draft.sale.direct ? " " + th("(bezpośrednia)") : ""}</td><td>${esc(d.userName)}</td><td>${esc(Dates.ts(d.savedAt))}</td><td>${statusBadge("DRAFT")}${d.rejectReason ? `<br><small class="neg">${esc(t("odrzucona: {r}", { r: d.rejectReason }))}</small>` : ""}</td>
             <td class="r nowrap">${d.userId === App.user().id ? `<a class="btn sm" href="#/nowa?draft=${esc(d.id)}">${th("Otwórz")}</a>` : ""} ${d.userId === App.user().id || App.can("documents.cancel") ? `<button class="btn sm danger" type="button" data-deldraft="${esc(d.id)}">${ic("trash", 13)} ${th("Usuń szkic")}</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
         <div class="card"><div class="toolbar">
-          <div class="field"><label for="o-type">${th("Rodzaj")}</label><select class="ctrl" id="o-type">${[["", N_("Wszystkie")], ["ZAKUP", N_("Zakup")], ["SPRZEDAZ", N_("Sprzedaż (WZ)")], ["DIRECT", N_("Sprzedaż bezpośrednia")], ["PRODUKCJA", N_("Produkcja na magazyn")], ["MM", "MM"]].map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+          <div class="field"><label for="o-type">${th("Rodzaj")}</label><select class="ctrl" id="o-type">${[["", N_("Wszystkie")], ["ZAKUP", N_("Zakup")], ["SPRZEDAZ", N_("Sprzedaż (WZ)")], ["DIRECT", N_("Sprzedaż bezpośrednia")], ["PRODUKCJA", N_("Produkcja na magazynie")], ["MM", "MM"]].map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
           <div class="field"><label for="o-status">${th("Status")}</label><select class="ctrl" id="o-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(t(R.STATUS[s]))}</option>`).join("")}</select></div>
           <div class="field"><label for="o-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="o-ym" value="${esc(f.ym)}"></div>
           <div class="field"><label for="o-scope">${th("Magazyn")}</label><select class="ctrl" id="o-scope"><option value="active" ${f.scope === "active" ? "selected" : ""}>${th("Aktywny")}</option><option value="all" ${f.scope === "all" ? "selected" : ""}>${th("Wszystkie")}</option></select></div>
@@ -633,8 +633,8 @@
       const live = ops.filter(o => o.status !== "CANCELLED");
       const sum = k => R.rq(live.reduce((a, o) => a + (o.production[k] || 0), 0));
       const modeTxt = m => m === "stock" ? t("na magazyn") : m === "direct" ? t("bezpośrednia") : t("z zakupu");
-      return `<div class="page-head"><div class="titles"><h2>${th("Produkcja")}</h2><p>${th("Produkcja na magazyn (surowiec ze stanu → produkt na stan), produkcja w łańcuchu zakupu oraz produkcja ze sprzedażą bezpośrednią. Zużycie surowca = produkcja ÷ przelicznik (1 m³ = 4 MP).")}</p></div>
-          <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa?preset=produkcja">${ic("plus", 15)} ${th("Produkcja na magazyn")}</a><a class="btn" href="#/nowa?preset=bezposrednia">${ic("plus", 15)} ${th("Produkcja + sprzedaż bezp.")}</a>` : ""}<a class="btn" href="#/kwit">${ic("receipt", 15)} ${th("Kwit produkcji dnia")}</a></div></div>
+      return `<div class="page-head"><div class="titles"><h2>${th("Produkcja")}</h2><p>${th("Produkcja na magazynie (surowiec ze stanu → produkt na stan), produkcja w łańcuchu zakupu oraz produkcja ze sprzedażą bezpośrednią. Zużycie surowca = produkcja ÷ przelicznik (1 m³ = 4 MP).")}</p></div>
+          <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa?preset=produkcja">${ic("plus", 15)} ${th("Produkcja na magazynie")}</a><a class="btn" href="#/nowa?preset=bezposrednia">${ic("plus", 15)} ${th("Produkcja + sprzedaż bezp.")}</a>` : ""}<a class="btn" href="#/kwit">${ic("receipt", 15)} ${th("Kwit produkcji dnia")}</a></div></div>
         <div class="card"><div class="toolbar">
           <div class="field"><label for="p-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="p-ym" value="${esc(f.ym)}"></div>
           <div class="field"><label for="p-mode">${th("Rodzaj")}</label><select class="ctrl" id="p-mode">${[["", N_("Wszystkie")], ["stock", N_("Na magazyn")], ["chain", N_("Z zakupu (łańcuch)")], ["direct", N_("Bezpośrednia (las)")]].map(([v, l]) => `<option value="${v}" ${f.mode === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div></div>

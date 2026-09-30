@@ -89,7 +89,7 @@
       const quick = App.can("op.create") ? `<div class="qa-grid" id="quick">
           ${qa("zakup", "inbox", N_("Zakup"), N_("dostawca → magazyn (PZ)"))}
           ${qa("wz", "out", N_("Sprzedaż z magazynu"), N_("magazyn → odbiorca (WZ)"))}
-          ${qa("produkcja", "factory", N_("Produkcja na magazyn"), N_("podaj MP → zużycie liczy system"))}
+          ${qa("produkcja", "factory", N_("Produkcja na magazynie"), N_("podaj MP → zużycie liczy system"))}
           ${qa("bezposrednia", "truck", N_("Produkcja + sprzedaż bezp."), N_("las → produkcja → odbiorca"))}
           ${qa("mm", "swap", N_("Przesunięcie MM"), N_("magazyn → magazyn"))}</div>` : "";
 

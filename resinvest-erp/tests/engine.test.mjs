@@ -65,7 +65,7 @@ test("Liczby: 12,50 / 12.50 / 1 250,50 / NBSP / 1.250,50 — ta sama wartość; 
 });
 
 /* ====================================== §22 ====================================== */
-test("§22 TEST 1: produkcja na magazyn 500 MP → zużycie 125 m³ (817 → 692 m³), zrębka +500 MP, bez transportu", () => {
+test("§22 TEST 1: produkcja na magazynie 500 MP → zużycie 125 m³ (817 → 692 m³), zrębka +500 MP, bez transportu", () => {
   const s = fresh();
   const op = commit(s, PROD());
   assert.equal(op.production.consumeQty, 125);
@@ -655,7 +655,7 @@ test("Wyścig: dwa WZ na ten sam stan — drugi odrzucony, stan nieujemny", () =
   assert.equal(R.commitOperation(s, b, ctx(s, "u_kier")).ok, false);
   assert.equal(bal(s, "pr_zr_lesna"), 3293);
 });
-test("Transport nie zmienia stanu; produkcja na magazyn nie ma transportu", () => {
+test("Transport nie zmienia stanu; produkcja na magazynie nie ma transportu", () => {
   const s = fresh();
   const modes = [{ mode: "none", place: "X" }, { mode: "own", place: "X", own: { vehicleId: "ve_scania", km: "262" } }, { mode: "external", place: "X", external: { company: "DAP", reg: "SZA 7K901", freight: "900" } }, { mode: "train", place: "X", train: { wagonCount: "3", tonMode: "same", sameT: "20", price: "30", priceUnit: "t" } }];
   for (const base of [{ purchase: PURCHASE_A }, { type: "SPRZEDAZ", sale: { productId: "pr_zr_lesna", qty: "500", unit: "MP", buyerId: "pa_ec_zab", price: "90" } }, { type: "MM", mm: { productId: "pr_zr_lesna", qty: "10", unit: "MP", toWhId: "wh_bra" } }]) {

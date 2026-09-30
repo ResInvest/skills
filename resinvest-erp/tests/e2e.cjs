@@ -138,9 +138,9 @@ async function fillForestDirect(page) {
     check("§4 Stany: drewno 817 m³ ≈ 778 t", (await cell("pr_drewno")) === "817 m³" && (await cell("pr_drewno", "data-mass")) === "≈ 778 t");
     check("§4 Stany: PKS tylko t (728 t ≈ 6 188 GJ)", (await cell("pr_pks")) === "728 t" && (await cell("pr_pks", "data-mass")) === "—" && (await cell("pr_pks", "data-gj")) === "≈ 6 188 GJ");
 
-    /* ------------- §22 TEST 1 / §31.16 A: produkcja na magazyn ------------- */
+    /* ------------- §22 TEST 1 / §31.16 A: produkcja na magazynie ------------- */
     await preset(page, "produkcja");
-    check("§5 Produkcja na magazyn: brak transportu, przewoźnika, odbiorcy, sprzedaży", !(await page.$("#f-transport-place")) && !(await page.$("#f-sale-buyerId")) && !(await page.$("#f-mode-own")) && !(await page.$("#f-purchase-supplierId")));
+    check("§5 Produkcja na magazynie: brak transportu, przewoźnika, odbiorcy, sprzedaży", !(await page.$("#f-transport-place")) && !(await page.$("#f-sale-buyerId")) && !(await page.$("#f-mode-own")) && !(await page.$("#f-purchase-supplierId")));
     check("§6 Produkcja: magazyn, surowiec, stan, produkt, ilość, zużycie, masa/GJ, cena i koszt rąbania, uwagi, nr dokumentu",
       await allExist(page, ["production.wh", "production.rawProductId", "production.stock", "production.outProductId", "production.outQty", "production.consume", "production.orient", "production.chipRate", "production.chipCost", "notes", "extDoc"].map(k => `[data-field="${k}"]`)));
     check("§18 Cena za rąbanie domyślnie 10,00 zł/MP", (await page.inputValue("#f-production-chipRate")) === "10,00");

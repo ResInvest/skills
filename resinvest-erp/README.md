@@ -199,7 +199,7 @@ operacje każdego rodzaju, MM Zabrze → Brąszewice (dwuetapowe: wysłanie i pr
 
 | Obszar | Zawartość |
 |---|---|
-| **Operacje** | Zakup (PZ, opcjonalnie łańcuch produkcja + sprzedaż) · Sprzedaż z magazynu (WZ) · Produkcja na magazyn (RW + PW) · Produkcja + sprzedaż bezpośrednia (PW + WZ) · Przesunięcie MM; transport własny / zewnętrzny / mieszany / kolej z kursami, kwitami wywozowymi i kosztami |
+| **Operacje** | Zakup (PZ, opcjonalnie łańcuch produkcja + sprzedaż) · Sprzedaż z magazynu (WZ) · Produkcja na magazynie (RW + PW) · Produkcja + sprzedaż bezpośrednia (PW + WZ) · Przesunięcie MM; transport własny / zewnętrzny / mieszany / kolej z kursami, kwitami wywozowymi i kosztami |
 | **Zatwierdzanie** | podsumowanie przed zatwierdzeniem (stan przed / po, zużycie, masa, GJ, koszty, dokumenty); zapis atomowy; ochrona przed podwójnym kliknięciem i podwójnym zapisem (klucz idempotencji) |
 | **Statusy** | ROBOCZY · ZATWIERDZONY · SKORYGOWANY · ANULOWANY |
 | **Korekty i anulowania** | dokument KOR (ilościowe, produkcji, sprzedaży bezpośredniej, wartościowe, opisowe; podgląd oryginał / korekta / różnica / wpływ na stan; odwrócenie korekty) · dokument AN (nigdy nie usuwa dokumentu; analiza zależności w czasie; wymagana przyczyna) |

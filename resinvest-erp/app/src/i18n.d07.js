@@ -26,7 +26,7 @@
   "Porzuć korektę": ["Zahodit opravu", "Discard correction"],
   "Rola <b>{r}</b> nie pozwala tworzyć operacji. Zaloguj się kontem z odpowiednimi uprawnieniami.": ["Role <b>{r}</b> neumožňuje vytvářet operace. Přihlaste se účtem s odpovídajícími oprávněními.", "The <b>{r}</b> role does not allow creating operations. Sign in with an account that has the right permissions."],
   "wersja robocza": ["koncept", "draft"],
-  "Zakup, sprzedaż z magazynu, produkcja na magazyn, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.": ["Nákup, prodej ze skladu, výroba na sklad, výroba s přímým prodejem nebo převod MM. Pole označená <span class=\"req\">*</span> jsou povinná. Před potvrzením uvidíte souhrn.", "Purchase, sale from stock, production to stock, production with direct sale, or MM transfer. Fields marked <span class=\"req\">*</span> are required. You will see a summary before approval."],
+  "Zakup, sprzedaż z magazynu, produkcja na magazynie, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.": ["Nákup, prodej ze skladu, výroba na sklad, výroba s přímým prodejem nebo převod MM. Pole označená <span class=\"req\">*</span> jsou povinná. Před potvrzením uvidíte souhrn.", "Purchase, sale from stock, production to stock, production with direct sale, or MM transfer. Fields marked <span class=\"req\">*</span> are required. You will see a summary before approval."],
   "Samouczek pod polami": ["Nápověda pod poli", "Tutorial under fields"],
   "Wyczyść": ["Vymazat", "Clear"],
   "Podsumowanie operacji": ["Souhrn operace", "Operation summary"],
