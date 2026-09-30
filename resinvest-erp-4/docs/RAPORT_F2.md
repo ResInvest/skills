@@ -80,6 +80,7 @@ Zastosowana na bazie deweloperskiej, testowej (`*_test`) i E2E (`*_e2e`). Migrac
 | `packages/domain` | 13/13 |
 | **E2E Playwright** (desktop 1280 px + telefon 390 px) | **12/12** |
 | `pnpm build` | OK |
+| **GitHub Actions** (ubuntu-latest, PostgreSQL 16) | uruchomienie #5 — **wszystkie kroki zielone**: instalacja, walidacja schematu, migracje, lint, typecheck, testy, build, instalacja Chromium, **E2E 12/12** |
 
 Scenariusze E2E (desktop, po kolei, na jednej bazie):
 1. pierwszy administrator z linku CLI; token znika z adresu; polityka haseł; link jednorazowy,
