@@ -36,11 +36,11 @@ jobs:
       # tylko baza efemeryczna runnera CI; testy tworzą osobną bazę <nazwa>_test
       DATABASE_URL: postgresql://resinvest:ci_only_password@127.0.0.1:5432/resinvest_ci?schema=public
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: resinvest-erp-4/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm

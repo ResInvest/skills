@@ -1,10 +1,10 @@
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import swc from "unplugin-swc";
 import { defineConfig } from "vitest/config";
 
 // .env z katalogu głównego monorepo (DATABASE_URL bazy testowej / deweloperskiej)
-config({ path: resolve(__dirname, "../../.env"), quiet: true });
+config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), quiet: true });
 
 export default defineConfig({
   // SWC zachowuje metadane dekoratorów potrzebne NestJS (emitDecoratorMetadata)
