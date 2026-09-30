@@ -157,7 +157,7 @@ Tabela `stock_ledger` powinna mieć `qty numeric(14,3)` + `unit` (z CHECK zgodny
 
 | Wymaganie | Decyzja | Uzasadnienie |
 |---|---|---|
-| Produkcja na magazyn (§3, §6) | użytkownik podaje **ilość produkcji**; zużycie = produkcja ÷ przelicznik (`Units.prodFactor`, dziś tylko m³ → MP = 4) | w 2.0 było odwrotnie (podawane zużycie) — sprzeczne z §6 |
+| Produkcja na magazynie (§3, §6) | użytkownik podaje **ilość produkcji**; zużycie = produkcja ÷ przelicznik (`Units.prodFactor`, dziś tylko m³ → MP = 4) | w 2.0 było odwrotnie (podawane zużycie) — sprzeczne z §6 |
 | Brak transportu w produkcji (§5) | sekcja transportu nie jest renderowana; silnik pomija walidację transportu dla `PRODUKCJA`, miejsce = magazyn | transport jest kosztem przewozu, a produkcja na placu nie ma przewozu |
 | Precyzja (§31.6) | wewnętrznie 6 miejsc (`rq`), zaokrąglenie wyłącznie przy prezentacji | 250,0001 MP → 62,500025 m³ musi być zablokowane przy stanie 62,5 m³ |
 | Statusy (§32.1) | `DRAFT` w osobnej kolekcji `drafts` (bez numeru i księgi); operacja: `POSTED` → `CORRECTED` / `CANCELLED` | szkic nie może zużywać numeracji ani wpływać na stan |

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="description" content="ResInvest ERP 3.3 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
-<meta name="generator" content="ResInvest ERP build 3.3.0 · 2026-09-28">
+<meta name="generator" content="ResInvest ERP build 3.3.0 · 2026-09-30">
 <title>ResInvest ERP</title>
 <script>
 /* Przed pierwszym malowaniem: motyw (bez „mignięcia” jasnego tła) i decyzja o intro (ekran z pierwszą klatką filmu). */
@@ -1396,7 +1396,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "dostawca → magazyn (PZ)": ["dodavatel → sklad (PZ)", "supplier → warehouse (PZ)"],
   "Sprzedaż z magazynu": ["Prodej ze skladu", "Sale from stock"],
   "magazyn → odbiorca (WZ)": ["sklad → odběratel (WZ)", "warehouse → customer (WZ)"],
-  "Produkcja na magazyn": ["Výroba na sklad", "Production to stock"],
+  "Produkcja na magazynie": ["Výroba na sklad", "Production to stock"],
   "podaj MP → zużycie liczy system": ["zadejte MP → spotřebu spočítá systém", "enter MP → the system calculates consumption"],
   "Produkcja + sprzedaż bezp.": ["Výroba + přímý prodej", "Production + direct sale"],
   "las → produkcja → odbiorca": ["les → výroba → odběratel", "forest → production → customer"],
@@ -2047,7 +2047,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "Porzuć korektę": ["Zahodit opravu", "Discard correction"],
   "Rola <b>{r}</b> nie pozwala tworzyć operacji. Zaloguj się kontem z odpowiednimi uprawnieniami.": ["Role <b>{r}</b> neumožňuje vytvářet operace. Přihlaste se účtem s odpovídajícími oprávněními.", "The <b>{r}</b> role does not allow creating operations. Sign in with an account that has the right permissions."],
   "wersja robocza": ["koncept", "draft"],
-  "Zakup, sprzedaż z magazynu, produkcja na magazyn, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.": ["Nákup, prodej ze skladu, výroba na sklad, výroba s přímým prodejem nebo převod MM. Pole označená <span class=\"req\">*</span> jsou povinná. Před potvrzením uvidíte souhrn.", "Purchase, sale from stock, production to stock, production with direct sale, or MM transfer. Fields marked <span class=\"req\">*</span> are required. You will see a summary before approval."],
+  "Zakup, sprzedaż z magazynu, produkcja na magazynie, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.": ["Nákup, prodej ze skladu, výroba na sklad, výroba s přímým prodejem nebo převod MM. Pole označená <span class=\"req\">*</span> jsou povinná. Před potvrzením uvidíte souhrn.", "Purchase, sale from stock, production to stock, production with direct sale, or MM transfer. Fields marked <span class=\"req\">*</span> are required. You will see a summary before approval."],
   "Samouczek pod polami": ["Nápověda pod poli", "Tutorial under fields"],
   "Wyczyść": ["Vymazat", "Clear"],
   "Podsumowanie operacji": ["Souhrn operace", "Operation summary"],
@@ -2392,7 +2392,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "inwentaryzacja": ["inventura", "stocktaking"],
   "bilans otwarcia": ["počáteční stav", "opening balance"],
   "Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje nienaruszony.": ["Všechny doklady aktivního skladu se sloupcem Stav. Storno a oprava vytvářejí nové doklady (AN, KOR) — původní doklad zůstává nedotčen.", "All documents of the active warehouse with a Status column. Cancellation and correction create new documents (AN, KOR) — the original document stays intact."],
-  "Produkcja na magazyn (surowiec ze stanu → produkt na stan), produkcja w łańcuchu zakupu oraz produkcja ze sprzedażą bezpośrednią. Zużycie surowca = produkcja ÷ przelicznik (1 m³ = 4 MP).": ["Výroba na sklad (surovina ze skladu → produkt na sklad), výroba v řetězci nákupu a výroba s přímým prodejem. Spotřeba suroviny = výroba ÷ přepočet (1 m³ = 4 MP).", "Production to stock (raw material from stock → product to stock), production within a purchase chain, and production with direct sale. Raw material use = production ÷ factor (1 m³ = 4 MP)."],
+  "Produkcja na magazynie (surowiec ze stanu → produkt na stan), produkcja w łańcuchu zakupu oraz produkcja ze sprzedażą bezpośrednią. Zużycie surowca = produkcja ÷ przelicznik (1 m³ = 4 MP).": ["Výroba na sklad (surovina ze skladu → produkt na sklad), výroba v řetězci nákupu a výroba s přímým prodejem. Spotřeba suroviny = výroba ÷ přepočet (1 m³ = 4 MP).", "Production to stock (raw material from stock → product to stock), production within a purchase chain, and production with direct sale. Raw material use = production ÷ factor (1 m³ = 4 MP)."],
   "Na magazyn": ["Na sklad", "To stock"],
   "Z zakupu (łańcuch)": ["Z nákupu (řetězec)", "From purchase (chain)"],
   "Bezpośrednia (las)": ["Přímá (les)", "Direct (forest)"],
@@ -3409,7 +3409,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const OP_TYPES = {
     ZAKUP: { label: N_("Zakup"), flow: N_("dostawca → magazyn"), correctPerm: "purchases.correct", createPerm: "receipts.create" },
     SPRZEDAZ: { label: N_("Sprzedaż"), flow: N_("magazyn → odbiorca (WZ)"), correctPerm: "sales.correct", createPerm: "issues.create" },
-    PRODUKCJA: { label: N_("Produkcja na magazyn"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct", createPerm: "production.create" },
+    PRODUKCJA: { label: N_("Produkcja na magazynie"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct", createPerm: "production.create" },
     MM: { label: N_("Przesunięcie MM"), flow: N_("magazyn → magazyn"), correctPerm: "inventory.correct", createPerm: "mm.create" }
   };
   const STATUS = { DRAFT: N_("ROBOCZY"), PENDING: N_("DO ZATWIERDZENIA"), POSTED: N_("ZATWIERDZONY"), CANCELLED: N_("ANULOWANY"), CORRECTED: N_("SKORYGOWANY") };
@@ -3976,7 +3976,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }
     }
 
-    /* ---------- miejsce i transport (nie dotyczy produkcji na magazyn) ---------- */
+    /* ---------- miejsce i transport (nie dotyczy produkcji na magazynie) ---------- */
     const T = draft.transport || {};
     let transport = { mode: "none", place: "", cost: 0 };
     if (type !== "PRODUKCJA") {
@@ -5788,7 +5788,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         purchase: { supplierId: "pa_agro", basis: "DEKL", productId: "pr_lupina", qty: "5", unit: "t", price: "610" },
         transport: { mode: "none", place: "RiC Brąszewice" }, notes: "Pomyłka — dostawa nie dotarła"
       }],
-      // produkcja na magazyn z wczoraj (kwit produkcji dnia)
+      // produkcja na magazynie z wczoraj (kwit produkcji dnia)
       ["u_bra", "2026-09-22", {
         type: "PRODUKCJA",
         production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "20", chipperId: "ch_biber", chipRate: "10" },
@@ -7784,7 +7784,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         <div class="scope four" role="group" aria-label="${esc(t("Rodzaj operacji"))}">
           ${typeCard("ZAKUP", t("Zakup"), t("Dostawca → magazyn (PZ). Opcjonalnie produkcja i sprzedaż wyniku."))}
           ${typeCard("SPRZEDAZ", t("Sprzedaż"), t("Magazyn → odbiorca (WZ) albo sprzedaż bezpośrednia po produkcji w lesie."))}
-          ${typeCard("PRODUKCJA", t("Produkcja na magazyn"), t("Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu."))}
+          ${typeCard("PRODUKCJA", t("Produkcja na magazynie"), t("Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu."))}
           ${typeCard("MM", t("Przesunięcie MM"), t("Magazyn → inny magazyn firmy. Stan firmy bez zmian."))}
         </div>
         <div class="info-line mt3">${ic("layers", 15)}<span>${corr ? t("Magazyn: <b>{w}</b> — magazyn dokumentu.", { w: esc(wh ? wh.name : "—") }) : type === "MM" ? t("Magazyn źródłowy i docelowy wybierasz w sekcji przesunięcia.") : t("Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).", { w: esc(wh ? wh.name : "—"), u: esc(App.user().name) })}</span></div>
@@ -7850,7 +7850,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           html += section(n++, "sale2", t("Odbiorca i cena"), t("Sprzedaż nie może przekroczyć ilości wyprodukowanej."), this.saleOfOutputFields());
         }
       } else if (type === "PRODUKCJA") {
-        html += section(n++, "prod", t("Produkcja na magazyn"), t("Podajesz ilość wyprodukowaną — zużycie surowca liczy system (MP ÷ 4 = m³). Bez zakupu, bez transportu, bez odbiorcy."), this.productionFields("stock"));
+        html += section(n++, "prod", t("Produkcja na magazynie"), t("Podajesz ilość wyprodukowaną — zużycie surowca liczy system (MP ÷ 4 = m³). Bez zakupu, bez transportu, bez odbiorcy."), this.productionFields("stock"));
       } else if (type === "MM") {
         const M = d.mm;
         const stock = Stock.byProduct(corr ? Object.assign({}, S, { ledger: S.ledger.filter(l => l.opId !== this.op.id) }) : S, this.whId());
@@ -8024,7 +8024,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       return `<div class="page-head"><div class="titles"><h2>${esc(t("Nowa operacja"))}${this.draft.draftId ? ` <span class="badge st-DRAFT">${esc(t("wersja robocza"))}</span>` : ""}</h2>
           ${rec && rec.rejectReason ? `<div class="info-line err mt2" id="reject-info">${ic("alert", 15)}<span>${esc(t("Odrzucona przez {u} ({d}): {r}. Popraw i przekaż ponownie.", { u: rec.rejectedBy, d: Dates.ts(rec.rejectedAt), r: rec.rejectReason }))}</span></div>` : ""}
           ${rec && rec.status === "PENDING" ? `<div class="info-line mt2">${ic("clock", 15)}<span>${esc(t("Operacja czeka na zatwierdzenie. Zmiana i zapis wycofa ją do wersji roboczej."))}</span></div>` : ""}
-          <p>${t("Zakup, sprzedaż z magazynu, produkcja na magazyn, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.")}</p></div>
+          <p>${t("Zakup, sprzedaż z magazynu, produkcja na magazynie, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.")}</p></div>
           <div class="actions">
             <label class="inline-opt"><input type="checkbox" id="tut-toggle" ${lsGet("riw.tutorial", "1") !== "0" ? "checked" : ""}> ${esc(t("Samouczek pod polami"))}</label>
             <button class="btn ghost" type="button" id="form-reset">${ic("x", 15)} ${esc(t("Wyczyść"))}</button>
@@ -8652,7 +8652,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const partnerName = id => (App.partner(id) || {}).name || "";
   const opPartnerId = o => o.purchase ? o.purchase.supplierId : o.sale ? o.sale.buyerId : "";
   const opTypeLabel = o => o.type === "ZAKUP" ? t("Zakup") + (o.scope.includes("PRODUKCJA") ? " + " + t("produkcja") : "") + (o.scope.includes("SPRZEDAZ") ? " + " + t("sprzedaż") : "")
-    : o.type === "PRODUKCJA" ? t("Produkcja na magazyn") : o.type === "MM" ? t("Przesunięcie MM") : o.direct ? t("Produkcja + sprzedaż bezpośrednia") : t("Sprzedaż z magazynu (WZ)");
+    : o.type === "PRODUKCJA" ? t("Produkcja na magazynie") : o.type === "MM" ? t("Przesunięcie MM") : o.direct ? t("Produkcja + sprzedaż bezpośrednia") : t("Sprzedaż z magazynu (WZ)");
   const TYPE_BADGE = o => `<span class="badge ${o.type === "ZAKUP" ? "ok" : o.type === "PRODUKCJA" ? "brand" : o.type === "MM" ? "info" : "gold"}">${esc(opTypeLabel(o))}</span>`;
   const opProduct = o => o.type === "ZAKUP" ? pName(o.purchase.productId) : o.type === "MM" ? pName(o.mm.productId)
     : o.production ? pName(o.production.outProductId) : o.sale ? pName(o.sale.productId) : "—";
@@ -9142,7 +9142,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           ${drafts.map(d => `<tr><td>${esc(R.OP_TYPES[d.type] ? t(R.OP_TYPES[d.type].label) : d.type)}${d.type === "SPRZEDAZ" && d.draft.sale.direct ? " " + th("(bezpośrednia)") : ""}</td><td>${esc(d.userName)}</td><td>${esc(Dates.ts(d.savedAt))}</td><td>${statusBadge("DRAFT")}${d.rejectReason ? `<br><small class="neg">${esc(t("odrzucona: {r}", { r: d.rejectReason }))}</small>` : ""}</td>
             <td class="r nowrap">${d.userId === App.user().id ? `<a class="btn sm" href="#/nowa?draft=${esc(d.id)}">${th("Otwórz")}</a>` : ""} ${d.userId === App.user().id || App.can("documents.cancel") ? `<button class="btn sm danger" type="button" data-deldraft="${esc(d.id)}">${ic("trash", 13)} ${th("Usuń szkic")}</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
         <div class="card"><div class="toolbar">
-          <div class="field"><label for="o-type">${th("Rodzaj")}</label><select class="ctrl" id="o-type">${[["", N_("Wszystkie")], ["ZAKUP", N_("Zakup")], ["SPRZEDAZ", N_("Sprzedaż (WZ)")], ["DIRECT", N_("Sprzedaż bezpośrednia")], ["PRODUKCJA", N_("Produkcja na magazyn")], ["MM", "MM"]].map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+          <div class="field"><label for="o-type">${th("Rodzaj")}</label><select class="ctrl" id="o-type">${[["", N_("Wszystkie")], ["ZAKUP", N_("Zakup")], ["SPRZEDAZ", N_("Sprzedaż (WZ)")], ["DIRECT", N_("Sprzedaż bezpośrednia")], ["PRODUKCJA", N_("Produkcja na magazynie")], ["MM", "MM"]].map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
           <div class="field"><label for="o-status">${th("Status")}</label><select class="ctrl" id="o-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(t(R.STATUS[s]))}</option>`).join("")}</select></div>
           <div class="field"><label for="o-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="o-ym" value="${esc(f.ym)}"></div>
           <div class="field"><label for="o-scope">${th("Magazyn")}</label><select class="ctrl" id="o-scope"><option value="active" ${f.scope === "active" ? "selected" : ""}>${th("Aktywny")}</option><option value="all" ${f.scope === "all" ? "selected" : ""}>${th("Wszystkie")}</option></select></div>
@@ -9266,8 +9266,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const live = ops.filter(o => o.status !== "CANCELLED");
       const sum = k => R.rq(live.reduce((a, o) => a + (o.production[k] || 0), 0));
       const modeTxt = m => m === "stock" ? t("na magazyn") : m === "direct" ? t("bezpośrednia") : t("z zakupu");
-      return `<div class="page-head"><div class="titles"><h2>${th("Produkcja")}</h2><p>${th("Produkcja na magazyn (surowiec ze stanu → produkt na stan), produkcja w łańcuchu zakupu oraz produkcja ze sprzedażą bezpośrednią. Zużycie surowca = produkcja ÷ przelicznik (1 m³ = 4 MP).")}</p></div>
-          <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa?preset=produkcja">${ic("plus", 15)} ${th("Produkcja na magazyn")}</a><a class="btn" href="#/nowa?preset=bezposrednia">${ic("plus", 15)} ${th("Produkcja + sprzedaż bezp.")}</a>` : ""}<a class="btn" href="#/kwit">${ic("receipt", 15)} ${th("Kwit produkcji dnia")}</a></div></div>
+      return `<div class="page-head"><div class="titles"><h2>${th("Produkcja")}</h2><p>${th("Produkcja na magazynie (surowiec ze stanu → produkt na stan), produkcja w łańcuchu zakupu oraz produkcja ze sprzedażą bezpośrednią. Zużycie surowca = produkcja ÷ przelicznik (1 m³ = 4 MP).")}</p></div>
+          <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa?preset=produkcja">${ic("plus", 15)} ${th("Produkcja na magazynie")}</a><a class="btn" href="#/nowa?preset=bezposrednia">${ic("plus", 15)} ${th("Produkcja + sprzedaż bezp.")}</a>` : ""}<a class="btn" href="#/kwit">${ic("receipt", 15)} ${th("Kwit produkcji dnia")}</a></div></div>
         <div class="card"><div class="toolbar">
           <div class="field"><label for="p-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="p-ym" value="${esc(f.ym)}"></div>
           <div class="field"><label for="p-mode">${th("Rodzaj")}</label><select class="ctrl" id="p-mode">${[["", N_("Wszystkie")], ["stock", N_("Na magazyn")], ["chain", N_("Z zakupu (łańcuch)")], ["direct", N_("Bezpośrednia (las)")]].map(([v, l]) => `<option value="${v}" ${f.mode === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div></div>
@@ -9913,7 +9913,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const quick = App.can("op.create") ? `<div class="qa-grid" id="quick">
           ${qa("zakup", "inbox", N_("Zakup"), N_("dostawca → magazyn (PZ)"))}
           ${qa("wz", "out", N_("Sprzedaż z magazynu"), N_("magazyn → odbiorca (WZ)"))}
-          ${qa("produkcja", "factory", N_("Produkcja na magazyn"), N_("podaj MP → zużycie liczy system"))}
+          ${qa("produkcja", "factory", N_("Produkcja na magazynie"), N_("podaj MP → zużycie liczy system"))}
           ${qa("bezposrednia", "truck", N_("Produkcja + sprzedaż bezp."), N_("las → produkcja → odbiorca"))}
           ${qa("mm", "swap", N_("Przesunięcie MM"), N_("magazyn → magazyn"))}</div>` : "";
 

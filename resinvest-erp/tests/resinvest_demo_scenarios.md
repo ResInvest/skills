@@ -11,9 +11,9 @@ Scenariusze do ręcznego sprawdzenia w `ResInvest_ERP_demo.html`. Każdy ma odpo
 3. Użytkownik: **Anna Górska — Kierownik** (magazyn RiC Zabrze).
 4. *Stany magazynowe*: drewno **817 m³ ≈ 778 t ≈ 6 611 GJ**, zrębka leśna **8 293 MP ≈ 2 737 t ≈ 23 262 GJ**, PKS **728 t ≈ 6 188 GJ**.
 
-## §22 TEST 1 / §31.16 A — produkcja na magazyn
+## §22 TEST 1 / §31.16 A — produkcja na magazynie
 
-1. *Nowa operacja → Produkcja na magazyn*. Brak sekcji transportu, przewoźnika, odbiorcy i sprzedaży.
+1. *Nowa operacja → Produkcja na magazynie*. Brak sekcji transportu, przewoźnika, odbiorcy i sprzedaży.
 2. Surowiec: Drewno opałowe (stan 817 m³), produkt: Zrębka produkcyjna leśna, **Ilość produkcji 500 MP**.
 3. Oczekiwane: zużycie **125 m³** (auto), stan po **692 m³**, masa ≈ 165 t, ≈ 1 402,5 GJ, cena za rąbanie **10,00 zł/MP**, koszt **5 000,00 zł** (§22 TEST 7).
 4. *Zatwierdź…* → okno podsumowania (stan przed/po, RW + PW) → *Zatwierdź dokument* → szczegóły dokumentu, status ZATWIERDZONY.

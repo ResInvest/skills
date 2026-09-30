@@ -278,7 +278,7 @@
   const OP_TYPES = {
     ZAKUP: { label: N_("Zakup"), flow: N_("dostawca → magazyn"), correctPerm: "purchases.correct", createPerm: "receipts.create" },
     SPRZEDAZ: { label: N_("Sprzedaż"), flow: N_("magazyn → odbiorca (WZ)"), correctPerm: "sales.correct", createPerm: "issues.create" },
-    PRODUKCJA: { label: N_("Produkcja na magazyn"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct", createPerm: "production.create" },
+    PRODUKCJA: { label: N_("Produkcja na magazynie"), flow: N_("surowiec ze stanu → produkcja → produkt na stanie"), correctPerm: "production.correct", createPerm: "production.create" },
     MM: { label: N_("Przesunięcie MM"), flow: N_("magazyn → magazyn"), correctPerm: "inventory.correct", createPerm: "mm.create" }
   };
   const STATUS = { DRAFT: N_("ROBOCZY"), PENDING: N_("DO ZATWIERDZENIA"), POSTED: N_("ZATWIERDZONY"), CANCELLED: N_("ANULOWANY"), CORRECTED: N_("SKORYGOWANY") };
@@ -845,7 +845,7 @@
       }
     }
 
-    /* ---------- miejsce i transport (nie dotyczy produkcji na magazyn) ---------- */
+    /* ---------- miejsce i transport (nie dotyczy produkcji na magazynie) ---------- */
     const T = draft.transport || {};
     let transport = { mode: "none", place: "", cost: 0 };
     if (type !== "PRODUKCJA") {

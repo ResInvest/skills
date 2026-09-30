@@ -209,7 +209,7 @@
         purchase: { supplierId: "pa_agro", basis: "DEKL", productId: "pr_lupina", qty: "5", unit: "t", price: "610" },
         transport: { mode: "none", place: "RiC Brąszewice" }, notes: "Pomyłka — dostawa nie dotarła"
       }],
-      // produkcja na magazyn z wczoraj (kwit produkcji dnia)
+      // produkcja na magazynie z wczoraj (kwit produkcji dnia)
       ["u_bra", "2026-09-22", {
         type: "PRODUKCJA",
         production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "20", chipperId: "ch_biber", chipRate: "10" },

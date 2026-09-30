@@ -52,7 +52,7 @@ Legenda: ✅ spełnia · 🟡 do poprawy · 🔁 do przebudowy · ❌ brak
 | 6 | Administracja → Bilans otwarcia (zatwierdzanie, historia) | ❌ | `openingBalance()` istnieje tylko dla danych przykładowych, bez UI i bez obiegu zatwierdzania |
 | 7 | Przeliczniki konfigurowalne, zapis źródła AUTO/MANUAL/COMPANY_RATE | 🟡 | przeliczniki w konfiguracji i kartotece produktu; źródło zapisywane tylko dla masy zakupu i tonażu MM |
 | 8 | Sprzedaż w MP/m³/t + tonaż AUTO/RĘCZNY | 🟡 | brak ręcznego tonażu i jego źródła w sprzedaży |
-| 9 | Nazwa „PRODUKCJA NA MAGAZYNIE” | 🟡 | w kodzie „Produkcja na magazyn” (10 miejsc + słowniki) |
+| 9 | Nazwa „PRODUKCJA NA MAGAZYNIE” | ✅ | zmienione w 3.x z „Produkcja na magazyn” (etykiety, pulpit, formularz, listy, słowniki CS/EN, testy); w 4.0 od początku |
 | 10 | Numery PZ/WZ wpisywane ręcznie, osobne daty dokumentu/przyjęcia/utworzenia | 🔁 | numeracja automatyczna; jedna data operacji + `createdAt` |
 | 11 | Otwórz / Podgląd / Koryguj / Usuń, BYŁO/JEST | 🟡 | korekty z tabelą przed/po są; **„Usuń” nie ma** — jest anulowanie z dokumentem AN |
 | 12 | Wydruk, PDF, CSV, **XLSX**, **DOCX** | 🟡 | brak XLSX, DOCX |
