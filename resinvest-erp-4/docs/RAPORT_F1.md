@@ -69,6 +69,8 @@ Zastosowana na: bazie deweloperskiej, świeżej bazie „CI” oraz bazie testow
 5. Parser `COMPANY_DOMAINS` zwracał tekst zamiast listy przy wartości domyślnej.
 6. Testy integracyjne współdzieliły kody ról/magazynów z danymi słownikowymi (kolizja).
 7. Nagłówek `X-Frame-Options: SAMEORIGIN` i domyślna CSP helmet — łagodniejsze niż zakładane.
+8. **Pierwsze uruchomienie CI w GitHub nie przeszło**: test danych słownikowych liczył wszystkie role w bazie testowej
+   i zależał od kolejności plików (w CI wcześniej wykonał się test ograniczeń, który tworzy własną rolę).
 
 ## 7. Naprawione problemy
 
@@ -79,6 +81,8 @@ Zastosowana na: bazie deweloperskiej, świeżej bazie „CI” oraz bazie testow
 5. Parser list z wartością domyślną przed transformacją + test.
 6. Rozdzielone dane testowe; test idempotencji danych słownikowych.
 7. `DENY` + minimalna CSP dla API; test nagłówków.
+8. Test liczy tylko role słownikowe; sprawdzony przy losowej kolejności plików (3 przebiegi); konfiguracja Vitest
+   jako `.mts` (bez ostrzeżenia Vite), akcje GitHub `checkout@v5` / `setup-node@v5` (Node 20 wycofywany na runnerach).
 
 ## 8. Pozostałe ryzyka techniczne
 
@@ -86,7 +90,7 @@ Zastosowana na: bazie deweloperskiej, świeżej bazie „CI” oraz bazie testow
 |---|---|
 | Obrazy Docker i `docker compose up` nie zostały uruchomione | w środowisku budowania brak demona Docker; plik Compose zweryfikowany składniowo (`docker compose config`) |
 | Konfiguracja Nginx nie przeszła `nginx -t` | brak Nginx w środowisku budowania — do sprawdzenia w F9 na serwerze testowym |
-| Workflow CI nie był jeszcze uruchomiony w GitHub | kroki odtworzone lokalnie 1:1; pierwsze uruchomienie po wypchnięciu |
+| CI w GitHub | pierwsze uruchomienie wykryło test zależny od kolejności (naprawione, pkt 6–7) — wynik kolejnego uruchomienia w historii Actions |
 | Wydajność modelu przy dużej liczbie ruchów | indeksy na (magazyn, materiał, data); testy obciążeniowe w F10 |
 | TypeScript 7 | migracja po wsparciu w typescript-eslint |
 

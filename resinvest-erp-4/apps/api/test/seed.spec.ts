@@ -28,7 +28,8 @@ describe("dane słownikowe (seed)", () => {
     expect(n.roles).toBe(0);
     expect(n.permissions).toBe(0);
     expect(n.materials).toBe(0);
-    expect(await db.role.count()).toBe(ROLES.length);
+    // tylko role słownikowe — inne pliki testów mogą tworzyć własne role w tej samej bazie testowej
+    expect(await db.role.count({ where: { code: { in: ROLES.map(r => r.code) } } })).toBe(ROLES.length);
     expect((await db.material.findUnique({ where: { code: "ZR-T" } }))?.name).toBe("Zrębka towar (zmiana)");
   });
 });
