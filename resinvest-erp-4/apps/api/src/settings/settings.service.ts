@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service.js";
 
 /** Ustawienia systemu (tabela settings) z wartościami domyślnymi. */
-const DEFAULTS = { "auth.allowSelfRegistration": false, "mm.mode": "two", "operations.requireApproval": false } as const;
+const DEFAULTS: { "auth.allowSelfRegistration": boolean; "mm.mode": "one" | "two"; "operations.requireApproval": boolean } = { "auth.allowSelfRegistration": false, "mm.mode": "two", "operations.requireApproval": false };
 export type SettingKey = keyof typeof DEFAULTS;
 
 @Injectable()

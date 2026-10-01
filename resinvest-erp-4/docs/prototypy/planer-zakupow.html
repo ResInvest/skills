@@ -1,0 +1,549 @@
+<title>Planer zakupów ResInvest ERP</title>
+<style>
+/* Układ: górny pasek ERP (jak w 4.0) → nagłówek planera z filtrami → zakładki → KPI → tabela / wykres. Kolory = tokeny ERP 4. */
+:root {
+  --bg: #f4f6f5; --surface: #ffffff; --surface-2: #f0f3f1; --text: #16211c; --muted: #5b6b63; --line: #d9e1dc;
+  --brand: #1f6b47; --brand-ink: #ffffff; --brand-soft: #e3f3ea;
+  --ok: #17613d; --ok-bg: #e3f3ea; --warn: #7a4b00; --warn-bg: #fdf2dc; --err: #a3261e; --err-bg: #fbe7e6; --info: #1d4f8a; --info-bg: #e5eef9;
+  --plan: #b8c4be; --act: #1f6b47; --sel: #b7791f;
+  --pz: #15803d; --wz: #c2410c; --mm: #1d4ed8; --aux: #5b6b63;
+  --font: system-ui, "Segoe UI", Roboto, sans-serif; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1411; --surface: #151e19; --surface-2: #1b2620; --text: #dfe8e3; --muted: #9aaba2; --line: #26332c;
+  --brand: #2f9a66; --brand-soft: #173526; --ok: #7fd6a7; --ok-bg: #173526; --warn: #f3c979; --warn-bg: #3a2c10; --err: #f0a39d; --err-bg: #3a1a18; --info: #9cc3f0; --info-bg: #15283f;
+  --plan: #3d4d45; --act: #3fae77; --sel: #e0a446; --aux: #9aaba2; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e1411; --surface: #151e19; --surface-2: #1b2620; --text: #dfe8e3; --muted: #9aaba2; --line: #26332c;
+  --brand: #2f9a66; --brand-soft: #173526; --ok: #7fd6a7; --ok-bg: #173526; --warn: #f3c979; --warn-bg: #3a2c10; --err: #f0a39d; --err-bg: #3a1a18; --info: #9cc3f0; --info-bg: #15283f;
+  --plan: #3d4d45; --act: #3fae77; --sel: #e0a446; --aux: #9aaba2; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.doc { font-family: var(--mono); font-size: .82rem; font-weight: 700; }
+
+/* pasek ERP */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { display: flex; gap: 10px; align-items: center; }
+.mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--brand); color: var(--brand-ink); font-weight: 700; }
+.brand small { display: block; color: var(--muted); }
+.nav { display: flex; gap: 2px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.nav span { padding: 9px 11px; border-radius: 8px; color: var(--muted); }
+.nav span.on { background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.nav .new { font-size: .68rem; font-weight: 700; background: var(--sel); color: #1b1305; border-radius: 99px; padding: 1px 6px; margin-left: 4px; vertical-align: 2px; }
+.demo { font-size: .78rem; padding: 4px 10px; border-radius: 99px; background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+
+.wrap { max-width: 1240px; margin: 0 auto; padding: 22px 16px 40px; display: grid; gap: 16px; }
+.page-h { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0 0 2px; font-size: 1.6rem; text-wrap: balance; }
+h2 { margin: 0; font-size: 1.05rem; text-wrap: balance; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ctrl { min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.btn { min-height: 38px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.btn:hover { border-color: var(--brand); }
+.btn.on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.period { font-weight: 600; min-width: 0; }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs button { min-height: 44px; padding: 0 14px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tabs button.on { color: var(--text); border-bottom-color: var(--brand); font-weight: 600; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.k { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.k small { color: var(--muted); font-weight: 600; }
+.k strong { font-size: 1.6rem; letter-spacing: -.01em; }
+.k.lead { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.k.lead small { color: inherit; opacity: .8; }
+.meter { height: 6px; border-radius: 4px; background: rgb(255 255 255 / .25); overflow: hidden; margin-top: 6px; }
+.meter i { display: block; height: 100%; background: var(--brand-ink); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.scroll { overflow-x: auto; min-width: 0; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: middle; }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+thead th { background: var(--surface-2); color: var(--muted); font-size: .78rem; font-weight: 600; white-space: nowrap; }
+thead th .src { display: block; font-weight: 700; font-size: .66rem; letter-spacing: .05em; }
+tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+tr.today td:first-child { box-shadow: inset 4px 0 var(--sel); }
+tr.future td { color: var(--muted); }
+td input { width: 92px; min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); text-align: right; }
+td input:disabled { opacity: .7; }
+.auto { color: var(--info); }
+.src-auto { color: var(--info); }
+.src-man { color: var(--sel); }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.pill.ok { background: var(--ok-bg); color: var(--ok); }
+.pill.warn { background: var(--warn-bg); color: var(--warn); }
+.pill.err { background: var(--err-bg); color: var(--err); }
+.pill.info { background: var(--info-bg); color: var(--info); }
+.pill.n { background: var(--surface-2); color: var(--muted); }
+.linkish { border: 0; background: none; padding: 4px 0; color: var(--brand); text-decoration: underline; cursor: pointer; }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 99px; font: 700 .72rem var(--mono); color: #fff; margin-right: 4px; }
+.b-PZ { background: var(--pz); } .b-PW, .b-RW { background: var(--aux); } .b-TR { background: var(--mm); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.chart svg text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.tip { position: absolute; pointer-events: none; background: var(--text); color: var(--bg); padding: 6px 9px; border-radius: 6px; font-size: .8rem; white-space: nowrap; transform: translate(-50%, -110%); }
+.note { color: var(--muted); font-size: .84rem; margin: 0; max-width: 78ch; }
+.callout { border: 1px solid var(--line); border-left: 4px solid var(--sel); background: var(--warn-bg); color: var(--text); border-radius: 8px; padding: 10px 12px; font-size: .88rem; }
+.callout b { color: var(--warn); }
+.days { display: flex; gap: 6px; flex-wrap: wrap; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.matrix td.c, .matrix th.c { text-align: center; }
+.heat { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 6px; background: var(--ok-bg); color: var(--ok); font-weight: 700; }
+
+/* panel dnia */
+.scrim { position: fixed; inset: 0; z-index: 40; background: rgb(0 0 0 / .45); display: flex; justify-content: flex-end; }
+.panel { width: min(720px, 100%); height: 100%; background: var(--surface); display: grid; grid-template-rows: auto 1fr auto; box-shadow: -10px 0 40px rgb(0 0 0 / .25); padding-top: env(safe-area-inset-top, 0px); }
+.panel-h { display: flex; justify-content: space-between; align-items: start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.panel-b { overflow: auto; padding: 16px; display: grid; gap: 14px; align-content: start; }
+.panel-f { padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); font-size: .84rem; color: var(--muted); }
+.op { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
+.op-h { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: .88rem; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; }
+.map td { vertical-align: top; }
+.map td:nth-child(2) { font-family: var(--mono); font-size: .8rem; }
+
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .kpis { grid-template-columns: minmax(0, 1fr); } .nav { display: none; } h1 { font-size: 1.35rem; } }
+@media (prefers-reduced-motion: no-preference) { .meter i { transition: width .4s; } }
+</style>
+
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true">RI</span><div><strong>ResInvest ERP</strong><small>Manager · RiC Zabrze</small></div></div>
+  <nav class="nav" aria-label="Główna nawigacja (podgląd)">
+    <span>Pulpit</span><span>Stany magazynowe</span><span>Nowa operacja</span><span>Dokumenty</span><span class="on">Planer zakupów<b class="new">NOWE</b></span><span>Kartoteki</span><span>Raporty</span>
+  </nav>
+  <span class="demo">Prototyp · dane przykładowe</span>
+</header>
+
+<main class="wrap">
+  <div class="page-h">
+    <div>
+      <h1>Planer zakupów</h1>
+      <p class="note">Plan wpisujesz ręcznie. Wykonanie, tony, ceny, kilometry, transport i kursy kierowców czyta się z historii operacji (PZ, PW, TR).</p>
+    </div>
+    <div class="filters">
+      <select class="ctrl" id="f-wh" aria-label="Magazyn"></select>
+      <button type="button" class="btn" id="f-prev" aria-label="Poprzedni okres">‹</button>
+      <span class="period num" id="f-label"></span>
+      <button type="button" class="btn" id="f-next" aria-label="Następny okres">›</button>
+      <button type="button" class="btn" id="f-now">Bieżący tydzień</button>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Widok planera">
+    <button type="button" role="tab" id="t-week" data-tab="week">Tydzień</button>
+    <button type="button" role="tab" id="t-year" data-tab="year">Miesiące i rok</button>
+    <button type="button" role="tab" id="t-fleet" data-tab="fleet">Kierowcy i kursy</button>
+    <button type="button" role="tab" id="t-src" data-tab="src">Skąd są dane</button>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Wskaźniki tygodnia"></section>
+  <section id="view"></section>
+</main>
+
+<div id="panel-root"></div>
+
+<script>
+(() => {
+  "use strict";
+  /* ---------------- stałe i formatowanie ---------------- */
+  const TODAY = "2026-10-01";                // „dziś” prototypu = data historii przykładowej
+  const RATE_T_PER_MP = 0.33;                // przelicznik firmowy ERP (konfiguracja 4.0)
+  const PLANNER_FACTOR = 0.63;               // współczynnik z obecnego planera (do decyzji)
+  const KM_RATE = 5;                         // zł/km — stawka domyślna transportu własnego
+  const MN = ["styczeń","luty","marzec","kwiecień","maj","czerwiec","lipiec","sierpień","wrzesień","październik","listopad","grudzień"];
+  const DN = ["Pn","Wt","Śr","Cz","Pt","So","Nd"];
+  const WH = [
+    { id: "ZAB", name: "RiC Zabrze", base: 260 },
+    { id: "BRA", name: "RiC Brąszewice", base: 190 },
+    { id: "ROK", name: "RiC Rokitki", base: 140 },
+  ];
+  const nf = (v, d = 0) => (Number.isFinite(v) ? v : 0).toLocaleString("pl-PL", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const zl = (v, d = 0) => `${nf(v, d)} zł`;
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const $ = s => document.querySelector(s);
+
+  /* ---------------- daty (UTC, bez stref) ---------------- */
+  const D = iso => new Date(`${iso}T00:00:00Z`);
+  const iso = d => d.toISOString().slice(0, 10);
+  const addDays = (s, n) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+  const dow = s => (D(s).getUTCDay() + 6) % 7;                       // 0 = poniedziałek
+  function isoWeek(s) { const d = D(s); d.setUTCDate(d.getUTCDate() + 3 - dow(s)); const y = d.getUTCFullYear(); const j = new Date(Date.UTC(y, 0, 4)); return { y, w: 1 + Math.round(((d - j) / 864e5 - 3 + ((j.getUTCDay() + 6) % 7)) / 7) }; }
+  const weekStart = s => addDays(s, -dow(s));
+  const plDay = s => `${s.slice(8, 10)}.${s.slice(5, 7)}`;
+
+  /* ---------------- historia przykładowa (deterministyczna) ----------------
+     Symuluje to, co ERP zapisze w bazie: operacje zakupu z produkcją (PZ + RW + PW) z kursami transportu (TR).
+     W prawdziwym module te rekordy przychodzą z API (/operations, /transport-runs), nie z przeglądarki.     */
+  let seed = 20261001;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const pick = a => a[Math.floor(rnd() * a.length)];
+  const PLACES = {
+    ZAB: ["Nadl. Rudziniec · leśn. Kłodnica", "Nadl. Rudziniec · leśn. Pławniowice", "Nadl. Gliwice · leśn. Łabędy", "Inwestycja DK88 Zabrze (wycinka)"],
+    BRA: ["Nadl. Kalisz · leśn. Brąszewice", "Nadl. Złoczew · leśn. Uników", "Nadl. Kalisz · leśn. Wróblew"],
+    ROK: ["Nadl. Lubliniec · leśn. Rokitki", "Nadl. Herby · leśn. Hadra", "Inwestycja S11 (wycinka)"],
+  };
+  const DRIVERS = {
+    ZAB: [["Jan Nowak", "SGL 4T821"], ["Piotr Wiśniewski", "SGL 7K310"], ["Marek Kowalczyk", "SZA 19052"], ["Tomasz Lis", "SGL 2R114"], ["Adam Zieliński", "SZA 66013"]],
+    BRA: [["Krzysztof Wójcik", "ESI 5H220"], ["Paweł Kamiński", "ESI 8M501"], ["Łukasz Dudek", "PKA 31F07"]],
+    ROK: [["Grzegorz Mazur", "SLU 4C882"], ["Dariusz Pawlak", "SLU 9A145"], ["Rafał Sikora", "SLU 1T330"]],
+  };
+  const EXT = { name: "Trans-Bud Sp. z o.o.", regs: ["WGM 7712C", "WGM 1180K"] };
+  const ops = [];             // { wh, date, place, mp, pricePerMP, purchaseCost, pz, rw, pw, tr, runs[] }
+  const seqs = {};
+  const nextNo = (type, wh, date) => { const k = `${type}|${wh}|${date.slice(0, 7)}`; seqs[k] = (seqs[k] || 0) + 1; return `${type}/${String(seqs[k]).padStart(3, "0")}/${date.slice(5, 7)}/${date.slice(0, 4)}`; };
+  for (let s = "2026-01-02"; s <= TODAY; s = addDays(s, 1)) {
+    const wd = dow(s);
+    if (wd === 6) continue;                                            // niedziela — brak pracy rębaka
+    for (const w of WH) {
+      if (rnd() < (wd === 5 ? 0.5 : 0.05)) continue;                 // dni bez produkcji
+      const season = 0.97 + 0.1 * Math.cos(((Number(s.slice(5, 7)) - 1) / 12) * 2 * Math.PI);  // zimą nieco więcej
+      const nOps = rnd() < 0.25 ? 2 : 1;
+      for (let o = 0; o < nOps; o++) {
+        const mp = Math.round((w.base * season * (0.78 + rnd() * 0.42)) / nOps / 4) * 4;
+        const pricePerMP = Math.round((40 + rnd() * 12) * 100) / 100;
+        const runs = [];
+        let left = mp;
+        const nRuns = Math.max(1, Math.min(7, Math.round(mp / (60 + rnd() * 30))));
+        for (let r = 0; r < nRuns; r++) {
+          const share = r === nRuns - 1 ? left : Math.round(mp / nRuns / 2) * 2;
+          left -= share;
+          const external = rnd() < 0.15;
+          const [driver, reg] = external ? [`kierowca ${EXT.name.split(" ")[0]}`, pick(EXT.regs)] : pick(DRIVERS[w.id]);
+          const km = Math.round(18 + rnd() * 70);
+          const weighed = rnd() < 0.7;
+          runs.push({ driver, reg, external, company: external ? EXT.name : null, km, cost: Math.round(km * KM_RATE * (external ? 1.2 : 1) * 100) / 100, mp: share,
+            t: weighed ? Math.round(share * RATE_T_PER_MP * (0.9 + rnd() * 0.25) * 100) / 100 : null });
+        }
+        ops.push({ wh: w.id, date: s, place: pick(PLACES[w.id]), mp, pricePerMP, purchaseCost: Math.round(mp * pricePerMP * 100) / 100,
+          pz: nextNo("PZ", w.id, s), rw: nextNo("RW", w.id, s), pw: nextNo("PW", w.id, s), tr: nextNo("TR", w.id, s), runs });
+      }
+    }
+  }
+
+  /* ---------------- plan (jedyna dana wpisywana ręcznie) ---------------- */
+  const planDefault = (wh, s) => { const w = WH.find(x => x.id === wh); const d = dow(s); return d === 6 ? 0 : d === 5 ? Math.round(w.base * 0.4 / 10) * 10 : w.base; };
+  let planEdits = {};
+  try { planEdits = JSON.parse(localStorage.getItem("planer-demo-plan") || "{}") || {}; } catch { planEdits = {}; }
+  const savePlan = () => { try { localStorage.setItem("planer-demo-plan", JSON.stringify(planEdits)); } catch { /* przeglądarka bez pamięci — plan zostaje w tej sesji */ } };
+  const planOf = (wh, s) => (planEdits[`${wh}|${s}`] ?? planDefault(wh, s));
+
+  /* ---------------- agregacja: dokładnie te reguły trafią do serwisu planera ---------------- */
+  const opsByKey = new Map();
+  for (const o of ops) { const k = `${o.wh}|${o.date}`; if (!opsByKey.has(k)) opsByKey.set(k, []); opsByKey.get(k).push(o); }
+  function dayFacts(whs, s) {
+    const r = { plan: 0, act: 0, t: 0, tWeighed: 0, tAuto: 0, val: 0, km: 0, tr: 0, trips: 0, ops: [], places: [] };
+    for (const wh of whs) {
+      r.plan += planOf(wh, s);
+      for (const o of opsByKey.get(`${wh}|${s}`) || []) {
+        r.ops.push(o); r.act += o.mp; r.val += o.purchaseCost; r.places.push(o.place);
+        for (const run of o.runs) {
+          r.km += run.km; r.tr += run.cost; r.trips += 1;
+          if (run.t !== null) r.tWeighed += run.t; else r.tAuto += run.mp * RATE_T_PER_MP;
+        }
+      }
+    }
+    r.t = r.tWeighed + r.tAuto;
+    return r;
+  }
+  function sumRange(whs, from, to) {
+    const r = { plan: 0, planToDate: 0, act: 0, t: 0, tWeighed: 0, val: 0, km: 0, tr: 0, trips: 0, days: 0 };
+    for (let s = from; s <= to; s = addDays(s, 1)) {
+      const f = dayFacts(whs, s);
+      r.plan += f.plan; if (s <= TODAY) r.planToDate += f.plan; r.act += f.act; r.t += f.t; r.tWeighed += f.tWeighed; r.val += f.val; r.km += f.km; r.tr += f.tr; r.trips += f.trips;
+      if (f.act > 0) r.days += 1;
+    }
+    return r;
+  }
+  const real = (a, p) => (p ? (a / p) * 100 : 0);
+
+  /* ---------------- stan widoku ---------------- */
+  const st = { tab: "week", wh: "ZAB", week: weekStart(TODAY), day: TODAY, month: Number(TODAY.slice(5, 7)) - 1 };
+  try { const t = localStorage.getItem("planer-demo-tab"); if (t) st.tab = t; } catch { /* brak pamięci */ }
+  const whs = () => (st.wh === "ALL" ? WH.map(w => w.id) : [st.wh]);
+  const weekDays = () => [...Array(7)].map((_, i) => addDays(st.week, i));
+
+  /* ---------------- filtry ---------------- */
+  $("#f-wh").innerHTML = WH.map(w => `<option value="${w.id}">${w.name}</option>`).join("") + `<option value="ALL">Wszystkie magazyny</option>`;
+  $("#f-wh").value = st.wh;
+  $("#f-wh").addEventListener("change", e => { st.wh = e.target.value; render(); });
+  $("#f-prev").addEventListener("click", () => shift(-1));
+  $("#f-next").addEventListener("click", () => shift(1));
+  $("#f-now").addEventListener("click", () => { st.week = weekStart(TODAY); st.day = TODAY; st.month = Number(TODAY.slice(5, 7)) - 1; render(); });
+  function shift(n) {
+    if (st.tab === "year") { st.month = Math.min(11, Math.max(0, st.month + n)); }
+    else { st.week = addDays(st.week, 7 * n); st.day = addDays(st.day, 7 * n); }
+    render();
+  }
+  document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => { st.tab = b.dataset.tab; try { localStorage.setItem("planer-demo-tab", st.tab); } catch { /* brak pamięci */ } render(); }));
+
+  /* ---------------- KPI ---------------- */
+  function kpis() {
+    const days = weekDays(), w = sumRange(whs(), days[0], days[6]);
+    const r = real(w.act, w.planToDate);
+    const avg = w.act ? w.val / w.act : 0, trmp = w.act ? w.tr / w.act : 0;
+    $("#kpis").innerHTML = `
+      <div class="k lead"><small>Realizacja planu do dziś — tydzień ${isoWeek(days[0]).w}</small><strong class="num">${nf(r, 1)}%</strong>
+        <div class="meter" role="meter" aria-valuenow="${Math.round(r)}" aria-valuemin="0" aria-valuemax="100" aria-label="Realizacja planu"><i style="width:${Math.min(100, r)}%"></i></div></div>
+      <div class="k"><small>Wykonanie tygodnia</small><strong class="num">${nf(w.act)} MP</strong><span class="muted small num">${nf(w.t, 1)} t · z wagi ${nf(w.t ? (w.tWeighed / w.t) * 100 : 0)}%</span></div>
+      <div class="k"><small>Wartość zakupu</small><strong class="num">${zl(w.val)}</strong><span class="muted small num">średnio ${nf(avg, 2)} zł/MP</span></div>
+      <div class="k"><small>Transport</small><strong class="num">${nf(trmp, 2)} zł/MP</strong><span class="muted small num">${nf(w.trips)} kursów · ${nf(w.km)} km</span></div>`;
+  }
+
+  /* ---------------- widok: tydzień ---------------- */
+  function viewWeek() {
+    const days = weekDays(), all = st.wh === "ALL";
+    const tot = sumRange(whs(), days[0], days[6]);
+    const rows = days.map((s, i) => {
+      const f = dayFacts(whs(), s), fut = s > TODAY, rr = real(f.act, f.plan);
+      const pill = f.plan ? `<span class="pill ${fut ? "n" : rr >= 100 ? "ok" : rr >= 80 ? "warn" : "err"}">${fut ? "plan" : nf(rr, 1) + "%"}</span>` : "–";
+      const planCell = all ? `<span class="num">${nf(f.plan)}</span>` : `<input type="number" min="0" step="10" inputmode="numeric" id="plan-${s}" data-day="${s}" value="${f.plan}" aria-label="Plan na ${plDay(s)} w MP">`;
+      const place = f.places.length ? esc([...new Set(f.places)].join("; ")) : `<span class="muted">${fut ? "—" : "brak produkcji"}</span>`;
+      return `<tr class="${s === TODAY ? "today" : ""} ${fut ? "future" : ""}">
+        <td class="l"><b>${DN[i]}</b> <span class="num">${plDay(s)}</span></td>
+        <td class="l small" style="min-width:190px">${place}</td>
+        <td>${planCell}</td>
+        <td class="num auto">${fut ? "" : nf(f.act)}</td>
+        <td class="num auto">${fut || !f.act ? "" : nf(f.t, 1)}</td>
+        <td>${pill}</td>
+        <td class="num auto">${f.act ? nf(f.val / f.act, 2) : ""}</td>
+        <td class="num auto">${f.km ? nf(f.km) : ""}</td>
+        <td class="num auto">${f.tr ? nf(f.tr, 2) : ""}</td>
+        <td class="num auto">${f.val ? nf(f.val, 2) : ""}</td>
+        <td class="num auto">${f.trips || ""}</td>
+        <td>${f.ops.length ? `<button type="button" class="linkish" data-open="${s}">${f.ops.length} ${f.ops.length === 1 ? "operacja" : "operacje"}</button>` : ""}</td>
+      </tr>`;
+    }).join("");
+    $("#view").innerHTML = `
+      <div class="card">
+        <div class="card-h"><h2>Tydzień ${isoWeek(days[0]).w}: ${plDay(days[0])} – ${plDay(days[6])}.${days[6].slice(0, 4)}</h2>
+          <div class="legend"><span class="src-man">■ RĘCZNIE — plan</span><span class="src-auto">■ AUTO — z dokumentów ERP</span></div></div>
+        <div class="scroll"><table>
+          <thead><tr>
+            <th class="l">Dzień</th><th class="l">Miejsce produkcji <span class="src src-auto">AUTO · PW</span></th>
+            <th>Plan [MP]<span class="src src-man">RĘCZNIE</span></th><th>Wykonanie [MP]<span class="src src-auto">AUTO · PW</span></th>
+            <th>Tony [t]<span class="src src-auto">AUTO · waga / przelicznik</span></th><th>Realizacja</th>
+            <th>Cena [zł/MP]<span class="src src-auto">AUTO · PZ</span></th><th>Km<span class="src src-auto">AUTO · TR</span></th>
+            <th>Transport [zł]<span class="src src-auto">AUTO · TR</span></th><th>Wartość zakupu [zł]<span class="src src-auto">AUTO · PZ</span></th>
+            <th>Kursy<span class="src src-auto">AUTO · TR</span></th><th>Dokumenty</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td class="l">Razem</td><td></td><td class="num">${nf(tot.plan)}</td><td class="num">${nf(tot.act)}</td><td class="num">${nf(tot.t, 1)}</td>
+            <td><span class="pill info" title="wobec planu do dziś">${nf(real(tot.act, tot.planToDate), 1)}%</span></td><td class="num">${tot.act ? nf(tot.val / tot.act, 2) : "–"}</td>
+            <td class="num">${nf(tot.km)}</td><td class="num">${nf(tot.tr, 2)}</td><td class="num">${nf(tot.val, 2)}</td><td class="num">${nf(tot.trips)}</td><td></td></tr></tfoot>
+        </table></div>
+        <p class="note">${all ? "Widok wszystkich magazynów sumuje plany — plan zmienia się w widoku konkretnego magazynu." : "Zmień plan dnia w kolumnie „Plan” — realizacja i sumy przeliczą się od razu."}
+          Wartości AUTO są tylko do odczytu: poprawia się je korektą dokumentu, więc planer zawsze zgadza się z magazynem i raportami.</p>
+      </div>`;
+    $("#view").querySelectorAll("input[data-day]").forEach(inp => inp.addEventListener("change", e => {
+      const v = Math.max(0, Math.round(Number(e.target.value) || 0));
+      planEdits[`${st.wh}|${e.target.dataset.day}`] = v; savePlan(); render();
+    }));
+    bindOpen();
+  }
+
+  /* ---------------- widok: miesiące i rok ---------------- */
+  function viewYear() {
+    const year = TODAY.slice(0, 4);
+    const months = MN.map((name, m) => {
+      const from = `${year}-${String(m + 1).padStart(2, "0")}-01`, to = addDays(m === 11 ? `${Number(year) + 1}-01-01` : `${year}-${String(m + 2).padStart(2, "0")}-01`, -1);
+      return { name, m, ...sumRange(whs(), from, to) };
+    });
+    const Y = months.reduce((a, x) => ({ plan: a.plan + x.plan, planToDate: a.planToDate + x.planToDate, act: a.act + x.act, t: a.t + x.t, val: a.val + x.val, tr: a.tr + x.tr, trips: a.trips + x.trips, km: a.km + x.km }), { plan: 0, planToDate: 0, act: 0, t: 0, val: 0, tr: 0, trips: 0, km: 0 });
+    const max = Math.max(...months.map(x => Math.max(x.plan, x.act)));
+    const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+    const W = 720, H = 240, L = 54, B = 26, T = 10, cw = (W - L - 8) / 12, ph = H - B - T;
+    const y = v => T + ph - (v / top) * ph;
+    let grid = "";
+    for (let v = 0; v <= top; v += step) grid += `<line x1="${L}" x2="${W - 4}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${nf(v)}</text>`;
+    const bars = months.map(x => {
+      const cx = L + cw * x.m + cw / 2, bw = Math.min(16, cw / 2 - 4);
+      const sel = x.m === st.month;
+      return `<g class="mbar" data-m="${x.m}" tabindex="0" role="button" aria-label="${x.name}: plan ${nf(x.plan)} MP, wykonanie ${nf(x.act)} MP">
+        <rect x="${L + cw * x.m}" y="${T}" width="${cw}" height="${ph}" fill="transparent"/>
+        <rect x="${cx - bw - 1}" y="${y(x.plan)}" width="${bw}" height="${Math.max(0, T + ph - y(x.plan))}" rx="3" fill="var(--plan)"/>
+        <rect x="${cx + 1}" y="${y(x.act)}" width="${bw}" height="${Math.max(0, T + ph - y(x.act))}" rx="3" fill="${sel ? "var(--sel)" : "var(--act)"}"/>
+        <text x="${cx}" y="${H - 8}" text-anchor="middle" ${sel ? 'style="font-weight:700;fill:var(--text)"' : ""}>${x.name.slice(0, 3)}</text></g>`;
+    }).join("");
+    const rows = months.map(x => `<tr class="${x.m === st.month ? "today" : ""}"><td class="l">${x.name}</td><td class="num">${nf(x.plan)}</td><td class="num">${nf(x.act)}</td><td class="num">${nf(x.t, 1)}</td>
+      <td>${x.planToDate && x.act ? `<span class="pill ${real(x.act, x.planToDate) >= 100 ? "ok" : real(x.act, x.planToDate) >= 80 ? "warn" : "err"}">${nf(real(x.act, x.planToDate), 1)}%</span>` : "–"}</td>
+      <td class="num">${Y.act ? nf((x.act / Y.act) * 100, 1) + "%" : "–"}</td><td class="num">${x.act ? nf(x.val / x.act, 2) : "–"}</td><td class="num">${nf(x.val)}</td>
+      <td class="num">${nf(x.tr)}</td><td class="num">${x.act ? nf(x.tr / x.act, 2) : "–"}</td><td class="num">${nf(x.trips)}</td></tr>`).join("");
+    const sel = months[st.month];
+    $("#view").innerHTML = `
+      <div class="grid2">
+        <div class="card">
+          <div class="card-h"><h2>Plan i wykonanie ${year} [MP]</h2>
+            <div class="legend"><span><i style="background:var(--plan)"></i>Plan</span><span><i style="background:var(--act)"></i>Wykonanie</span><span><i style="background:var(--sel)"></i>Wybrany miesiąc</span></div></div>
+          <div class="scroll chart" id="chart"><svg viewBox="0 0 ${W} ${H}" aria-label="Wykres planu i wykonania według miesięcy">${grid}${bars}</svg><div class="tip" id="tip" hidden></div></div>
+          <p class="note">Kliknij miesiąc, aby zobaczyć jego podsumowanie. Wykonanie po 1 października jest puste — to przyszłość.</p>
+        </div>
+        <div class="card">
+          <div class="card-h"><h2>${sel.name} ${year}</h2><span class="pill info">${sel.planToDate ? nf(real(sel.act, sel.planToDate), 1) + "% planu do dziś" : "plan na przyszłość"}</span></div>
+          <dl class="kv">
+            <dt>Plan</dt><dd class="num">${nf(sel.plan)} MP</dd>
+            <dt>Wykonanie</dt><dd class="num">${nf(sel.act)} MP · ${nf(sel.t, 1)} t</dd>
+            <dt>Dni z produkcją</dt><dd class="num">${sel.days}</dd>
+            <dt>Wartość zakupu</dt><dd class="num">${zl(sel.val)} (średnio ${nf(sel.act ? sel.val / sel.act : 0, 2)} zł/MP)</dd>
+            <dt>Transport</dt><dd class="num">${zl(sel.tr)} · ${nf(sel.km)} km · ${nf(sel.trips)} kursów</dd>
+            <dt>Udział w roku</dt><dd class="num">${nf(Y.act ? (sel.act / Y.act) * 100 : 0, 1)}% wykonania rocznego</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Miesiące i rok ${year}</h2>
+        <div class="scroll"><table>
+          <thead><tr><th class="l">Miesiąc</th><th>Plan [MP]</th><th>Wykonanie [MP]</th><th>Tony [t]</th><th>Realizacja</th><th>Udział w roku</th><th>Śr. cena [zł/MP]</th><th>Zakup [zł]</th><th>Transport [zł]</th><th>Transport [zł/MP]</th><th>Kursy</th></tr></thead>
+          <tbody>${rows}</tbody>
+          <tfoot><tr><td class="l">Rok</td><td class="num">${nf(Y.plan)}</td><td class="num">${nf(Y.act)}</td><td class="num">${nf(Y.t, 1)}</td><td><span class="pill info" title="wobec planu do dziś">${nf(real(Y.act, Y.planToDate), 1)}%</span></td><td class="num">100%</td>
+            <td class="num">${Y.act ? nf(Y.val / Y.act, 2) : "–"}</td><td class="num">${nf(Y.val)}</td><td class="num">${nf(Y.tr)}</td><td class="num">${Y.act ? nf(Y.tr / Y.act, 2) : "–"}</td><td class="num">${nf(Y.trips)}</td></tr></tfoot>
+        </table></div>
+      </div>`;
+    const tip = $("#tip"), chart = $("#chart");
+    chart.querySelectorAll(".mbar").forEach(g => {
+      const m = Number(g.dataset.m), x = months[m];
+      const show = () => {
+        const b = g.getBoundingClientRect(), c = chart.getBoundingClientRect();
+        tip.innerHTML = `<b>${x.name}</b> · plan ${nf(x.plan)} MP · wykonanie ${nf(x.act)} MP`;
+        tip.style.left = `${b.left - c.left + chart.scrollLeft + b.width / 2}px`; tip.style.top = `${b.top - c.top + 40}px`; tip.hidden = false;
+      };
+      g.addEventListener("mouseenter", show); g.addEventListener("focus", show);
+      g.addEventListener("mouseleave", () => { tip.hidden = true; }); g.addEventListener("blur", () => { tip.hidden = true; });
+      const choose = () => { st.month = m; render(); };
+      g.addEventListener("click", choose);
+      g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(); } });
+    });
+  }
+  function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(Math.max(raw, 1))); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+
+  /* ---------------- widok: kierowcy i kursy ---------------- */
+  function viewFleet() {
+    const days = weekDays();
+    if (!days.includes(st.day)) st.day = days.find(d => d <= TODAY) || days[0];
+    const f = dayFacts(whs(), st.day);
+    const runs = f.ops.flatMap(o => o.runs.map(r => ({ ...r, tr: o.tr, place: o.place })));
+    const byDriver = new Map();
+    for (const r of runs) { const k = `${r.driver}|${r.reg}`; const a = byDriver.get(k) || { driver: r.driver, reg: r.reg, company: r.company, trips: 0, mp: 0, t: 0, weighed: 0, km: 0, cost: 0 }; a.trips++; a.mp += r.mp; a.km += r.km; a.cost += r.cost; if (r.t !== null) { a.t += r.t; a.weighed++; } byDriver.set(k, a); }
+    const dayRows = [...byDriver.values()].sort((a, b) => b.trips - a.trips).map(a => `<tr><td class="l">${esc(a.driver)}${a.company ? `<br><small class="muted">${esc(a.company)}</small>` : ""}</td><td class="l doc">${esc(a.reg)}</td>
+      <td class="num">${a.trips}</td><td class="num">${nf(a.mp)}</td><td class="num">${a.weighed ? nf(a.t, 2) : "–"}${a.weighed && a.weighed < a.trips ? ` <small class="muted">(${a.weighed}/${a.trips} z wagi)</small>` : ""}</td><td class="num">${nf(a.km)}</td><td class="num">${nf(a.cost, 2)}</td></tr>`).join("");
+    // macierz tygodnia: kierowca × dzień
+    const drivers = new Map();
+    for (const s of days) for (const o of dayFacts(whs(), s).ops) for (const r of o.runs) { const k = `${r.driver}|${r.reg}`; const row = drivers.get(k) || { driver: r.driver, reg: r.reg, per: {}, sum: 0 }; row.per[s] = (row.per[s] || 0) + 1; row.sum++; drivers.set(k, row); }
+    const matrix = [...drivers.values()].sort((a, b) => b.sum - a.sum).map(d => `<tr><td class="l">${esc(d.driver)} <span class="doc muted">${esc(d.reg)}</span></td>${days.map(s => `<td class="c">${d.per[s] ? `<span class="heat">${d.per[s]}</span>` : `<span class="muted">·</span>`}</td>`).join("")}<td class="num"><b>${d.sum}</b></td></tr>`).join("");
+    $("#view").innerHTML = `
+      <div class="card">
+        <div class="card-h"><h2>Kursy dnia</h2><div class="days">${days.map((s, i) => `<button type="button" class="btn ${s === st.day ? "on" : ""}" data-day="${s}" ${s > TODAY ? "disabled" : ""}>${DN[i]} ${plDay(s)}</button>`).join("")}</div></div>
+        <div class="scroll"><table>
+          <thead><tr><th class="l">Kierowca</th><th class="l">Pojazd</th><th>Kursy</th><th>MP</th><th>Tony z wagi [t]</th><th>Km</th><th>Koszt [zł]</th></tr></thead>
+          <tbody>${dayRows || `<tr><td class="l muted" colspan="7">Brak kursów w tym dniu.</td></tr>`}</tbody>
+          <tfoot><tr><td class="l">Razem</td><td></td><td class="num">${runs.length}</td><td class="num">${nf(f.act)}</td><td class="num">${nf(f.tWeighed, 2)}</td><td class="num">${nf(f.km)}</td><td class="num">${nf(f.tr, 2)}</td></tr></tfoot>
+        </table></div>
+        <p class="note">Lista powstaje z kursów zapisanych w operacjach (dokument TR: pojazd z floty, kierowca, km, stawka, ilość, waga). Nie trzeba jej przepisywać — a kursy z planera i z dokumentów nie mogą się rozjechać.</p>
+      </div>
+      <div class="card">
+        <h2>Kursy w tygodniu według kierowców</h2>
+        <div class="scroll"><table class="matrix">
+          <thead><tr><th class="l">Kierowca i pojazd</th>${days.map((s, i) => `<th class="c">${DN[i]} ${plDay(s)}</th>`).join("")}<th>Razem</th></tr></thead>
+          <tbody>${matrix || `<tr><td class="l muted" colspan="9">Brak kursów w tym tygodniu.</td></tr>`}</tbody>
+        </table></div>
+      </div>`;
+    $("#view").querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => { st.day = b.dataset.day; render(); }));
+  }
+
+  /* ---------------- widok: skąd są dane ---------------- */
+  function viewSrc() {
+    const row = (field, src, rule, status) => `<tr><td class="l">${field}</td><td class="l">${src}</td><td class="l">${rule}</td><td class="l">${status}</td></tr>`;
+    const now = `<span class="pill ok">dostępne</span>`, soon = `<span class="pill warn">po F4b-2</span>`, man = `<span class="pill n">ręcznie</span>`, newT = `<span class="pill info">nowa tabela</span>`;
+    $("#view").innerHTML = `
+      <div class="callout"><b>Do decyzji: przelicznik ton.</b> Obecny planer liczy ${String(PLANNER_FACTOR).replace(".", ",")} t/MP, a konfiguracja ERP ma ${String(RATE_T_PER_MP).replace(".", ",")} t/MP (1 MP = 0,33 t).
+        W prototypie tony biorą się z wagi kursu, a gdy kursu nie zważono — z przelicznika ERP. Jeden przelicznik firmowy dla całego systemu, zmieniany w konfiguracji z datą obowiązywania.</div>
+      <div class="card">
+        <h2>Pola planera i ich źródło w ERP</h2>
+        <div class="scroll"><table class="map">
+          <thead><tr><th class="l">Pole planera</th><th class="l">Źródło</th><th class="l">Reguła</th><th class="l">Stan</th></tr></thead>
+          <tbody>
+            ${row("Plan [MP]", "purchase_plans", "Jedyna wartość wpisywana ręcznie: magazyn × dzień, z historią zmian (kto, kiedy, było/jest).", `${man} ${newT}`)}
+            ${row("Wykonanie [MP]", "production_runs.out_qty", "Suma produkcji zrębki w dniu (data ruchu), wszystkie tryby: z zakupu, ze stanu, w lesie.", now)}
+            ${row("Tony [t]", "transport_runs.weight_t / przelicznik", "Waga kursu, gdy jest; inaczej MP × przelicznik firmowy obowiązujący w dniu.", soon)}
+            ${row("Cena [zł/MP]", "operations.purchase_cost", "Wartość zakupu ÷ MP wyprodukowane z tego zakupu (średnia ważona w okresie).", now)}
+            ${row("Miejsce produkcji", "operations.place / nadleśnictwo, leśnictwo", "Z operacji zakupu z produkcją; kilka miejsc w dniu — lista.", soon)}
+            ${row("Odległość [km]", "transport_runs.km", "Suma km kursów dnia.", soon)}
+            ${row("Transport [zł]", "transport_runs.cost", "Km × stawka albo fracht z faktury przewoźnika; „w cenie zakupu” = 0 zł.", soon)}
+            ${row("Kursy", "transport_runs (liczba)", "Liczba kursów dnia — własnych i zewnętrznych.", soon)}
+            ${row("Kierowcy i auta", "transport_runs.driver_id, vehicle_id", "Kursy pogrupowane po kierowcy i pojeździe z kartoteki floty.", soon)}
+            ${row("Uwagi dnia", "purchase_plans.note", "Notatka planisty, poza dokumentami magazynowymi.", `${man} ${newT}`)}
+          </tbody>
+        </table></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h2>Co zmienia się względem obecnego planera</h2>
+          <ul class="note" style="padding-left:18px;margin:0;display:grid;gap:6px">
+            <li>Dane w bazie ERP zamiast w jednej przeglądarce: widzą je wszyscy uprawnieni, są w kopiach zapasowych.</li>
+            <li>Wykonanie, ceny, transport i kursy nie są przepisywane, więc nie ma rozbieżności „auta / planer”.</li>
+            <li>Kliknięcie dnia pokazuje dokumenty PZ, PW i TR, z których powstała liczba.</li>
+            <li>Planer ma magazyny i uprawnienia jak reszta systemu; eksport do XLSX przechodzi przez moduł raportów.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Warunek pełnej automatyzacji</h2>
+          <p class="note">Kursy, kilometry, koszty transportu, tony z wagi i miejsce produkcji pojawią się w bazie dopiero z operacjami „zakup z produkcją” i transportem (TR) — to etap F4b-2, w trakcie budowy.
+            Wykonanie MP i ceny zakupu są dostępne już teraz. Planer najlepiej zbudować zaraz po F4b-2, przed raportami (F5), bo korzysta z tych samych agregatów.</p>
+        </div>
+      </div>`;
+  }
+
+  /* ---------------- panel dnia: dokumenty źródłowe ---------------- */
+  function bindOpen() { $("#view").querySelectorAll("[data-open]").forEach(b => b.addEventListener("click", () => openDay(b.dataset.open, b))); }
+  function openDay(s, opener) {
+    const f = dayFacts(whs(), s);
+    const ops = f.ops.map(o => {
+      const whName = WH.find(w => w.id === o.wh).name;
+      const runs = o.runs.map((r, i) => `<tr><td class="l">${i + 1}</td><td class="l">${esc(r.driver)}${r.company ? `<br><small class="muted">${esc(r.company)}</small>` : ""}</td><td class="l doc">${esc(r.reg)}</td><td class="num">${r.km}</td><td class="num">${nf(r.cost, 2)}</td><td class="num">${r.mp}</td><td class="num">${r.t !== null ? `${nf(r.t, 2)} <span class="pill ok">waga</span>` : `${nf(r.mp * RATE_T_PER_MP, 2)} <span class="pill n">AUTO</span>`}</td></tr>`).join("");
+      return `<article class="op">
+        <div class="op-h"><span><span class="badge b-PZ">PZ</span><span class="doc">${o.pz}</span></span><span><span class="badge b-RW">RW</span><span class="doc">${o.rw}</span></span><span><span class="badge b-PW">PW</span><span class="doc">${o.pw}</span></span><span><span class="badge b-TR">TR</span><span class="doc">${o.tr}</span></span></div>
+        <dl class="kv"><dt>Magazyn</dt><dd>${whName}</dd><dt>Miejsce</dt><dd>${esc(o.place)}</dd><dt>Produkcja</dt><dd class="num">${nf(o.mp)} MP (zużycie ${nf(o.mp / 4, 2)} m³)</dd>
+          <dt>Zakup</dt><dd class="num">${zl(o.purchaseCost, 2)} · ${nf(o.pricePerMP, 2)} zł/MP</dd></dl>
+        <div class="scroll"><table><thead><tr><th class="l">Kurs</th><th class="l">Kierowca</th><th class="l">Pojazd</th><th>Km</th><th>Koszt [zł]</th><th>MP</th><th>Tony</th></tr></thead><tbody>${runs}</tbody></table></div>
+      </article>`;
+    }).join("");
+    const root = $("#panel-root");
+    root.innerHTML = `<div class="scrim" id="scrim"><aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">
+      <header class="panel-h"><div><h2 id="panel-title">${DN[dow(s)]} ${plDay(s)}.${s.slice(0, 4)} — dokumenty źródłowe</h2>
+        <p class="note num">${nf(f.act)} MP · ${nf(f.t, 1)} t · ${zl(f.val, 2)} · ${f.trips} kursów · ${nf(f.km)} km</p></div>
+        <button type="button" class="btn" id="panel-close" aria-label="Zamknij">✕</button></header>
+      <div class="panel-b">${ops}</div>
+      <footer class="panel-f">Liczby w planerze to sumy tych dokumentów. Błąd poprawia się korektą dokumentu (z historią i audytem), a planer pokaże nową wartość automatycznie.</footer>
+    </aside></div>`;
+    const close = () => { root.innerHTML = ""; document.removeEventListener("keydown", onKey); opener?.focus(); };
+    const onKey = e => { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    $("#panel-close").addEventListener("click", close);
+    $("#scrim").addEventListener("mousedown", e => { if (e.target.id === "scrim") close(); });
+    $("#panel-close").focus();
+  }
+
+  /* ---------------- render ---------------- */
+  function render() {
+    document.querySelectorAll(".tabs button").forEach(b => { const on = b.dataset.tab === st.tab; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+    const days = weekDays();
+    $("#f-label").textContent = st.tab === "year" ? `${MN[st.month]} ${TODAY.slice(0, 4)}` : `tydz. ${isoWeek(days[0]).w}: ${plDay(days[0])} – ${plDay(days[6])}`;
+    $("#f-now").hidden = st.tab === "src";
+    kpis();
+    ({ week: viewWeek, year: viewYear, fleet: viewFleet, src: viewSrc })[st.tab]();
+  }
+  render();
+})();
+</script>

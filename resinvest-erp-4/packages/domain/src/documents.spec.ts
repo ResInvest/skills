@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planOperation, autoNumber, normalizeDocNumber, type PlanContext, type PlanMaterial } from "./documents.js";
+import { planOperation, planReceipt, autoNumber, normalizeDocNumber, type PlanContext, type PlanMaterial, type ReceiptContext } from "./documents.js";
 
 const WH = "wh-1";
 const mats: PlanMaterial[] = [
@@ -92,5 +92,49 @@ describe("numeracja", () => {
   it("TYP/NNN/MM/RRRR; porównanie bez wielkości liter i spacji", () => {
     expect(autoNumber("PZ", 4, "2026-09-23")).toBe("PZ/004/09/2026");
     expect(normalizeDocNumber("wz / 27")).toBe(normalizeDocNumber("WZ/27"));
+  });
+});
+
+describe("MM — przesunięcie międzymagazynowe (§20)", () => {
+  const mm = { ...base, type: "TRANSFER" as const, targetWarehouseId: "wh-2", materialId: "zrebka", qty: "100", unit: "MP" as const };
+  it("dwuetapowe (domyślnie): rozchód w źródle, przychód dopiero przy przyjęciu; tonaż AUTO", () => {
+    const r = planOperation(mm, ctx);
+    expect(r.ok).toBe(true); if (!r.ok) return;
+    expect(r.plan.movements).toEqual([{ warehouseId: WH, materialId: "zrebka", qty: "-100", kind: "TRANSFER_OUT", doc: 0, line: 0 }]);
+    expect(r.plan.transfer).toEqual({ targetWarehouseId: "wh-2", twoStage: true });
+    expect(r.plan.documents[0]).toMatchObject({ type: "MM", main: true, partnerId: null, lines: [{ qtyStock: "100", weightT: "33", weightSource: "COMPANY_RATE" }] });
+  });
+  it("jednoetapowe: rozchód w źródle i przychód w celu jednym zatwierdzeniem; ilość w m³ → MP", () => {
+    const r = planOperation({ ...mm, qty: "25", unit: "M3", weightManual: "30,5" }, { ...ctx, transferTwoStage: false });
+    expect(r.ok && r.plan.movements.map(m => [m.warehouseId, m.qty, m.kind])).toEqual([[WH, "-100", "TRANSFER_OUT"], ["wh-2", "100", "TRANSFER_IN"]]);
+    expect(r.ok && r.plan.summary[0]).toBe("25 m³ | 30,5 t | RĘCZNY");
+  });
+  it("ten sam magazyn / brak celu / ilość 0 — błędy przy polach; numer ręczny MM dozwolony", () => {
+    const r = planOperation({ ...mm, targetWarehouseId: WH, qty: "0" }, ctx);
+    expect(r.ok ? [] : r.errors.map(e => e.field)).toEqual(["targetWarehouseId", "qty"]);
+    expect(planOperation({ ...mm, targetWarehouseId: "" }, ctx)).toMatchObject({ ok: false, errors: [{ field: "targetWarehouseId" }] });
+    expect(planOperation({ ...mm, numbering: { mode: "MANUAL", number: "MM 3/2026" } }, ctx)).toMatchObject({ ok: true, plan: { numbering: { mode: "MANUAL", number: "MM 3/2026" } } });
+  });
+});
+
+describe("przyjęcie MM (planReceipt)", () => {
+  const rc: ReceiptContext = { material: mats[1]!, sentQtyStock: "100", sentDate: "2026-09-20", sentUnit: "MP", today: "2026-10-01" };
+  it("puste pola = przyjęto całość z datą dzisiejszą, bez różnicy i bez przyczyny", () => {
+    expect(planReceipt({}, rc)).toMatchObject({ ok: true, plan: { date: "2026-10-01", qtyStock: "100", diffStock: "0", reason: null, weightT: "33", weightSource: "COMPANY_RATE" } });
+  });
+  it("różnica (ubytek 4 MP) wymaga przyczyny; z przyczyną — diff +4", () => {
+    expect(planReceipt({ qty: "96" }, rc)).toMatchObject({ ok: false, errors: [{ field: "reason", message: expect.stringContaining("4 MP") }] });
+    expect(planReceipt({ qty: "96", reason: "LOSS" }, rc)).toMatchObject({ ok: true, plan: { qtyStock: "96", diffStock: "4", reason: "LOSS" } });
+  });
+  it("nadwyżka w m³ (26 m³ = 104 MP) → diff −4; „Inna przyczyna” wymaga opisu", () => {
+    expect(planReceipt({ qty: "26", unit: "M3", reason: "OTHER" }, rc)).toMatchObject({ ok: false, errors: [{ field: "note" }] });
+    expect(planReceipt({ qty: "26", unit: "M3", reason: "SURPLUS" }, rc)).toMatchObject({ ok: true, plan: { qtySource: "26", unitSource: "M3", qtyStock: "104", diffStock: "-4" } });
+  });
+  it("data przed wysłaniem albo z przyszłości — odrzucona; przyjęcie zerowe wymaga opisu; tonaż ręczny", () => {
+    expect(planReceipt({ date: "2026-09-19" }, rc)).toMatchObject({ ok: false, errors: [{ field: "date" }] });
+    expect(planReceipt({ date: "2026-10-02" }, rc)).toMatchObject({ ok: false, errors: [{ field: "date" }] });
+    expect(planReceipt({ qty: "0", reason: "LOSS" }, rc)).toMatchObject({ ok: false, errors: [{ field: "note" }] });
+    expect(planReceipt({ qty: "0", reason: "LOSS", note: "wywrotka" }, rc)).toMatchObject({ ok: true, plan: { qtyStock: "0", weightT: null } });
+    expect(planReceipt({ weightManual: "31,2" }, rc)).toMatchObject({ ok: true, plan: { weightT: "31.2", weightSource: "MANUAL" } });
   });
 });

@@ -10,8 +10,8 @@ import { formatQty } from "./stock.js";
  * Stan (czy wystarczy towaru) sprawdza księga ruchów w transakcji — tutaj tylko reguły danych.
  */
 
-export type OperationKind = "PURCHASE" | "SALE" | "PRODUCTION";
-export type DocType = "PZ" | "WZ" | "RW" | "PW";
+export type OperationKind = "PURCHASE" | "SALE" | "PRODUCTION" | "TRANSFER";
+export type DocType = "PZ" | "WZ" | "RW" | "PW" | "MM";
 export type NumberingMode = "AUTO" | "MANUAL";
 
 export interface PlanMaterial extends MaterialUnits { id: string; name: string; active: boolean; category: string }
@@ -22,6 +22,8 @@ export interface PlanContext {
   rates?: CompanyRates;
   /** Dzień „dzisiaj” w strefie firmy (RRRR-MM-DD). */
   today: string;
+  /** Tryb MM z konfiguracji: dwuetapowy (wysłanie → „W drodze” → przyjęcie) albo jednoetapowy. Domyślnie dwuetapowy. */
+  transferTwoStage?: boolean;
 }
 
 export interface ExtraInput { typeId: string; vehicleId?: string | null; qty?: unknown; rate?: unknown; cost?: unknown; description?: string | null }
@@ -33,19 +35,22 @@ interface Base {
 export interface PurchaseInput extends Base { type: "PURCHASE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; priceUnit?: Unit | null; weightManual?: unknown }
 export interface SaleInput extends Base { type: "SALE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; weightManual?: unknown }
 export interface ProductionInput extends Base { type: "PRODUCTION"; rawMaterialId: string; outMaterialId: string; outQty: unknown; chipperId?: string | null; operatorId?: string | null; chipRate?: unknown }
-export type OperationInput = PurchaseInput | SaleInput | ProductionInput;
+export interface TransferInput extends Base { type: "TRANSFER"; targetWarehouseId: string; materialId: string; qty: unknown; unit: Unit; weightManual?: unknown }
+export type OperationInput = PurchaseInput | SaleInput | ProductionInput | TransferInput;
 
 export interface PlannedLine {
   materialId: string; qtySource: string; unitSource: Unit; qtyStock: string; unitStock: Unit; factor: string; source: ValueSource;
   weightT: string | null; weightSource: ValueSource | null; autoWeightT: string | null; unitPrice: string | null; priceUnit: Unit | null; value: string | null;
 }
 export interface PlannedDocument { type: DocType; partnerId: string | null; lines: PlannedLine[]; main: boolean }
-export interface PlannedMovement { warehouseId: string; materialId: string; qty: string; kind: "PURCHASE" | "SALE" | "CONSUMPTION" | "PRODUCTION"; doc: number; line: number }
+export interface PlannedMovement { warehouseId: string; materialId: string; qty: string; kind: "PURCHASE" | "SALE" | "CONSUMPTION" | "PRODUCTION" | "TRANSFER_OUT" | "TRANSFER_IN"; doc: number; line: number }
 export interface PlannedExtra { typeId: string; typeName: string; vehicleId: string | null; quantity: string | null; rate: string | null; cost: string; description: string | null }
 export interface OperationPlan {
   type: OperationKind; warehouseId: string; date: string; documentDate: string;
   documents: PlannedDocument[]; movements: PlannedMovement[]; extras: PlannedExtra[];
   production: { rawMaterialId: string; outMaterialId: string; consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string } | null;
+  /** MM: magazyn docelowy i tryb; przy dwuetapowym przychód w celu powstaje dopiero przy przyjęciu. */
+  transfer: { targetWarehouseId: string; twoStage: boolean } | null;
   totals: { purchaseCost: string; revenue: string; chippingCost: string; additionalCost: string; result: string };
   numbering: { mode: NumberingMode; number: string | null };
   /** Opis do podsumowania przed zatwierdzeniem (np. „60 MP | 19,8 t | AUTO”). */
@@ -99,6 +104,7 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
   const documents: PlannedDocument[] = [], movements: PlannedMovement[] = [], summary: string[] = [];
   let purchaseCost = D(0), revenue = D(0), chippingCost = D(0);
   let production: OperationPlan["production"] = null;
+  let transfer: OperationPlan["transfer"] = null;
   const wh = input.warehouseId;
 
   try {
@@ -134,6 +140,33 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
           if (w) summary.push(`${formatQty(qty)} ${UNIT_LABEL[input.unit]} | ${formatQty(w.weightT)} t | ${SOURCE_LABEL[w.source]}`);
         }
       }
+    } else if (input.type === "TRANSFER") {
+      const twoStage = ctx.transferTwoStage !== false;
+      if (!input.targetWarehouseId) err("targetWarehouseId", "Wybierz magazyn docelowy przesunięcia");
+      else if (input.targetWarehouseId === wh) err("targetWarehouseId", "Magazyn źródłowy i docelowy nie mogą być takie same");
+      const m = material("materialId", input.materialId, "materiał");
+      const qty = num("qty", input.qty, { positive: true, label: "ilość" });
+      if (m && qty) {
+        let conv;
+        try { conv = convert(qty, input.unit, m.stockUnit, m, rates); } catch (e) { err("unit", e instanceof UnitError ? e.message : "Nieprawidłowa jednostka"); }
+        if (conv) {
+          let manualW: string | null = null;
+          if (input.weightManual !== undefined && input.weightManual !== null && String(input.weightManual).trim() !== "") {
+            const p = parseNumber(input.weightManual);
+            if (p.ok) manualW = p.value; else err("weightManual", p.error);
+          }
+          let w: ReturnType<typeof tonnage> | null = null;
+          try { w = tonnage(conv.value, m, manualW, rates); } catch { err("weightManual", "Tonaż z wagi: liczba większa od 0"); }
+          documents.push({ type: "MM", partnerId: null, main: true, lines: [{
+            materialId: m.id, qtySource: qty.toString(), unitSource: input.unit, qtyStock: conv.value, unitStock: m.stockUnit, factor: conv.factor, source: conv.source,
+            weightT: w?.weightT ?? null, weightSource: w?.source ?? null, autoWeightT: w?.autoWeightT ?? null, unitPrice: null, priceUnit: null, value: null }] });
+          movements.push({ warehouseId: wh, materialId: m.id, qty: D(conv.value).neg().toString(), kind: "TRANSFER_OUT", doc: 0, line: 0 });
+          if (!twoStage && input.targetWarehouseId && input.targetWarehouseId !== wh) movements.push({ warehouseId: input.targetWarehouseId, materialId: m.id, qty: conv.value, kind: "TRANSFER_IN", doc: 0, line: 0 });
+          if (w) summary.push(`${formatQty(qty)} ${UNIT_LABEL[input.unit]} | ${formatQty(w.weightT)} t | ${SOURCE_LABEL[w.source]}`);
+          summary.push(twoStage ? "MM dwuetapowe: towar „W drodze” do przyjęcia w magazynie docelowym" : "MM jednoetapowe: przychód w magazynie docelowym przy zatwierdzeniu");
+        }
+      }
+      transfer = input.targetWarehouseId && input.targetWarehouseId !== wh ? { targetWarehouseId: input.targetWarehouseId, twoStage } : null;
     } else {
       const raw = material("rawMaterialId", input.rawMaterialId, "surowiec");
       const out = material("outMaterialId", input.outMaterialId, "produkt wyjściowy");
@@ -181,7 +214,7 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
   if (errors.length) return { ok: false, errors };
   const result = revenue.minus(purchaseCost).minus(chippingCost).minus(additionalCost);
   return { ok: true, plan: {
-    type: input.type, warehouseId: wh, date: input.date, documentDate, documents, movements, extras, production,
+    type: input.type, warehouseId: wh, date: input.date, documentDate, documents, movements, extras, production, transfer,
     totals: { purchaseCost: money(purchaseCost), revenue: money(revenue), chippingCost: money(chippingCost), additionalCost: money(additionalCost), result: money(result) },
     numbering: { mode: input.type === "PRODUCTION" ? "AUTO" : mode, number: manualNumber }, summary,
   } };
@@ -195,3 +228,76 @@ function line(m: PlanMaterial, qty: Decimal, unit: Unit, factor: string): Planne
 export const autoNumber = (type: string, seq: number, date: string) => `${type}/${String(seq).padStart(3, "0")}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
 /** Porównanie numerów bez względu na wielkość liter i spacje (unikalność typ + magazyn + rok). */
 export const normalizeDocNumber = (n: string) => n.replace(/\s+/g, "").toUpperCase();
+
+/** Przyczyny różnicy między ilością wysłaną a przyjętą na MM (jak w 3.x). */
+export const MM_DIFF_REASONS = {
+  LOSS: "Ubytek w transporcie", MEASUREMENT: "Różnica pomiaru", MOISTURE: "Wilgotność / osiadanie",
+  DAMAGE: "Uszkodzenie / zanieczyszczenie", SURPLUS: "Nadwyżka przy przyjęciu", OTHER: "Inna przyczyna",
+} as const;
+export type MmDiffReason = keyof typeof MM_DIFF_REASONS;
+
+export interface ReceiptInput { date?: string | null; qty?: unknown; unit?: Unit | null; weightManual?: unknown; reason?: string | null; note?: string | null }
+export interface ReceiptContext {
+  material: MaterialUnits & { name: string };
+  /** Wysłano (jednostka magazynowa) i data wysłania MM. */
+  sentQtyStock: string; sentDate: string; sentUnit: Unit;
+  today: string; rates?: CompanyRates;
+}
+export interface ReceiptPlan {
+  date: string; qtySource: string; unitSource: Unit; qtyStock: string; factor: string;
+  /** wysłano − przyjęto (jednostka magazynowa): > 0 ubytek, < 0 nadwyżka, 0 bez różnicy. */
+  diffStock: string; reason: MmDiffReason | null; note: string | null;
+  weightT: string | null; weightSource: ValueSource | null;
+}
+export type ReceiptResult = { ok: true; plan: ReceiptPlan } | { ok: false; errors: Array<{ field: string; message: string }> };
+
+/**
+ * Przyjęcie MM dwuetapowego w magazynie docelowym (port `planReceive` z 3.x): ilość faktycznie przyjęta
+ * (puste = cała wysłana), data nie wcześniejsza niż wysłanie i nie z przyszłości, przy różnicy — przyczyna
+ * („Inna przyczyna” i przyjęcie zerowe wymagają opisu), tonaż AUTO z przelicznika albo RĘCZNY z wagi.
+ */
+export function planReceipt(input: ReceiptInput, ctx: ReceiptContext): ReceiptResult {
+  const errors: Array<{ field: string; message: string }> = [];
+  const err = (field: string, message: string) => { errors.push({ field, message }); };
+  const rates = ctx.rates ?? DEFAULT_COMPANY_RATES;
+  const m = ctx.material;
+  const date = input.date && input.date.trim() ? input.date : ctx.today;
+  if (!isoDay.test(date)) err("date", "Podaj datę przyjęcia w formacie RRRR-MM-DD");
+  else if (date > ctx.today) err("date", "Data przyjęcia nie może być z przyszłości");
+  else if (date < ctx.sentDate) err("date", `Data przyjęcia nie może być wcześniejsza niż data wysłania (${ctx.sentDate})`);
+  const unit: Unit = input.unit ?? ctx.sentUnit;
+  if (!m.allowedUnits.includes(unit)) err("unit", `Dla „${m.name}” dozwolone: ${m.allowedUnits.map(u => UNIT_LABEL[u]).join(", ")}`);
+  let qty: Decimal | null = null;
+  if (input.qty === undefined || input.qty === null || String(input.qty).trim() === "") {
+    try { qty = D(convert(ctx.sentQtyStock, m.stockUnit, unit, m, rates).value); } catch (e) { err("unit", e instanceof UnitError ? e.message : "Nieprawidłowa jednostka"); }
+  } else {
+    const p = parseNumber(input.qty);
+    if (!p.ok) err("qty", p.error);
+    else if (D(p.value).lt(0)) err("qty", "Ilość przyjęta nie może być ujemna");
+    else qty = D(p.value);
+  }
+  let qtyStock: string | null = null, factor = "1";
+  if (qty !== null && !errors.some(e => e.field === "unit")) {
+    try { const c = convert(qty, unit, m.stockUnit, m, rates); qtyStock = c.value; factor = c.factor; } catch (e) { err("unit", e instanceof UnitError ? e.message : "Nieprawidłowa jednostka"); }
+  }
+  const note = (input.note ?? "").trim().slice(0, 300) || null;
+  const reasonRaw = (input.reason ?? "").trim();
+  const reason = reasonRaw in MM_DIFF_REASONS ? (reasonRaw as MmDiffReason) : null;
+  const diff = qtyStock !== null ? D(ctx.sentQtyStock).minus(qtyStock) : D(0);
+  if (qtyStock !== null && !diff.isZero()) {
+    if (!reason) err("reason", `Ilość przyjęta różni się od wysłanej o ${formatQty(diff.abs())} ${UNIT_LABEL[m.stockUnit]} — wskaż przyczynę`);
+    else if (reason === "OTHER" && !note) err("note", "Opisz przyczynę różnicy");
+  }
+  if (qtyStock !== null && D(qtyStock).isZero() && !note) err("note", "Przyjęcie zerowe (cała dostawa utracona) wymaga opisu");
+  let weightT: string | null = null, weightSource: ValueSource | null = null;
+  if (qtyStock !== null && D(qtyStock).gt(0)) {
+    let manual: string | null = null;
+    if (input.weightManual !== undefined && input.weightManual !== null && String(input.weightManual).trim() !== "") {
+      const p = parseNumber(input.weightManual);
+      if (p.ok) manual = p.value; else err("weightManual", p.error);
+    }
+    try { const w = tonnage(qtyStock, m, manual, rates); weightT = w.weightT; weightSource = w.source; } catch { err("weightManual", "Tonaż z wagi: liczba większa od 0"); }
+  }
+  if (errors.length || qty === null || qtyStock === null) return { ok: false, errors: errors.length ? errors : [{ field: "qty", message: "Podaj ilość przyjętą" }] };
+  return { ok: true, plan: { date, qtySource: qty.toString(), unitSource: unit, qtyStock, factor, diffStock: diff.toString(), reason: diff.isZero() ? null : reason, note, weightT, weightSource } };
+}

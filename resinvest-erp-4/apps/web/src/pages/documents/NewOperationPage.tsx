@@ -75,7 +75,8 @@ export function NewOperationPage() {
     if (type === "PRODUCTION") return { type, ...base, rawMaterialId: f.rawMaterialId, outMaterialId: f.outMaterialId, outQty: f.outQty, chipperId: f.chipperId || null, operatorId: f.operatorId || null, chipRate: f.chipRate };
     const unit = (f.unit || fd?.materials.find(m => m.id === f.materialId)?.stockUnit || "T") as Unit;
     if (type === "PURCHASE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, priceUnit: f.priceUnit || null, weightManual: f.weightManual };
-    return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, weightManual: f.weightManual };
+    if (type === "SALE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, weightManual: f.weightManual };
+    return null; // MM — osobna zakładka (F4b-2)
   })();
 
   const local = !fd || !input ? null
@@ -286,7 +287,7 @@ function ConfirmDialog({ preview, input, fd, onClose, onDone }: { preview: Previ
       onDone(r.operation);
     },
   });
-  const name = (k: string) => { const id = k.split(":")[1] ?? k; const m = fd.materials.find(x => x.id === id); return { name: m?.name ?? "materiał", unit: m ? UNIT_LABEL[m.stockUnit] : "" }; };
+  const name = (k: string) => { const id = k.split("|")[1] ?? k; const m = fd.materials.find(x => x.id === id); return { name: m?.name ?? "materiał", unit: m ? UNIT_LABEL[m.stockUnit] : "" }; };
   const p = preview.plan;
   const blocked = preview.shortages.length > 0;
   return (
