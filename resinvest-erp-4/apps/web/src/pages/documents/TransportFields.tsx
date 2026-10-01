@@ -1,5 +1,7 @@
 import { TRANSPORT_MODE_LABEL, type TransportInput, type TransportMode } from "@resinvest/domain";
 import { UNIT_LABEL, type Unit } from "../../api/types";
+import { Hint } from "../../ui/tutorial";
+import { OP_HELP } from "./help";
 
 export interface FleetData {
   vehicles: Array<{ id: string; name: string; registration: string; status: string; ownership: "OWN" | "EXTERNAL"; defaultDriverId: string | null; warehouseId: string | null }>;
@@ -51,6 +53,7 @@ export function TransportFields({ value, onChange, fleet, unit, purchase, fe }: 
   const hasExt = t.mode === "EXTERNAL" || t.mode === "MIXED";
   const U = unit ? UNIT_LABEL[unit] : "";
   const err = (f: string) => fe(f) && <small className="error">{fe(f)}</small>;
+  const H = (id: string) => <Hint id={id} text={OP_HELP[id]} />;
   return (
     <fieldset className="field" id="op-transport">
       <legend>Transport</legend>
@@ -58,22 +61,23 @@ export function TransportFields({ value, onChange, fleet, unit, purchase, fe }: 
         <div className="field"><label htmlFor="tr-mode">Rodzaj transportu</label>
           <select id="tr-mode" className="ctrl" value={t.mode} onChange={e => changeMode(e.target.value as TransportMode)}>
             {modes.map(m => <option key={m} value={m}>{TRANSPORT_MODE_LABEL[m]}</option>)}
-          </select>{err("transport.mode")}</div>
+          </select>{H("tr-mode")}{err("transport.mode")}</div>
         {t.mode !== "NONE" && <div className="field"><label htmlFor="tr-place">Miejsce załadunku / dostawy <span className="req">*</span></label>
-          <input id="tr-place" className="ctrl" maxLength={250} placeholder="np. Nadl. Rudziniec, EC Zabrze" value={t.place} onChange={e => set({ place: e.target.value })} />{err("transport.place")}</div>}
+          <input id="tr-place" className="ctrl" maxLength={250} placeholder="np. Nadl. Rudziniec, EC Zabrze" value={t.place} onChange={e => set({ place: e.target.value })} />{H("tr-place")}{err("transport.place")}</div>}
       </div>
       {t.mode === "SUPPLIER" && <p className="muted small">Dostawę organizuje i opłaca dostawca (koszt w cenie zakupu) — bez kursów i bez dokumentu TR.</p>}
       {hasExt && <div className="grid2">
         <div className="field"><label htmlFor="tr-company">Firma przewozowa <span className="req">*</span></label>
           <select id="tr-company" className="ctrl" value={t.externalCompanyId} onChange={e => set({ externalCompanyId: e.target.value })}>
             <option value="">— wybierz —</option>{fleet.companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>{err("transport.externalCompanyId")}</div>
-        <label className="check"><input type="checkbox" id="tr-included" checked={t.includedInPrice} onChange={e => set({ includedInPrice: e.target.checked })} /> Fracht wliczony w cenę towaru (kursy zewnętrzne bez kosztu)</label>
+          </select>{H("tr-company")}{err("transport.externalCompanyId")}</div>
+        <label className="check"><input type="checkbox" id="tr-included" checked={t.includedInPrice} onChange={e => set({ includedInPrice: e.target.checked })} /> Fracht wliczony w cenę towaru (kursy zewnętrzne bez kosztu){H("tr-included")}</label>
       </div>}
       {["OWN", "EXTERNAL", "MIXED"].includes(t.mode) && <>
         {t.runs.map((r, i) => {
           const K = (f: string) => `transport.runs.${i}.${f}`;
           const v = fleet.vehicles.find(x => x.id === r.vehicleId);
+          const RH = (id: string) => (i === 0 ? H(id) : null); // opisy tylko przy pierwszym kursie — kolejne mają te same pola
           return (
             <div key={r.key} className="run-row" data-run={i}>
               <div className="run-h"><strong>Kurs {i + 1}</strong>
@@ -86,29 +90,29 @@ export function TransportFields({ value, onChange, fleet, unit, purchase, fe }: 
                   <div className="field"><label htmlFor={`tr-veh-${i}`}>Pojazd</label>
                     <select id={`tr-veh-${i}`} className="ctrl" value={r.vehicleId} onChange={e => { const nv = fleet.vehicles.find(x => x.id === e.target.value); setRun(r.key, { vehicleId: e.target.value, driverId: r.driverId || nv?.defaultDriverId || "" }); }}>
                       <option value="">— pojazd —</option>{ownVehicles.map(x => <option key={x.id} value={x.id}>{x.registration} {x.name}</option>)}
-                    </select>{err(K("vehicleId"))}</div>
+                    </select>{RH("tr-veh")}{err(K("vehicleId"))}</div>
                   <div className="field"><label htmlFor={`tr-drv-${i}`}>Kierowca</label>
                     <select id={`tr-drv-${i}`} className="ctrl" value={r.driverId} onChange={e => setRun(r.key, { driverId: e.target.value })}>
                       <option value="">{v?.defaultDriverId ? "— domyślny pojazdu —" : "— kierowca —"}</option>{fleet.drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                    </select>{err(K("driverId"))}</div>
+                    </select>{RH("tr-drv")}{err(K("driverId"))}</div>
                 </> : <>
                   <div className="field"><label htmlFor={`tr-reg-${i}`}>Nr rej. przewoźnika</label>
-                    <input id={`tr-reg-${i}`} className="ctrl" maxLength={20} value={r.registration} onChange={e => setRun(r.key, { registration: e.target.value })} />{err(K("registration"))}</div>
+                    <input id={`tr-reg-${i}`} className="ctrl" maxLength={20} value={r.registration} onChange={e => setRun(r.key, { registration: e.target.value })} />{RH("tr-reg")}{err(K("registration"))}</div>
                   <div className="field"><label htmlFor={`tr-dname-${i}`}>Kierowca (opisowo)</label>
-                    <input id={`tr-dname-${i}`} className="ctrl" maxLength={120} value={r.driverName} onChange={e => setRun(r.key, { driverName: e.target.value })} /></div>
+                    <input id={`tr-dname-${i}`} className="ctrl" maxLength={120} value={r.driverName} onChange={e => setRun(r.key, { driverName: e.target.value })} />{RH("tr-dname")}</div>
                 </>}
                 <div className="field"><label htmlFor={`tr-km-${i}`}>Km</label>
-                  <input id={`tr-km-${i}`} className="ctrl r" inputMode="decimal" value={r.km} onChange={e => setRun(r.key, { km: e.target.value })} />{err(K("km"))}</div>
+                  <input id={`tr-km-${i}`} className="ctrl r" inputMode="decimal" value={r.km} onChange={e => setRun(r.key, { km: e.target.value })} />{RH("tr-km")}{err(K("km"))}</div>
                 <div className="field"><label htmlFor={`tr-rate-${i}`}>Stawka zł/km</label>
-                  <input id={`tr-rate-${i}`} className="ctrl r" inputMode="decimal" placeholder={fleet.kmRateDefault} value={r.rate} onChange={e => setRun(r.key, { rate: e.target.value })} />{err(K("rate"))}</div>
+                  <input id={`tr-rate-${i}`} className="ctrl r" inputMode="decimal" placeholder={fleet.kmRateDefault} value={r.rate} onChange={e => setRun(r.key, { rate: e.target.value })} />{RH("tr-rate")}{err(K("rate"))}</div>
                 {r.ownership === "EXTERNAL" && <div className="field"><label htmlFor={`tr-fr-${i}`}>Fracht kursu (zł)</label>
-                  <input id={`tr-fr-${i}`} className="ctrl r" inputMode="decimal" placeholder="z faktury" value={r.freight} onChange={e => setRun(r.key, { freight: e.target.value })} />{err(K("freight"))}</div>}
+                  <input id={`tr-fr-${i}`} className="ctrl r" inputMode="decimal" placeholder="z faktury" value={r.freight} onChange={e => setRun(r.key, { freight: e.target.value })} />{RH("tr-fr")}{err(K("freight"))}</div>}
                 <div className="field"><label htmlFor={`tr-qty-${i}`}>Ilość{U ? ` (${U})` : ""}</label>
-                  <input id={`tr-qty-${i}`} className="ctrl r" inputMode="decimal" placeholder={t.runs.length === 1 ? "cała ilość" : ""} value={r.qty} onChange={e => setRun(r.key, { qty: e.target.value })} />{err(K("qty"))}</div>
+                  <input id={`tr-qty-${i}`} className="ctrl r" inputMode="decimal" placeholder={t.runs.length === 1 ? "cała ilość" : ""} value={r.qty} onChange={e => setRun(r.key, { qty: e.target.value })} />{RH("tr-qty")}{err(K("qty"))}</div>
                 <div className="field"><label htmlFor={`tr-w-${i}`}>Waga z wagi (t)</label>
-                  <input id={`tr-w-${i}`} className="ctrl r" inputMode="decimal" value={r.weightT} onChange={e => setRun(r.key, { weightT: e.target.value })} />{err(K("weightT"))}</div>
+                  <input id={`tr-w-${i}`} className="ctrl r" inputMode="decimal" value={r.weightT} onChange={e => setRun(r.key, { weightT: e.target.value })} />{RH("tr-w")}{err(K("weightT"))}</div>
                 <div className="field"><label htmlFor={`tr-wb-${i}`}>Nr kwitu</label>
-                  <input id={`tr-wb-${i}`} className="ctrl" maxLength={60} value={r.waybillNo} onChange={e => setRun(r.key, { waybillNo: e.target.value })} />{err(K("waybillNo"))}</div>
+                  <input id={`tr-wb-${i}`} className="ctrl" maxLength={60} value={r.waybillNo} onChange={e => setRun(r.key, { waybillNo: e.target.value })} />{RH("tr-wb")}{err(K("waybillNo"))}</div>
               </div>
             </div>
           );
@@ -118,17 +122,17 @@ export function TransportFields({ value, onChange, fleet, unit, purchase, fe }: 
         <small className="hint">Koszt kursu = km × stawka (domyślnie {fleet.kmRateDefault} zł/km) albo fracht z faktury przewoźnika. Transport nie zmienia stanu magazynowego.</small>
       </>}
       {t.mode === "TRAIN" && <div className="grid2">
-        <div className="field"><label htmlFor="tr-train-no">Nr składu</label><input id="tr-train-no" className="ctrl" maxLength={40} value={t.train.trainNo} onChange={e => set({ train: { ...t.train, trainNo: e.target.value } })} /></div>
-        <div className="field"><label htmlFor="tr-carrier">Przewoźnik kolejowy</label><input id="tr-carrier" className="ctrl" maxLength={120} value={t.train.carrier} onChange={e => set({ train: { ...t.train, carrier: e.target.value } })} /></div>
+        <div className="field"><label htmlFor="tr-train-no">Nr składu</label><input id="tr-train-no" className="ctrl" maxLength={40} value={t.train.trainNo} onChange={e => set({ train: { ...t.train, trainNo: e.target.value } })} />{H("tr-train-no")}</div>
+        <div className="field"><label htmlFor="tr-carrier">Przewoźnik kolejowy</label><input id="tr-carrier" className="ctrl" maxLength={120} value={t.train.carrier} onChange={e => set({ train: { ...t.train, carrier: e.target.value } })} />{H("tr-carrier")}</div>
         <div className="field"><label htmlFor="tr-wagons">Tonaż wagonów (t, rozdzielone średnikiem)</label>
           <input id="tr-wagons" className="ctrl" placeholder="np. 33; 32,8; 33,4" value={t.train.wagonTons} onChange={e => set({ train: { ...t.train, wagonTons: e.target.value } })} />
-          {err("transport.train.wagonTons")}
+          {H("tr-wagons")}{err("transport.train.wagonTons")}
           {t.train.wagonTons.split(/[;\n]+/).filter(x => x.trim()).map((_, i) => <span key={i}>{err(`transport.train.wagonTons.${i}`)}</span>)}</div>
         <div className="field"><label htmlFor="tr-tprice">Cena frachtu (zł)</label>
           <div className="join"><input id="tr-tprice" className="ctrl r" inputMode="decimal" value={t.train.price} onChange={e => set({ train: { ...t.train, price: e.target.value } })} />
             <select className="ctrl" aria-label="Jednostka ceny frachtu" value={t.train.priceUnit} onChange={e => set({ train: { ...t.train, priceUnit: e.target.value as Unit } })}>
               <option value="T">za t</option><option value="MP">za MP</option><option value="M3">za m³</option></select></div>
-          {err("transport.train.price") ?? err("transport.train.priceUnit")}</div>
+          {H("tr-tprice")}{err("transport.train.price") ?? err("transport.train.priceUnit")}</div>
       </div>}
     </fieldset>
   );

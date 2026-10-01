@@ -4,6 +4,7 @@ import { formatQty, plannerDrivers, plannerMonths, type PlannerDay, type Planner
 import { ApiRequestError, api, errorText } from "../../api/client";
 import { useSession } from "../../auth/session";
 import { Alert } from "../../ui/components";
+import { ColumnHelp, TutorialToggle } from "../../ui/tutorial";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { DocBadge, pln } from "../documents/OperationDetail";
 
@@ -60,6 +61,7 @@ export function PlannerPage() {
       <div className="page-h">
         <div><h1>Planer zakupów</h1>
           <p className="muted small">Plan wpisujesz ręcznie. Wykonanie, tony, ceny, kilometry, transport i kursy kierowców czyta się z dokumentów (PZ, PW, TR).</p></div>
+        <TutorialToggle />
       </div>
       <div className="filters" role="search">
         <select className="ctrl" aria-label="Magazyn" id="pl-wh" value={whId} onChange={e => setWh(e.target.value)}>
@@ -159,6 +161,7 @@ function WeekView({ v, whId, days7, canEdit, onOpen }: { v: PlannerView; whId: s
           <td className="r num">{tot.avgPrice ? nf(tot.avgPrice, 2) : "–"}</td><td className="r num">{nf(tot.km)}</td><td className="r num">{nf(tot.transportCost, 2)}</td>
           <td className="r num">{nf(tot.purchaseCost, 2)}</td><td className="r num">{tot.trips}</td><td /></tr></tfoot>
       </table></div>
+      <ColumnHelp id="pl-week-cols" items={WEEK_COLUMNS} />
       <p className="muted small">{canEdit ? "Zmień plan dnia w kolumnie „Plan” — zapis po wyjściu z pola (Enter). Każda zmiana trafia do dziennika audytu." : v.warehouses.length > 1 ? "Widok wszystkich magazynów sumuje plany — plan zmienia się w widoku konkretnego magazynu." : "Plan zmienia osoba z uprawnieniem „Planer zakupów — plan dzienny”."}
         {" "}Wartości AUTO są tylko do odczytu: poprawia się je korektą dokumentu.</p>
     </section>
@@ -230,6 +233,7 @@ function YearView({ v, year, month, setMonth }: { v: PlannerView; year: number; 
             <td className="r num">{Y.avgPrice ? nf(Y.avgPrice, 2) : "–"}</td><td className="r num">{nf(Y.purchaseCost)}</td><td className="r num">{nf(Y.transportCost)}</td>
             <td className="r num">{Y.transportPerMp ? nf(Y.transportPerMp, 2) : "–"}</td><td className="r num">{Y.trips}</td></tr></tfoot>
         </table></div>
+        <ColumnHelp id="pl-months-cols" items={MONTH_COLUMNS} />
       </section>
     </>
   );
@@ -249,6 +253,7 @@ function FleetView({ v, days7, day, setDay }: { v: PlannerView; days7: string[];
               <td data-label="Kursy" className="r num">{r.trips}</td><td data-label="MP" className="r num">{nf(r.qty)}</td><td data-label="Km" className="r num">{nf(r.km)}</td><td data-label="Koszt" className="r num">{nf(r.cost, 2)}</td></tr>))
             : <tr><td colSpan={6} className="muted">Brak kursów w tym dniu.</td></tr>}</tbody>
         </table></div>
+        <ColumnHelp items={FLEET_COLUMNS} />
         <p className="muted small">Lista powstaje z kursów zapisanych w operacjach (dokument TR: pojazd z floty, kierowca, km, ilość, waga) — bez przepisywania.</p>
       </section>
       <section className="card">
@@ -308,3 +313,28 @@ function DayPanel({ day, ops, onClose }: { day: string; ops: PlannerOp[]; onClos
     </div>
   );
 }
+
+const WEEK_COLUMNS = [
+  ["Dzień", "Dzień tygodnia; dzisiejszy jest wyróżniony. Przycisk dokumentów otwiera operacje źródłowe dnia."],
+  ["Miejsce produkcji", "Miejsce transportu albo nadleśnictwo i leśnictwo / wycinka z operacji zakupu."],
+  ["Plan [MP]", "RĘCZNIE — jedyna wartość wpisywana w planerze; zapis po wyjściu z pola albo Enter, z audytem było / jest."],
+  ["Wykonanie [MP]", "AUTO — produkcja z zakupu, produkcja w lesie i zakup materiału w MP z zatwierdzonych dokumentów."],
+  ["Tony [t]", "AUTO — waga zważonych kursów plus niezważona reszta × 0,33 t/MP."],
+  ["Realizacja", "Wykonanie ÷ plan dnia (w sumie tygodnia — wobec planu do dziś)."],
+  ["Cena [zł/MP]", "Wartość zakupu ÷ wykonanie."],
+  ["Km / Transport / Kursy", "Suma kilometrów, kosztu i liczby kursów z dokumentów TR operacji zakupu."],
+  ["Wartość zakupu [zł]", "Wartość netto zakupu (PZ) albo koszt surowca przy sprzedaży bezpośredniej."],
+  ["Dokumenty", "Numery dokumentów źródłowych dnia: PZ, RW, PW, WZ, TR."],
+] as const;
+const MONTH_COLUMNS = [
+  ["Plan / Wykonanie / Tony", "Sumy dni miesiąca — te same reguły co w widoku tygodnia."],
+  ["Realizacja", "Wykonanie ÷ plan do dziś; zielono ≥ 100%, żółto ≥ 80%, czerwono poniżej."],
+  ["Udział w roku", "Wykonanie miesiąca jako procent wykonania roku."],
+  ["Śr. cena [zł/MP]", "Wartość zakupu ÷ wykonanie miesiąca."],
+  ["Transport [zł/MP]", "Koszt transportu ÷ wykonanie — ile kosztuje przewiezienie 1 MP."],
+] as const;
+const FLEET_COLUMNS = [
+  ["Kierowca / Pojazd", "Z kursów zapisanych w operacjach (flota własna albo przewoźnik)."],
+  ["Kursy / MP / Km", "Liczba kursów, przewieziona ilość i kilometry w wybranym dniu."],
+  ["Koszt [zł]", "Koszt kursów: km × stawka albo fracht z faktury."],
+] as const;

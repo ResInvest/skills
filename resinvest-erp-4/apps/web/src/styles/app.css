@@ -208,16 +208,55 @@ fieldset.field legend { font-weight: 600; margin-bottom: 4px; }
 @media (max-width: 900px) { .pl-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pl-grid2 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .pl-kpis { grid-template-columns: minmax(0, 1fr); } }
 .op-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
-.op-layout > .card { margin-top: 12px; }
-.op-preview { position: sticky; top: 72px; }
+.op-layout > .card, .op-side { margin-top: 12px; }
+.op-side { position: sticky; top: 72px; display: grid; gap: 12px; max-height: calc(100dvh - 88px); overflow-y: auto; }
+/* Samouczek: opis pod polem i opis kolumn tabeli */
+.tut { display: block; margin-top: 2px; padding-left: 8px; border-left: 3px solid var(--info-bg); color: var(--info); font-size: .8rem; line-height: 1.35; }
+.tut-cols { margin: 8px 0 0; font-size: .85rem; }
+.tut-cols summary { cursor: pointer; color: var(--info); font-weight: 600; }
+.tut-cols dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 16px; margin: 8px 0 0; }
+.tut-cols dt { font-weight: 600; } .tut-cols dd { margin: 0; color: var(--muted); }
+.btn.on { border-color: var(--info); color: var(--info); }
+/* Braki w polach: czerwone obramowanie kontrolki, przy której stoi komunikat */
+div.field:has(> small.error) .ctrl, .extra-row:has(> small.error) .ctrl { border-color: var(--err); box-shadow: 0 0 0 1px var(--err); }
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 40% { outline: 3px solid var(--warn); outline-offset: 2px; } 100% { outline: 3px solid transparent; outline-offset: 2px; } }
+/* Panel „Co jeszcze uzupełnić” */
+.op-guide .card-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.guide-bar { height: 6px; border-radius: 6px; background: var(--err-bg); overflow: hidden; margin: 4px 0; }
+.guide-bar > span { display: block; height: 100%; background: var(--ok); transition: width .25s; }
+.guide { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.guide button { display: flex; gap: 8px; align-items: flex-start; width: 100%; padding: 6px 8px; border: 1px solid transparent; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.guide button:hover, .guide button:focus-visible { border-color: var(--line); background: var(--surface-2); }
+.g-ico { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: .8rem; font-weight: 800; background: var(--surface-2); color: var(--muted); }
+.g-txt { min-width: 0; } .g-txt small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.g-done .g-ico { background: var(--ok-bg); color: var(--ok); }
+.g-done .g-txt small, .g-optional .g-txt small { display: none; } /* gotowe i opcjonalne w jednej linii — opis w podpowiedzi */
+.guide .g-done button, .guide .g-optional button { padding-top: 3px; padding-bottom: 3px; }
+.g-missing .g-ico { background: var(--err); color: #fff; }
+.g-missing .g-txt strong, .g-missing .g-txt small { color: var(--err); }
+.g-next button { border-color: var(--err); background: var(--err-bg); }
+.g-next em { font-style: normal; font-size: .8rem; color: var(--err); }
+.guide-ok { margin: 8px 0 0; padding: 6px 8px; border-radius: 8px; background: var(--ok-bg); color: var(--ok); font-weight: 600; }
+.guide-float { display: none; }
 .join { display: flex; gap: 6px; }
 .join .ctrl:first-child { flex: 1; min-width: 0; }
 .join select.ctrl { width: auto; flex: none; }
 .extra-row { display: grid; grid-template-columns: 1.3fr 1.1fr .7fr .7fr .8fr 1.3fr auto; gap: 6px; align-items: start; margin-bottom: 8px; }
 .extra-row .error { grid-column: 1 / -1; }
 @media (max-width: 960px) {
-  .op-layout { grid-template-columns: minmax(0, 1fr); }
-  .op-preview { position: static; }
+  .op-layout { grid-template-columns: minmax(0, 1fr); padding-bottom: 64px; }
+  /* telefon / tablet: lista kontrolna nad formularzem jako kafelki, podgląd pod formularzem, pasek braków na dole */
+  .op-side { display: contents; }
+  .op-guide { order: -1; margin-top: 12px; }
+  .op-guide .guide { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .op-guide .g-txt small { display: none; }
+  .op-guide .g-missing.g-next .g-txt small { display: block; }
+  .op-preview { margin-top: 12px; }
+  .guide-float { display: flex; align-items: center; gap: 8px; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 20; padding: 10px 14px;
+    border: 0; border-radius: 12px; background: var(--err); color: #fff; font: inherit; text-align: left; box-shadow: 0 6px 20px rgb(0 0 0 / .25); cursor: pointer; }
+  .guide-float strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .guide-float .g-ico { background: #fff; color: var(--err); }
   .extra-row { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
 }
 

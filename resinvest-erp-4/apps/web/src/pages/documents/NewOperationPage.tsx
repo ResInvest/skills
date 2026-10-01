@@ -6,8 +6,11 @@ import { ApiRequestError, api, errorText } from "../../api/client";
 import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog } from "../../ui/components";
+import { Hint, TutorialToggle } from "../../ui/tutorial";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
+import { elFor, goToField, guideSteps, OperationGuide } from "./guide";
+import { opHelp } from "./help";
 import { ChainProductionFields, EMPTY_CHAIN, EMPTY_SALE, OutputSaleFields, toChainInput, toSaleInput, type ChainState, type SaleState } from "./ChainFields";
 import { EMPTY_TRANSPORT, TransportFields, toTransportInput, type FleetData, type TransportState } from "./TransportFields";
 import { DocBadge, OperationDetail, type OperationView, pln } from "./OperationDetail";
@@ -66,6 +69,9 @@ export function NewOperationPage() {
   const [chain, setChain] = useState<ChainState>(EMPTY_CHAIN);
   const [outSale, setOutSale] = useState<SaleState>(EMPTY_SALE);
   const [tried, setTried] = useState(false);
+  // pola, które użytkownik już odwiedził — ich braki świecą na czerwono od razu, reszta dopiero po „Dalej”
+  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
+  const touch = (id: string) => { if (id && !touched.has(id)) setTouched(s => new Set(s).add(id)); };
   const [preview, setPreview] = useState<Preview | null>(null);
   const [serverErr, setServerErr] = useState<unknown>(null);
   const [created, setCreated] = useState<{ id: string; numbers: string[] } | null>(null);
@@ -97,7 +103,7 @@ export function NewOperationPage() {
   const local = !fd || !input ? null
     : planOperation(input, { materials: new Map(fd.materials.map(m => [m.id, m])), extraTypes: new Map(fd.extraTypes.map(t => [t.id, t])), rates: fd.rates, today: fd.today, transferTwoStage: fd.mmTwoStage,
       kmRateDefault: fd.kmRateDefault, fleet: fleetOf(fd, W.id) });
-  const localErr = (field: string) => (tried && local && !local.ok ? local.errors.find(e => e.field === field)?.message : undefined);
+  const localErr = (field: string) => ((tried || touched.has(elFor(field))) && local && !local.ok ? local.errors.find(e => e.field === field)?.message : undefined);
   const fe = (field: string) => (serverErr instanceof ApiRequestError ? serverErr.field(field) : undefined) ?? localErr(field);
 
   const check = useMutation({
@@ -110,7 +116,8 @@ export function NewOperationPage() {
     if (!input || !local?.ok) return;
     check.mutate(input);
   };
-  const reset = () => { setF(EMPTY); setExtras([]); setTransport(EMPTY_TRANSPORT); setChain(EMPTY_CHAIN); setOutSale(EMPTY_SALE); setTried(false); setPreview(null); setServerErr(null); };
+  const reset = () => { setF(EMPTY); setExtras([]); setTransport(EMPTY_TRANSPORT); setChain(EMPTY_CHAIN); setOutSale(EMPTY_SALE); setTried(false); setTouched(new Set()); setPreview(null); setServerErr(null); };
+  const go = (el: string) => { touch(el); goToField(el); };
 
   if (!allowed.length) return <section className="card"><h1>Nowa operacja</h1><p className="muted">Twoja rola nie pozwala wprowadzać operacji magazynowych.</p></section>;
   const mats = fd?.materials.filter(m => m.active) ?? [];
@@ -121,12 +128,18 @@ export function NewOperationPage() {
   const bal = (id: string) => fd?.balances[id] ?? "0";
   const docLabel = KINDS.find(k => k.kind === type)?.doc ?? "";
   const plan = local?.ok ? local.plan : null;
+  const steps = !type ? [] : guideSteps({
+    type, f, day, extras: extras.length, transportMode: type === "PRODUCTION" ? "NONE" : transport.mode,
+    chain: type === "DIRECT_SALE" ? { ...chain, enabled: true } : chain, sale: type === "DIRECT_SALE" ? { ...outSale, enabled: true } : outSale,
+    errors: [...(serverErr instanceof ApiRequestError ? serverErr.body?.details ?? [] : []), ...(local && !local.ok ? local.errors : [])],
+  });
+  const H = (id: string, variant?: string) => <Hint id={id} text={opHelp(id, variant)} />;
 
   return (
     <>
       <div className="page-h">
         <div><h1>Nowa operacja</h1><p className="muted small">Każda operacja tworzy dokumenty (PZ / WZ / RW + PW) i ruchy w księdze magazynu. Stan zmienia się dopiero po zatwierdzeniu.</p></div>
-        <Link className="btn" to="/dokumenty">Rejestr dokumentów</Link>
+        <div className="actions"><TutorialToggle /><Link className="btn" to="/dokumenty">Rejestr dokumentów</Link></div>
       </div>
       <div className="tabs scroll" role="tablist" aria-label="Rodzaj operacji">
         {allowed.map(k => <button key={k.kind} type="button" role="tab" aria-selected={type === k.kind} className={type === k.kind ? "on" : ""} id={`op-tab-${k.kind}`}
@@ -135,13 +148,14 @@ export function NewOperationPage() {
       {created && <Alert kind="ok"><span>Zapisano operację — dokumenty: <strong className="doc">{created.numbers.join(", ")}</strong>. <button type="button" className="linkish" id="op-created-open" onClick={() => setDetail(created.id)}>Pokaż szczegóły</button></span></Alert>}
       {form.isError ? <Alert kind="err">{errorText(form.error)}</Alert> : !fd ? <p className="muted">Wczytywanie…</p> : (
         <div className="op-layout">
-          <form className="card form" id="op-form" noValidate onSubmit={e => { e.preventDefault(); next(); }}>
+          <form className="card form" id="op-form" noValidate onSubmit={e => { e.preventDefault(); next(); }}
+            onBlur={e => touch(e.target.id)} onChange={e => { if (e.target instanceof HTMLSelectElement) touch(e.target.id); }}>
             <div className="grid2">
               <div className="field"><label htmlFor="op-wh">Magazyn <span className="req">*</span></label>
-                <select id="op-wh" className="ctrl" value={W.id} onChange={e => { reset(); W.setId(e.target.value); }}>{W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
+                <select id="op-wh" className="ctrl" value={W.id} onChange={e => { reset(); W.setId(e.target.value); }}>{W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select>{H("op-wh")}</div>
               <div className="field"><label htmlFor="op-date">Data operacji (ruchu) <span className="req">*</span></label>
                 <input id="op-date" className="ctrl" type="date" value={day} max={fd.today} onChange={e => { setPreview(null); setDate(e.target.value); }} />
-                {fe("date") && <small className="error">{fe("date")}</small>}</div>
+                {H("op-date")}{fe("date") && <small className="error">{fe("date")}</small>}</div>
             </div>
 
             {type === "DIRECT_SALE" ? (
@@ -151,9 +165,9 @@ export function NewOperationPage() {
                   <div className="field"><label htmlFor="op-raw">Surowiec wejściowy <span className="req">*</span></label>
                     <select id="op-raw" className="ctrl" value={f.rawMaterialId} onChange={e => set("rawMaterialId", e.target.value)}>
                       <option value="">— wybierz —</option>{mats.filter(m => m.category === "WOOD").map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>{fe("rawMaterialId") && <small className="error">{fe("rawMaterialId")}</small>}</div>
+                    </select>{H("op-raw", "DIRECT_SALE")}{fe("rawMaterialId") && <small className="error">{fe("rawMaterialId")}</small>}</div>
                   <div className="field"><label htmlFor="op-rawcost">Koszt surowca (zł)</label>
-                    <input id="op-rawcost" className="ctrl r" inputMode="decimal" placeholder="opcjonalnie" value={f.rawCost} onChange={e => set("rawCost", e.target.value)} />
+                    <input id="op-rawcost" className="ctrl r" inputMode="decimal" placeholder="opcjonalnie" value={f.rawCost} onChange={e => set("rawCost", e.target.value)} />{H("op-rawcost")}
                     {fe("rawCost") && <small className="error">{fe("rawCost")}</small>}</div>
                 </div>
                 <fieldset className="field"><legend>Produkcja</legend>
@@ -167,9 +181,9 @@ export function NewOperationPage() {
                       <option value="AUTO">Automatycznie (WZ/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
                     </select>
                     {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label="Numer ręczny WZ" maxLength={40} value={f.number} onChange={e => set("number", e.target.value)} />}
-                    {fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
+                    {H("op-numbering")}{fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
                   <div className="field"><label htmlFor="op-ext">Nr dokumentu zewnętrznego</label>
-                    <input id="op-ext" className="ctrl" maxLength={60} value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} /></div>
+                    <input id="op-ext" className="ctrl" maxLength={60} value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />{H("op-ext")}</div>
                 </div>
               </>
             ) : type === "TRANSFER" ? (
@@ -181,11 +195,11 @@ export function NewOperationPage() {
                   <div className="field"><label htmlFor="op-target">Magazyn docelowy <span className="req">*</span></label>
                     <select id="op-target" className="ctrl" value={f.targetWarehouseId} onChange={e => set("targetWarehouseId", e.target.value)}>
                       <option value="">— wybierz —</option>{fd.warehouses.filter(w => w.id !== W.id).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                    </select>{fe("targetWarehouseId") && <small className="error">{fe("targetWarehouseId")}</small>}</div>
+                    </select>{H("op-target")}{fe("targetWarehouseId") && <small className="error">{fe("targetWarehouseId")}</small>}</div>
                   <div className="field"><label htmlFor="op-mat">Materiał <span className="req">*</span></label>
                     <select id="op-mat" className="ctrl" value={f.materialId} onChange={e => { const m = fd.materials.find(x => x.id === e.target.value); setPreview(null); setF(s => ({ ...s, materialId: e.target.value, unit: m?.stockUnit ?? "" })); }}>
                       <option value="">— wybierz —</option>{mats.map(m => <option key={m.id} value={m.id}>{m.name} (stan {formatQty(bal(m.id))} {UNIT_LABEL[m.stockUnit]})</option>)}
-                    </select>{fe("materialId") && <small className="error">{fe("materialId")}</small>}</div>
+                    </select>{H("op-mat", type)}{fe("materialId") && <small className="error">{fe("materialId")}</small>}</div>
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-qty">Ilość <span className="req">*</span></label>
@@ -193,10 +207,10 @@ export function NewOperationPage() {
                       <input id="op-qty" className="ctrl r" inputMode="decimal" placeholder="np. 120" value={f.qty} onChange={e => set("qty", e.target.value)} />
                       <select className="ctrl" aria-label="Jednostka ilości" value={f.unit} disabled={!mat} onChange={e => set("unit", e.target.value)}>
                         {(mat?.allowedUnits ?? ["T" as Unit]).map(u => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}</select>
-                    </div>{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
+                    </div>{H("op-qty")}{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
                   <div className="field"><label htmlFor="op-weight">Tonaż z wagi (t)</label>
                     <input id="op-weight" className="ctrl r" inputMode="decimal" placeholder="puste = AUTO z przelicznika" value={f.weightManual} onChange={e => set("weightManual", e.target.value)} />
-                    {fe("weightManual") && <small className="error">{fe("weightManual")}</small>}</div>
+                    {H("op-weight")}{fe("weightManual") && <small className="error">{fe("weightManual")}</small>}</div>
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-numbering">Numer MM</label>
@@ -204,9 +218,9 @@ export function NewOperationPage() {
                       <option value="AUTO">Automatycznie (MM/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
                     </select>
                     {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label="Numer ręczny MM" maxLength={40} placeholder="np. MM 3/2026" value={f.number} onChange={e => set("number", e.target.value)} />}
-                    {fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
+                    {H("op-numbering")}{fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
                   <div className="field"><label htmlFor="op-ext">Nr dokumentu zewnętrznego</label>
-                    <input id="op-ext" className="ctrl" maxLength={60} placeholder="np. kwit wagowy" value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />
+                    <input id="op-ext" className="ctrl" maxLength={60} placeholder="np. kwit wagowy" value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />{H("op-ext")}
                     {fe("externalNumber") && <small className="error">{fe("externalNumber")}</small>}</div>
                 </div>
               </>
@@ -215,18 +229,18 @@ export function NewOperationPage() {
                 <div className="field"><label htmlFor="op-partner">{type === "PURCHASE" ? "Dostawca" : "Odbiorca"} <span className="req">*</span></label>
                   <select id="op-partner" className="ctrl" value={f.partnerId} onChange={e => set("partnerId", e.target.value)}>
                     <option value="">— wybierz —</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>{fe("partnerId") && <small className="error">{fe("partnerId")}</small>}</div>
+                  </select>{H("op-partner", type)}{fe("partnerId") && <small className="error">{fe("partnerId")}</small>}</div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-mat">{type === "PURCHASE" ? "Materiał" : "Towar z magazynu"} <span className="req">*</span></label>
                     <select id="op-mat" className="ctrl" value={f.materialId} onChange={e => { const m = fd.materials.find(x => x.id === e.target.value); setPreview(null); setF(s => ({ ...s, materialId: e.target.value, unit: m?.stockUnit ?? "", priceUnit: "" })); }}>
                       <option value="">— wybierz —</option>{mats.map(m => <option key={m.id} value={m.id}>{m.name} (stan {formatQty(bal(m.id))} {UNIT_LABEL[m.stockUnit]})</option>)}
-                    </select>{fe("materialId") && <small className="error">{fe("materialId")}</small>}</div>
+                    </select>{H("op-mat", type)}{fe("materialId") && <small className="error">{fe("materialId")}</small>}</div>
                   <div className="field"><label htmlFor="op-qty">Ilość <span className="req">*</span></label>
                     <div className="join">
                       <input id="op-qty" className="ctrl r" inputMode="decimal" placeholder="np. 60" value={f.qty} onChange={e => set("qty", e.target.value)} />
                       <select className="ctrl" aria-label="Jednostka ilości" value={f.unit} disabled={!mat} onChange={e => set("unit", e.target.value)}>
                         {(mat?.allowedUnits ?? ["T" as Unit]).map(u => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}</select>
-                    </div>{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
+                    </div>{H("op-qty")}{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-price">Cena netto (zł){type === "SALE" && mat ? ` za ${UNIT_LABEL[(f.unit || mat.stockUnit) as Unit]}` : ""} <span className="req">*</span></label>
@@ -234,10 +248,10 @@ export function NewOperationPage() {
                       <input id="op-price" className="ctrl r" inputMode="decimal" placeholder="np. 85,50" value={f.price} onChange={e => set("price", e.target.value)} />
                       {type === "PURCHASE" && <select className="ctrl" aria-label="Jednostka ceny" value={f.priceUnit || f.unit} disabled={!mat} onChange={e => set("priceUnit", e.target.value)}>
                         {(mat?.allowedUnits ?? ["T" as Unit]).map(u => <option key={u} value={u}>za {UNIT_LABEL[u]}</option>)}</select>}
-                    </div>{(fe("price") ?? fe("priceUnit")) && <small className="error">{fe("price") ?? fe("priceUnit")}</small>}</div>
+                    </div>{H("op-price", type)}{(fe("price") ?? fe("priceUnit")) && <small className="error">{fe("price") ?? fe("priceUnit")}</small>}</div>
                   <div className="field"><label htmlFor="op-weight">Tonaż z wagi (t)</label>
                     <input id="op-weight" className="ctrl r" inputMode="decimal" placeholder="puste = AUTO z przelicznika" value={f.weightManual} onChange={e => set("weightManual", e.target.value)} />
-                    <small className="hint">Wpisany tonaż jest RĘCZNY i nie zostanie nadpisany przelicznikiem.</small>
+                    {H("op-weight")}
                     {fe("weightManual") && <small className="error">{fe("weightManual")}</small>}</div>
                 </div>
                 <div className="grid2">
@@ -246,9 +260,9 @@ export function NewOperationPage() {
                       <option value="AUTO">Automatycznie ({docLabel}/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
                     </select>
                     {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label={`Numer ręczny ${docLabel}`} maxLength={40} placeholder={`np. ${docLabel} 12/2026`} value={f.number} onChange={e => set("number", e.target.value)} />}
-                    {fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
+                    {H("op-numbering")}{fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
                   <div className="field"><label htmlFor="op-ext">Nr dokumentu zewnętrznego</label>
-                    <input id="op-ext" className="ctrl" maxLength={60} placeholder="np. faktura, kwit wagowy" value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />
+                    <input id="op-ext" className="ctrl" maxLength={60} placeholder="np. faktura, kwit wagowy" value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />{H("op-ext")}
                     {fe("externalNumber") && <small className="error">{fe("externalNumber")}</small>}</div>
                 </div>
                 {type === "PURCHASE" && can("production.create") && (
@@ -270,30 +284,30 @@ export function NewOperationPage() {
                   <div className="field"><label htmlFor="op-raw">Surowiec (m³) <span className="req">*</span></label>
                     <select id="op-raw" className="ctrl" value={f.rawMaterialId} onChange={e => set("rawMaterialId", e.target.value)}>
                       <option value="">— wybierz —</option>{mats.filter(m => m.stockUnit === "M3").map(m => <option key={m.id} value={m.id}>{m.name} (stan {formatQty(bal(m.id))} m³)</option>)}
-                    </select>{fe("rawMaterialId") && <small className="error">{fe("rawMaterialId")}</small>}</div>
+                    </select>{H("op-raw", "PRODUCTION")}{fe("rawMaterialId") && <small className="error">{fe("rawMaterialId")}</small>}</div>
                   <div className="field"><label htmlFor="op-out">Produkt — zrębka (MP) <span className="req">*</span></label>
                     <select id="op-out" className="ctrl" value={f.outMaterialId} onChange={e => set("outMaterialId", e.target.value)}>
                       <option value="">— wybierz —</option>{mats.filter(m => m.stockUnit === "MP").map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                    </select>{fe("outMaterialId") && <small className="error">{fe("outMaterialId")}</small>}</div>
+                    </select>{H("op-out")}{fe("outMaterialId") && <small className="error">{fe("outMaterialId")}</small>}</div>
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-outqty">Ilość produkcji (MP) <span className="req">*</span></label>
-                    <input id="op-outqty" className="ctrl r" inputMode="decimal" placeholder="np. 120" value={f.outQty} onChange={e => set("outQty", e.target.value)} />
+                    <input id="op-outqty" className="ctrl r" inputMode="decimal" placeholder="np. 120" value={f.outQty} onChange={e => set("outQty", e.target.value)} />{H("op-outqty")}
                     <small className="hint">Zużycie = MP ÷ {formatQty(raw?.mpPerM3 ?? fd.rates.mpPerM3)} MP z 1 m³{raw?.mpPerM3 ? " (przelicznik surowca)" : " (przelicznik firmowy)"}.</small>
                     {fe("outQty") && <small className="error">{fe("outQty")}</small>}</div>
                   <div className="field"><label htmlFor="op-chiprate">Cena rąbania (zł / MP)</label>
-                    <input id="op-chiprate" className="ctrl r" inputMode="decimal" placeholder="opcjonalnie" value={f.chipRate} onChange={e => set("chipRate", e.target.value)} />
+                    <input id="op-chiprate" className="ctrl r" inputMode="decimal" placeholder="opcjonalnie" value={f.chipRate} onChange={e => set("chipRate", e.target.value)} />{H("op-chiprate")}
                     {fe("chipRate") && <small className="error">{fe("chipRate")}</small>}</div>
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-chipper">Rębak</label>
                     <select id="op-chipper" className="ctrl" value={f.chipperId} onChange={e => { const c = fd.chippers.find(x => x.id === e.target.value); setPreview(null); setF(s => ({ ...s, chipperId: e.target.value, operatorId: c?.operatorId ?? s.operatorId })); }}>
                       <option value="">— bez rębaka —</option>{fd.chippers.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ""}</option>)}
-                    </select>{fe("chipperId") && <small className="error">{fe("chipperId")}</small>}</div>
+                    </select>{H("op-chipper")}{fe("chipperId") && <small className="error">{fe("chipperId")}</small>}</div>
                   <div className="field"><label htmlFor="op-operator">Operator</label>
                     <select id="op-operator" className="ctrl" value={f.operatorId} onChange={e => set("operatorId", e.target.value)}>
                       <option value="">— brak —</option>{fd.operators.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                    </select>{fe("operatorId") && <small className="error">{fe("operatorId")}</small>}</div>
+                    </select>{H("op-operator")}{fe("operatorId") && <small className="error">{fe("operatorId")}</small>}</div>
                 </div>
               </>
             )}
@@ -301,9 +315,9 @@ export function NewOperationPage() {
             <div className="grid2">
               <div className="field"><label htmlFor="op-docdate">Data dokumentu</label>
                 <input id="op-docdate" className="ctrl" type="date" value={f.documentDate} max={fd.today} onChange={e => set("documentDate", e.target.value)} />
-                <small className="hint">Puste = data operacji.</small>{fe("documentDate") && <small className="error">{fe("documentDate")}</small>}</div>
+                {H("op-docdate")}{fe("documentDate") && <small className="error">{fe("documentDate")}</small>}</div>
               <div className="field"><label htmlFor="op-notes">Uwagi</label>
-                <input id="op-notes" className="ctrl" maxLength={2000} value={f.notes} onChange={e => set("notes", e.target.value)} /></div>
+                <input id="op-notes" className="ctrl" maxLength={2000} value={f.notes} onChange={e => set("notes", e.target.value)} />{H("op-notes")}</div>
             </div>
 
             {type !== "PRODUCTION" && <TransportFields value={transport} onChange={t => { setPreview(null); setTransport(t); }}
@@ -317,21 +331,21 @@ export function NewOperationPage() {
                 const ef = (k: string) => fe(`extras.${i}.${k}`);
                 return (
                   <div key={x.key} className="extra-row" data-extra={i}>
-                    <select className="ctrl" aria-label={`Rodzaj operacji dodatkowej ${i + 1}`} value={x.typeId} onChange={e => upd({ typeId: e.target.value })}>
+                    <select className="ctrl" id={`ex-type-${i}`} aria-label={`Rodzaj operacji dodatkowej ${i + 1}`} value={x.typeId} onChange={e => upd({ typeId: e.target.value })}>
                       <option value="">— rodzaj —</option>{fd.extraTypes.map(et => <option key={et.id} value={et.id}>{et.name}</option>)}</select>
-                    <select className="ctrl" aria-label={`Pojazd, operacja dodatkowa ${i + 1}`} value={x.vehicleId} onChange={e => upd({ vehicleId: e.target.value })}>
+                    <select className="ctrl" id={`ex-veh-${i}`} aria-label={`Pojazd, operacja dodatkowa ${i + 1}`} value={x.vehicleId} onChange={e => upd({ vehicleId: e.target.value })}>
                       <option value="">— pojazd —</option>{fd.vehicles.map(v => <option key={v.id} value={v.id}>{v.registration} {v.name}</option>)}</select>
-                    <input className="ctrl r" inputMode="decimal" aria-label={`Ilość${t?.unit ? ` (${t.unit})` : ""}, operacja dodatkowa ${i + 1}`} placeholder={`ilość${t?.unit ? ` ${t.unit}` : ""}`} value={x.qty} onChange={e => upd({ qty: e.target.value })} />
-                    <input className="ctrl r" inputMode="decimal" aria-label={`Stawka, operacja dodatkowa ${i + 1}`} placeholder={t?.defaultRate ? `stawka ${t.defaultRate}` : "stawka"} value={x.rate} onChange={e => upd({ rate: e.target.value })} />
-                    <input className="ctrl r" inputMode="decimal" aria-label={`Koszt (zł), operacja dodatkowa ${i + 1}`} placeholder="koszt zł" value={x.cost} onChange={e => upd({ cost: e.target.value })} />
-                    <input className="ctrl" aria-label={`Opis, operacja dodatkowa ${i + 1}`} placeholder="opis" maxLength={300} value={x.description} onChange={e => upd({ description: e.target.value })} />
+                    <input className="ctrl r" inputMode="decimal" id={`ex-qty-${i}`} aria-label={`Ilość${t?.unit ? ` (${t.unit})` : ""}, operacja dodatkowa ${i + 1}`} placeholder={`ilość${t?.unit ? ` ${t.unit}` : ""}`} value={x.qty} onChange={e => upd({ qty: e.target.value })} />
+                    <input className="ctrl r" inputMode="decimal" id={`ex-rate-${i}`} aria-label={`Stawka, operacja dodatkowa ${i + 1}`} placeholder={t?.defaultRate ? `stawka ${t.defaultRate}` : "stawka"} value={x.rate} onChange={e => upd({ rate: e.target.value })} />
+                    <input className="ctrl r" inputMode="decimal" id={`ex-cost-${i}`} aria-label={`Koszt (zł), operacja dodatkowa ${i + 1}`} placeholder="koszt zł" value={x.cost} onChange={e => upd({ cost: e.target.value })} />
+                    <input className="ctrl" id={`ex-desc-${i}`} aria-label={`Opis, operacja dodatkowa ${i + 1}`} placeholder="opis" maxLength={300} value={x.description} onChange={e => upd({ description: e.target.value })} />
                     <button type="button" className="btn sm ghost" aria-label={`Usuń operację dodatkową ${i + 1}`} onClick={() => { setPreview(null); setExtras(xs => xs.filter(r => r.key !== x.key)); }}>✕</button>
                     {(ef("typeId") ?? ef("qty") ?? ef("rate") ?? ef("cost") ?? ef("description")) && <small className="error">{ef("typeId") ?? ef("qty") ?? ef("rate") ?? ef("cost") ?? ef("description")}</small>}
                   </div>
                 );
               })}
               {extras.length < MAX_EXTRAS && <button type="button" className="btn sm" id="op-extra-add" onClick={() => { setPreview(null); setExtras(xs => [...xs, { key: ++extraSeq, typeId: "", vehicleId: "", qty: "", rate: "", cost: "", description: "" }]); }}>+ Dodaj operację dodatkową</button>}
-              <small className="hint">Koszt = podana kwota albo ilość × stawka (domyślna stawka z kartoteki).</small>
+              {H("op-extras")}
               {fe("extras") && <small className="error">{fe("extras")}</small>}
             </fieldset>
 
@@ -343,6 +357,8 @@ export function NewOperationPage() {
             </div>
           </form>
 
+          <div className="op-side">
+            <OperationGuide steps={steps} onGo={go} />
           <aside className="card op-preview" id="op-live" aria-live="polite">
             <header className="card-h"><h2>Podgląd</h2></header>
             {!plan ? <p className="muted small">Uzupełnij pola — podgląd dokumentów i kwot pojawi się automatycznie.</p> : (
@@ -373,6 +389,7 @@ export function NewOperationPage() {
             )}
             <p className="muted small mt">Stan „po” w podglądzie jest orientacyjny; ostateczną decyzję podejmuje serwer w chwili zapisu.</p>
           </aside>
+          </div>
         </div>
       )}
       {preview && input && fd && <ConfirmDialog preview={preview} input={input} fd={fd} onClose={() => setPreview(null)}

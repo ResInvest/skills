@@ -28,6 +28,50 @@ test("1. kierownik dodaje dostawcę (kartoteka) — potrzebny do zakupu", async 
   await expect(mgr.locator("#catalog-table")).toContainText("Nadleśnictwo Rudziniec");
 });
 
+test("1b. panel „Co jeszcze uzupełnić”: czerwone braki, przejście do pola, samouczek pod polami, telefon", async () => {
+  await go(mgr, "Nowa operacja");
+  const guide = mgr.locator("#op-guide");
+  const step = (k: string) => guide.locator(`li[data-step="${k}"]`);
+  await expect(step("date")).toHaveAttribute("data-state", "done");
+  await expect(step("partner")).toHaveAttribute("data-state", "missing");
+  await expect(step("partner")).toHaveClass(/g-next/);                       // pierwszy brak — „teraz”
+  await expect(step("transport")).toHaveAttribute("data-state", "optional");
+  await expect(mgr.locator("#op-guide-count")).toHaveText("brakuje: 4");    // dostawca, materiał, ilość, cena
+  // kliknięcie kroku przenosi do pola i od razu pokazuje brak przy polu
+  await step("material").getByRole("button").click();
+  await expect(mgr.locator("#op-mat")).toBeFocused();
+  await expect(mgr.locator("#op-form")).toContainText("Wybierz materiał");
+  await mgr.locator("#op-partner").selectOption({ label: "Nadleśnictwo Rudziniec" });
+  await expect(step("partner")).toHaveAttribute("data-state", "done");
+  await expect(step("material")).toHaveClass(/g-next/);
+  // pole odwiedzone i zostawione puste świeci od razu (bez klikania „Dalej”)
+  await mgr.locator("#op-qty").focus();
+  await mgr.locator("#op-price").focus();
+  await expect(mgr.locator("#op-form")).toContainText("Podaj: ilość");
+  // samouczek: opis pod polem, wyłączenie i ponowne włączenie (pamiętane po odświeżeniu)
+  await expect(mgr.locator('[data-tut="op-qty"]')).toContainText("jednostkę magazynową");
+  await mgr.locator("#tut-toggle").click();
+  await expect(mgr.locator('[data-tut="op-qty"]')).toHaveCount(0);
+  await mgr.reload();
+  await expect(mgr.locator("#op-guide")).toBeVisible();
+  await expect(mgr.locator('[data-tut="op-qty"]')).toHaveCount(0);
+  await mgr.locator("#tut-toggle").click();
+  await expect(mgr.locator('[data-tut="op-qty"]')).toBeVisible();
+  // zmiana trybu transportu dodaje wymagane kroki transportu
+  await mgr.locator("#tr-mode").selectOption("OWN");
+  await expect(mgr.locator("#op-guide li[data-step='transport']")).toHaveAttribute("data-state", "missing");
+  await mgr.locator("#tr-mode").selectOption("NONE");
+  await shot(mgr, "f4d-nowa-operacja-prowadzenie");
+  // telefon: lista nad formularzem, pasek braków na dole przenosi do pierwszego braku
+  await mgr.setViewportSize({ width: 390, height: 844 });
+  await expect(mgr.locator("#op-guide-next")).toContainText("Dostawca");
+  await mgr.locator("#op-guide-next").click();
+  await expect(mgr.locator("#op-partner")).toBeFocused();
+  await expectNoHorizontalScroll(mgr);
+  await shot(mgr, "f4d-nowa-operacja-telefon");
+  await mgr.setViewportSize({ width: 1280, height: 800 });
+});
+
 test("2. zakup PZ: 100 m³ × 120 zł + praca ładowarką 2 h × 150 zł — podgląd, podsumowanie, zapis, szczegóły", async () => {
   await go(mgr, "Nowa operacja");
   await expect(mgr.getByRole("tab", { name: /Zakup/ })).toHaveAttribute("aria-selected", "true");

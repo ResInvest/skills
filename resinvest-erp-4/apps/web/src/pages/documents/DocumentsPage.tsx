@@ -6,6 +6,8 @@ import { ApiRequestError, api, errorText } from "../../api/client";
 import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog } from "../../ui/components";
+import { ColumnHelp, Hint, TutorialToggle } from "../../ui/tutorial";
+import { OP_HELP } from "./help";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
 import { DocBadge, OP_LABEL, OperationDetail, TransferState, day, pln, tonLine } from "./OperationDetail";
@@ -44,7 +46,8 @@ export function DocumentsPage() {
     <>
       <div className="page-h">
         <div><h1>Dokumenty</h1><p className="muted small">PZ — przyjęcia, WZ — wydania, MM — przesunięcia. Kliknij numer, aby zobaczyć operację z pozycjami.</p></div>
-        {(can("receipts.create") || can("issues.create") || can("production.create")) && <Link className="btn primary" to="/nowa-operacja">+ Nowa operacja</Link>}
+        <div className="actions"><TutorialToggle />
+          {(can("receipts.create") || can("issues.create") || can("production.create")) && <Link className="btn primary" to="/nowa-operacja">+ Nowa operacja</Link>}</div>
       </div>
       {done && <Alert kind="ok">{done}</Alert>}
       {inbound.length > 0 && (
@@ -85,6 +88,7 @@ export function DocumentsPage() {
               </tbody>
             </table>
           </div>
+          <ColumnHelp id="docs-cols" items={DOC_COLUMNS} />
           <nav className="pager" aria-label="Strony">
             <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Poprzednia</button>
             <span>Strona {page} z {pages} · {q.data.total} dokumentów</span>
@@ -97,6 +101,15 @@ export function DocumentsPage() {
     </>
   );
 }
+
+const DOC_COLUMNS = [
+  ["Nr dokumentu", "Numer nadany przy zapisie (automatyczny albo ręczny). Kliknij, aby zobaczyć całą operację z pozycjami i historią."],
+  ["Typ", "PZ — przyjęcie, WZ — wydanie, MM — przesunięcie, TR — transport; pomocnicze: RW — zużycie, PW — produkcja, BO — bilans otwarcia."],
+  ["Data", "Data ruchu w księdze; pod nią data dokumentu, jeśli jest inna."],
+  ["Treść", "Materiały z ilością w jednostce dokumentu i magazynowej oraz rodzaj operacji."],
+  ["Kontrahent", "Dostawca albo odbiorca; przy MM trasa magazynów i stan przyjęcia."],
+  ["Wartość", "Wartość netto dokumentu (zakup, sprzedaż albo koszt transportu)."],
+] as const;
 
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Warsaw" }).format(new Date());
 
@@ -139,10 +152,10 @@ function ReceiveDialog({ t, onClose, onDone }: { t: InTransit; onClose: () => vo
               <input id="rc-qty" className="ctrl r" inputMode="decimal" value={f.qty} onChange={e => set("qty", e.target.value)} />
               <select className="ctrl" aria-label="Jednostka ilości przyjętej" value={f.unit} onChange={e => set("unit", e.target.value)}>
                 {(m?.allowedUnits ?? [t.unitSource]).map(u => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}</select>
-            </div>{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
+            </div><Hint id="rc-qty" text={OP_HELP["rc-qty"]} />{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
           <div className="field"><label htmlFor="rc-date">Data przyjęcia <span className="req">*</span></label>
             <input id="rc-date" className="ctrl" type="date" min={t.date} max={today()} value={f.date} onChange={e => set("date", e.target.value)} />
-            {fe("date") && <small className="error">{fe("date")}</small>}</div>
+            <Hint id="rc-date" text={OP_HELP["rc-date"]} />{fe("date") && <small className="error">{fe("date")}</small>}</div>
         </div>
         {plan?.ok && diff !== 0 && <Alert kind="warn"><span>Różnica: {diff > 0 ? "ubytek" : "nadwyżka"} <strong className="num">{formatQty(Math.abs(diff).toString())} {m ? UNIT_LABEL[m.stockUnit] : ""}</strong> · {MM_DIFF_REASONS[f.reason as keyof typeof MM_DIFF_REASONS] ?? ""}</span></Alert>}
         {reasonHint && <Alert kind="warn">{reasonHint}</Alert>}
@@ -150,14 +163,14 @@ function ReceiveDialog({ t, onClose, onDone }: { t: InTransit; onClose: () => vo
           <div className="field"><label htmlFor="rc-reason">Przyczyna różnicy</label>
             <select id="rc-reason" className="ctrl" value={f.reason} onChange={e => set("reason", e.target.value)}>
               <option value="">— brak różnicy —</option>{Object.entries(MM_DIFF_REASONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>{fe("reason") && <small className="error">{fe("reason")}</small>}</div>
+            </select><Hint id="rc-reason" text={OP_HELP["rc-reason"]} />{fe("reason") && <small className="error">{fe("reason")}</small>}</div>
           <div className="field"><label htmlFor="rc-weight">Tonaż z wagi (t)</label>
             <input id="rc-weight" className="ctrl r" inputMode="decimal" placeholder="puste = AUTO" value={f.weightManual} onChange={e => set("weightManual", e.target.value)} />
-            {fe("weightManual") && <small className="error">{fe("weightManual")}</small>}</div>
+            <Hint id="rc-weight" text={OP_HELP["rc-weight"]} />{fe("weightManual") && <small className="error">{fe("weightManual")}</small>}</div>
         </div>
         <div className="field"><label htmlFor="rc-note">Opis</label>
           <input id="rc-note" className="ctrl" maxLength={300} placeholder="wymagany przy „Inna przyczyna” i przyjęciu zerowym" value={f.note} onChange={e => set("note", e.target.value)} />
-          {fe("note") && <small className="error">{fe("note")}</small>}</div>
+          <Hint id="rc-note" text={OP_HELP["rc-note"]} />{fe("note") && <small className="error">{fe("note")}</small>}</div>
       </div>
     </Dialog>
   );
