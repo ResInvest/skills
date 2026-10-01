@@ -6,7 +6,8 @@
    * księga w JEDNOSTCE MAGAZYNOWEJ PRODUKTU (drewno m³, zrębka MP, PKS/łupina t),
      precyzja wewnętrzna 6 miejsc — zaokrąglenie dopiero przy prezentacji,
    * masa (t) i energia (GJ) są orientacyjne; waga rzeczywista ich nie zastępuje,
-   * operacje: ZAKUP · SPRZEDAZ (WZ / bezpośrednia) · PRODUKCJA (na magazyn) · MM,
+   * operacje: ZAKUP · SPRZEDAZ (WZ / bezpośrednia) · PRODUKCJA (na magazynie) · MM,
+   *   + operacje dodatkowe (osobne rekordy powiązane z operacją, rodzaj z kartoteki),
    * każda operacja: pełna walidacja → symulacja sald → zapis atomowy,
    * dokument zatwierdzony nigdy nie jest usuwany ani zmieniany po cichu:
      anulowanie i korekta tworzą nowe zapisy księgi z powiązaniem i audytem,
@@ -24,8 +25,8 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.3.0";
-  const SCHEMA = 7;
+  const VERSION = "3.4.0";
+  const SCHEMA = 8;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -224,7 +225,7 @@
     "production.create": N_("Produkcja — wprowadzanie"), "mm.create": N_("Przesunięcia MM — wprowadzanie"),
     "mm.receive": N_("Przyjęcie MM na magazynie docelowym"),
     "op.approve": N_("Zatwierdzanie operacji (gdy obieg zatwierdzania jest włączony)"),
-    "documents.cancel": N_("Anulowanie dokumentów"), "documents.correct": N_("Korekty dokumentów"),
+    "documents.cancel": N_("Anulowanie dokumentów"), "documents.delete": N_("Usuwanie dokumentów (z odwróceniem ruchów)"), "documents.correct": N_("Korekty dokumentów"),
     "inventory.correct": N_("Korekty stanów / MM"), "production.correct": N_("Korekty produkcji"), "sales.correct": N_("Korekty sprzedaży"),
     "purchases.correct": N_("Korekty zakupów"), "inv.open": N_("Otwarcie okresu inwentaryzacji"), "inv.count": N_("Spis z natury"),
     "inv.close": N_("Zamknięcie okresu"), "fleet.edit": N_("Edycja floty"), "master.edit": N_("Edycja kartotek (produkty, kontrahenci)"),
@@ -237,7 +238,7 @@
   const CREATE_PERMS = ["receipts.create", "issues.create", "production.create", "mm.create"];
   const ROLE_DEFAULTS = {
     admin: ["*"],
-    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
+    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.delete", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
     magazynier: [...CREATE_PERMS, "mm.receive", "inv.count", "report.view", "history.read"],
     obserwator: ["report.view", "history.read"],
     audytor: ["report.view", "reports.export", "history.read", "audit.read", "users.read"]
@@ -252,8 +253,8 @@
   };
   /** Opis ról (ekran użytkowników): kto co może. */
   const ROLE_INFO = {
-    admin: N_("Pełny dostęp: wszystkie magazyny, użytkownicy i role, kartoteki, kopie, konfiguracja, korekty i anulowania."),
-    kierownik: N_("Operacje, dokumenty, korekty i anulowania w przydzielonych magazynach, zamykanie okresów, flota i kartoteki, podgląd użytkowników."),
+    admin: N_("Pełny dostęp: wszystkie magazyny, użytkownicy i role, kartoteki, kopie, konfiguracja, korekty, anulowania i usuwanie dokumentów."),
+    kierownik: N_("Operacje, dokumenty, korekty, anulowania i usuwanie dokumentów w przydzielonych magazynach, zamykanie okresów, flota i kartoteki, podgląd użytkowników."),
     magazynier: N_("Przyjęcia, wydania, produkcja i MM w przydzielonych magazynach; stany, dokumenty, raporty podstawowe, spis z natury."),
     obserwator: N_("Tylko odczyt: stany, dokumenty, raporty i historia w przydzielonych magazynach."),
     audytor: N_("Odczyt wszystkich magazynów, raporty, historia zmian i dziennik audytu — bez zmian w danych.")
@@ -324,6 +325,20 @@
   const TRANSPORT_MODES = { none: N_("Brak transportu"), own: N_("Transport własny"), external: N_("Transport zewnętrzny"), mixed: N_("Transport własny + zewnętrzny"), train: N_("Pociąg"), supplier: N_("Transport w cenie zakupu — zapewnia dostawca") };
   const VEHICLE_TYPES = { ruchoma_podloga: N_("Ruchoma podłoga"), ciezarowy: N_("Samochód ciężarowy"), wywrotka: N_("Wywrotka") };
   const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
+  /** Rębak: własny (operator z kartoteki floty) albo firmy zewnętrznej (firma, oznaczenie, nr rej., operator opisowo). */
+  const CHIPPER_OWNERS = { own: N_("Rębak własny"), external: N_("Rębak firmy zewnętrznej") };
+  /** Źródło tonażu na dokumencie: przelicznik firmowy (AUTO) albo wartość wpisana z wagi (RĘCZNY) — nigdy nie nadpisywana. */
+  const WEIGHT_SOURCES = { auto: N_("AUTO"), manual: N_("RĘCZNY") };
+  /** Kartoteka „Dodatkowe operacje” — pozycje startowe (dalej edytowane w programie, zapisywane w danych). */
+  const DEFAULT_EXTRA_TYPES = [
+    { id: "xt_holowanie", name: N_("Holowanie"), desc: N_("Holowanie pojazdu lub maszyny"), unit: "", rate: null },
+    { id: "xt_pryzmy", name: N_("Podgarnianie pryzm ładowarką"), desc: N_("Formowanie i podgarnianie pryzm na placu"), unit: "h", rate: null },
+    { id: "xt_plac", name: N_("Czyszczenie placu"), desc: N_("Sprzątanie placu składowego"), unit: "", rate: null },
+    { id: "xt_ladowarka", name: N_("Praca ładowarką"), desc: N_("Praca ładowarki rozliczana godzinowo"), unit: "h", rate: null },
+    { id: "xt_przemieszczanie", name: N_("Przemieszczanie biomasy"), desc: N_("Przemieszczanie materiału w obrębie placu"), unit: "", rate: null }
+  ];
+  const EXTRA_UNITS = { "": N_("ryczałt"), h: N_("godz."), km: "km", szt: N_("szt."), t: "t", MP: "MP", m3: "m³" };
+  const MAX_EXTRAS = 20;
   const INV_STATUS = { OTWARTA: N_("OTWARTA"), ZAMKNIETA: N_("ZAMKNIĘTA") };
   const PRODUCT_CATS = { drewno: N_("Drewno"), zrebka: N_("Zrębka"), agro: N_("Produkt tonowy") };
   const PARTNER_ROLES = { supplier: N_("Dostawca"), buyer: N_("Odbiorca"), both: N_("Dostawca i odbiorca") };
@@ -362,7 +377,7 @@
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
       config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
-      warehouses: [], users: [], products: [], partners: [], carriers: [],
+      warehouses: [], users: [], products: [], partners: [], carriers: [], extraTypes: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
       operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {},
       meta: { lastMonthCheck: null, createdAt: null }
@@ -372,7 +387,7 @@
     const e = [];
     if (!s || typeof s !== "object") return [t("Brak danych")];
     if (s.schema !== SCHEMA) e.push(t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: s.schema, b: SCHEMA }));
-    for (const k of ["warehouses", "users", "products", "partners", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
+    for (const k of ["warehouses", "users", "products", "partners", "extraTypes", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
     if (!s.fleet || !["vehicles", "drivers", "chippers", "operators"].every(k => Array.isArray(s.fleet[k]))) e.push(t("Brak kartotek floty"));
     if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push(t("Brak przeliczników"));
     if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push(t("Produkt bez jednostki magazynowej"));
@@ -445,6 +460,15 @@
       s.schema = 7; s.version = VERSION;
       notes.push(t("Schemat 6 → 7: przesunięcia MM dwuetapowe (W drodze → przyjęcie), uprawnienie przyjęcia MM, tonaż MM"));
     }
+    if (s.schema === 7) {
+      // kartoteka operacji dodatkowych, rębaki firm zewnętrznych, usuwanie dokumentów (soft delete)
+      const ts = (s.meta && s.meta.createdAt) || new Date().toISOString();
+      if (!Array.isArray(s.extraTypes)) s.extraTypes = DEFAULT_EXTRA_TYPES.map(x => Object.assign({}, x, { active: true, createdAt: ts, updatedAt: ts, createdBy: "System" }));
+      for (const c of (s.fleet && s.fleet.chippers) || []) if (!CHIPPER_OWNERS[c.owner]) c.owner = "own";
+      for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("documents.cancel") && !list.includes("documents.delete")) s.rolePerms[role] = list.concat("documents.delete");
+      s.schema = 8; s.version = VERSION;
+      notes.push(t("Schemat 7 → 8: operacje dodatkowe i ich kartoteka, rębaki firm zewnętrznych, ręczne numery PZ/WZ, tonaż ręczny w sprzedaży, usuwanie dokumentów"));
+    }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
   }
@@ -512,8 +536,8 @@
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
       purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", priceUnit: "", price: "", weightMode: "auto", weightManual: "" },
-      production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", chipRate: "" },
-      sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP" },
+      production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", operatorName: "", chipRate: "" },
+      sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP", weightMode: "auto", weightManual: "" },
       mm: { fromWhId: "", productId: "", qty: "", unit: "MP", toWhId: "", weightMode: "auto", weightManual: "" },
       transport: {
         mode: "none", place: "", placeTouched: false,
@@ -521,9 +545,12 @@
         external: { company: "", includedInPrice: false, runCount: "1", runs: [blankExtRun()] },
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
+      extras: { enabled: false, items: [blankExtra()] },
+      docNos: { PZ: "", WZ: "" }, docDate: "",
       notes: "", extDoc: ""
     };
   }
+  function blankExtra() { return { typeId: "", vehicleId: "", qty: "", rate: "", cost: "", desc: "" }; }
 
   /* ------------------------------------------------------------------ */
   /* Plan operacji — pełna walidacja i skutki (jedno źródło prawdy)      */
@@ -570,8 +597,8 @@
     }
 
     const postings = [], documents = [];
-    const norm = { type, purchase: null, production: null, sale: null, mm: null };
-    const totals = { purchaseCost: 0, rawCost: 0, chippingCost: 0, revenue: 0, transportCost: 0, result: 0 };
+    const norm = { type, purchase: null, production: null, sale: null, mm: null, extras: [], docNos: {}, docDate: "" };
+    const totals = { purchaseCost: 0, rawCost: 0, chippingCost: 0, extraCost: 0, revenue: 0, transportCost: 0, result: 0 };
     const R_ = Object.assign({}, draft.production || {}), S = draft.sale || {}, P = draft.purchase || {}, M = draft.mm || {};
 
     /* ---------- produkcja (wspólna dla trzech ścieżek) ----------
@@ -611,11 +638,13 @@
         } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", t("Podaj miejsce wycinki / inwestycję"));
       }
       const ch = byId(state.fleet.chippers, R_.chipperId);
+      const chExt = !!(ch && ch.owner === "external");
       if (R_.chipperId) {
         if (!ch) err("production.chipperId", t("Nieznany rębak"));
-        else if (ch.status !== "aktywny") err("production.chipperId", t("Rębak ma status „{s}”", { s: t(ASSET_STATUS[ch.status] || ch.status) }));
+        else if (ch.status !== "aktywny" && !(ctx && ctx.correction)) err("production.chipperId", t("Rębak ma status „{s}”", { s: t(ASSET_STATUS[ch.status] || ch.status) }));
         else if (ch.whId && whId && ch.whId !== whId) err("production.chipperId", t("Rębak jest przypisany do magazynu {w}", { w: (byId(state.warehouses, ch.whId) || {}).name || "" }));
-        if (!byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", t("Wybierz operatora rębaka"));
+        // rębak własny — operator z kartoteki floty; rębak firmy zewnętrznej — operator opisowo (opcjonalnie)
+        if (!chExt && !byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", t("Wybierz operatora rębaka"));
       }
       let chipRate = 0, chippingCost = 0;
       if (outProduct && outProduct.unit === "MP") {
@@ -623,7 +652,8 @@
         chippingCost = chipRate !== null ? round(outQty * chipRate, 2) : 0;
       }
       totals.chippingCost = chippingCost;
-      const op = byId(state.fleet.operators, R_.chipperId ? (R_.operatorId || (ch && ch.operatorId)) : "");
+      const op = chExt ? null : byId(state.fleet.operators, R_.chipperId ? (R_.operatorId || (ch && ch.operatorId)) : "");
+      const extOperator = chExt ? (str(R_.operatorName) || str(ch.operatorName)) : "";
       norm.production = {
         mode, type: R_.type || "", typeLabel: pt ? pt.label : "", outProductId: outProduct ? outProduct.id : "", outUnit: outProduct ? outProduct.unit : null,
         rawProductId: rawProduct ? rawProduct.id : "", consumeQty: consume, consumeUnit: rawProduct ? rawProduct.unit : null,
@@ -631,19 +661,36 @@
         ndl: str(R_.ndl), lesnictwo: str(R_.lesnictwo), kwit: str(R_.kwit),
         sourceType: R_.type === "inwestycyjna" && mode !== "stock" ? PROD_TYPES.inwestycyjna.sourceType : "",
         investSite: str(R_.investSite), sourceDoc: str(R_.sourceDoc),
-        chipperId: R_.chipperId || "", chipperName: ch ? ch.name : "", operatorId: op ? op.id : "", operatorName: op ? op.name : ""
+        chipperId: R_.chipperId || "", chipperName: ch ? ch.name : "", chipperOwner: ch ? (ch.owner || "own") : "", chipperCompany: chExt ? str(ch.company) : "", chipperReg: ch ? str(ch.reg) : "",
+        operatorId: op ? op.id : "", operatorName: op ? op.name : extOperator
       };
       return { outProduct, outQty, consume };
     }
     const prodMeta = () => {
       const x = norm.production;
       const m = { productionType: x.typeLabel || "", chipRate: x.chipRate, chippingCost: x.chippingCost };
-      if (x.chipperName) m.chipper = x.chipperName;
+      if (x.chipperName) m.chipper = x.chipperOwner === "external" ? `${x.chipperName} — ${x.chipperCompany}` : x.chipperName;
       if (x.operatorName) m.operator = x.operatorName;
       if (x.mode !== "stock" && x.type === "lesna") Object.assign(m, { ndl: x.ndl, lesnictwo: x.lesnictwo, kwit: x.kwit });
       if (x.mode !== "stock" && x.type === "inwestycyjna") Object.assign(m, { sourceType: x.sourceType, investSite: x.investSite, sourceDoc: x.sourceDoc });
       return m;
     };
+    /** Tonaż sprzedaży: AUTO (przelicznik firmowy) albo RĘCZNY (waga rzeczywista) — ręczny nie jest nadpisywany. */
+    function saleWeight(product, stockQty) {
+      const wMode = S.weightMode === "manual" ? "manual" : "auto";
+      if (S.weightMode && !WEIGHT_SOURCES[S.weightMode]) err("sale.weightMode", t("Wybierz sposób ustalenia tonażu"));
+      const autoWeight = product && stockQty > 0 ? Units.mass(stockQty, product, cfg) : 0;
+      let weightT = autoWeight;
+      if (wMode === "manual") {
+        const w = num("sale.weightManual", S.weightManual, { gt: 0, label: N_("tonaż") });
+        if (w !== null) {
+          weightT = rq(w);
+          if (autoWeight > 0 && product.unit !== "t" && Math.abs(weightT - autoWeight) / autoWeight > 0.25) warnings.push(t("Tonaż {a} t różni się o ponad 25% od wyliczonego z przelicznika {b} t — sprawdź kwit wagowy.", { a: fmtQ(weightT), b: fmtQ(autoWeight) }));
+          if (product && product.unit === "t" && Math.abs(weightT - stockQty) > EPS) warnings.push(t("Produkt liczony w tonach: stan zmieni się o {a} t (ilość), tonaż z wagi {b} t jest informacyjny.", { a: fmtQ(stockQty), b: fmtQ(weightT) }));
+        }
+      }
+      return { weightMode: wMode, weightT, autoWeight };
+    }
     /** Sprzedaż wyniku produkcji (łańcuch zakupu / sprzedaż bezpośrednia). */
     function planSaleOfOutput(outProduct, outQty, direct) {
       const buyer = byId(state.partners, S.buyerId);
@@ -655,10 +702,10 @@
       if (!["MP", "t"].includes(S.priceUnit)) err("sale.priceUnit", t("Wybierz jednostkę ceny"));
       const price = num("sale.price", S.price, { min: 0, label: N_("cenę sprzedaży") });
       if (price === 0) warnings.push(t("Cena sprzedaży wynosi 0 zł."));
-      const weightT = outProduct ? Units.mass(saleQ, outProduct, cfg) : 0;
+      const sw = saleWeight(outProduct, saleQ), weightT = sw.weightT;
       totals.revenue = price !== null ? round((S.priceUnit === "t" ? weightT : saleQ) * price, 2) : 0;
       if (direct && outQty - saleQ > EPS) warnings.push(t("Nie cała produkcja jest sprzedana — pozostałe {a} {u} zostanie przyjęte na stan magazynu.", { a: fmtQ(outQty - saleQ), u: outProduct ? U(outProduct.unit) : "" }));
-      norm.sale = { direct, fromStock: false, buyerId: S.buyerId, productId: outProduct ? outProduct.id : "", qty: saleQ, unit: outProduct ? outProduct.unit : "MP", stockQty: saleQ, price, priceUnit: S.priceUnit, revenue: totals.revenue, weightT };
+      norm.sale = { direct, fromStock: false, buyerId: S.buyerId, productId: outProduct ? outProduct.id : "", qty: saleQ, unit: outProduct ? outProduct.unit : "MP", stockQty: saleQ, price, priceUnit: S.priceUnit, revenue: totals.revenue, weightT, weightMode: sw.weightMode, autoWeight: sw.autoWeight };
       return saleQ;
     }
     const push = (kind, productId, qty, extra) => postings.push(Object.assign({ kind, cat: kind, whId, productId, qty: rq(qty) }, extra || {}));
@@ -739,7 +786,7 @@
           const saleQ = planSaleOfOutput(outProduct, outQty, false);
           if (outProduct && saleQ > 0) {
             push("SPRZEDAZ", outProduct.id, -saleQ);
-            documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
+            documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, weightMode: norm.sale.weightMode, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
           }
         }
       } else if (S.enabled) err("sale.enabled", t("W zakupie sprzedaż korzysta z wyniku produkcji — zaznacz produkcję albo użyj operacji „Sprzedaż” (WZ z magazynu)"));
@@ -760,11 +807,11 @@
       const price = num("sale.price", S.price, { min: 0, label: N_("cenę sprzedaży") });
       if (price === 0) warnings.push(t("Cena sprzedaży wynosi 0 zł."));
       totals.revenue = qty !== null && price !== null ? round(qty * price, 2) : 0;
-      const weightT = product ? Units.mass(stockQty, product, cfg) : 0;
-      norm.sale = { direct: false, fromStock: true, buyerId: S.buyerId, productId: S.productId, qty, unit: S.unit, stockQty, stockUnit: product ? product.unit : null, onStock, after: rq(onStock - stockQty), price, priceUnit: S.unit, revenue: totals.revenue, weightT };
+      const sw = saleWeight(product, stockQty), weightT = sw.weightT;
+      norm.sale = { direct: false, fromStock: true, buyerId: S.buyerId, productId: S.productId, qty, unit: S.unit, stockQty, stockUnit: product ? product.unit : null, onStock, after: rq(onStock - stockQty), price, priceUnit: S.unit, revenue: totals.revenue, weightT, weightMode: sw.weightMode, autoWeight: sw.autoWeight };
       if (product && stockQty > 0) {
         push("SPRZEDAZ", product.id, -stockQty);
-        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: product.id, qty, unit: S.unit, stockQty, stockUnit: product.unit, weightT, value: totals.revenue, price, priceUnit: S.unit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
+        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: product.id, qty, unit: S.unit, stockQty, stockUnit: product.unit, weightT, weightMode: sw.weightMode, value: totals.revenue, price, priceUnit: S.unit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
       }
     } else if (type === "SPRZEDAZ" && S.direct) {
       /* ============ D. PRODUKCJA + SPRZEDAŻ BEZPOŚREDNIA (las → odbiorca) ============ */
@@ -782,7 +829,7 @@
       }
       if (outProduct && saleQ > 0) {
         push("SPRZEDAZ", outProduct.id, -saleQ, { direct: true });
-        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−", meta: { direct: N_("sprzedaż bezpośrednia po produkcji / prosto z lasu") } });
+        documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, weightMode: norm.sale.weightMode, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−", meta: { direct: N_("sprzedaż bezpośrednia po produkcji / prosto z lasu") } });
       }
     } else if (type === "PRODUKCJA") {
       /* ================= C. PRODUKCJA NA MAGAZYN (surowiec ze stanu) ================= */
@@ -1054,6 +1101,59 @@
     norm.transport = transport;
     documents.forEach(d => { d.place = transport.place; });
 
+    /* ---------- operacje dodatkowe (holowanie, praca ładowarką…): osobne rekordy z kosztem ----------
+       Rodzaj z kartoteki „Dodatkowe operacje”, opcjonalnie pojazd z Floty. Koszt = kwota albo ilość × stawka
+       (stawka domyślna z kartoteki). Dotyczy operacji z produkcją. Nie zmienia stanu magazynowego.            */
+    const XS = draft.extras || {};
+    if (XS.enabled) {
+      const corr = !!(ctx && ctx.correction);
+      if (!norm.production) err("extras.enabled", t("Operacje dodatkowe dodaje się do produkcji — wybierz „Produkcja na magazynie” albo zaznacz produkcję"));
+      const items = Array.isArray(XS.items) ? XS.items : [];
+      if (!items.length) err("extras.items", t("Dodaj co najmniej jedną operację dodatkową"));
+      if (items.length > MAX_EXTRAS) err("extras.items", t("Maksymalnie {n} operacji dodatkowych w jednej operacji", { n: MAX_EXTRAS }));
+      items.slice(0, MAX_EXTRAS).forEach((x, i) => {
+        const K = f => `extras.items.${i}.${f}`;
+        const ty = byId(state.extraTypes, x.typeId);
+        if (!str(x.typeId)) err(K("typeId"), t("Wybierz rodzaj operacji dodatkowej"));
+        else if (!ty) err(K("typeId"), t("Nieznany rodzaj operacji dodatkowej"));
+        else if (ty.active === false && !corr) err(K("typeId"), t("Rodzaj „{n}” jest nieaktywny w kartotece", { n: ty.name }));
+        let veh = null;
+        if (str(x.vehicleId)) {
+          veh = byId(state.fleet.vehicles, x.vehicleId);
+          if (!veh) err(K("vehicleId"), t("Nieznany pojazd"));
+          else if (veh.status === "wycofany" && !corr) err(K("vehicleId"), t("Pojazd ma status „{s}” — wybierz aktywny", { s: t(ASSET_STATUS[veh.status]) }));
+        }
+        let qty = null, rate = null, cost = null;
+        if (str(x.qty) !== "") qty = num(K("qty"), x.qty, { gt: 0, label: N_("ilość") });
+        if (str(x.rate) !== "") rate = num(K("rate"), x.rate, { min: 0, label: N_("stawkę") });
+        else if (ty && ty.rate !== null && ty.rate !== undefined && str(ty.rate) !== "" && Number(ty.rate) >= 0) rate = Number(ty.rate);
+        if (str(x.cost) !== "") cost = num(K("cost"), x.cost, { min: 0, label: N_("koszt") });
+        else if (qty !== null && rate !== null) cost = round(qty * rate, 2);
+        else if (!errors[K("qty")] && !errors[K("rate")]) err(K("cost"), t("Podaj koszt (kwotę) albo ilość i stawkę"));
+        norm.extras.push({ no: i + 1, typeId: ty ? ty.id : str(x.typeId), typeName: ty ? ty.name : "", unit: ty ? (ty.unit || "") : "",
+          vehicleId: veh ? veh.id : "", vehicleName: veh ? veh.name : "", reg: veh ? veh.reg : "",
+          qty, rate, cost: cost === null ? 0 : round(cost, 2), costBasis: str(x.cost) !== "" ? "amount" : "qtyRate", desc: str(x.desc).slice(0, 300) });
+      });
+      totals.extraCost = round(norm.extras.reduce((a, x) => a + x.cost, 0), 2);
+    }
+
+    /* ---------- numery PZ / WZ (ręczne z podpowiedzią albo automatyczne) i data dokumentu ----------
+       Numer ręczny jest unikalny w obrębie typu, magazynu i roku. Korekta nie zmienia numeru dokumentu.     */
+    const DN = draft.docNos || {};
+    for (const ty of ["PZ", "WZ"]) {
+      const want = str(DN[ty]).replace(/\s+/g, " ");
+      if (!want || !documents.some(d => d.type === ty) || (ctx && ctx.correction)) continue;
+      const K = `docNos.${ty}`;
+      if (want.length > 40 || !/^[\p{L}0-9][\p{L}0-9 /._-]*$/u.test(want)) err(K, t("Numer dokumentu: litery, cyfry oraz znaki / . - _ (do 40 znaków)"));
+      else if (whId && Dates.isISO(date) && docNoTaken(state, ty, whId, date.slice(0, 4), want)) err(K, t("Numer {no} jest już użyty w magazynie {w} w roku {y}", { no: want, w: wh ? wh.name : "", y: date.slice(0, 4) }), "DOC_NO");
+      else norm.docNos[ty] = want;
+    }
+    const docDate = str(draft.docDate);
+    if (docDate && !Dates.isISO(docDate)) err("docDate", t("Podaj datę w formacie RRRR-MM-DD"));
+    else if (docDate && docDate > today) err("docDate", t("Data dokumentu nie może być z przyszłości"));
+    norm.docDate = docDate && Dates.isISO(docDate) ? docDate : (Dates.isISO(date) ? date : "");
+    documents.forEach(d => { if (d.type === "PZ" || d.type === "WZ") { d.docDate = norm.docDate; if (norm.docNos[d.type]) d.manualNo = norm.docNos[d.type]; } });
+
     /* ---------- symulacja sald krok po kroku (magazyn × produkt) ---------- */
     postings.forEach((p, i) => { p.step = i + 1; p.doc = KINDS[p.kind].doc; });
     const balances = [];
@@ -1070,7 +1170,7 @@
       sim.set(k, after);
     }
     for (const [k, after] of sim) { const [w, pid] = k.split("|"); balances.push({ whId: w, productId: pid, before: stockAt(w, pid), after }); }
-    totals.result = round(totals.revenue - totals.purchaseCost - totals.rawCost - totals.chippingCost - totals.transportCost, 2);
+    totals.result = round(totals.revenue - totals.purchaseCost - totals.rawCost - totals.chippingCost - totals.extraCost - totals.transportCost, 2);
 
     const errorList = Object.keys(errors).map(k => ({ field: k, msg: errors[k] }));
     return { ok: errorList.length === 0, errors, errorCodes: codes, errorList, warnings, whId, date, type, norm, postings, balances, documents, totals, user: user ? { id: user.id, name: user.name } : null };
@@ -1083,6 +1183,24 @@
     const ym = Dates.ym(date), k = `${type}-${ym}`;
     state.seq[k] = (state.seq[k] || 0) + 1;
     return `${type}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+  }
+  const normNo = no => String(no == null ? "" : no).replace(/\s+/g, "").toUpperCase();
+  /** Czy numer dokumentu danego typu jest już użyty w magazynie w danym roku (numer ręczny lub automatyczny). */
+  function docNoTaken(state, type, whId, year, no) {
+    const k = normNo(no);
+    return state.operations.some(o => o.whId === whId && String(o.date).slice(0, 4) === year && (o.documents || []).some(d => d.type === type && normNo(d.no) === k));
+  }
+  /** Kolejny numer automatyczny — z pominięciem numerów wpisanych ręcznie. */
+  function autoNo(state, type, date, whId) {
+    let no = nextNo(state, type, date), guard = 0;
+    while (whId && (type === "PZ" || type === "WZ") && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
+    return no;
+  }
+  /** Podpowiedź numeru (bez rezerwacji) — pokazywana w formularzu przy polu numeru PZ / WZ. */
+  function suggestDocNo(state, type, whId, date) {
+    const d = Dates.isISO(date) ? date : Dates.localToday();
+    const tmp = { seq: Object.assign({}, state.seq), operations: state.operations };
+    return autoNo(tmp, type, d, whId);
   }
   function nextLedgerSeq(state) { let m = 0; for (const l of state.ledger) if (l.seq > m) m = l.seq; return m + 1; }
   /** Wpis audytu. `act` = {k, p} (tłumaczony przy wyświetlaniu); `action` = postać kanoniczna (PL) do CSV i wyszukiwania. */
@@ -1120,7 +1238,7 @@
     const keys = [...new Set(plan.postings.map(p => `${p.whId}|${p.productId}`))];
     const before = snap(state, keys);
     const opId = uid("op");
-    const docs = plan.documents.map(d => Object.assign({}, d, { no: nextNo(state, d.type, plan.date) }));
+    const docs = plan.documents.map(d => Object.assign({}, d, { no: d.manualNo || autoNo(state, d.type, plan.date, plan.whId) }));
     const docNo = t => (docs.find(d => d.type === t) || {}).no || null;
     const pw = docs.find(d => d.type === "PW"), rw = docs.find(d => d.type === "RW");
     if (pw && rw) pw.meta = Object.assign({}, pw.meta, { fromDoc: rw.no });
@@ -1149,9 +1267,10 @@
         : plan.type === "PRODUKCJA" ? ["PRODUKCJA"] : plan.type === "MM" ? ["MM"] : n.sale.direct ? ["PRODUKCJA", "SPRZEDAZ"] : ["SPRZEDAZ"],
       direct: !!(n.sale && n.sale.direct),
       input, purchase: n.purchase, production: n.production, sale: n.sale, mm: n.mm,
+      extras: n.extras.map(x => Object.assign({ id: uid("xo"), opId }, x)), docDate: n.docDate,
       transport: n.transport, place: n.transport.place, notes: str(draft.notes), extDoc: str(draft.extDoc),
       documents: docs, totals: plan.totals, warnings: plan.warnings,
-      original: clone({ purchase: n.purchase, production: n.production, sale: n.sale, mm: n.mm, transport: n.transport, totals: plan.totals }),
+      original: clone({ purchase: n.purchase, production: n.production, sale: n.sale, mm: n.mm, extras: n.extras, transport: n.transport, totals: plan.totals }),
       corrections: [], cancel: null,
       valueEvents: [Object.assign({ date: plan.date, ts: nowIso(ctx), kind: "create", no: mainNo }, plan.totals)]
     };
@@ -1329,16 +1448,19 @@
   /* ------------------------------------------------------------------ */
   /* ANULOWANIE — odwrócenie skutków z analizą zależności w czasie        */
   /* ------------------------------------------------------------------ */
-  function planCancel(state, opId, ctx) {
+  function planCancel(state, opId, ctx, opts = {}) {
     const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
     const op = byId(state.operations, opId);
     if (!op) return { ok: false, error: t("Nie znaleziono operacji") };
+    if (op.deleted) return { ok: false, error: t("Dokument {no} jest usunięty", { no: op.no }) };
     if (op.status === "CANCELLED") return { ok: false, error: t("Dokument {no} jest już anulowany", { no: op.no }) };
-    if (!can(user, "documents.cancel")) return { ok: false, error: t("Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
+    if (opts.del) { if (!can(user, "documents.delete")) return { ok: false, error: t("Brak uprawnienia „documents.delete” — usuwanie wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" }; }
+    else if (!can(user, "documents.cancel")) return { ok: false, error: t("Brak uprawnienia „documents.cancel” — anulowanie wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
     if (!canAccessWh(user, op.whId)) return { ok: false, error: t("Brak dostępu do magazynu tej operacji"), code: "FORBIDDEN" };
     const entries = state.ledger.filter(l => l.opId === op.id);
     const whs = [...new Set(entries.map(e => e.whId))];
-    for (const w of whs) if (isLocked(state, w, today)) return { ok: false, error: t("Bieżący okres jest zamknięty — anulowanie niemożliwe"), code: "LOCKED" };
+    for (const w of whs) if (isLocked(state, w, today)) return { ok: false, error: opts.del ? t("Bieżący okres jest zamknięty — usunięcie niemożliwe") : t("Bieżący okres jest zamknięty — anulowanie niemożliwe"), code: "LOCKED" };
+    if (op.type === "MM" && op.mm && op.mm.twoStage && op.mm.receipt && opts.del) return { ok: false, code: "BLOCKED", error: t("Dokument MM {no} został już przyjęty w magazynie docelowym — usunięcie niemożliwe; użyj korekty lub anulowania.", { no: op.no }) };
     const net = new Map();
     for (const e of entries) { const k = netKey(e); const c = net.get(k) || { whId: e.whId, productId: e.productId, cat: e.cat, direct: !!e.direct, qty: 0 }; c.qty = rq(c.qty + e.qty); net.set(k, c); }
     const reversal = [...net.values()].filter(x => Math.abs(x.qty) > EPS).map(x => Object.assign({}, x, { qty: -x.qty }));
@@ -1379,7 +1501,7 @@
   }
   function cancelOperation(state, opId, ctx, reason, opts = {}) {
     if (!str(reason)) return { ok: false, error: t("Podaj przyczynę anulowania") };
-    const pc = planCancel(state, opId, ctx);
+    const pc = planCancel(state, opId, ctx, { del: !!opts.del });
     if (!pc.ok) return pc;
     if (pc.needAck && !opts.ack) return { ok: false, needAck: true, code: "NEED_ACK", dependents: pc.dependents, error: t("Po dokumencie wykonano operacje na tym samym towarze ({list}). Potwierdź, że anulowanie jest zamierzone.", { list: pc.dependents.map(d => d.no).join(", ") }) };
     const op = pc.op, today = (ctx && ctx.today) || Dates.localToday();
@@ -1397,6 +1519,28 @@
     return { ok: true, no, op };
   }
 
+  /**
+   * USUNIĘCIE dokumentu (soft delete): skutki magazynowe są odwracane jak przy anulowaniu (dokument AN),
+   * a dokument dostaje znacznik „usunięty” — znika z rejestrów (filtr „pokaż usunięte”), zostaje w historii i audycie.
+   * Zablokowane, gdy towar z dokumentu został już wydany / wykorzystany w późniejszych operacjach.
+   */
+  function deleteOperation(state, opId, ctx, reason) {
+    if (!str(reason)) return { ok: false, error: t("Podaj przyczynę usunięcia") };
+    const pc = planCancel(state, opId, ctx, { del: true });
+    if (!pc.ok) {
+      if (!pc.blocked) return pc;
+      const op0 = byId(state.operations, opId);
+      return Object.assign({}, pc, { error: t("Nie można usunąć dokumentu {no}: towar z tego dokumentu został już wydany lub wykorzystany ({list}). Najpierw skoryguj lub anuluj operacje zależne.", { no: op0 ? op0.no : "", list: (pc.dependents || []).map(d => d.no).join(", ") || "—" }) });
+    }
+    if (pc.dependents.length) return { ok: false, blocked: true, code: "BLOCKED", dependents: pc.dependents, error: t("Nie można usunąć dokumentu {no}: towar z tego dokumentu został już wydany lub wykorzystany ({list}). Najpierw skoryguj lub anuluj operacje zależne.", { no: pc.op.no, list: pc.dependents.map(d => d.no).join(", ") }) };
+    const r = cancelOperation(state, opId, Object.assign({}, ctx, { source: (ctx && ctx.source) || N_("Usunięcie dokumentu") }), reason, { ack: true, del: true });
+    if (!r.ok) return r;
+    const op = r.op;
+    op.deleted = { ts: nowIso(ctx), date: op.cancel.date, reason: str(reason), userId: ctx.user.id, userName: ctx.user.name, reversalNo: r.no };
+    audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: r.no, event: "delete", code: "DOC_DELETED", action: N_("Usunięcie dokumentu (soft delete — ruchy odwrócone, dokument zachowany w historii)"), before: { status: STATUS.POSTED }, after: { status: N_("USUNIĘTY"), odwrocenie: r.no }, reason: str(reason), source: (ctx && ctx.source) || N_("Usunięcie dokumentu") });
+    return { ok: true, no: r.no, op };
+  }
+
   /* ------------------------------------------------------------------ */
   /* KOREKTA — nowy dokument z różnicą; pełna walidacja jak zwykła operacja */
   /* ------------------------------------------------------------------ */
@@ -1407,18 +1551,29 @@
     ["sale.qty", N_("Ilość sprzedaży"), o => o.sale && o.sale.qty, o => o.sale && Units.label(o.sale.unit)],
     ["sale.price", N_("Cena sprzedaży"), o => o.sale && o.sale.price, () => "zł"],
     ["sale.buyerId", N_("Odbiorca"), o => o.sale && o.sale.buyerId],
+    ["sale.weightT", N_("Tonaż sprzedaży"), o => o.sale && o.sale.weightT, () => "t"],
+    ["sale.weightMode", N_("Źródło tonażu"), o => o.sale && o.sale.weightMode ? WEIGHT_SOURCES[o.sale.weightMode] : null],
     ["production.outQty", N_("Produkcja"), o => o.production && o.production.outQty, o => o.production && Units.label(o.production.outUnit)],
     ["production.consumeQty", N_("Zużycie surowca"), o => o.production && o.production.consumeQty, o => o.production && Units.label(o.production.consumeUnit)],
     ["production.chipRate", N_("Cena za rąbanie"), o => o.production && o.production.chipRate, () => "zł/MP"],
+    ["production.chipperName", N_("Rębak"), o => o.production && o.production.chipperName],
+    ["extras.list", N_("Operacje dodatkowe"), o => extrasText(o.extras)],
+    ["extras.cost", N_("Koszt operacji dodatkowych"), o => o.extras && o.extras.length ? round(o.extras.reduce((a, x) => a + x.cost, 0), 2) : null, () => "zł"],
     ["mm.qty", N_("Ilość MM"), o => o.mm && o.mm.qty, o => o.mm && Units.label(o.mm.unit)],
     ["mm.weightT", N_("Tonaż MM"), o => o.mm && o.mm.weightT, () => "t"],
     ["transport.place", N_("Miejsce dostawy"), o => o.transport && o.transport.place],
     ["transport.reg", N_("Nr rejestracyjny"), o => o.transport && o.transport.reg],
     ["transport.driverName", N_("Kierowca"), o => o.transport && o.transport.driverName],
     ["transport.cost", N_("Koszt transportu"), o => o.transport && o.transport.cost, () => "zł"],
+    ["docDate", N_("Data dokumentu"), o => o.docDate],
     ["notes", N_("Uwagi"), o => o.notes],
     ["extDoc", N_("Nr dokumentu zewnętrznego"), o => o.extDoc]
   ];
+  /** Operacje dodatkowe jako tekst (korekta BYŁO / JEST, eksport). */
+  function extrasText(list) {
+    if (!list || !list.length) return "";
+    return list.map(x => `${x.typeName}${x.reg ? " (" + x.reg + ")" : ""}: ${fmt(x.cost)} zł${x.desc ? " — " + x.desc : ""}`).join("; ");
+  }
   function planCorrection(state, opId, newDraft, ctx) {
     const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
     const op = byId(state.operations, opId);
@@ -1460,7 +1615,9 @@
       if (x.after < -EPS) { const pr = byId(state.products, x.productId); return { ok: false, code: "STOCK", error: t("Korekta niemożliwa: stan „{p}” spadłby do {a} {u}. Dostępny stan: {b} {u}.", { p: pr.name, a: fmtQ(x.after), b: fmtQ(x.before), u: Units.label(pr.unit) }) }; }
     }
     const nextMm = p.norm.mm && op.mm ? Object.assign({}, p.norm.mm, { twoStage: !!op.mm.twoStage, receipt: op.mm.receipt ? Object.assign({}, op.mm.receipt, { diff: rq(p.norm.mm.stockQty - op.mm.receipt.stockQty) }) : null }) : p.norm.mm;
-    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: nextMm, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
+    // operacje dodatkowe zachowują identyfikatory rekordów (pozycja po pozycji), nowe dostają nowe
+    const extras = p.norm.extras.map((x, i) => Object.assign({ id: (op.extras && op.extras[i] && op.extras[i].id) || uid("xo"), opId: op.id }, x));
+    const nextOp = { purchase: p.norm.purchase, production: p.norm.production, sale: p.norm.sale, mm: nextMm, extras, docDate: p.norm.docDate || op.docDate || op.date, transport: p.norm.transport, notes: str(d.notes), extDoc: str(d.extDoc) };
     const partner = id => (byId(state.partners, id) || {}).name || id || "";
     const changes = [];
     for (const [f, label, get, unit] of CORR_FIELDS) {
@@ -1500,6 +1657,7 @@
     const prevStatus = op.status;
     op.input = Object.assign(clone(newDraft), { date: op.date }); delete op.input.idemKey; delete op.input.draftId;
     Object.assign(op, pc.nextOp, { place: pc.nextOp.transport.place, totals: pc.plan.totals, status: "CORRECTED" });
+    op.documents.forEach(dc => { if (dc.type === "PZ" || dc.type === "WZ") dc.docDate = op.docDate; if (dc.type === "WZ" && op.sale) { dc.weightT = op.sale.weightT; dc.weightMode = op.sale.weightMode; } });
     if (pc.valueChanged) op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "correct", no }, pc.valueDelta));
     state.rev += 1;
     audit(state, ctx, { entity: "operation", entityId: op.id, opNo: op.no, relatedNo: no, event: opts.reverses ? "correction-reverse" : "correction", act: opts.reverses ? Lx("Odwrócenie korekty {no}", { no: opts.reverses }) : Lx(pc.descriptiveOnly ? N_("Korekta danych opisowych") : N_("Korekta dokumentu")),
@@ -1523,7 +1681,7 @@
     const kind = info.kind === "KWIT" ? "KP" : info.kind === "DOC" ? "WYD" : "RAP";
     const no = nextNo(state, kind, today);
     state.rev += 1;
-    audit(state, ctx, { entity: "report", entityId: no, opNo: no, event: "print", act: Lx(info.format === "pdf" ? N_("Wygenerowanie PDF: {title}") : N_("Wydruk: {title}"), { title: String(info.title || "").slice(0, 200) }), before: null, after: { zakres: info.range || "", magazyn: info.wh || "", format: info.format }, source: (ctx && ctx.source) || N_("Raporty") });
+    audit(state, ctx, { entity: "report", entityId: no, opNo: no, event: "print", act: Lx(info.format === "pdf" ? N_("Wygenerowanie PDF: {title}") : info.format === "xlsx" ? N_("Eksport XLSX: {title}") : info.format === "docx" ? N_("Eksport DOCX: {title}") : N_("Wydruk: {title}"), { title: String(info.title || "").slice(0, 200) }), before: null, after: { zakres: info.range || "", magazyn: info.wh || "", format: info.format }, source: (ctx && ctx.source) || N_("Raporty") });
     return { ok: true, no };
   }
 
@@ -1643,7 +1801,7 @@
     KINDS: {
       vehicles: { label: N_("Pojazd"), fields: ["name", "reg", "type", "status", "driverId", "whId"] },
       drivers: { label: N_("Kierowca"), fields: ["name", "phone", "whId"] },
-      chippers: { label: N_("Rębak"), fields: ["name", "status", "operatorId", "whId"] },
+      chippers: { label: N_("Rębak"), fields: ["name", "owner", "company", "reg", "status", "operatorId", "operatorName", "info", "whId"] },
       operators: { label: N_("Operator rębaka"), fields: ["name", "phone", "whId"] }
     },
     /** Czy zasób występuje w zapisanych operacjach lub wersjach roboczych (wtedy nie usuwa się go — tylko wycofuje). */
@@ -1665,8 +1823,12 @@
         if (!byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Wybierz kierowcę domyślnego");
       }
       if (kind === "chippers") {
+        const owner = rec.owner || "own";
+        if (!CHIPPER_OWNERS[owner]) e.owner = t("Wybierz, czyj jest rębak");
         if (!ASSET_STATUS[rec.status]) e.status = t("Wybierz status");
-        if (!byId(state.fleet.operators, rec.operatorId)) e.operatorId = t("Wybierz operatora domyślnego");
+        if (owner === "own" && !byId(state.fleet.operators, rec.operatorId)) e.operatorId = t("Wybierz operatora domyślnego");
+        if (owner === "external" && str(rec.company).length < 2) e.company = t("Podaj firmę — właściciela rębaka");
+        if (str(rec.reg) && !/^[A-Z0-9 ]{3,10}$/i.test(str(rec.reg))) e.reg = t("Numer rejestracyjny: litery i cyfry, 3–10 znaków");
       }
       if ((kind === "drivers" || kind === "operators") && list.some(x => x.id !== rec.id && x.name.toLowerCase() === str(rec.name).toLowerCase())) e.name = t("Taka osoba już istnieje");
       return e;
@@ -1678,6 +1840,11 @@
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
       const list = state.fleet[kind], clean = { id: rec.id || uid(kind.slice(0, 2)) };
       for (const f of this.KINDS[kind].fields) clean[f] = f === "reg" ? str(rec.reg).toUpperCase().replace(/\s+/g, " ") : str(rec[f]);
+      if (kind === "chippers") {
+        clean.owner = clean.owner || "own";
+        if (clean.owner === "own") { clean.company = ""; clean.operatorName = ""; } else clean.operatorId = "";
+        clean.info = clean.info.slice(0, 300);
+      }
       const idx = list.findIndex(x => x.id === clean.id), before = idx >= 0 ? clone(list[idx]) : null;
       if (idx >= 0) list[idx] = Object.assign({}, list[idx], clean); else list.push(clean);
       state.rev += 1;
@@ -1690,7 +1857,7 @@
       const list = state.fleet[kind], rec = byId(list, id);
       if (!rec) return { ok: false, error: t("Nie znaleziono") };
       if (kind === "drivers" && state.fleet.vehicles.some(v => v.driverId === id)) return { ok: false, error: t("Kierowca jest domyślny dla pojazdu — najpierw zmień przypisanie") };
-      if (kind === "operators" && state.fleet.chippers.some(c => c.operatorId === id)) return { ok: false, error: t("Operator jest domyślny dla rębaka — najpierw zmień przypisanie") };
+      if (kind === "operators" && state.fleet.chippers.some(c => c.owner !== "external" && c.operatorId === id)) return { ok: false, error: t("Operator jest domyślny dla rębaka — najpierw zmień przypisanie") };
       if ((kind === "vehicles" || kind === "chippers") && this.used(state, id)) return { ok: false, error: t("Pojazd lub rębak występuje w operacjach — nie można go usunąć; ustaw status „Wycofany” (historia kursów zostaje)") };
       state.fleet[kind] = list.filter(x => x.id !== id); state.rev += 1;
       audit(state, ctx, { entity: "fleet", entityId: id, opNo: rec.name, event: "fleet", act: Lx("Usunięcie: {k}", { k: { t: this.KINDS[kind].label } }), before: rec, after: null, source: (ctx && ctx.source) || N_("Moduł Flota") });
@@ -1716,7 +1883,8 @@
     KINDS: {
       products: { label: N_("Produkt"), prefix: "pr", fields: ["code", "name", "cat", "unit", "units", "tPerUnit", "mpPerM3", "tPerM3", "active"] },
       partners: { label: N_("Kontrahent"), prefix: "pa", fields: ["name", "role", "kind", "city", "address", "nip", "phone", "email", "lesnictwa", "active"] },
-      warehouses: { label: N_("Magazyn"), prefix: "wh", fields: ["code", "name", "address", "active"] }
+      warehouses: { label: N_("Magazyn"), prefix: "wh", fields: ["code", "name", "address", "active"] },
+      extraTypes: { label: N_("Dodatkowa operacja"), prefix: "xt", fields: ["name", "desc", "unit", "rate", "active"] }
     },
     usedProduct(state, id) { return state.ledger.some(l => l.productId === id) || state.operations.some(o => JSON.stringify(o.input || {}).includes(`"${id}"`)); },
     validate(state, kind, rec) {
@@ -1749,6 +1917,11 @@
         if (!nipValid(rec.nip)) e.nip = t("Niepoprawny NIP (10 cyfr z sumą kontrolną)");
         if (str(rec.email) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str(rec.email))) e.email = t("Niepoprawny adres e-mail");
       }
+      if (kind === "extraTypes") {
+        if (str(rec.desc).length > 300) e.desc = t("Opis: maksymalnie 300 znaków");
+        if (!Object.prototype.hasOwnProperty.call(EXTRA_UNITS, str(rec.unit))) e.unit = t("Wybierz jednostkę");
+        if (rec.rate !== undefined && rec.rate !== null && str(rec.rate) !== "") { const r = NumParse.parse(rec.rate); if (!r.ok || r.value < 0) e.rate = t("Stawka: liczba nie mniejsza od 0"); }
+      }
       if (kind === "warehouses" && rec.active === false) {
         const prev = byId(list, rec.id);
         if (prev) {
@@ -1777,6 +1950,7 @@
         r.units = [...new Set([r.unit].concat(Array.isArray(r.units) ? r.units : Units.defaultUnits(r)))].filter(Boolean);
       }
       if (kind === "warehouses") r.code = str(r.code).toUpperCase();
+      if (kind === "extraTypes") { r.unit = str(r.unit); r.rate = r.rate === undefined || r.rate === null || str(r.rate) === "" ? null : rq(NumParse.value(r.rate, 0)); r.desc = str(r.desc); }
       if (kind === "partners") {
         if (r.role === "buyer") delete r.kind;
         r.nip = str(r.nip).replace(/[\s-]/g, "");
@@ -1792,6 +1966,7 @@
         if (clean.unit === "t") delete clean.tPerUnit;
         clean.units = Units.LIST.filter(u => clean.units.includes(u));
       }
+      if (kind === "extraTypes") { clean.rate = r.rate; clean.updatedAt = nowIso(ctx); }
       if (prev && prev.createdBy) clean.createdBy = prev.createdBy;
       if (prev && prev.createdAt) clean.createdAt = prev.createdAt; else if (!prev) { clean.createdAt = nowIso(ctx); clean.createdBy = ctx.user.name; }
       const list = state[kind], idx = list.findIndex(x => x.id === clean.id);
@@ -1813,6 +1988,7 @@
     const inOps = state.operations.some(o => JSON.stringify(o).includes(`"${id}"`)) || state.drafts.some(d => JSON.stringify(d).includes(`"${id}"`));
     if (kind === "products" && (this.usedProduct(state, id) || inOps)) return { ok: false, error: t("Produkt występuje w dokumentach — nie można go usunąć; dezaktywuj go") };
     if (kind === "partners" && inOps) return { ok: false, error: t("Kontrahent występuje w dokumentach — nie można go usunąć; dezaktywuj go") };
+    if (kind === "extraTypes" && inOps) return { ok: false, error: t("Rodzaj operacji występuje w dokumentach — nie można go usunąć; ustaw go jako nieaktywny") };
     if (kind === "warehouses") {
       if (state.ledger.some(l => l.whId === id) || state.operations.some(o => o.whId === id || o.toWhId === id) || state.drafts.some(d => d.whId === id)) return { ok: false, error: t("Magazyn ma dokumenty lub ruchy w księdze — nie można go usunąć; dezaktywuj go") };
       if (state.users.some(u => u.whId === id || (u.warehouseIds || []).includes(id))) return { ok: false, error: t("Do magazynu są przypisani użytkownicy — najpierw przenieś ich do innego magazynu") };
@@ -2182,6 +2358,7 @@
         })(),
         rows: trOps.map(op => ({ opId: op.id, no: (op.documents.find(d => d.type === "TR") || {}).no, date: op.date, mode: t(TRANSPORT_MODES[op.transport.mode]), place: op.transport.place, km: op.transport.km || 0, wagons: op.transport.wagonCount || 0, totalT: op.transport.totalT || 0, cost: op.transport.cost }))
       };
+      const extras = this.extras(state, from, to, whId, ops);
       const corrections = [], cancellations = [];
       for (const op of ops) {
         for (const c of op.corrections) if (inR(c.date)) corrections.push({ opId: op.id, no: c.no, orig: op.no, date: c.date, reason: trReason(c.reason), user: c.userName, changes: c.changes, deltas: c.deltas, valueDelta: c.valueDelta, totalsBefore: c.totalsBefore, totalsAfter: c.totalsAfter, descriptiveOnly: c.descriptiveOnly });
@@ -2198,9 +2375,27 @@
       const ym = f.mode === "month" ? Dates.ym(from) : null;
       const closed = ym ? state.warehouses.filter(w => !whId || w.id === whId).map(w => ({ whId: w.id, name: w.name, closed: !!(Inventory.find(state, w.id, ym) && Inventory.find(state, w.id, ym).status === "ZAMKNIETA") })) : [];
       return {
-        filters: f, from, to, recon, consistent: recon.every(r => r.consistent), purchases, production, sales, consumption, mm, transport, corrections, cancellations, valuation, closed,
+        filters: f, from, to, recon, consistent: recon.every(r => r.consistent), purchases, production, sales, consumption, mm, transport, extras, corrections, cancellations, valuation, closed,
         turnover: this.turnover(state, from, to, whId, f)
       };
+    },
+
+    /**
+     * Operacje dodatkowe w okresie (kafel pulpitu, raport): rekordy z operacji niewycofanych na koniec okresu,
+     * koszt łączny i liczba; rozbicie wg rodzaju. Data = data operacji głównej.
+     */
+    extras(state, from, to, whId, opsIn) {
+      const ops = (opsIn || state.operations).filter(op => (!whId || op.whId === whId) && op.date >= from && op.date <= to && opLiveAt(op, to) && Array.isArray(op.extras) && op.extras.length);
+      const rows = [];
+      for (const op of ops) for (const x of op.extras) {
+        const doc = op.type === "PRODUKCJA" ? (op.documents.find(d => d.type === "PW") || {}).no : op.no;
+        rows.push({ id: x.id, opId: op.id, date: op.date, typeId: x.typeId, typeName: x.typeName, vehicleName: x.vehicleName || "", reg: x.reg || "", whId: op.whId, whName: (byId(state.warehouses, op.whId) || {}).name || "",
+          docNo: doc || op.no, opNo: op.no, opType: op.type, qty: x.qty, unit: x.unit, rate: x.rate, cost: x.cost, desc: x.desc || "", status: op.status });
+      }
+      rows.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+      const byType = new Map();
+      for (const r of rows) { const c = byType.get(r.typeId) || { typeId: r.typeId, name: r.typeName, count: 0, cost: 0 }; c.count++; c.cost = round(c.cost + r.cost, 2); byType.set(r.typeId, c); }
+      return { count: rows.length, cost: round(rows.reduce((a, r) => a + r.cost, 0), 2), rows, byType: [...byType.values()].sort((a, b) => b.cost - a.cost), opIds: [...new Set(rows.map(r => r.opId))] };
     },
 
     /** Obroty wg typu operacji (liczba, ilości w rozbiciu na jednostki, wartość). */
@@ -2240,18 +2435,20 @@
           raw: raw ? raw.name : "—", consume: x.mode === "direct" ? x.rawQty : x.consumeQty, consumeUnit: raw ? raw.unit : "", consumeFromStock: x.mode !== "direct",
           product: out ? out.name : "—", outQty: x.outQty, outUnit: out ? out.unit : "",
           mp: out && out.unit === "MP" ? x.outQty : null, m3: out && out.unit === "MP" ? rq(x.outQty / cfg.m3_mp) : null, t: o.t, gj: o.gj,
-          chipRate: x.chipRate, chipCost: x.chippingCost, notes: op.notes, status: op.status, corrected: op.corrections.length > 0
+          chipRate: x.chipRate, chipCost: x.chippingCost, chipperOwner: x.chipperOwner || "", chipperCompany: x.chipperCompany || "",
+          extraCost: (op.extras || []).reduce((a, e) => a + e.cost, 0), extras: extrasText(op.extras), notes: op.notes, status: op.status, corrected: op.corrections.length > 0
         });
       }
       const live = rows.filter(r => r.status !== "CANCELLED");
       const sum = k => rq(live.reduce((a, r) => a + (r[k] || 0), 0));
-      return { date, whId, rows, totals: { count: live.length, mp: sum("mp"), m3: sum("m3"), t: sum("t"), gj: sum("gj"), chipCost: round(live.reduce((a, r) => a + r.chipCost, 0), 2) } };
+      return { date, whId, rows, totals: { count: live.length, mp: sum("mp"), m3: sum("m3"), t: sum("t"), gj: sum("gj"), chipCost: round(live.reduce((a, r) => a + r.chipCost, 0), 2), extraCost: round(live.reduce((a, r) => a + r.extraCost, 0), 2) } };
     }
   };
 
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
-    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, CORRECTION_REASONS, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
+    CHIPPER_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,

@@ -19,7 +19,6 @@
   "{n} niezamknięty okres|{n} niezamknięte okresy|{n} niezamkniętych okresów": ["{n} neuzavřené období|{n} neuzavřená období|{n} neuzavřených období", "{n} open period|{n} open periods"],
   "Raport miesiąca": ["Přehled měsíce", "Monthly report"],
   "Sprzedaż w miesiącu": ["Prodej v měsíci", "Sales this month"],
-  "Koszty: zakup, rąbanie, transport": ["Náklady: nákup, štěpkování, doprava", "Costs: purchase, chipping, transport"],
   "Wynik operacji w miesiącu": ["Výsledek operací v měsíci", "Operating result this month"],
   "operacja w miesiącu|operacje w miesiącu|operacji w miesiącu": ["operace v měsíci|operace v měsíci|operací v měsíci", "operation this month|operations this month"],
   "Zakup": ["Nákup", "Purchase"],

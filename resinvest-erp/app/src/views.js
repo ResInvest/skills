@@ -10,6 +10,7 @@
   const { R, t, tp, N_, esc, $, $$, ic, download, csvNum, toCSV, Toast, Modal, Store, App, Views, statusBadge, transportText, CANCEL_REASONS } = UI;
   const { fmt, fmtQ, money, Units, Dates, Stock } = R;
   const PDF = root.RIW_PDF;
+  const OFFICE = root.RIW_OFFICE;
   const th = s => esc(t(s));
 
   /* ------------------------------------------------------------------ */
@@ -30,7 +31,14 @@
   const opValue = o => o.type === "ZAKUP" ? o.totals.purchaseCost : o.sale ? o.totals.revenue : o.type === "PRODUKCJA" ? o.totals.chippingCost : 0;
   const nowText = () => { const d = new Date(); return `${Dates.pl(App.today())} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
   const qtyByUnit = m => Object.entries(m || {}).filter(([, v]) => Math.abs(v) > R.EPS).map(([u, v]) => `${fmtQ(v)} ${Units.label(u)}`).join(" · ") || "—";
-  const statusText = st => st === "CANCELLED" ? t("ANULOWANY") : t(R.STATUS[st] || st);
+  const statusText = st => st === "DELETED" ? t("USUNIĘTY") : st === "CANCELLED" ? t("ANULOWANY") : t(R.STATUS[st] || st);
+  /** Status operacji / dokumentu z uwzględnieniem usunięcia (soft delete). */
+  const opStatusBadge = o => o && o.deleted ? `<span class="badge err" data-deleted="1">${th("USUNIĘTY")}</span>` : statusBadge(o.status);
+  /** Typ dokumentu z kolorem: PZ — zielony, WZ — złoty, MM — niebieski, PW / RW — marka, KOR / AN — ostrzegawcze. */
+  const docBadge = ty => `<span class="badge doc-badge doc-${esc(ty)}">${esc(ty)}</span>`;
+  const extrasTotal = op => R.round((op.extras || []).reduce((a, x) => a + x.cost, 0), 2);
+  const extraLine = x => `${x.typeName}${x.reg ? ` (${x.reg})` : ""}: ${money(x.cost)}${x.qty !== null && x.qty !== undefined && x.rate !== null && x.rate !== undefined && x.costBasis === "qtyRate" ? ` (${fmtQ(x.qty)} × ${fmt(x.rate)} zł)` : ""}${x.desc ? " — " + x.desc : ""}`;
+  const tonLine = s => s && s.weightT != null ? `${fmtQ(s.qty)} ${Units.label(s.unit)} | ${fmt(s.weightT, 2)} t | ${t(R.WEIGHT_SOURCES[s.weightMode] || "AUTO")}` : "";
   const allWh = () => t("wszystkie magazyny");
   /** Znacznik stanu przesunięcia MM (dwuetapowe): W DRODZE / PRZYJĘTE; jednoetapowe — bez znacznika. */
   const mmBadge = o => {
@@ -48,9 +56,9 @@
     for (const op of S.operations) {
       if (whId && op.whId !== whId && op.toWhId !== whId) continue;
       const mmx = op.type === "MM" && op.mm ? { mmState: R.mmState(op), twoStage: !!op.mm.twoStage, receipt: op.mm.receipt || null } : {};
-      for (const d of op.documents) rows.push(Object.assign({}, d, { date: op.date, opId: op.id, opNo: op.no, opType: op.type, direct: op.direct, status: op.status, whId: op.whId, userName: op.userName }, d.type === "MM" ? mmx : {}));
+      for (const d of op.documents) rows.push(Object.assign({}, d, { date: op.date, opId: op.id, opNo: op.no, opType: op.type, direct: op.direct, status: op.status, deleted: !!op.deleted, whId: op.whId, userName: op.userName, createdAt: op.createdAt }, d.type === "MM" ? mmx : {}));
       op.corrections.forEach(c => rows.push({ type: "KOR", no: c.no, date: c.date, opId: op.id, opNo: op.no, status: "POSTED", whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: c.deltas.length ? "±" : "brak", userName: c.userName, note: t("KOREKTA dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(c.reason) }), corr: c }));
-      if (op.cancel) rows.push({ type: "AN", no: op.cancel.no, date: op.cancel.date, opId: op.id, opNo: op.no, status: "POSTED", whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: "±", userName: op.cancel.userName, note: t("ANULOWANIE dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(op.cancel.reason) }) });
+      if (op.cancel) rows.push({ type: "AN", no: op.cancel.no, date: op.cancel.date, opId: op.id, opNo: op.no, status: "POSTED", deleted: !!op.deleted, whId: op.whId, productId: null, qty: null, unit: null, value: 0, partner: partnerName(opPartnerId(op)), place: op.place, stock: "±", userName: op.cancel.userName, note: op.deleted ? t("USUNIĘCIE dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(op.deleted.reason) }) : t("ANULOWANIE dokumentu nr {no}: {r}", { no: op.no, r: R.trReason(op.cancel.reason) }) });
     }
     const extra = new Map();
     for (const l of S.ledger) {
@@ -104,14 +112,43 @@
       } catch (e) { console.error(e); Toast.err(t("Nie udało się wygenerować PDF"), e.message); }
     }
   };
+  /** Eksport XLSX / DOCX (pełny model dokumentu — dane ogólne i wszystkie tabele) z rejestracją w audycie. */
+  Printer.office = async function (model, kind, fmtName, fileBase) {
+    try {
+      const no = await this.register(model, kind, fmtName);
+      const m = this.finish(model, no);
+      const bytes = fmtName === "docx" ? OFFICE.docx(m) : OFFICE.xlsx(OFFICE.modelToSheets(m, { data: t("Dane"), field: t("Pole"), value: t("Wartość"), table: t("Tabela") }), { title: m.title, author: m.generatedBy });
+      const name = `${fileBase || "dokument"}_${(no || "").replace(/\//g, "-")}.${fmtName}`.replace(/[^\w.\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/g, "_");
+      download(name, new Blob([bytes], { type: fmtName === "docx" ? OFFICE.DOCX_MIME : OFFICE.XLSX_MIME }));
+      root.RIW_DEBUG.lastOffice = { name, size: bytes.length, format: fmtName, model: m };
+      Toast.ok(fmtName === "docx" ? t("Wygenerowano DOCX") : t("Wygenerowano XLSX"), `${name} · ${fmt(bytes.length / 1024, 0)} kB`);
+    } catch (e) { console.error(e); Toast.err(t("Nie udało się wygenerować pliku"), e.message); }
+  };
+  /** Tabela rejestru → XLSX (ten sam zakres i kolumny co CSV). */
+  function xlsxTable(fileBase, title, columns, rows, subtitle) {
+    const bytes = OFFICE.xlsx([{ name: title, title, subtitle, columns, rows }], { title, author: App.user().name });
+    const name = `${fileBase}.xlsx`.replace(/[^\w.\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/g, "_");
+    download(name, new Blob([bytes], { type: OFFICE.XLSX_MIME }));
+    root.RIW_DEBUG.lastOffice = { name, size: bytes.length, format: "xlsx", rows: rows.length };
+    Store.exec("print.register", { kind: "RAP", title, range: subtitle || "", wh: App.whName(App.user().whId), format: "xlsx" }, N_("Eksport XLSX")).catch(() => {});
+    Toast.ok(t("Wygenerowano XLSX"), `${name} · ${tp("{n} wiersz|{n} wiersze|{n} wierszy", rows.length)}`);
+  }
+  const num = v => v === null || v === undefined || v === "" ? "" : R.round(v, 6);
   const printButtons = id => `<button class="btn" type="button" data-print="${id}">${ic("print", 15)} ${th("Drukuj")}</button><button class="btn" type="button" data-pdf="${id}">${ic("pdf", 15)} ${th("Generuj PDF")}</button>`;
+  const officeButtons = id => `<button class="btn" type="button" data-xlsx="${id}">${ic("dl", 15)} XLSX</button><button class="btn" type="button" data-docx="${id}">${ic("file", 15)} DOCX</button>`;
 
   /** Model dokumentu magazynowego (PZ, RW, PW, WZ, MM, TR, KOR, AN). */
   function docModel(d) {
     const S = Store.state, op = d.opId ? R.byId(S.operations, d.opId) : null;
     const kv = [];
     const add = (k, v) => { if (v !== undefined && v !== null && v !== "") kv.push([k, String(v)]); };
-    add(t("Numer"), d.no); add(t("Rodzaj"), t(R.DOC_LABEL[d.type])); add(t("Data"), Dates.pl(d.date)); add(t("Magazyn"), App.whName(d.whId)); add(t("Status"), statusText(d.status));
+    add(t("Numer"), d.no + (d.manualNo ? " " + t("(wpisany ręcznie)") : "")); add(t("Rodzaj"), t(R.DOC_LABEL[d.type]));
+    if (d.type === "PZ" || d.type === "WZ") {
+      add(t("Data dokumentu"), Dates.pl(d.docDate || d.date));
+      add(d.type === "PZ" ? t("Data przyjęcia") : t("Data wydania"), Dates.pl(d.date));
+    } else add(t("Data"), Dates.pl(d.date));
+    if (op && op.createdAt) add(t("Utworzono (data i godzina)"), `${Dates.ts(op.createdAt, true)} · ${op.userName}`);
+    add(t("Magazyn"), App.whName(d.whId)); add(t("Status"), statusText(d.deleted ? "DELETED" : d.status));
     if (d.place) add(t("Miejsce transportu"), d.place);
     if (d.productId) {
       const p = App.product(d.productId);
@@ -119,6 +156,7 @@
       add(t("Ilość"), `${fmtQ(d.qty, 6)} ${Units.label(d.unit)}${d.unit !== p.unit ? ` (= ${fmtQ(d.stockQty, 6)} ${Units.label(p.unit)})` : ""}`);
       const o = Units.orient(d.stockQty != null ? d.stockQty : d.qty, p, S.config);
       add(t("Masa · energia"), `${d.weightMode === "manual" ? t("{q} t (waga rzeczywista)", { q: fmtQ(d.weightT) }) : `≈ ${fmt(o.t, 2)} t`} · ≈ ${fmt(o.gj, 1)} GJ ${t("(orientacyjnie)")}`);
+      if (d.type === "WZ" && d.weightT != null) add(t("Ilość | tonaż | źródło"), tonLine({ qty: d.qty, unit: d.unit, weightT: d.weightT, weightMode: d.weightMode || "auto" }));
     }
     if (d.fromWh) { add(t("Z magazynu"), d.fromWh); add(t("Do magazynu"), d.toWh); }
     if (d.type === "MM" && op && op.mm) {
@@ -146,6 +184,10 @@
     }
     const blocks = [{ type: "kv", rows: kv, cols: 1 }];
     if (d.transport) transportBlocks(d.transport, blocks);
+    if (d.type === "PW" && op && op.extras && op.extras.length) {
+      blocks.push({ type: "h", text: t("Operacje dodatkowe") }, { type: "table", columns: [{ label: t("Rodzaj"), w: 2.4 }, { label: t("Pojazd"), w: 1.6 }, { label: t("Ilość × stawka"), w: 1.6, align: "right" }, { label: t("Opis"), w: 2.6 }, { label: t("Koszt"), w: 1.3, align: "right" }],
+        rows: op.extras.map(x => [x.typeName, x.reg ? `${x.reg} · ${x.vehicleName}` : "—", x.qty !== null && x.qty !== undefined && x.rate !== null && x.rate !== undefined ? `${fmtQ(x.qty)} × ${fmt(x.rate)} zł` : "—", x.desc || "—", money(x.cost)]), foot: [t("Razem"), "", "", "", money(extrasTotal(op))] });
+    }
     if (d.type === "KOR" && d.corr) {
       const c = d.corr;
       blocks.push({ type: "h", text: t("KOREKTA dokumentu nr {no}", { no: d.opNo }) }, { type: "p", text: t("Powód: {r} · wprowadził: {u}", { r: R.trReason(c.reason), u: c.userName }) + (c.reverses ? " · " + t("odwraca korektę {no}", { no: c.reverses }) : "") });
@@ -153,7 +195,7 @@
       if (c.deltas.length) blocks.push({ type: "table", columns: [{ label: t("Produkt"), w: 3 }, { label: t("Magazyn"), w: 2 }, { label: t("Zmiana stanu"), w: 2, align: "right" }], rows: c.deltas.map(x => [pName(x.productId), App.whName(x.whId), (x.qty > 0 ? "+" : "") + App.qtyNative(x.qty, x.productId, 6)]) });
     }
     if (d.type === "AN" && op && op.cancel) {
-      blocks.push({ type: "h", text: t("ANULOWANIE dokumentu nr {no}", { no: op.no }) }, { type: "p", text: t("Przyczyna: {r} · wykonał: {u}", { r: R.trReason(op.cancel.reason), u: op.cancel.userName }) });
+      blocks.push({ type: "h", text: op.deleted ? t("USUNIĘCIE dokumentu nr {no}", { no: op.no }) : t("ANULOWANIE dokumentu nr {no}", { no: op.no }) }, { type: "p", text: t("Przyczyna: {r} · wykonał: {u}", { r: R.trReason(op.cancel.reason), u: op.cancel.userName }) });
       blocks.push({ type: "table", columns: [{ label: t("Produkt"), w: 3 }, { label: t("Magazyn"), w: 2 }, { label: t("Zmiana"), w: 2, align: "right" }, { label: t("Stan przed"), w: 2, align: "right" }, { label: t("Stan po"), w: 2, align: "right" }], rows: op.cancel.effect.map(x => [pName(x.productId), App.whName(x.whId), (x.qty > 0 ? "+" : "") + App.qtyNative(x.qty, x.productId, 6), App.qtyNative(x.before, x.productId), App.qtyNative(x.after, x.productId)]) });
     }
     if (op) blocks.push({ type: "p", muted: true, text: t("Operacja {no} · {type} · wystawił: {u}", { no: op.no, type: opTypeLabel(op), u: op.userName }) + (op.extDoc ? " · " + t("dokument zewnętrzny: {x}", { x: op.extDoc }) : "") + (op.notes ? " · " + t("uwagi: {x}", { x: op.notes }) : "") });
@@ -199,15 +241,19 @@
       const events = S.audit.filter(a => a.entityId === op.id).slice().sort((a, b) => a.ts < b.ts ? -1 : 1);
       const kv = [];
       const add = (k, v) => { if (v !== undefined && v !== null && v !== "") kv.push(`<dt>${esc(k)}</dt><dd>${v}</dd>`); };
-      add(t("Rodzaj"), TYPE_BADGE(op)); add(t("Status"), statusBadge(op.status)); add(t("Data"), esc(Dates.pl(op.date))); add(t("Magazyn"), esc(App.whName(op.whId)) + (op.toWhId ? ` → ${esc(App.whName(op.toWhId))}` : ""));
-      add(t("Wystawił"), esc(`${op.userName} · ${Dates.ts(op.createdAt)}`));
+      add(t("Rodzaj"), TYPE_BADGE(op)); add(t("Status"), opStatusBadge(op)); add(t("Data"), esc(Dates.pl(op.date))); add(t("Magazyn"), esc(App.whName(op.whId)) + (op.toWhId ? ` → ${esc(App.whName(op.toWhId))}` : ""));
+      const extDocs = op.documents.filter(dc => dc.type === "PZ" || dc.type === "WZ");
+      if (extDocs.length) add(t("Dokumenty PZ / WZ"), extDocs.map(dc => `<span class="mono">${esc(dc.no)}</span>${dc.manualNo ? ` <small class="dim">${th("(ręczny)")}</small>` : ""}`).join(" · ") + (op.docDate && op.docDate !== op.date ? ` · ${esc(t("data dokumentu {d}", { d: Dates.pl(op.docDate) }))}` : ""));
+      add(t("Wystawił"), esc(`${op.userName} · ${Dates.ts(op.createdAt, true)}`));
       if (op.purchase) add(t("Zakup"), `${esc(partnerName(op.purchase.supplierId))} · ${esc(fmtQ(op.purchase.qty))} ${Units.label(op.purchase.unit)} ${esc(pName(op.purchase.productId))} × ${fmt(op.purchase.price)} zł/${Units.label(op.purchase.priceUnit || op.purchase.unit)}${op.purchase.priceUnit && op.purchase.priceUnit !== op.purchase.unit ? ` (${esc(fmtQ(op.purchase.priceQty))} ${Units.label(op.purchase.priceUnit)})` : ""}`);
       if (op.production) {
         const X = op.production;
         add(X.mode === "direct" ? t("Produkcja w lesie") : t("Produkcja"), `${X.rawProductId ? `${esc(pName(X.rawProductId))} ${esc(fmtQ(X.consumeQty, 6))} ${Units.label(X.consumeUnit)}${X.mode === "direct" ? " " + esc(t("(nie ze stanu)")) : ""} → ` : ""}<b>${esc(fmtQ(X.outQty, 6))} ${Units.label(X.outUnit)}</b> ${esc(pName(X.outProductId))}`);
-        if (X.outUnit === "MP") add(t("Rąbanie"), `${fmt(X.chipRate)} zł/MP = ${money(X.chippingCost)}${X.chipperName ? ` · ${esc(X.chipperName)} (${esc(X.operatorName)})` : ""}`);
+        if (X.outUnit === "MP") add(t("Rąbanie"), `${fmt(X.chipRate)} zł/MP = ${money(X.chippingCost)}${X.chipperName ? ` · ${esc(X.chipperName)}${X.chipperOwner === "external" ? ` <span class="badge info">${esc(t("firma zewnętrzna"))}</span> ${esc(X.chipperCompany)}` : ""}${X.operatorName ? ` (${esc(X.operatorName)})` : ""}` : ""}`);
       }
+      if (op.extras && op.extras.length) add(t("Operacje dodatkowe"), `<ul class="plain-list" id="op-extras">${op.extras.map(x => `<li>${esc(extraLine(x))}</li>`).join("")}</ul><b>${esc(t("Razem: {m}", { m: money(extrasTotal(op)) }))}</b>`);
       if (op.sale) add(t("Sprzedaż"), `${esc(partnerName(op.sale.buyerId))} · ${esc(fmtQ(op.sale.qty))} ${Units.label(op.sale.unit)} → ${money(op.sale.revenue)}`);
+      if (op.sale && op.sale.weightT != null) add(t("Ilość | tonaż | źródło"), `<span id="op-tonline">${esc(tonLine(op.sale))}</span>`);
       if (op.mm) {
         const M = op.mm, rc = M.receipt, p = App.product(M.productId);
         add(t("Przesunięcie"), `${esc(fmtQ(M.qty))} ${Units.label(M.unit)} ${esc(pName(M.productId))}: ${esc(M.fromWhName)} → ${esc(M.toWhName)}`);
@@ -221,6 +267,7 @@
 
       const canCorr = op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && R.canAccessWh(App.user(), op.whId);
       const canCancel = op.status !== "CANCELLED" && App.can("documents.cancel") && R.canAccessWh(App.user(), op.whId);
+      const canDelete = op.status !== "CANCELLED" && !op.deleted && App.can("documents.delete") && R.canAccessWh(App.user(), op.whId);
       const lastCorr = op.corrections[op.corrections.length - 1];
       const corrRows = op.corrections.map(c => `<tr><td class="mono nowrap"><a href="#" data-doc="${esc(c.no)}">${esc(c.no)}</a></td><td class="nowrap">${esc(Dates.pl(c.date))}</td><td>${esc(c.userName)}</td><td>${esc(R.trReason(c.reason))}${c.reverses ? `<br><small class="dim">${esc(t("odwraca {no}", { no: c.reverses }))}</small>` : ""}</td>
           <td>${c.changes.map(x => `${esc(t(x.label))}: ${esc(x.beforeText)} → <b>${esc(x.afterText)}</b>`).join("<br>") || "—"}</td>
@@ -234,7 +281,8 @@
       const body = `
         ${opts.justSaved ? `<div class="info-line ok mb3">${ic("check", 15)}<span>${t("Dokument zatwierdzony: <b>{list}</b>. Status: ZATWIERDZONY.", { list: docs.map(d => esc(d.no)).join(", ") })}</span></div>` : ""}
         ${R.mmState(op) === "W_DRODZE" ? `<div class="info-line warn mb3" id="mm-transit-info">${ic("truck", 15)}<span>${esc(t("Towar w drodze do magazynu {w}. Stan magazynu docelowego wzrośnie po przyjęciu MM.", { w: op.mm.toWhName }))}</span></div>` : ""}
-        ${op.status === "CANCELLED" ? `<div class="info-line err mb3">${ic("ban", 15)}<span>${esc(t("Dokument anulowany {d} przez {u} — dokument {no}. Przyczyna: {r}. Skutki magazynowe zostały odwrócone; dokument pozostaje w historii.", { d: Dates.pl(op.cancel.date), u: op.cancel.userName, no: op.cancel.no, r: R.trReason(op.cancel.reason) }))}</span></div>` : ""}
+        ${op.deleted ? `<div class="info-line err mb3" id="op-deleted-info">${ic("trash", 15)}<span>${esc(t("Dokument USUNIĘTY {d} przez {u}. Przyczyna: {r}. Ruchy magazynowe odwrócono dokumentem {no}; dokument pozostaje w historii i dzienniku audytu.", { d: Dates.ts(op.deleted.ts), u: op.deleted.userName, no: op.deleted.reversalNo, r: R.trReason(op.deleted.reason) }))}</span></div>`
+          : op.status === "CANCELLED" ? `<div class="info-line err mb3">${ic("ban", 15)}<span>${esc(t("Dokument anulowany {d} przez {u} — dokument {no}. Przyczyna: {r}. Skutki magazynowe zostały odwrócone; dokument pozostaje w historii.", { d: Dates.pl(op.cancel.date), u: op.cancel.userName, no: op.cancel.no, r: R.trReason(op.cancel.reason) }))}</span></div>` : ""}
         <div class="grid g2 detail-grid"><dl class="money-list" id="op-kv">${kv.join("")}</dl>
           <div><h4 class="mini-h">${th("Dokumenty")}</h4><div class="tbl-wrap"><table class="tbl" id="op-docs"><thead><tr><th>${th("Nr")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th>${th("Stan")}</th><th></th></tr></thead><tbody>
             ${docs.map(d => `<tr><td class="mono nowrap">${esc(d.no)}</td><td>${esc(docContent(d))}</td><td class="r">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td><td>${stockLbl(d)}</td><td class="r nowrap"><button class="btn sm" type="button" data-doc="${esc(d.no)}">${th("Podgląd")}</button></td></tr>`).join("")}
@@ -248,8 +296,8 @@
         <h4 class="mini-h">${th("Historia zdarzeń")}</h4>
         <ul class="timeline" id="op-events">${events.map(a => `<li>${auditLine(a)}</li>`).join("")}</ul>`;
       const m = Modal.open({
-        title: `${op.no} — ${opTypeLabel(op)}`, sub: `${statusBadge(op.status)} ${mmBadge(op)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
-        footer: `${canReceive(op) ? `<button class="btn primary" type="button" data-receive id="mm-receive-btn">${ic("inbox", 15)} ${th("Przyjmij MM…")}</button>` : ""}${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}
+        title: `${op.no} — ${opTypeLabel(op)}`, sub: `${opStatusBadge(op)} ${mmBadge(op)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
+        footer: `${canReceive(op) ? `<button class="btn primary" type="button" data-receive id="mm-receive-btn">${ic("inbox", 15)} ${th("Przyjmij MM…")}</button>` : ""}${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}${canDelete ? `<button class="btn danger ghost" type="button" data-delete id="op-delete-btn">${ic("trash", 15)} ${th("Usuń…")}</button>` : ""}
           ${canCorr ? `<a class="btn" href="#/korekta?op=${esc(op.id)}" data-correct>${ic("edit", 15)} ${th("Koryguj…")}</a>` : ""}
           <span class="spacer"></span>
           <button class="btn primary" type="button" data-close>${th("Zamknij")}</button>`
@@ -257,6 +305,7 @@
       $("[data-close]", m.el).onclick = () => m.close();
       const cc = $("[data-correct]", m.el); if (cc) cc.addEventListener("click", () => m.close());
       const cb = $("[data-cancel]", m.el); if (cb) cb.onclick = () => { m.close(); CancelDialog.open(op.id); };
+      const db = $("[data-delete]", m.el); if (db) db.onclick = () => { m.close(); DeleteDialog.open(op.id); };
       const rb = $("[data-receive]", m.el); if (rb) rb.onclick = () => { m.close(); ReceiveDialog.open(op.id); };
       $$("[data-doc]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); const d = allDocuments(Store.state).find(x => x.no === b.dataset.doc); if (d) DocPreview.open(d); });
       $$("[data-op]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); m.close(); OpDetail.open(b.dataset.op); });
@@ -340,11 +389,13 @@
           : b.type === "h" ? `<h5>${esc(b.text)}</h5>` : b.type === "p" ? (b.bold ? `<h5>${esc(b.text)}</h5>` : `<p class="${b.muted ? "muted" : ""}">${esc(b.text)}</p>`)
           : `<table class="tbl"><thead><tr>${b.columns.map(c => `<th class="${c.align === "right" ? "r" : ""}">${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map((v, i) => `<td class="${b.columns[i].align === "right" ? "r" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}</div>`;
       const m = Modal.open({ title: `${d.type} ${d.no}`, sub: esc(t(R.DOC_LABEL[d.type])), wide: true, id: "doc-preview", body: html,
-        footer: `${d.opId ? `<button class="btn ghost" type="button" data-opd>${esc(t("Operacja {no}", { no: d.opNo }))}</button>` : ""}<span class="spacer"></span>${printButtons("doc")}<button class="btn primary" type="button" data-ok>${th("Zamknij")}</button>` });
+        footer: `${d.opId ? `<button class="btn ghost" type="button" data-opd>${esc(t("Operacja {no}", { no: d.opNo }))}</button>` : ""}<span class="spacer"></span>${printButtons("doc")}${officeButtons("doc")}<button class="btn primary" type="button" data-ok>${th("Zamknij")}</button>` });
       $("[data-ok]", m.el).onclick = () => m.close();
       const o = $("[data-opd]", m.el); if (o) o.onclick = () => { m.close(); OpDetail.open(d.opId); };
       $("[data-print]", m.el).onclick = () => Printer.print(model, "DOC");
       $("[data-pdf]", m.el).onclick = () => Printer.pdf(model, "DOC", d.no.replace(/\//g, "-"));
+      $("[data-xlsx]", m.el).onclick = () => Printer.office(model, "DOC", "xlsx", d.no.replace(/\//g, "-"));
+      $("[data-docx]", m.el).onclick = () => Printer.office(model, "DOC", "docx", d.no.replace(/\//g, "-"));
     }
   };
 
@@ -398,6 +449,49 @@
   };
 
   /* ------------------------------------------------------------------ */
+  /* Usunięcie dokumentu (soft delete z odwróceniem ruchów)               */
+  /* ------------------------------------------------------------------ */
+  const DeleteDialog = {
+    open(opId) {
+      const S = Store.state, op = R.byId(S.operations, opId);
+      const pc = R.planCancel(S, opId, App.ctx(N_("Usunięcie dokumentu")), { del: true });
+      if (!pc.ok && !pc.blocked) { Toast.err(t("Nie można usunąć"), pc.error); return; }
+      const deps = (pc.dependents || []).map(d => `<li><a href="#" data-op="${esc(d.id)}">${esc(d.no)}</a> · ${esc(t(R.OP_TYPES[d.opType] ? R.OP_TYPES[d.opType].label : d.type))} · ${esc(Dates.pl(d.date))}</li>`).join("");
+      const blocked = pc.blocked || (pc.dependents && pc.dependents.length);
+      let body;
+      if (blocked) {
+        body = `<div class="info-line err" id="delete-blocked">${ic("alert", 15)}<span>${esc(t("Nie można usunąć dokumentu {no}: towar z tego dokumentu został już wydany lub wykorzystany. Najpierw skoryguj lub anuluj operacje zależne.", { no: op.no }))}</span></div>
+          ${deps ? `<h4 class="mini-h">${th("Operacje zależne")}</h4><ul class="rel-list">${deps}</ul>` : ""}`;
+      } else {
+        const eff = pc.reversal.map(x => `<tr><td>${esc(pName(x.productId))}<br><small class="dim">${esc(App.whName(x.whId))}</small></td><td class="r"><span class="${x.qty < 0 ? "neg" : "pos"}">${x.qty > 0 ? "+" : ""}${esc(App.qtyNative(x.qty, x.productId, 6))}</span></td><td class="r">${esc(App.qtyNative(x.before, x.productId))}</td><td class="r"><b>${esc(App.qtyNative(x.after, x.productId))}</b></td></tr>`).join("");
+        body = `<p class="muted">${t("Usunięcie dokumentu <b>{no}</b> odwraca jego skutki magazynowe i wartościowe (dokument odwracający z datą {d}). Dokument znika z rejestrów (filtr „Pokaż usunięte”), ale <b>pozostaje w historii i dzienniku audytu</b> — z powodem, użytkownikiem i godziną.", { no: esc(op.no), d: esc(Dates.pl(App.today())) })}</p>
+          <h4 class="mini-h">${th("Wpływ na stan")}</h4>
+          ${eff ? `<div class="tbl-wrap"><table class="tbl" id="delete-effect"><thead><tr><th>${th("Produkt")}</th><th class="r">${th("Zmiana")}</th><th class="r">${th("Stan przed")}</th><th class="r">${th("Stan po")}</th></tr></thead><tbody>${eff}</tbody></table></div>` : `<p class="muted">${th("Brak ruchów magazynowych (np. sama korekta wartości).")}</p>`}
+          <div class="fgrid mt4"><div class="field"><label for="delete-reason">${th("Powód usunięcia")} <span class="req">*</span></label>
+            <select class="ctrl" id="delete-reason"><option value="">— ${th("wybierz")} —</option>${CANCEL_REASONS.map(r => `<option value="${esc(r)}">${esc(t(r))}</option>`).join("")}</select>
+            <input class="ctrl mt2" id="delete-reason-text" placeholder="${th("opis (wymagany przy „inny”)")}"><div class="msg hidden" id="delete-msg" role="alert"></div></div></div>`;
+      }
+      const m = Modal.open({ title: t("Usunięcie dokumentu {no}", { no: op.no }), sub: esc(opTypeLabel(op)), wide: true, id: "delete-dialog", body,
+        footer: `<button class="btn ghost" type="button" data-no>${blocked ? th("Zamknij") : th("Nie usuwaj")}</button>${blocked ? "" : `<button class="btn danger" type="button" data-yes id="delete-yes">${ic("trash", 15)} ${th("Usuń dokument")}</button>`}` });
+      $("[data-no]", m.el).onclick = () => m.close();
+      $$("[data-op]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); m.close(); OpDetail.open(b.dataset.op); });
+      const yes = $("[data-yes]", m.el);
+      if (!yes) return;
+      yes.onclick = async () => {
+        const sel = $("#delete-reason", m.el).value, txt = $("#delete-reason-text", m.el).value.trim(), msg = $("#delete-msg", m.el);
+        const fail = x => { msg.textContent = x; msg.classList.remove("hidden"); };
+        if (!sel) return fail(t("Wybierz powód usunięcia"));
+        if (sel === "inny" && !txt) return fail(t("Opisz powód usunięcia"));
+        yes.disabled = true;
+        const res = await Store.exec("op.delete", { opId, reason: txt ? `${sel} — ${txt}` : sel }, N_("Usunięcie dokumentu"));
+        yes.disabled = false;
+        if (!res.ok) { fail(res.error); Toast.err(t("Nie usunięto — nic nie zapisano"), res.error); return; }
+        m.close(); Toast.ok(t("Dokument usunięty"), t("{no} — ruchy odwrócone dokumentem {an}; wpis pozostaje w historii.", { no: op.no, an: res.no })); App.render();
+      };
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Wykresy (SVG) i podpowiedź                                           */
   /* ------------------------------------------------------------------ */
   const Tip = {
@@ -445,9 +539,9 @@
   function opsTable(ops, { id = "ops-table", showWh = false, compact = false } = {}) {
     if (!ops.length) return `<div class="empty">${th("Brak operacji dla wybranych filtrów.")}</div>`;
     if (compact) return `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Data")}</th><th>${th("Rodzaj / produkt")}</th><th>${th("Status")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th></tr></thead><tbody>
-      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}<br><small class="dim">${esc(opProduct(o))}</small></td><td>${statusBadge(o.status)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td><td class="r nowrap">${esc(opQty(o))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td></tr>`).join("")}</tbody></table></div>`;
+      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}<br><small class="dim">${esc(opProduct(o))}</small></td><td>${opStatusBadge(o)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td><td class="r nowrap">${esc(opQty(o))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td></tr>`).join("")}</tbody></table></div>`;
     return `<div class="tbl-wrap"><table class="tbl" id="${id}"><thead><tr><th>${th("Nr")}</th><th>${th("Data")}</th><th>${th("Rodzaj")}</th><th>${th("Status")}</th>${showWh ? `<th>${th("Magazyn")}</th>` : ""}<th>${th("Produkt")}</th><th class="r">${th("Ilość")}</th><th>${th("Kontrahent")}</th><th class="r">${th("Wartość")}</th><th>${th("Użytkownik")}</th><th></th></tr></thead><tbody>
-      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}</td><td>${statusBadge(o.status)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td>${showWh ? `<td>${esc(App.whName(o.whId))}${o.toWhId ? ` → ${esc(App.whName(o.toWhId))}` : ""}</td>` : ""}
+      ${ops.map(o => `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc(o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td><td>${TYPE_BADGE(o)}</td><td>${opStatusBadge(o)}${o.type === "MM" ? " " + mmBadge(o) : ""}</td>${showWh ? `<td>${esc(App.whName(o.whId))}${o.toWhId ? ` → ${esc(App.whName(o.toWhId))}` : ""}</td>` : ""}
         <td>${esc(opProduct(o))}</td><td class="r nowrap">${esc(opQty(o))}</td><td>${esc(partnerName(opPartnerId(o)) || (o.mm ? o.mm.toWhName : ""))}</td><td class="r nowrap">${esc(money(opValue(o)))}</td><td>${esc(o.userName)}</td>
         <td class="r"><button class="btn sm" type="button">${th("Szczegóły")}</button></td></tr>`).join("")}</tbody></table></div>`;
   }
@@ -483,23 +577,24 @@
   /* ================================================================== */
   Views.operacje = {
     filtered() {
-      const f = App.tabs.ops || (App.tabs.ops = { type: "", status: "", ym: "", q: "", scope: "active" });
+      const f = App.tabs.ops || (App.tabs.ops = { type: "", status: "", ym: "", q: "", scope: "active", showDeleted: false });
       const q = f.q.trim().toLowerCase(), wh = App.user().whId;
       return Store.state.operations.filter(o => (f.scope === "all" || o.whId === wh || o.toWhId === wh) &&
+        (f.showDeleted || f.status === "DELETED" || !o.deleted) &&
         (!f.type || (f.type === "DIRECT" ? o.direct : f.type === "SPRZEDAZ" ? o.type === "SPRZEDAZ" && !o.direct : o.type === f.type)) &&
-        (!f.status || o.status === f.status) && (!f.ym || o.date.startsWith(f.ym)) &&
+        (!f.status || (f.status === "DELETED" ? !!o.deleted : o.status === f.status && !o.deleted)) && (!f.ym || o.date.startsWith(f.ym)) &&
         (!q || [o.no, o.place, o.userName, opProduct(o), partnerName(opPartnerId(o)), o.extDoc, o.notes, ...o.documents.map(d => d.no)].join(" ").toLowerCase().includes(q)))
         .slice().sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : a.createdAt < b.createdAt ? 1 : -1);
     },
     html() {
-      const S = Store.state, f = App.tabs.ops || (App.tabs.ops = { type: "", status: "", ym: "", q: "", scope: "active" });
+      const S = Store.state, f = App.tabs.ops || (App.tabs.ops = { type: "", status: "", ym: "", q: "", scope: "active", showDeleted: false });
       const rows = this.filtered();
       const me = App.user();
       const queue = S.drafts.filter(d => d.status === "PENDING" && (R.canApprove(me, d.whId) || d.userId === me.id))
         .sort((a, b) => (a.submittedAt || "") < (b.submittedAt || "") ? -1 : 1);
       const drafts = S.drafts.filter(d => d.status !== "PENDING" && d.whId === me.whId);
-      return `<div class="page-head"><div class="titles"><h2>${th("Operacje")}</h2><p>${esc(t("Rejestr wszystkich operacji magazynu {w} ze statusem dokumentu. Kliknij wiersz — szczegóły, powiązania, korekta, anulowanie. Dokumentów zatwierdzonych nie usuwa się.", { w: App.wh().name }))}</p></div>
-          <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa">${ic("plus", 15)} ${th("Nowa operacja")}</a>` : ""}<button class="btn" type="button" id="ops-csv">${ic("dl", 15)} CSV</button></div></div>
+      return `<div class="page-head"><div class="titles"><h2>${th("Operacje")}</h2><p>${esc(t("Rejestr wszystkich operacji magazynu {w} ze statusem dokumentu. Kliknij wiersz — szczegóły, powiązania, korekta, anulowanie, usunięcie. Usunięty dokument zostaje w historii i audycie.", { w: App.wh().name }))}</p></div>
+          <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa">${ic("plus", 15)} ${th("Nowa operacja")}</a>` : ""}<button class="btn" type="button" id="ops-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="ops-xlsx">${ic("dl", 15)} XLSX</button></div></div>
         ${queue.length ? `<div class="card mb4 queue-card" id="approvals"><div class="card-h"><h3>${ic("clock", 16)} ${th("Do zatwierdzenia")}</h3><span class="sub">${esc(t("operacje przekazane przez magazynierów — bez numeru i bez wpływu na stan do czasu zatwierdzenia"))}</span></div>
           <div class="tbl-wrap"><table class="tbl" id="approvals-table"><thead><tr><th>${th("Rodzaj")}</th><th>${th("Operacja")}</th><th>${th("Magazyn")}</th><th>${th("Wprowadził")}</th><th>${th("Przekazano")}</th><th class="r">${th("Wynik")}</th><th></th></tr></thead><tbody>
           ${queue.map(d => { const mine = R.canApprove(me, d.whId); return `<tr data-pending="${esc(d.id)}"><td>${esc(R.OP_TYPES[d.type] ? t(R.OP_TYPES[d.type].label) : d.type)}${d.type === "SPRZEDAZ" && d.draft.sale.direct ? " " + th("(bezpośrednia)") : ""}</td><td>${esc(d.summary || "—")}</td><td>${esc(App.whName(d.whId))}</td><td>${esc(d.userName)}</td><td class="nowrap">${esc(Dates.ts(d.submittedAt))}</td><td class="r nowrap">${d.totals ? esc(money(d.totals.result)) : "—"}</td>
@@ -510,17 +605,21 @@
             <td class="r nowrap">${d.userId === App.user().id ? `<a class="btn sm" href="#/nowa?draft=${esc(d.id)}">${th("Otwórz")}</a>` : ""} ${d.userId === App.user().id || App.can("documents.cancel") ? `<button class="btn sm danger" type="button" data-deldraft="${esc(d.id)}">${ic("trash", 13)} ${th("Usuń szkic")}</button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
         <div class="card"><div class="toolbar">
           <div class="field"><label for="o-type">${th("Rodzaj")}</label><select class="ctrl" id="o-type">${[["", N_("Wszystkie")], ["ZAKUP", N_("Zakup")], ["SPRZEDAZ", N_("Sprzedaż (WZ)")], ["DIRECT", N_("Sprzedaż bezpośrednia")], ["PRODUKCJA", N_("Produkcja na magazynie")], ["MM", "MM"]].map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
-          <div class="field"><label for="o-status">${th("Status")}</label><select class="ctrl" id="o-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(t(R.STATUS[s]))}</option>`).join("")}</select></div>
+          <div class="field"><label for="o-status">${th("Status")}</label><select class="ctrl" id="o-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED", "DELETED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(statusText(s))}</option>`).join("")}</select></div>
           <div class="field"><label for="o-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="o-ym" value="${esc(f.ym)}"></div>
           <div class="field"><label for="o-scope">${th("Magazyn")}</label><select class="ctrl" id="o-scope"><option value="active" ${f.scope === "active" ? "selected" : ""}>${th("Aktywny")}</option><option value="all" ${f.scope === "all" ? "selected" : ""}>${th("Wszystkie")}</option></select></div>
-          ${searchInput("o-q", f.q, t("numer, kontrahent, produkt, uwagi…"))}</div>
+          ${searchInput("o-q", f.q, t("numer, kontrahent, produkt, uwagi…"))}
+          <label class="inline-opt"><input type="checkbox" id="o-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label></div>
           ${opsTable(rows, { showWh: f.scope === "all" })}
-          <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} operacja|{n} operacje|{n} operacji", rows.length))} · ${esc(t("{n} anulowanych", { n: rows.filter(o => o.status === "CANCELLED").length }))} · ${esc(t("{n} skorygowanych", { n: rows.filter(o => o.status === "CORRECTED").length }))}</span></div></div>`;
+          <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} operacja|{n} operacje|{n} operacji", rows.length))} · ${esc(t("{n} anulowanych", { n: rows.filter(o => o.status === "CANCELLED" && !o.deleted).length }))} · ${esc(t("{n} usuniętych (ukryte: {h})", { n: S.operations.filter(o => o.deleted).length, h: f.showDeleted ? t("nie") : t("tak") }))} · ${esc(t("{n} skorygowanych", { n: rows.filter(o => o.status === "CORRECTED").length }))}</span></div></div>`;
     },
     bind(page) {
       const f = App.tabs.ops;
       const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
       on("#o-type", "type"); on("#o-status", "status"); on("#o-ym", "ym"); on("#o-scope", "scope");
+      const od = $("#o-deleted", page); if (od) od.onchange = e => { f.showDeleted = e.target.checked; App.render(); };
+      const ox = $("#ops-xlsx", page); if (ox) ox.onclick = () => xlsxTable(`operacje_${App.today()}`, t("Operacje"), [t("Nr"), t("Data"), t("Rodzaj"), t("Status"), t("Magazyn"), t("Produkt"), t("Ilość"), t("Kontrahent"), t("Wartość zł"), t("Operacje dodatkowe zł"), t("Wynik zł"), t("Użytkownik"), t("Utworzono"), t("Dokumenty")],
+        this.filtered().map(o => [o.no, o.date, opTypeLabel(o), statusText(o.deleted ? "DELETED" : o.status), App.whName(o.whId), opProduct(o), opQty(o), partnerName(opPartnerId(o)), num(opValue(o)), num(extrasTotal(o)), num(o.totals.result), o.userName, Dates.ts(o.createdAt, true), o.documents.map(d => d.no).join(" ")]), App.whName(App.user().whId));
       bindSearch(page, "#o-q", f, "q", this);
       bindOps(page);
       $$("[data-reject]", page).forEach(b => b.onclick = async () => {
@@ -539,7 +638,7 @@
         App.render();
       });
       $("#ops-csv", page).onclick = () => download(`operacje_${App.today()}.csv`, toCSV([t("Nr"), t("Data"), t("Rodzaj"), t("Status"), t("Magazyn"), t("Produkt"), t("Ilość"), t("Kontrahent"), t("Wartość zł"), t("Wynik zł"), t("Użytkownik"), t("Dokumenty")],
-        this.filtered().map(o => [o.no, o.date, opTypeLabel(o), t(R.STATUS[o.status]), App.whName(o.whId), opProduct(o), opQty(o), partnerName(opPartnerId(o)), csvNum(opValue(o)), csvNum(o.totals.result), o.userName, o.documents.map(d => d.no).join(" ")])), "text/csv;charset=utf-8");
+        this.filtered().map(o => [o.no, o.date, opTypeLabel(o), statusText(o.deleted ? "DELETED" : o.status), App.whName(o.whId), opProduct(o), opQty(o), partnerName(opPartnerId(o)), csvNum(opValue(o)), csvNum(o.totals.result), o.userName, o.documents.map(d => d.no).join(" ")])), "text/csv;charset=utf-8");
     }
   };
 
@@ -549,38 +648,45 @@
   function docRegister(cfg) {
     return {
       filtered() {
-        const f = App.tabs[cfg.id] || (App.tabs[cfg.id] = { type: "", status: "", ym: "", q: "" });
+        const f = App.tabs[cfg.id] || (App.tabs[cfg.id] = { type: "", status: "", ym: "", q: "", showDeleted: false });
         const q = f.q.trim().toLowerCase(), wh = App.user().whId;
         return allDocuments(Store.state).filter(d => {
+          if (d.deleted && !f.showDeleted && f.status !== "DELETED") return false;
           if (cfg.types && !cfg.types.includes(d.type)) return false;
           const inWh = d.whId === wh || (d.type === "MM" && d.toWhId === wh);
           if (!inWh) return false;
           if (cfg.filter && !cfg.filter(d, wh)) return false;
-          return (!f.type || d.type === f.type) && (!f.status || d.status === f.status) && (!f.ym || d.date.startsWith(f.ym)) &&
+          return (!f.type || d.type === f.type) && (!f.status || (f.status === "DELETED" ? d.deleted : d.status === f.status && !d.deleted)) && (!f.ym || d.date.startsWith(f.ym)) &&
             (!q || [d.no, d.opNo, d.partner, d.place, docContent(d)].join(" ").toLowerCase().includes(q));
         });
       },
       html() {
-        const f = App.tabs[cfg.id] || (App.tabs[cfg.id] = { type: "", status: "", ym: "", q: "" });
+        const f = App.tabs[cfg.id] || (App.tabs[cfg.id] = { type: "", status: "", ym: "", q: "", showDeleted: false });
         const rows = this.filtered();
+        const S = Store.state;
+        const opOf = d => d.opId ? R.byId(S.operations, d.opId) : null;
+        const primary = d => d.opId && ["PZ", "WZ", "PW", "MM"].includes(d.type) && !(d.type === "PW" && opOf(d) && opOf(d).type !== "PRODUKCJA");
+        const canCorr = op => op && op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && R.canAccessWh(App.user(), op.whId);
+        const canDel = op => op && op.status !== "CANCELLED" && !op.deleted && App.can("documents.delete") && R.canAccessWh(App.user(), op.whId);
         const perUnit = {};
         const qOf = d => cfg.id === "przyjecia" && d.type === "MM" && d.twoStage ? (d.receipt ? d.receipt.stockQty : 0) : d.stockQty;
-        rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + qOf(d)); });
+        rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null && d.productId).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + qOf(d)); });
         const value = rows.filter(d => d.status !== "CANCELLED").reduce((a, d) => a + (d.value || 0), 0);
         return `<div class="page-head"><div class="titles"><h2>${th(cfg.title)}</h2><p>${th(cfg.desc)}</p></div>
-            <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button></div></div>
+            <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="reg-xlsx">${ic("dl", 15)} XLSX</button></div></div>
           ${cfg.pre ? cfg.pre() : ""}
           <div class="card"><div class="toolbar">
             ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${cfg.typeOptions.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
-            <div class="field"><label for="r-status">${th("Status")}</label><select class="ctrl" id="r-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(t(R.STATUS[s]))}</option>`).join("")}</select></div>
+            <div class="field"><label for="r-status">${th("Status")}</label><select class="ctrl" id="r-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED", "DELETED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(statusText(s))}</option>`).join("")}</select></div>
             <div class="field"><label for="r-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="r-ym" value="${esc(f.ym)}"></div>
-            ${searchInput("r-q", f.q, t("numer, kontrahent, miejsce…"))}</div>
-            ${rows.length ? `<div class="tbl-wrap"><table class="tbl" id="docs-table"><thead><tr><th>${th("Nr dokumentu")}</th><th>${th("Typ")}</th><th>${th("Data")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th><th>${th("Kontrahent")}</th><th>${th("Miejsce transportu")}</th><th>${th("Wpływ na stan")}</th><th>${th("Status")}</th><th></th></tr></thead><tbody>
-              ${rows.map((d, i) => `<tr class="${d.status === "CANCELLED" ? "void" : ""}"><td class="mono nowrap">${esc(d.no)}</td><td><span class="badge">${d.type}</span></td><td class="nowrap">${esc(Dates.pl(d.date))}</td>
+            ${searchInput("r-q", f.q, t("numer, kontrahent, miejsce…"))}
+            <label class="inline-opt"><input type="checkbox" id="r-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label></div>
+            ${rows.length ? `<div class="tbl-wrap"><table class="tbl sticky-act" id="docs-table"><thead><tr><th>${th("Nr dokumentu")}</th><th>${th("Typ")}</th><th>${th("Data")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th><th>${th("Kontrahent")}</th><th>${th("Miejsce transportu")}</th><th>${th("Wpływ na stan")}</th><th>${th("Status")}</th><th><span class="sr-only">${th("Akcje")}</span></th></tr></thead><tbody>
+              ${rows.map((d, i) => `<tr class="doc-row doc-row-${esc(d.type)} ${d.status === "CANCELLED" ? "void" : ""}" data-docno="${esc(d.no)}"><td class="mono nowrap"><b>${esc(d.no)}</b>${d.manualNo ? ` <small class="dim" title="${th("numer wpisany ręcznie")}">✎</small>` : ""}</td><td>${docBadge(d.type)}</td><td class="nowrap">${esc(Dates.pl(d.date))}${d.docDate && d.docDate !== d.date ? `<br><small class="dim">${esc(t("dok. {d}", { d: Dates.pl(d.docDate) }))}</small>` : ""}</td>
                 <td>${esc(docContent(d))}</td><td class="r nowrap">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td>
                 <td class="r nowrap">${d.value ? esc(money(d.value)) : "—"}</td><td>${esc(d.partner || (d.transport && (d.transport.company || d.transport.carrier)) || "")}</td>
-                <td>${esc(d.place || "—")}</td><td>${d.type === "MM" && d.mmState === "W_DRODZE" && cfg.id === "przyjecia" ? `<span class="badge warn">${th("oczekuje na przyjęcie")}</span>` : stockLbl(d)}</td><td>${statusBadge(d.status)}${d.type === "MM" ? " " + mmBadge(d) : ""}</td>
-                <td class="r nowrap"><button class="btn sm" type="button" data-view="${i}">${th("Podgląd")}</button>${d.opId ? ` <button class="btn sm" type="button" data-opd="${esc(d.opId)}">${th("Operacja")}</button>` : ""}</td></tr>`).join("")}
+                <td>${esc(d.place || "—")}</td><td>${d.type === "MM" && d.mmState === "W_DRODZE" && cfg.id === "przyjecia" ? `<span class="badge warn">${th("oczekuje na przyjęcie")}</span>` : stockLbl(d)}</td><td>${d.deleted ? `<span class="badge err">${th("USUNIĘTY")}</span>` : statusBadge(d.status)}${d.type === "MM" ? " " + mmBadge(d) : ""}</td>
+                <td class="r nowrap"><div class="row-actions">${d.opId ? `<button class="btn sm icon-act" type="button" data-opd="${esc(d.opId)}" title="${th("Otwórz")}" aria-label="${th("Otwórz")}">${ic("file", 14)}<span class="sr-only">${th("Otwórz")}</span></button>` : ""}<button class="btn sm icon-act" type="button" data-view="${i}" title="${th("Podgląd")}" aria-label="${th("Podgląd")}">${ic("eye", 14)}<span class="sr-only">${th("Podgląd")}</span></button>${primary(d) && canCorr(opOf(d)) ? `<a class="btn sm icon-act" href="#/korekta?op=${esc(d.opId)}" data-corr="${esc(d.opId)}" title="${th("Koryguj")}" aria-label="${th("Koryguj")}">${ic("edit", 14)}<span class="sr-only">${th("Koryguj")}</span></a>` : ""}${primary(d) && canDel(opOf(d)) ? `<button class="btn sm danger icon-act" type="button" data-del="${esc(d.opId)}" title="${th("Usuń")}" aria-label="${th("Usuń")}">${ic("trash", 14)}<span class="sr-only">${th("Usuń")}</span></button>` : ""}</div></td></tr>`).join("")}
               </tbody><tfoot><tr><td colspan="4">${th("Razem (bez anulowanych)")}</td><td class="r">${esc(Object.entries(perUnit).map(([u, q]) => `${fmtQ(q)} ${Units.label(u)}`).join(" · ") || "—")}</td><td class="r">${esc(money(value))}</td><td colspan="5"></td></tr></tfoot></table></div>` : `<div class="empty">${th("Brak dokumentów dla wybranych filtrów.")}</div>`}
           </div>`;
       },
@@ -588,12 +694,16 @@
         const f = App.tabs[cfg.id], rows = this.filtered();
         const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
         on("#r-type", "type"); on("#r-status", "status"); on("#r-ym", "ym");
+        const rd = $("#r-deleted", page); if (rd) rd.onchange = e => { f.showDeleted = e.target.checked; App.render(); };
+        $$("[data-del]", page).forEach(b => b.onclick = () => DeleteDialog.open(b.dataset.del));
+        const rx = $("#reg-xlsx", page); if (rx) rx.onclick = () => xlsxTable(`${cfg.id}_${App.today()}`, t(cfg.title), [t("Nr dokumentu"), t("Typ"), t("Data operacji"), t("Data dokumentu"), t("Treść"), t("Ilość"), t("Jednostka"), t("Tonaż t"), t("Źródło tonażu"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja"), t("Utworzono"), t("Użytkownik")],
+          rows.map(d => [d.no, d.type, d.date, d.docDate || d.date, docContent(d), num(d.qty), d.unit ? Units.label(d.unit) : "", num(d.weightT), d.type === "WZ" ? t(R.WEIGHT_SOURCES[d.weightMode] || "AUTO") : "", num(d.value), d.partner || "", d.place || "", d.stock, statusText(d.deleted ? "DELETED" : d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || "", d.createdAt ? Dates.ts(d.createdAt, true) : "", d.userName || ""]), App.whName(App.user().whId));
         bindSearch(page, "#r-q", f, "q", this);
         $$("[data-view]", page).forEach(b => b.onclick = () => DocPreview.open(rows[+b.dataset.view]));
         $$("[data-opd]", page).forEach(b => b.onclick = () => OpDetail.open(b.dataset.opd));
         $$("[data-receive]", page).forEach(b => b.onclick = () => ReceiveDialog.open(b.dataset.receive));
         $("#reg-csv", page).onclick = () => download(`${cfg.id}_${App.today()}.csv`, toCSV([t("Nr dokumentu"), t("Typ"), t("Data"), t("Treść"), t("Ilość"), t("Jednostka"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja")],
-          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || ""])), "text/csv;charset=utf-8");
+          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.deleted ? "DELETED" : d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || ""])), "text/csv;charset=utf-8");
       }
     };
   }
@@ -620,8 +730,8 @@
   Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], pre: mmTransitPanel,
     desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym. W trybie dwuetapowym towar jest „w drodze” do czasu przyjęcia MM przez magazyn docelowy."),
     buttons: [{ label: N_("Nowe przesunięcie MM"), href: "#/nowa?preset=mm", primary: true }] });
-  Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
-    desc: N_("Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje nienaruszony."),
+  Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie / usunięcie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
+    desc: N_("Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie, usunięcie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje w historii. Akcje: Otwórz, Podgląd, Koryguj, Usuń."),
     buttons: [] });
 
   /* ------------------------------ Produkcja ------------------------------ */
@@ -638,13 +748,15 @@
         <div class="card"><div class="toolbar">
           <div class="field"><label for="p-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="p-ym" value="${esc(f.ym)}"></div>
           <div class="field"><label for="p-mode">${th("Rodzaj")}</label><select class="ctrl" id="p-mode">${[["", N_("Wszystkie")], ["stock", N_("Na magazyn")], ["chain", N_("Z zakupu (łańcuch)")], ["direct", N_("Bezpośrednia (las)")]].map(([v, l]) => `<option value="${v}" ${f.mode === v ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div></div>
-          ${ops.length ? `<div class="tbl-wrap"><table class="tbl" id="prod-table"><thead><tr><th>${th("Nr PW")}</th><th>${th("Data")}</th><th>${th("Rodzaj")}</th><th>${th("Status")}</th><th>${th("Surowiec")}</th><th class="r">${th("Zużycie")}</th><th>${th("Produkt")}</th><th class="r">${th("Produkcja")}</th><th class="r">≈ t / ≈ GJ</th><th class="r">${th("Rąbanie")}</th><th>${th("Operator")}</th></tr></thead><tbody>
+          ${ops.length ? `<div class="tbl-wrap"><table class="tbl" id="prod-table"><thead><tr><th>${th("Nr PW")}</th><th>${th("Data")}</th><th>${th("Rodzaj")}</th><th>${th("Status")}</th><th>${th("Surowiec")}</th><th class="r">${th("Zużycie")}</th><th>${th("Produkt")}</th><th class="r">${th("Produkcja")}</th><th class="r">≈ t / ≈ GJ</th><th class="r">${th("Rąbanie")}</th><th class="r">${th("Operacje dodatkowe")}</th><th>${th("Operator / rębak")}</th></tr></thead><tbody>
             ${ops.map(o => { const X = o.production, out = App.product(X.outProductId), or = Units.orient(X.outQty, out, S.config); return `<tr class="clickable ${o.status === "CANCELLED" ? "void" : ""}" data-opid="${esc(o.id)}"><td class="mono nowrap">${esc((o.documents.find(d => d.type === "PW") || {}).no || o.no)}</td><td class="nowrap">${esc(Dates.pl(o.date))}</td>
               <td>${esc(modeTxt(X.mode))}</td><td>${statusBadge(o.status)}</td><td>${esc(pName(X.rawProductId))}</td>
               <td class="r nowrap">${X.consumeQty !== null ? esc(fmtQ(X.consumeQty) + " " + Units.label(X.consumeUnit)) : "—"}${X.mode === "direct" ? `<br><small class='dim'>${th("nie ze stanu")}</small>` : ""}</td>
               <td>${esc(pName(X.outProductId))}</td><td class="r nowrap"><b>${esc(fmtQ(X.outQty) + " " + Units.label(X.outUnit))}</b></td><td class="r nowrap">${fmt(or.t, 1)} t · ${fmt(or.gj, 0)} GJ</td>
-              <td class="r nowrap">${esc(money(X.chippingCost))}<br><small class="dim">${fmt(X.chipRate)} zł/MP</small></td><td>${esc(X.operatorName || o.userName)}</td></tr>`; }).join("")}
-            </tbody><tfoot><tr><td colspan="7">${th("Razem (bez anulowanych)")}</td><td class="r">${esc(fmtQ(sum("outQty")))} MP</td><td></td><td class="r">${esc(money(live.reduce((a, o) => a + o.production.chippingCost, 0)))}</td><td></td></tr></tfoot></table></div>` : `<div class="empty">${th("Brak produkcji w wybranym okresie.")}</div>`}</div>`;
+              <td class="r nowrap">${esc(money(X.chippingCost))}<br><small class="dim">${fmt(X.chipRate)} zł/MP</small></td>
+              <td class="r nowrap">${o.extras && o.extras.length ? `${esc(money(extrasTotal(o)))}<br><small class="dim">${esc(o.extras.map(x => x.typeName).join(", "))}</small>` : "—"}</td>
+              <td>${esc(X.operatorName || o.userName)}${X.chipperName ? `<br><small class="dim">${esc(X.chipperName)}${X.chipperOwner === "external" ? " · " + esc(X.chipperCompany) : ""}</small>` : ""}</td></tr>`; }).join("")}
+            </tbody><tfoot><tr><td colspan="7">${th("Razem (bez anulowanych)")}</td><td class="r">${esc(fmtQ(sum("outQty")))} MP</td><td></td><td class="r">${esc(money(live.reduce((a, o) => a + o.production.chippingCost, 0)))}</td><td class="r">${esc(money(live.reduce((a, o) => a + extrasTotal(o), 0)))}</td><td></td></tr></tfoot></table></div>` : `<div class="empty">${th("Brak produkcji w wybranym okresie.")}</div>`}</div>`;
     },
     bind(page) {
       const f = App.tabs.prod;
@@ -918,6 +1030,7 @@
           [t("Sprzedaż z magazynu"), money(rep.sales.value), qtyByUnit(rep.sales.byUnit).replace(/-/g, "")],
           [t("Sprzedaż bezpośrednia"), money(rep.sales.valueDirect), tp("{n} operacja|{n} operacje|{n} operacji", rep.sales.countDirect)],
           [t("Transport"), money(rep.transport.cost), `${tp("{n} kurs|{n} kursy|{n} kursów", rep.transport.count)} · ${fmtQ(rep.transport.km, 0)} km`],
+          [t("Operacje dodatkowe"), money(rep.extras.cost), tp("{n} operacja|{n} operacje|{n} operacji", rep.extras.count)],
           [t("Korekty / anulowania"), `${rep.corrections.length} / ${rep.cancellations.length}`, t("dokumenty KOR / AN w okresie")]] },
         { type: "h", text: t("Bilans stanów: stan pocz. + przyjęcia + produkcja − zużycie − sprzedaż ± MM = stan końc.") },
         { type: "table", size: 7, columns: [{ label: t("Produkt"), w: 2.2 }, { label: t("Jedn."), w: 0.6 }, { label: t("Stan pocz."), w: 1.1, align: "right" }, { label: t("Zakup (PZ)"), w: 1, align: "right" }, { label: t("Produkcja (PW)"), w: 1.1, align: "right" }, { label: t("Zużycie (RW)"), w: 1, align: "right" }, { label: t("Sprzedaż (WZ)"), w: 1.1, align: "right" }, { label: t("Bezp. PW−WZ"), w: 1, align: "right" }, { label: "MM ±", w: 0.9, align: "right" }, { label: t("Inw./BO"), w: 0.9, align: "right" }, { label: t("Stan końc."), w: 1.1, align: "right" }, { label: "≈ t", w: 0.8, align: "right" }, { label: "≈ GJ", w: 0.9, align: "right" }, { label: t("Kontrola"), w: 1.3 }],
@@ -936,7 +1049,10 @@
         { type: "h", text: t("Transport") },
         { type: "table", columns: [{ label: t("Przewoźnik / tryb"), w: 3 }, { label: t("Kursy"), w: 1, align: "right" }, { label: "km", w: 1, align: "right" }, { label: t("Koszt"), w: 1.5, align: "right" }], rows: rep.transport.carriers.map(x => [x.name, String(x.count), fmtQ(x.km, 0), money(x.cost)]), foot: [t("Razem"), String(rep.transport.count), fmtQ(rep.transport.km, 0), money(rep.transport.cost)], note: rep.transport.wagons ? t("Pociągi: {w} wagonów · {q} t.", { w: rep.transport.wagons, q: fmtQ(rep.transport.trainT) }) : "" },
         { type: "h", text: t("Wycena stanu (orientacyjna — średnia cena zakupu)") },
-        { type: "table", columns: [{ label: t("Produkt"), w: 3 }, { label: t("Cena śr."), w: 1.3, align: "right" }, { label: t("Stan pocz."), w: 1.4, align: "right" }, { label: t("Przychody"), w: 1.4, align: "right" }, { label: t("Rozchody"), w: 1.4, align: "right" }, { label: t("Stan końc."), w: 1.4, align: "right" }], rows: rep.valuation.map(v => v.priced ? [v.name, `${fmt(v.avg, 2)} zł/${Units.label(v.unit)}`, money(v.openingValue), money(v.inValue), money(v.outValue), money(v.closingValue)] : [v.name, t("BRAK WYCENY"), "—", "—", "—", "—"]), note: t("„Brak wyceny” = brak zakupów tego produktu do końca okresu (np. bilans otwarcia bez ceny). Pełna wycena magazynowa (FIFO / średnia ruchoma) — etap produkcyjny.") }
+        { type: "table", columns: [{ label: t("Produkt"), w: 3 }, { label: t("Cena śr."), w: 1.3, align: "right" }, { label: t("Stan pocz."), w: 1.4, align: "right" }, { label: t("Przychody"), w: 1.4, align: "right" }, { label: t("Rozchody"), w: 1.4, align: "right" }, { label: t("Stan końc."), w: 1.4, align: "right" }], rows: rep.valuation.map(v => v.priced ? [v.name, `${fmt(v.avg, 2)} zł/${Units.label(v.unit)}`, money(v.openingValue), money(v.inValue), money(v.outValue), money(v.closingValue)] : [v.name, t("BRAK WYCENY"), "—", "—", "—", "—"]), note: t("„Brak wyceny” = brak zakupów tego produktu do końca okresu (np. bilans otwarcia bez ceny). Pełna wycena magazynowa (FIFO / średnia ruchoma) — etap produkcyjny.") },
+        { type: "h", text: t("Operacje dodatkowe") },
+        { type: "table", columns: [{ label: t("Data"), w: 1 }, { label: t("Rodzaj"), w: 2.2 }, { label: t("Pojazd"), w: 1.4 }, { label: t("Magazyn"), w: 1.4 }, { label: t("Dokument"), w: 1.5 }, { label: t("Opis"), w: 2.2 }, { label: t("Koszt"), w: 1.2, align: "right" }],
+          rows: rep.extras.rows.map(x => [Dates.pl(x.date), x.typeName, x.reg || "—", x.whName, x.docNo, x.desc || "—", money(x.cost)]), foot: rep.extras.rows.length ? [t("Razem"), "", "", "", "", "", money(rep.extras.cost)] : null, empty: t("Brak operacji dodatkowych w okresie.") }
       ];
       if (months.length) blocks.push({ type: "h", text: t("Rok {y} — miesiące", { y: rg.year }) }, { type: "table", columns: [{ label: t("Miesiąc"), w: 2 }, { label: t("Zakupy"), w: 1.4, align: "right" }, { label: t("Produkcja MP"), w: 1.2, align: "right" }, { label: t("Rąbanie"), w: 1.3, align: "right" }, { label: t("Sprzedaż"), w: 1.4, align: "right" }, { label: t("Transport"), w: 1.3, align: "right" }, { label: t("Korekty"), w: 0.8, align: "right" }, { label: t("Bilans"), w: 1 }],
         rows: months.map(({ ym, r }) => [Dates.label(ym), money(r.purchases.value), fmtQ(r.production.chippingMP), money(r.production.chippingCost), money(r.sales.value + r.sales.valueDirect), money(r.transport.cost), String(r.corrections.length), r.consistent ? "OK" : t("NIESPÓJNY")]) });
@@ -974,7 +1090,7 @@
       const sec = (title, inner, id) => `<div class="card mt4" ${id ? `id="${id}"` : ""}><div class="card-h"><h3>${esc(title)}</h3></div>${inner}</div>`;
       const hBlocks = model.blocks.filter(b => b.type === "h").map(b => b.text);
       return `<div class="page-head"><div class="titles"><h2>${th("Raporty")}</h2><p>${th("Raport okresowy: dzień / tydzień / miesiąc / rok / zakres własny, dla jednego lub wszystkich magazynów. Wartości netto po korektach i anulowaniach. Kliknij wiersz, aby zobaczyć operacje źródłowe. Ekran, wydruk i PDF mają tę samą treść.")}</p></div>
-          <div class="actions">${printButtons("rep")}<button class="btn" type="button" id="rep-csv">${ic("dl", 15)} ${th("CSV bilansu")}</button></div></div>
+          <div class="actions">${printButtons("rep")}${officeButtons("rep")}<button class="btn" type="button" id="rep-csv">${ic("dl", 15)} ${th("CSV bilansu")}</button></div></div>
         <div class="card"><div class="toolbar" id="rep-filters">
           ${periodControls(f, "r")}
           <div class="field"><label for="r-wh">${th("Magazyn")}</label><select class="ctrl" id="r-wh"><option value="all" ${f.wh === "all" ? "selected" : ""}>${th("Wszystkie magazyny")}</option>${S.warehouses.map(w => `<option value="${w.id}" ${f.wh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
@@ -1005,6 +1121,8 @@
       const c = () => Reports.compute();
       $("[data-print]", page).onclick = () => Printer.print(Reports.model(c()), "RAP");
       $("[data-pdf]", page).onclick = () => { const x = c(); Printer.pdf(Reports.model(x), "RAP", `raport_${x.rg.from}_${x.rg.to}`); };
+      $("[data-xlsx]", page).onclick = () => { const x = c(); Printer.office(Reports.model(x), "RAP", "xlsx", `raport_${x.rg.from}_${x.rg.to}`); };
+      $("[data-docx]", page).onclick = () => { const x = c(); Printer.office(Reports.model(x), "RAP", "docx", `raport_${x.rg.from}_${x.rg.to}`); };
       $("#rep-csv", page).onclick = () => { const x = c(); download(`bilans_${x.rg.from}_${x.rg.to}.csv`, toCSV([t("Produkt"), t("Jednostka"), t("Stan pocz."), t("Zakup"), t("Produkcja"), t("Zużycie"), t("Sprzedaż WZ"), t("Bezpośrednia PW-WZ"), "MM", t("Inw./BO"), t("Stan końc."), t("Masa t"), t("Energia GJ"), t("Kontrola")],
         x.rep.recon.map(r => [r.name, Units.label(r.unit), csvNum(r.opening), csvNum(r.ZAKUP), csvNum(r.PRODUKCJA), csvNum(r.ZUZYCIE), csvNum(r.SPRZEDAZ), csvNum(r.BEZP), csvNum(r.MM), csvNum(r.INNE), csvNum(r.closing), csvNum(r.closingT), csvNum(r.closingGJ), r.consistent ? "OK" : t("NIESPÓJNY")])), "text/csv;charset=utf-8"); };
     }
@@ -1113,12 +1231,12 @@
         ${S.fleet.vehicles.filter(inWh).map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td>${whCell(v)}<td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("Telefon")}</th><th>${th("Domyślny w pojazdach")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
         ${S.fleet.drivers.filter(inWh).map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td>${whCell(d)}<td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
-      if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Rębak")}</th><th>${th("Status")}</th><th>${th("Operator domyślny")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.chippers.filter(inWh).map(c => `<tr><td><b>${esc(c.name)}</b></td><td>${st(c.status)}</td><td>${esc(opr(c.operatorId))}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("")}</tbody></table>`;
+      if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Rębak")}</th><th>${th("Właściciel")}</th><th>${th("Nr rejestracyjny")}</th><th>${th("Status")}</th><th>${th("Operator")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.chippers.filter(inWh).map(c => { const ext = c.owner === "external"; return `<tr data-chipper-owner="${ext ? "external" : "own"}"><td><b>${esc(c.name)}</b>${c.info ? `<br><small class="dim">${esc(c.info)}</small>` : ""}</td><td>${ext ? `<span class="badge info">${th("firma zewnętrzna")}</span><br><small>${esc(c.company || "")}</small>` : `<span class="badge ok">${th("własny")}</span>`}</td><td class="mono">${esc(c.reg || "—")}</td><td>${st(c.status)}</td><td>${esc(ext ? (c.operatorName || "—") : opr(c.operatorId))}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`; }).join("")}</tbody></table>`;
       if (tab === "operators") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Operator")}</th><th>${th("Telefon")}</th><th>${th("Domyślny przy rębakach")}</th><th>${th("Magazyn")}</th><th></th></tr></thead><tbody>
         ${S.fleet.operators.filter(inWh).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.phone || "")}</td><td>${esc(S.fleet.chippers.filter(c => c.operatorId === o.id).map(c => c.name).join(", ") || "—")}</td>${whCell(o)}<td class="r">${btn("operators", o.id)}</td></tr>`).join("")}</tbody></table>`;
       const lastRuns = runs.slice().sort((a, b) => a.op.date < b.op.date ? 1 : -1).slice(0, 12);
-      const labels = { vehicles: N_("Samochody / ruchome podłogi"), drivers: N_("Kierowcy"), chippers: N_("Rębaki"), operators: N_("Operatorzy rębaków") };
+      const labels = { vehicles: N_("Samochody / ruchome podłogi"), drivers: N_("Kierowcy"), chippers: N_("Rębaki (własne i firm zewnętrznych)"), operators: N_("Operatorzy rębaków") };
       return `<div class="page-head"><div class="titles"><h2>${th("Flota")}</h2><p>${th("Transport własny w „Nowej operacji” korzysta z tej listy. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.")}</p></div>
           <div class="actions">${edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} ${esc(t("Dodaj: {k}", { k: t(R.Fleet.KINDS[tab].label).toLowerCase() }))}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`}</div></div>
         <div class="tabs" role="tablist">${Object.entries(labels).map(([k, l]) => `<button class="tab" type="button" role="tab" aria-selected="${k === tab}" data-tab="${k}">${th(l)}</button>`).join("")}</div>
@@ -1147,7 +1265,8 @@
     },
     edit(kind, id) {
       const S = Store.state;
-      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", operatorId: "", phone: "", whId: App.tabs.fleetWh || App.user().whId };
+      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", operatorId: "", phone: "", owner: "own", company: "", operatorName: "", info: "", whId: App.tabs.fleetWh || App.user().whId };
+      if (kind === "chippers" && !rec.owner) rec.owner = "own";
       const o = (arr, v) => arr.map(([k, l]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(l)}</option>`).join("");
       const f = (k, label, ctrl, help) => `<div class="field" data-ff="${k}"><label for="fe-${k}">${esc(label)}</label>${ctrl}<div class="msg hidden" data-fmsg="${k}"></div>${help ? `<div class="help">${esc(help)}</div>` : ""}</div>`;
       let body = f("name", kind === "vehicles" ? t("Nazwa pojazdu") : kind === "chippers" ? t("Nazwa rębaka") : t("Imię i nazwisko"), `<input class="ctrl" id="fe-name" value="${esc(rec.name)}">`, kind === "vehicles" ? t("np. Scania R450 — ruchoma podłoga") : "");
@@ -1158,14 +1277,22 @@
         body += f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Zmiana dotyczy przyszłych kursów."));
       }
       if (kind === "chippers") {
+        body += f("owner", t("Czyj jest rębak"), `<select class="ctrl" id="fe-owner">${o(Object.entries(R.CHIPPER_OWNERS).map(([k, v]) => [k, t(v)]), rec.owner)}</select>`, t("Rębak firmy zewnętrznej (usługa rębania) — firma, oznaczenie, nr rejestracyjny i operator opisowo."));
+        body += `<div data-own-only="external">${f("company", t("Firma (właściciel rębaka)"), `<input class="ctrl" id="fe-company" value="${esc(rec.company || "")}" placeholder="${esc(t("np. {x}", { x: "Usługi Leśne Drwal sp. z o.o." }))}">`)}</div>`;
+        body += f("reg", t("Numer rejestracyjny (jeśli dotyczy)"), `<input class="ctrl" id="fe-reg" value="${esc(rec.reg || "")}" placeholder="${esc(t("np. {x}", { x: "SGL 7Z412" }))}">`);
         body += f("status", t("Status"), `<select class="ctrl" id="fe-status">${o(Object.entries(R.ASSET_STATUS).map(([k, v]) => [k, t(v)]), rec.status)}</select>`);
-        body += f("operatorId", t("Operator domyślny"), `<select class="ctrl" id="fe-operatorId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.operators.map(d => [d.id, d.name]), rec.operatorId)}</select>`);
+        body += `<div data-own-only="own">${f("operatorId", t("Operator domyślny"), `<select class="ctrl" id="fe-operatorId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.operators.map(d => [d.id, d.name]), rec.operatorId)}</select>`)}</div>`;
+        body += `<div data-own-only="external">${f("operatorName", t("Operator (jeśli dotyczy)"), `<input class="ctrl" id="fe-operatorName" value="${esc(rec.operatorName || "")}" placeholder="${esc(t("imię i nazwisko"))}">`)}</div>`;
+        body += f("info", t("Informacje dodatkowe"), `<input class="ctrl" id="fe-info" value="${esc(rec.info || "")}" maxlength="300" placeholder="${esc(t("np. rozliczenie, kontakt, uwagi"))}">`);
       }
       if (kind === "drivers" || kind === "operators") body += f("phone", t("Telefon"), `<input class="ctrl" id="fe-phone" value="${esc(rec.phone || "")}" inputmode="tel">`);
       body += f("whId", t("Magazyn"), `<select class="ctrl" id="fe-whId"><option value="">${th("wspólny (wszystkie magazyny)")}</option>${o(S.warehouses.filter(w => w.active !== false || w.id === rec.whId).map(w => [w.id, w.name]), rec.whId || "")}</select>`, t("Przydział do magazynu: zasób jest wybierany w operacjach tego magazynu."));
       const m = Modal.open({ title: `${id ? t("Edycja") : t("Nowy")}: ${t(R.Fleet.KINDS[kind].label).toLowerCase()}`, body: `<div class="stack">${body}</div>`,
         footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes>${th("Zapisz")}</button>` });
       $("[data-no]", m.el).onclick = () => m.close();
+      const ow = $("#fe-owner", m.el);
+      const syncOwner = () => { if (!ow) return; $$("[data-own-only]", m.el).forEach(x => x.classList.toggle("hidden", x.dataset.ownOnly !== ow.value)); };
+      if (ow) { ow.onchange = syncOwner; syncOwner(); }
       $("[data-yes]", m.el).onclick = async () => {
         const next = Object.assign({}, rec, { id: id || undefined });
         for (const k of R.Fleet.KINDS[kind].fields) { const el = $("#fe-" + k, m.el); if (el) next[k] = el.value; }

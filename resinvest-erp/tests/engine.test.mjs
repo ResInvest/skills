@@ -337,7 +337,7 @@ test("MM: przełącznik trybu w konfiguracji (administrator) i migracja 6 → 7"
   assert.equal(op.mm.twoStage, false);
   const old = R.clone(s); old.schema = 6; delete old.config.mmMode; old.rolePerms = { magazynier: ["mm.create", "report.view"] };
   const m = R.migrate(old);
-  assert.equal(m.to, 7);
+  assert.equal(m.to, R.SCHEMA, "migracja prowadzi do bieżącego schematu (6 → 7 → 8)");
   assert.equal(m.state.config.mmMode, "two");
   assert.ok(m.state.rolePerms.magazynier.includes("mm.receive"));
 });
@@ -387,7 +387,8 @@ test("§32.23 TEST 4: korekta ilości w górę i w dół — dokument KOR, róż
   const pv = R.planCorrection(s, op.id, down, ctx(s));
   assert.equal(pv.ok, true, pv.error);
   assert.deepEqual(pv.deltas.map(d => d.qty), [50]);
-  assert.deepEqual(pv.changes.map(c => [c.field, c.diff]), [["sale.qty", -50]]);
+  // ilość i tonaż (AUTO — z przelicznika, zmienia się razem z ilością: 50 MP × 0,33 t)
+  assert.deepEqual(pv.changes.map(c => [c.field, c.diff]), [["sale.qty", -50], ["sale.weightT", -16.5]]);
   const r = R.correctOperation(s, op.id, down, "błędnie wpisana ilość", ctx(s));
   assert.equal(r.ok, true, r.error);
   assert.match(r.no, /^KOR\//);
@@ -456,7 +457,11 @@ test("§32.23 TEST 9: odwrócenie korekty kolejną korektą; korekty nie usuwa s
   assert.equal(op.corrections[1].reverses, k1.no);
   assert.equal(R.reverseCorrection(s, op.id, k1.no, "x", ctx(s)).ok, false, "tylko ostatnia korekta, nie odwrócenie odwrócenia");
   assert.equal(R.reverseCorrection(s, op.id, k2.no, "x", ctx(s)).ok, false);
-  assert.equal(typeof R.deleteOperation, "undefined", "silnik nie ma usuwania zatwierdzonych dokumentów");
+  // „Usuń” to soft delete: dokument i jego korekty zostają w danych (status ANULOWANY + znacznik usunięcia)
+  const del = R.deleteOperation(s, op.id, ctx(s), "dokument wprowadzony podwójnie");
+  assert.equal(del.ok, true, del.error);
+  assert.ok(s.operations.includes(op) && op.deleted && op.status === "CANCELLED");
+  assert.equal(op.corrections.length, 2, "korekty nie znikają po usunięciu");
 });
 test("§32.23 TEST 10: uprawnienia i reguły — magazynier nie anuluje ani nie koryguje; anulowanego nie koryguje się", () => {
   const s = fresh();
@@ -614,7 +619,7 @@ test("TEST 38–39: zamknięty miesiąc — dane zachowane, raport oznacza zamkn
 test("TEST 40: kwit produkcji dnia — MP, m³, t, GJ, koszt rąbania", () => {
   const s = fresh();
   const k = R.Reports.productionDay(s, "2026-09-22", "wh_bra");
-  assert.deepEqual(k.totals, { count: 1, mp: 20, m3: 5, t: 6.6, gj: 56.1, chipCost: 200 });
+  assert.deepEqual(k.totals, { count: 1, mp: 20, m3: 5, t: 6.6, gj: 56.1, chipCost: 200, extraCost: 240 });
   assert.equal(k.rows[0].consume, 5);
   assert.equal(k.rows[0].operator, "Adam Mazur");
 });

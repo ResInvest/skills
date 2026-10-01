@@ -40,7 +40,6 @@
   "Rodzaj produkcji": ["Druh výroby", "Production type"],
   "Cena za rąbanie [zł/MP]": ["Cena za štěpkování [zł/MP]", "Chipping price [zł/MP]"],
   "Koszt rąbania": ["Náklady na štěpkování", "Chipping cost"],
-  "Rębak (Flota)": ["Štěpkovač (vozový park)", "Chipper (fleet)"],
   "bez wskazania rębaka": ["bez určení štěpkovače", "no chipper specified"],
   "(domyślny)": ["(výchozí)", "(default)"],
   "wybierz odbiorcę": ["vyberte odběratele", "select customer"],

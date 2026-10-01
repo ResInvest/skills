@@ -1,6 +1,6 @@
 {
- "schema": 7,
- "version": "3.3.0",
+ "schema": 8,
+ "version": "3.4.0",
  "rev": 16,
  "config": {
   "m3_mp": 4,
@@ -370,6 +370,63 @@
   "Transport Kowalski",
   "PKP Cargo"
  ],
+ "extraTypes": [
+  {
+   "id": "xt_holowanie",
+   "name": "Holowanie",
+   "desc": "Holowanie pojazdu lub maszyny",
+   "unit": "",
+   "rate": null,
+   "active": true,
+   "createdAt": "2026-08-01T08:00:00.000Z",
+   "updatedAt": "2026-08-01T08:00:00.000Z",
+   "createdBy": "System"
+  },
+  {
+   "id": "xt_pryzmy",
+   "name": "Podgarnianie pryzm ładowarką",
+   "desc": "Formowanie i podgarnianie pryzm na placu",
+   "unit": "h",
+   "rate": 180,
+   "active": true,
+   "createdAt": "2026-08-01T08:00:00.000Z",
+   "updatedAt": "2026-08-01T08:00:00.000Z",
+   "createdBy": "System"
+  },
+  {
+   "id": "xt_plac",
+   "name": "Czyszczenie placu",
+   "desc": "Sprzątanie placu składowego",
+   "unit": "",
+   "rate": null,
+   "active": true,
+   "createdAt": "2026-08-01T08:00:00.000Z",
+   "updatedAt": "2026-08-01T08:00:00.000Z",
+   "createdBy": "System"
+  },
+  {
+   "id": "xt_ladowarka",
+   "name": "Praca ładowarką",
+   "desc": "Praca ładowarki rozliczana godzinowo",
+   "unit": "h",
+   "rate": 160,
+   "active": true,
+   "createdAt": "2026-08-01T08:00:00.000Z",
+   "updatedAt": "2026-08-01T08:00:00.000Z",
+   "createdBy": "System"
+  },
+  {
+   "id": "xt_przemieszczanie",
+   "name": "Przemieszczanie biomasy",
+   "desc": "Przemieszczanie materiału w obrębie placu",
+   "unit": "",
+   "rate": null,
+   "active": true,
+   "createdAt": "2026-08-01T08:00:00.000Z",
+   "updatedAt": "2026-08-01T08:00:00.000Z",
+   "createdBy": "System"
+  }
+ ],
  "fleet": {
   "drivers": [
    {
@@ -465,6 +522,7 @@
    {
     "id": "ch_jenz",
     "name": "Jenz HEM 583",
+    "owner": "own",
     "status": "aktywny",
     "operatorId": "op_lis",
     "whId": "wh_zab"
@@ -472,6 +530,7 @@
    {
     "id": "ch_biber",
     "name": "Eschlböck Biber 92",
+    "owner": "own",
     "status": "aktywny",
     "operatorId": "op_mazur",
     "whId": "wh_bra"
@@ -479,16 +538,29 @@
    {
     "id": "ch_albach",
     "name": "Albach Diamant 2000",
+    "owner": "own",
     "status": "aktywny",
     "operatorId": "op_dudek",
     "whId": "wh_rok"
+   },
+   {
+    "id": "ch_ext_drwal",
+    "name": "Bandit 2590XP",
+    "owner": "external",
+    "company": "Usługi Leśne Drwal sp. z o.o.",
+    "reg": "SGL 7Z412",
+    "status": "aktywny",
+    "operatorId": "",
+    "operatorName": "Zbigniew Kos",
+    "info": "Usługa rębania z operatorem; rozliczenie za MP",
+    "whId": ""
    }
   ]
  },
  "operations": [
   {
-   "id": "op_muky417dcdt3wm7",
-   "idemKey": "idem_muky4178bejmudw",
+   "id": "op_mup1db2mc9gabhd",
+   "idemKey": "idem_mup1db2ibu84b0k",
    "type": "ZAKUP",
    "no": "PZ/001/08/2026",
    "date": "2026-08-05",
@@ -539,6 +611,7 @@
      "sourceDoc": "",
      "chipperId": "ch_jenz",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -550,7 +623,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -633,6 +708,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": true,
+     "items": [
+      {
+       "typeId": "xt_holowanie",
+       "vehicleId": "ve_scania",
+       "qty": "",
+       "rate": "",
+       "cost": "500",
+       "desc": "Holowanie rębaka z drogi leśnej"
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -679,11 +772,33 @@
     "sourceDoc": "",
     "chipperId": "ch_jenz",
     "chipperName": "Jenz HEM 583",
+    "chipperOwner": "own",
+    "chipperCompany": "",
+    "chipperReg": "",
     "operatorId": "op_lis",
     "operatorName": "Krzysztof Lis"
    },
    "sale": null,
    "mm": null,
+   "extras": [
+    {
+     "id": "xo_mup1db2nghomtnf",
+     "opId": "op_mup1db2mc9gabhd",
+     "no": 1,
+     "typeId": "xt_holowanie",
+     "typeName": "Holowanie",
+     "unit": "",
+     "vehicleId": "ve_scania",
+     "vehicleName": "Scania R450 — ruchoma podłoga",
+     "reg": "SGL 4T821",
+     "qty": null,
+     "rate": null,
+     "cost": 500,
+     "costBasis": "amount",
+     "desc": "Holowanie rębaka z drogi leśnej"
+    }
+   ],
+   "docDate": "2026-08-05",
    "transport": {
     "mode": "own",
     "place": "RiC Zabrze",
@@ -791,6 +906,7 @@
      "basis": "KZR",
      "stock": "+",
      "place": "RiC Zabrze",
+     "docDate": "2026-08-05",
      "no": "PZ/001/08/2026"
     },
     {
@@ -932,9 +1048,10 @@
     "purchaseCost": 6900,
     "rawCost": 0,
     "chippingCost": 1200,
+    "extraCost": 500,
     "revenue": 0,
     "transportCost": 675,
-    "result": -8775
+    "result": -9275
    },
    "warnings": [],
    "original": {
@@ -981,11 +1098,30 @@
      "sourceDoc": "",
      "chipperId": "ch_jenz",
      "chipperName": "Jenz HEM 583",
+     "chipperOwner": "own",
+     "chipperCompany": "",
+     "chipperReg": "",
      "operatorId": "op_lis",
      "operatorName": "Krzysztof Lis"
     },
     "sale": null,
     "mm": null,
+    "extras": [
+     {
+      "no": 1,
+      "typeId": "xt_holowanie",
+      "typeName": "Holowanie",
+      "unit": "",
+      "vehicleId": "ve_scania",
+      "vehicleName": "Scania R450 — ruchoma podłoga",
+      "reg": "SGL 4T821",
+      "qty": null,
+      "rate": null,
+      "cost": 500,
+      "costBasis": "amount",
+      "desc": "Holowanie rębaka z drogi leśnej"
+     }
+    ],
     "transport": {
      "mode": "own",
      "place": "RiC Zabrze",
@@ -1074,9 +1210,10 @@
      "purchaseCost": 6900,
      "rawCost": 0,
      "chippingCost": 1200,
+     "extraCost": 500,
      "revenue": 0,
      "transportCost": 675,
-     "result": -8775
+     "result": -9275
     }
    },
    "corrections": [],
@@ -1090,15 +1227,16 @@
      "purchaseCost": 6900,
      "rawCost": 0,
      "chippingCost": 1200,
+     "extraCost": 500,
      "revenue": 0,
      "transportCost": 675,
-     "result": -8775
+     "result": -9275
     }
    ]
   },
   {
-   "id": "op_muky417fifwkzmc",
-   "idemKey": "idem_muky417ehrufd56",
+   "id": "op_mup1db2nj28yslq",
+   "idemKey": "idem_mup1db2nihg28w8",
    "type": "ZAKUP",
    "no": "PZ/002/08/2026",
    "date": "2026-08-12",
@@ -1148,6 +1286,7 @@
      "sourceDoc": "",
      "chipperId": "",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -1159,7 +1298,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -1229,6 +1370,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -1255,6 +1414,8 @@
    "production": null,
    "sale": null,
    "mm": null,
+   "extras": [],
+   "docDate": "2026-08-12",
    "transport": {
     "mode": "external",
     "place": "RiC Zabrze",
@@ -1333,6 +1494,7 @@
      "basis": "DEKL",
      "stock": "+",
      "place": "RiC Zabrze",
+     "docDate": "2026-08-12",
      "no": "PZ/002/08/2026"
     },
     {
@@ -1406,6 +1568,7 @@
     "purchaseCost": 5500,
     "rawCost": 0,
     "chippingCost": 0,
+    "extraCost": 0,
     "revenue": 0,
     "transportCost": 880,
     "result": -6380
@@ -1435,6 +1598,7 @@
     "production": null,
     "sale": null,
     "mm": null,
+    "extras": [],
     "transport": {
      "mode": "external",
      "place": "RiC Zabrze",
@@ -1494,6 +1658,7 @@
      "purchaseCost": 5500,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 880,
      "result": -6380
@@ -1510,6 +1675,7 @@
      "purchaseCost": 5500,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 880,
      "result": -6380
@@ -1517,8 +1683,8 @@
    ]
   },
   {
-   "id": "op_muky417gmmzu2is",
-   "idemKey": "idem_muky417fl18ir2y",
+   "id": "op_mup1db2pnq47hrr",
+   "idemKey": "idem_mup1db2omqj10eu",
    "type": "ZAKUP",
    "no": "PZ/003/08/2026",
    "date": "2026-08-20",
@@ -1570,6 +1736,7 @@
      "sourceDoc": "Protokół wycinki 17/2026",
      "chipperId": "ch_jenz",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -1581,7 +1748,9 @@
      "buyerId": "pa_ec_kat",
      "qtyMP": "100",
      "price": "95",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -1644,6 +1813,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -1690,6 +1877,9 @@
     "sourceDoc": "Protokół wycinki 17/2026",
     "chipperId": "ch_jenz",
     "chipperName": "Jenz HEM 583",
+    "chipperOwner": "own",
+    "chipperCompany": "",
+    "chipperReg": "",
     "operatorId": "op_lis",
     "operatorName": "Krzysztof Lis"
    },
@@ -1704,9 +1894,13 @@
     "price": 95,
     "priceUnit": "MP",
     "revenue": 9500,
-    "weightT": 33
+    "weightT": 33,
+    "weightMode": "auto",
+    "autoWeight": 33
    },
    "mm": null,
+   "extras": [],
+   "docDate": "2026-08-20",
    "transport": {
     "mode": "train",
     "place": "EC Katowice — bocznica",
@@ -1754,6 +1948,7 @@
      "basis": "KZR",
      "stock": "+",
      "place": "EC Katowice — bocznica",
+     "docDate": "2026-08-20",
      "no": "PZ/003/08/2026"
     },
     {
@@ -1804,6 +1999,7 @@
      "stockQty": 100,
      "stockUnit": "MP",
      "weightT": 33,
+     "weightMode": "auto",
      "value": 9500,
      "price": 95,
      "priceUnit": "MP",
@@ -1811,6 +2007,7 @@
      "partner": "EC Katowice — biomasa",
      "stock": "−",
      "place": "EC Katowice — bocznica",
+     "docDate": "2026-08-20",
      "no": "WZ/001/08/2026"
     },
     {
@@ -1853,6 +2050,7 @@
     "purchaseCost": 4500,
     "rawCost": 0,
     "chippingCost": 1000,
+    "extraCost": 0,
     "revenue": 9500,
     "transportCost": 924,
     "result": 3076
@@ -1902,6 +2100,9 @@
      "sourceDoc": "Protokół wycinki 17/2026",
      "chipperId": "ch_jenz",
      "chipperName": "Jenz HEM 583",
+     "chipperOwner": "own",
+     "chipperCompany": "",
+     "chipperReg": "",
      "operatorId": "op_lis",
      "operatorName": "Krzysztof Lis"
     },
@@ -1916,9 +2117,12 @@
      "price": 95,
      "priceUnit": "MP",
      "revenue": 9500,
-     "weightT": 33
+     "weightT": 33,
+     "weightMode": "auto",
+     "autoWeight": 33
     },
     "mm": null,
+    "extras": [],
     "transport": {
      "mode": "train",
      "place": "EC Katowice — bocznica",
@@ -1947,6 +2151,7 @@
      "purchaseCost": 4500,
      "rawCost": 0,
      "chippingCost": 1000,
+     "extraCost": 0,
      "revenue": 9500,
      "transportCost": 924,
      "result": 3076
@@ -1963,6 +2168,7 @@
      "purchaseCost": 4500,
      "rawCost": 0,
      "chippingCost": 1000,
+     "extraCost": 0,
      "revenue": 9500,
      "transportCost": 924,
      "result": 3076
@@ -1970,10 +2176,10 @@
    ]
   },
   {
-   "id": "op_muky417itko6mkv",
-   "idemKey": "idem_muky417hs47tkr1",
+   "id": "op_mup1db2rulh374p",
+   "idemKey": "idem_mup1db2qtiv4baj",
    "type": "ZAKUP",
-   "no": "PZ/001/09/2026",
+   "no": "PZ/11",
    "date": "2026-09-03",
    "whId": "wh_zab",
    "toWhId": null,
@@ -2023,6 +2229,7 @@
      "sourceDoc": "",
      "chipperId": "ch_jenz",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -2034,7 +2241,9 @@
      "buyerId": "pa_ec_zab",
      "qtyMP": "",
      "price": "90",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -2128,6 +2337,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "PZ/11",
+     "WZ": ""
+    },
+    "docDate": "2026-09-02",
     "notes": "",
     "extDoc": ""
    },
@@ -2174,6 +2401,9 @@
     "sourceDoc": "",
     "chipperId": "ch_jenz",
     "chipperName": "Jenz HEM 583",
+    "chipperOwner": "own",
+    "chipperCompany": "",
+    "chipperReg": "",
     "operatorId": "op_lis",
     "operatorName": "Krzysztof Lis"
    },
@@ -2188,9 +2418,13 @@
     "price": 90,
     "priceUnit": "MP",
     "revenue": 7200,
-    "weightT": 26.4
+    "weightT": 26.4,
+    "weightMode": "auto",
+    "autoWeight": 26.4
    },
    "mm": null,
+   "extras": [],
+   "docDate": "2026-09-02",
    "transport": {
     "mode": "mixed",
     "place": "Elektrociepłownia Zabrze S.A.",
@@ -2451,7 +2685,9 @@
      "basis": "KZR",
      "stock": "+",
      "place": "Elektrociepłownia Zabrze S.A.",
-     "no": "PZ/001/09/2026"
+     "docDate": "2026-09-02",
+     "manualNo": "PZ/11",
+     "no": "PZ/11"
     },
     {
      "type": "RW",
@@ -2501,6 +2737,7 @@
      "stockQty": 80,
      "stockUnit": "MP",
      "weightT": 26.4,
+     "weightMode": "auto",
      "value": 7200,
      "price": 90,
      "priceUnit": "MP",
@@ -2508,6 +2745,7 @@
      "partner": "Elektrociepłownia Zabrze S.A.",
      "stock": "−",
      "place": "Elektrociepłownia Zabrze S.A.",
+     "docDate": "2026-09-02",
      "no": "WZ/001/09/2026"
     },
     {
@@ -2763,6 +3001,7 @@
     "purchaseCost": 4600,
     "rawCost": 0,
     "chippingCost": 800,
+    "extraCost": 0,
     "revenue": 7200,
     "transportCost": 702,
     "result": 1098
@@ -2812,6 +3051,9 @@
      "sourceDoc": "",
      "chipperId": "ch_jenz",
      "chipperName": "Jenz HEM 583",
+     "chipperOwner": "own",
+     "chipperCompany": "",
+     "chipperReg": "",
      "operatorId": "op_lis",
      "operatorName": "Krzysztof Lis"
     },
@@ -2826,9 +3068,12 @@
      "price": 90,
      "priceUnit": "MP",
      "revenue": 7200,
-     "weightT": 26.4
+     "weightT": 26.4,
+     "weightMode": "auto",
+     "autoWeight": 26.4
     },
     "mm": null,
+    "extras": [],
     "transport": {
      "mode": "mixed",
      "place": "Elektrociepłownia Zabrze S.A.",
@@ -3070,6 +3315,7 @@
      "purchaseCost": 4600,
      "rawCost": 0,
      "chippingCost": 800,
+     "extraCost": 0,
      "revenue": 7200,
      "transportCost": 702,
      "result": 1098
@@ -3082,10 +3328,11 @@
      "date": "2026-09-03",
      "ts": "2026-09-03T08:00:00.000Z",
      "kind": "create",
-     "no": "PZ/001/09/2026",
+     "no": "PZ/11",
      "purchaseCost": 4600,
      "rawCost": 0,
      "chippingCost": 800,
+     "extraCost": 0,
      "revenue": 7200,
      "transportCost": 702,
      "result": 1098
@@ -3093,10 +3340,10 @@
    ]
   },
   {
-   "id": "op_muky417j10cbsi1x",
-   "idemKey": "idem_muky417izs6y14f",
+   "id": "op_mup1db2r11zd7yo5",
+   "idemKey": "idem_mup1db2r106cqf3s",
    "type": "ZAKUP",
-   "no": "PZ/002/09/2026",
+   "no": "PZ/001/09/2026",
    "date": "2026-09-08",
    "whId": "wh_bra",
    "toWhId": null,
@@ -3144,6 +3391,7 @@
      "sourceDoc": "",
      "chipperId": "",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -3155,7 +3403,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -3218,6 +3468,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -3244,6 +3512,8 @@
    "production": null,
    "sale": null,
    "mm": null,
+   "extras": [],
+   "docDate": "2026-09-08",
    "transport": {
     "mode": "external",
     "place": "RiC Brąszewice",
@@ -3306,7 +3576,8 @@
      "basis": "DEKL",
      "stock": "+",
      "place": "RiC Brąszewice",
-     "no": "PZ/002/09/2026"
+     "docDate": "2026-09-08",
+     "no": "PZ/001/09/2026"
     },
     {
      "type": "TR",
@@ -3363,6 +3634,7 @@
     "purchaseCost": 3150,
     "rawCost": 0,
     "chippingCost": 0,
+    "extraCost": 0,
     "revenue": 0,
     "transportCost": 0,
     "result": -3150
@@ -3394,6 +3666,7 @@
     "production": null,
     "sale": null,
     "mm": null,
+    "extras": [],
     "transport": {
      "mode": "external",
      "place": "RiC Brąszewice",
@@ -3437,6 +3710,7 @@
      "purchaseCost": 3150,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": -3150
@@ -3449,10 +3723,11 @@
      "date": "2026-09-08",
      "ts": "2026-09-08T08:00:00.000Z",
      "kind": "create",
-     "no": "PZ/002/09/2026",
+     "no": "PZ/001/09/2026",
      "purchaseCost": 3150,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": -3150
@@ -3460,8 +3735,8 @@
    ]
   },
   {
-   "id": "op_muky417j14fnw8n9",
-   "idemKey": "idem_muky417j133g6jfb",
+   "id": "op_mup1db2s15z27wfk",
+   "idemKey": "idem_mup1db2s142ez975",
    "type": "PRODUKCJA",
    "no": "PW/002/09/2026",
    "date": "2026-09-10",
@@ -3511,6 +3786,7 @@
      "sourceDoc": "",
      "chipperId": "ch_biber",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": "10"
     },
     "sale": {
@@ -3522,7 +3798,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -3585,6 +3863,32 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": true,
+     "items": [
+      {
+       "typeId": "xt_pryzmy",
+       "vehicleId": "",
+       "qty": "2",
+       "rate": "",
+       "cost": "",
+       "desc": "Podgarnianie pryzmy P2 po rębaniu"
+      },
+      {
+       "typeId": "xt_plac",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "250",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "Rębanie na placu — pryzma P2",
     "extDoc": "KP 12/09/2026"
    },
@@ -3612,11 +3916,49 @@
     "sourceDoc": "",
     "chipperId": "ch_biber",
     "chipperName": "Eschlböck Biber 92",
+    "chipperOwner": "own",
+    "chipperCompany": "",
+    "chipperReg": "",
     "operatorId": "op_mazur",
     "operatorName": "Adam Mazur"
    },
    "sale": null,
    "mm": null,
+   "extras": [
+    {
+     "id": "xo_mup1db2s18ihng06",
+     "opId": "op_mup1db2s15z27wfk",
+     "no": 1,
+     "typeId": "xt_pryzmy",
+     "typeName": "Podgarnianie pryzm ładowarką",
+     "unit": "h",
+     "vehicleId": "",
+     "vehicleName": "",
+     "reg": "",
+     "qty": 2,
+     "rate": 180,
+     "cost": 360,
+     "costBasis": "qtyRate",
+     "desc": "Podgarnianie pryzmy P2 po rębaniu"
+    },
+    {
+     "id": "xo_mup1db2s19ovt96y",
+     "opId": "op_mup1db2s15z27wfk",
+     "no": 2,
+     "typeId": "xt_plac",
+     "typeName": "Czyszczenie placu",
+     "unit": "",
+     "vehicleId": "",
+     "vehicleName": "",
+     "reg": "",
+     "qty": null,
+     "rate": null,
+     "cost": 250,
+     "costBasis": "amount",
+     "desc": ""
+    }
+   ],
+   "docDate": "2026-09-10",
    "transport": {
     "mode": "none",
     "place": "RiC Brąszewice",
@@ -3667,9 +4009,10 @@
     "purchaseCost": 0,
     "rawCost": 0,
     "chippingCost": 400,
+    "extraCost": 610,
     "revenue": 0,
     "transportCost": 0,
-    "result": -400
+    "result": -1010
    },
    "warnings": [],
    "original": {
@@ -3697,11 +4040,44 @@
      "sourceDoc": "",
      "chipperId": "ch_biber",
      "chipperName": "Eschlböck Biber 92",
+     "chipperOwner": "own",
+     "chipperCompany": "",
+     "chipperReg": "",
      "operatorId": "op_mazur",
      "operatorName": "Adam Mazur"
     },
     "sale": null,
     "mm": null,
+    "extras": [
+     {
+      "no": 1,
+      "typeId": "xt_pryzmy",
+      "typeName": "Podgarnianie pryzm ładowarką",
+      "unit": "h",
+      "vehicleId": "",
+      "vehicleName": "",
+      "reg": "",
+      "qty": 2,
+      "rate": 180,
+      "cost": 360,
+      "costBasis": "qtyRate",
+      "desc": "Podgarnianie pryzmy P2 po rębaniu"
+     },
+     {
+      "no": 2,
+      "typeId": "xt_plac",
+      "typeName": "Czyszczenie placu",
+      "unit": "",
+      "vehicleId": "",
+      "vehicleName": "",
+      "reg": "",
+      "qty": null,
+      "rate": null,
+      "cost": 250,
+      "costBasis": "amount",
+      "desc": ""
+     }
+    ],
     "transport": {
      "mode": "none",
      "place": "RiC Brąszewice",
@@ -3711,9 +4087,10 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 400,
+     "extraCost": 610,
      "revenue": 0,
      "transportCost": 0,
-     "result": -400
+     "result": -1010
     }
    },
    "corrections": [],
@@ -3727,15 +4104,16 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 400,
+     "extraCost": 610,
      "revenue": 0,
      "transportCost": 0,
-     "result": -400
+     "result": -1010
     }
    ]
   },
   {
-   "id": "op_muky417j19fk1ks4",
-   "idemKey": "idem_muky417j18zblfae",
+   "id": "op_mup1db2t1cr7lina",
+   "idemKey": "idem_mup1db2s1bfhdcog",
    "type": "SPRZEDAZ",
    "no": "WZ/002/09/2026",
    "date": "2026-09-12",
@@ -3785,6 +4163,7 @@
      "sourceDoc": "",
      "chipperId": "",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -3796,7 +4175,9 @@
      "buyerId": "pa_ciep_ryb",
      "qtyMP": "",
      "price": "85",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "manual",
+     "weightManual": "31,1"
     },
     "mm": {
      "fromWhId": "",
@@ -3859,6 +4240,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -3878,9 +4277,13 @@
     "price": 85,
     "priceUnit": "MP",
     "revenue": 7650,
-    "weightT": 29.7
+    "weightT": 31.1,
+    "weightMode": "manual",
+    "autoWeight": 29.7
    },
    "mm": null,
+   "extras": [],
+   "docDate": "2026-09-12",
    "transport": {
     "mode": "external",
     "place": "Ciepłownia Rybnik",
@@ -3932,7 +4335,8 @@
      "unit": "MP",
      "stockQty": 100,
      "stockUnit": "MP",
-     "weightT": 33,
+     "weightT": 31.1,
+     "weightMode": "manual",
      "value": 8500,
      "price": 85,
      "priceUnit": "MP",
@@ -3940,6 +4344,7 @@
      "partner": "Ciepłownia Rybnik",
      "stock": "−",
      "place": "Ciepłownia Rybnik",
+     "docDate": "2026-09-12",
      "no": "WZ/002/09/2026"
     },
     {
@@ -3997,6 +4402,7 @@
     "purchaseCost": 0,
     "rawCost": 0,
     "chippingCost": 0,
+    "extraCost": 0,
     "revenue": 7650,
     "transportCost": 650,
     "result": 7000
@@ -4021,9 +4427,12 @@
      "price": 85,
      "priceUnit": "MP",
      "revenue": 8500,
-     "weightT": 33
+     "weightT": 34.6,
+     "weightMode": "manual",
+     "autoWeight": 33
     },
     "mm": null,
+    "extras": [],
     "transport": {
      "mode": "external",
      "place": "Ciepłownia Rybnik",
@@ -4067,6 +4476,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 8500,
      "transportCost": 650,
      "result": 7850
@@ -4115,6 +4525,7 @@
        "sourceDoc": "",
        "chipperId": "",
        "operatorId": "",
+       "operatorName": "",
        "chipRate": ""
       },
       "sale": {
@@ -4126,7 +4537,9 @@
        "buyerId": "pa_ciep_ryb",
        "qtyMP": "",
        "price": "85",
-       "priceUnit": "MP"
+       "priceUnit": "MP",
+       "weightMode": "manual",
+       "weightManual": "34,6"
       },
       "mm": {
        "fromWhId": "",
@@ -4189,6 +4602,24 @@
         "priceUnit": "t"
        }
       },
+      "extras": {
+       "enabled": false,
+       "items": [
+        {
+         "typeId": "",
+         "vehicleId": "",
+         "qty": "",
+         "rate": "",
+         "cost": "",
+         "desc": ""
+        }
+       ]
+      },
+      "docNos": {
+       "PZ": "",
+       "WZ": ""
+      },
+      "docDate": "",
       "notes": "",
       "extDoc": ""
      },
@@ -4202,6 +4633,16 @@
        "afterText": "90 MP",
        "diff": -10,
        "unit": "MP"
+      },
+      {
+       "field": "sale.weightT",
+       "label": "Tonaż sprzedaży",
+       "before": 34.6,
+       "after": 31.1,
+       "beforeText": "34,6 t",
+       "afterText": "31,1 t",
+       "diff": -3.5,
+       "unit": "t"
       }
      ],
      "deltas": [
@@ -4219,6 +4660,7 @@
       "purchaseCost": 0,
       "rawCost": 0,
       "chippingCost": 0,
+      "extraCost": 0,
       "revenue": -850,
       "transportCost": 0,
       "result": -850
@@ -4228,6 +4670,7 @@
       "purchaseCost": 0,
       "rawCost": 0,
       "chippingCost": 0,
+      "extraCost": 0,
       "revenue": 8500,
       "transportCost": 650,
       "result": 7850
@@ -4236,6 +4679,7 @@
       "purchaseCost": 0,
       "rawCost": 0,
       "chippingCost": 0,
+      "extraCost": 0,
       "revenue": 7650,
       "transportCost": 650,
       "result": 7000
@@ -4252,6 +4696,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 8500,
      "transportCost": 650,
      "result": 7850
@@ -4264,6 +4709,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": -850,
      "transportCost": 0,
      "result": -850
@@ -4271,8 +4717,8 @@
    ]
   },
   {
-   "id": "op_muky417l1ddpf13b",
-   "idemKey": "idem_muky417k1ciqcwjs",
+   "id": "op_mup1db2u1gjlnui7",
+   "idemKey": "idem_mup1db2t1fokoqa1",
    "type": "SPRZEDAZ",
    "no": "PW/003/09/2026",
    "date": "2026-09-15",
@@ -4321,8 +4767,9 @@
      "kwit": "KW 0233/09/2026",
      "investSite": "",
      "sourceDoc": "",
-     "chipperId": "ch_jenz",
+     "chipperId": "ch_ext_drwal",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": "10"
     },
     "sale": {
@@ -4334,7 +4781,9 @@
      "buyerId": "pa_elektrownia",
      "qtyMP": "600",
      "price": "88",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -4403,6 +4852,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": true,
+     "items": [
+      {
+       "typeId": "xt_holowanie",
+       "vehicleId": "ve_scania",
+       "qty": "",
+       "rate": "",
+       "cost": "350",
+       "desc": "Podciągnięcie rębaka na składnicę"
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -4428,10 +4895,13 @@
     "sourceType": "",
     "investSite": "",
     "sourceDoc": "",
-    "chipperId": "ch_jenz",
-    "chipperName": "Jenz HEM 583",
-    "operatorId": "op_lis",
-    "operatorName": "Krzysztof Lis",
+    "chipperId": "ch_ext_drwal",
+    "chipperName": "Bandit 2590XP",
+    "chipperOwner": "external",
+    "chipperCompany": "Usługi Leśne Drwal sp. z o.o.",
+    "chipperReg": "SGL 7Z412",
+    "operatorId": "",
+    "operatorName": "Zbigniew Kos",
     "rawQty": 150,
     "rawCost": 0
    },
@@ -4446,9 +4916,30 @@
     "price": 88,
     "priceUnit": "MP",
     "revenue": 52800,
-    "weightT": 198
+    "weightT": 198,
+    "weightMode": "auto",
+    "autoWeight": 198
    },
    "mm": null,
+   "extras": [
+    {
+     "id": "xo_mup1db2u1joz9vsr",
+     "opId": "op_mup1db2u1gjlnui7",
+     "no": 1,
+     "typeId": "xt_holowanie",
+     "typeName": "Holowanie",
+     "unit": "",
+     "vehicleId": "ve_scania",
+     "vehicleName": "Scania R450 — ruchoma podłoga",
+     "reg": "SGL 4T821",
+     "qty": null,
+     "rate": null,
+     "cost": 350,
+     "costBasis": "amount",
+     "desc": "Podciągnięcie rębaka na składnicę"
+    }
+   ],
+   "docDate": "2026-09-15",
    "transport": {
     "mode": "train",
     "place": "Elektrownia Łaziska",
@@ -4495,8 +4986,8 @@
       "productionType": "Zrębka produkcyjna leśna",
       "chipRate": 10,
       "chippingCost": 6000,
-      "chipper": "Jenz HEM 583",
-      "operator": "Krzysztof Lis",
+      "chipper": "Bandit 2590XP — Usługi Leśne Drwal sp. z o.o.",
+      "operator": "Zbigniew Kos",
       "ndl": "Rudy Raciborskie",
       "lesnictwo": "Kuźnia",
       "kwit": "KW 0233/09/2026",
@@ -4522,6 +5013,7 @@
      "stockQty": 600,
      "stockUnit": "MP",
      "weightT": 198,
+     "weightMode": "auto",
      "value": 52800,
      "price": 88,
      "priceUnit": "MP",
@@ -4532,6 +5024,7 @@
       "direct": "sprzedaż bezpośrednia po produkcji / prosto z lasu"
      },
      "place": "Elektrownia Łaziska",
+     "docDate": "2026-09-15",
      "no": "WZ/003/09/2026"
     },
     {
@@ -4577,9 +5070,10 @@
     "purchaseCost": 0,
     "rawCost": 0,
     "chippingCost": 6000,
+    "extraCost": 350,
     "revenue": 52800,
     "transportCost": 4950,
-    "result": 41850
+    "result": 41500
    },
    "warnings": [],
    "original": {
@@ -4605,10 +5099,13 @@
      "sourceType": "",
      "investSite": "",
      "sourceDoc": "",
-     "chipperId": "ch_jenz",
-     "chipperName": "Jenz HEM 583",
-     "operatorId": "op_lis",
-     "operatorName": "Krzysztof Lis",
+     "chipperId": "ch_ext_drwal",
+     "chipperName": "Bandit 2590XP",
+     "chipperOwner": "external",
+     "chipperCompany": "Usługi Leśne Drwal sp. z o.o.",
+     "chipperReg": "SGL 7Z412",
+     "operatorId": "",
+     "operatorName": "Zbigniew Kos",
      "rawQty": 150,
      "rawCost": 0
     },
@@ -4623,9 +5120,27 @@
      "price": 88,
      "priceUnit": "MP",
      "revenue": 52800,
-     "weightT": 198
+     "weightT": 198,
+     "weightMode": "auto",
+     "autoWeight": 198
     },
     "mm": null,
+    "extras": [
+     {
+      "no": 1,
+      "typeId": "xt_holowanie",
+      "typeName": "Holowanie",
+      "unit": "",
+      "vehicleId": "ve_scania",
+      "vehicleName": "Scania R450 — ruchoma podłoga",
+      "reg": "SGL 4T821",
+      "qty": null,
+      "rate": null,
+      "cost": 350,
+      "costBasis": "amount",
+      "desc": "Podciągnięcie rębaka na składnicę"
+     }
+    ],
     "transport": {
      "mode": "train",
      "place": "Elektrownia Łaziska",
@@ -4657,9 +5172,10 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 6000,
+     "extraCost": 350,
      "revenue": 52800,
      "transportCost": 4950,
-     "result": 41850
+     "result": 41500
     }
    },
    "corrections": [],
@@ -4673,15 +5189,16 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 6000,
+     "extraCost": 350,
      "revenue": 52800,
      "transportCost": 4950,
-     "result": 41850
+     "result": 41500
     }
    ]
   },
   {
-   "id": "op_muky417m1ikzpcjg",
-   "idemKey": "idem_muky417l1helf6j1",
+   "id": "op_mup1db2u1mg1hlgy",
+   "idemKey": "idem_mup1db2u1lulw15h",
    "type": "MM",
    "no": "MM/001/09/2026",
    "date": "2026-09-16",
@@ -4731,6 +5248,7 @@
      "sourceDoc": "",
      "chipperId": "",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -4742,7 +5260,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "wh_zab",
@@ -4805,6 +5325,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "",
     "extDoc": ""
    },
@@ -4843,6 +5381,8 @@
      "key": null
     }
    },
+   "extras": [],
+   "docDate": "2026-09-16",
    "transport": {
     "mode": "own",
     "place": "RiC Brąszewice",
@@ -4970,6 +5510,7 @@
     "purchaseCost": 0,
     "rawCost": 0,
     "chippingCost": 0,
+    "extraCost": 0,
     "revenue": 0,
     "transportCost": 140,
     "result": -140
@@ -4998,6 +5539,7 @@
      "twoStage": true,
      "receipt": null
     },
+    "extras": [],
     "transport": {
      "mode": "own",
      "place": "RiC Brąszewice",
@@ -5046,6 +5588,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 140,
      "result": -140
@@ -5062,6 +5605,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 140,
      "result": -140
@@ -5069,10 +5613,10 @@
    ]
   },
   {
-   "id": "op_muky417m1m6ejfs0",
-   "idemKey": "idem_muky417m1ldogxu5",
+   "id": "op_mup1db2v1qymm2nx",
+   "idemKey": "idem_mup1db2u1pgu8i2l",
    "type": "ZAKUP",
-   "no": "PZ/003/09/2026",
+   "no": "PZ/002/09/2026",
    "date": "2026-09-17",
    "whId": "wh_bra",
    "toWhId": null,
@@ -5120,6 +5664,7 @@
      "sourceDoc": "",
      "chipperId": "",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": ""
     },
     "sale": {
@@ -5131,7 +5676,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -5194,6 +5741,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": false,
+     "items": [
+      {
+       "typeId": "",
+       "vehicleId": "",
+       "qty": "",
+       "rate": "",
+       "cost": "",
+       "desc": ""
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "Pomyłka — dostawa nie dotarła",
     "extDoc": ""
    },
@@ -5220,6 +5785,8 @@
    "production": null,
    "sale": null,
    "mm": null,
+   "extras": [],
+   "docDate": "2026-09-17",
    "transport": {
     "mode": "none",
     "place": "RiC Brąszewice",
@@ -5248,13 +5815,15 @@
      "basis": "DEKL",
      "stock": "+",
      "place": "RiC Brąszewice",
-     "no": "PZ/003/09/2026"
+     "docDate": "2026-09-17",
+     "no": "PZ/002/09/2026"
     }
    ],
    "totals": {
     "purchaseCost": 3050,
     "rawCost": 0,
     "chippingCost": 0,
+    "extraCost": 0,
     "revenue": 0,
     "transportCost": 0,
     "result": -3050
@@ -5284,6 +5853,7 @@
     "production": null,
     "sale": null,
     "mm": null,
+    "extras": [],
     "transport": {
      "mode": "none",
      "place": "RiC Brąszewice",
@@ -5293,6 +5863,7 @@
      "purchaseCost": 3050,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": -3050
@@ -5323,10 +5894,11 @@
      "date": "2026-09-17",
      "ts": "2026-09-17T08:00:00.000Z",
      "kind": "create",
-     "no": "PZ/003/09/2026",
+     "no": "PZ/002/09/2026",
      "purchaseCost": 3050,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": -3050
@@ -5339,6 +5911,7 @@
      "purchaseCost": -3050,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": 3050
@@ -5346,8 +5919,8 @@
    ]
   },
   {
-   "id": "op_muky417n1q6h7odm",
-   "idemKey": "idem_muky417m1px8jj7y",
+   "id": "op_mup1db2v1uzxamh9",
+   "idemKey": "idem_mup1db2v1t9aw3dk",
    "type": "PRODUKCJA",
    "no": "PW/004/09/2026",
    "date": "2026-09-22",
@@ -5397,6 +5970,7 @@
      "sourceDoc": "",
      "chipperId": "ch_biber",
      "operatorId": "",
+     "operatorName": "",
      "chipRate": "10"
     },
     "sale": {
@@ -5408,7 +5982,9 @@
      "buyerId": "",
      "qtyMP": "",
      "price": "",
-     "priceUnit": "MP"
+     "priceUnit": "MP",
+     "weightMode": "auto",
+     "weightManual": ""
     },
     "mm": {
      "fromWhId": "",
@@ -5471,6 +6047,24 @@
       "priceUnit": "t"
      }
     },
+    "extras": {
+     "enabled": true,
+     "items": [
+      {
+       "typeId": "xt_ladowarka",
+       "vehicleId": "",
+       "qty": "1,5",
+       "rate": "",
+       "cost": "",
+       "desc": "Załadunek rębaka"
+      }
+     ]
+    },
+    "docNos": {
+     "PZ": "",
+     "WZ": ""
+    },
+    "docDate": "",
     "notes": "Pryzma P3",
     "extDoc": ""
    },
@@ -5498,11 +6092,33 @@
     "sourceDoc": "",
     "chipperId": "ch_biber",
     "chipperName": "Eschlböck Biber 92",
+    "chipperOwner": "own",
+    "chipperCompany": "",
+    "chipperReg": "",
     "operatorId": "op_mazur",
     "operatorName": "Adam Mazur"
    },
    "sale": null,
    "mm": null,
+   "extras": [
+    {
+     "id": "xo_mup1db2v1xj3x078",
+     "opId": "op_mup1db2v1uzxamh9",
+     "no": 1,
+     "typeId": "xt_ladowarka",
+     "typeName": "Praca ładowarką",
+     "unit": "h",
+     "vehicleId": "",
+     "vehicleName": "",
+     "reg": "",
+     "qty": 1.5,
+     "rate": 160,
+     "cost": 240,
+     "costBasis": "qtyRate",
+     "desc": "Załadunek rębaka"
+    }
+   ],
+   "docDate": "2026-09-22",
    "transport": {
     "mode": "none",
     "place": "RiC Brąszewice",
@@ -5553,9 +6169,10 @@
     "purchaseCost": 0,
     "rawCost": 0,
     "chippingCost": 200,
+    "extraCost": 240,
     "revenue": 0,
     "transportCost": 0,
-    "result": -200
+    "result": -440
    },
    "warnings": [],
    "original": {
@@ -5583,11 +6200,30 @@
      "sourceDoc": "",
      "chipperId": "ch_biber",
      "chipperName": "Eschlböck Biber 92",
+     "chipperOwner": "own",
+     "chipperCompany": "",
+     "chipperReg": "",
      "operatorId": "op_mazur",
      "operatorName": "Adam Mazur"
     },
     "sale": null,
     "mm": null,
+    "extras": [
+     {
+      "no": 1,
+      "typeId": "xt_ladowarka",
+      "typeName": "Praca ładowarką",
+      "unit": "h",
+      "vehicleId": "",
+      "vehicleName": "",
+      "reg": "",
+      "qty": 1.5,
+      "rate": 160,
+      "cost": 240,
+      "costBasis": "qtyRate",
+      "desc": "Załadunek rębaka"
+     }
+    ],
     "transport": {
      "mode": "none",
      "place": "RiC Brąszewice",
@@ -5597,9 +6233,10 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 200,
+     "extraCost": 240,
      "revenue": 0,
      "transportCost": 0,
-     "result": -200
+     "result": -440
     }
    },
    "corrections": [],
@@ -5613,9 +6250,10 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 200,
+     "extraCost": 240,
      "revenue": 0,
      "transportCost": 0,
-     "result": -200
+     "result": -440
     }
    ]
   }
@@ -5623,7 +6261,7 @@
  "drafts": [],
  "ledger": [
   {
-   "id": "l_muky41781k7cog6",
+   "id": "l_mup1db2i16y3ns0",
    "seq": 1,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5641,7 +6279,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_muky41782xjddkg",
+   "id": "l_mup1db2i2b2m017",
    "seq": 2,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5659,7 +6297,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_muky41783ckichn",
+   "id": "l_mup1db2i33fco6r",
    "seq": 3,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5677,7 +6315,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_muky417845yiral",
+   "id": "l_mup1db2i45oo82p",
    "seq": 4,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5695,7 +6333,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_muky41785ja7xk1",
+   "id": "l_mup1db2i5xfq1hn",
    "seq": 5,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5713,7 +6351,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_muky417866qrokl",
+   "id": "l_mup1db2i6odmyr0",
    "seq": 6,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5731,7 +6369,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_muky41788c9hoze",
+   "id": "l_mup1db2i8k3vh9j",
    "seq": 7,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5749,7 +6387,7 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_muky41789ceaj7j",
+   "id": "l_mup1db2i99p3iie",
    "seq": 8,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -5767,14 +6405,14 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_muky417ddr727vi",
+   "id": "l_mup1db2md1af1ru",
    "seq": 9,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 28.56,
    "direct": false,
-   "opId": "op_muky417dcdt3wm7",
+   "opId": "op_mup1db2mc9gabhd",
    "step": 1,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -5785,14 +6423,14 @@
    "docNo": "PZ/001/08/2026"
   },
   {
-   "id": "l_muky417dejyoecj",
+   "id": "l_mup1db2mep9ouij",
    "seq": 10,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -28.56,
    "direct": false,
-   "opId": "op_muky417dcdt3wm7",
+   "opId": "op_mup1db2mc9gabhd",
    "step": 2,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -5803,14 +6441,14 @@
    "docNo": "RW/001/08/2026"
   },
   {
-   "id": "l_muky417dff27o76",
+   "id": "l_mup1db2mfm47uoo",
    "seq": 11,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 39.6,
    "direct": false,
-   "opId": "op_muky417dcdt3wm7",
+   "opId": "op_mup1db2mc9gabhd",
    "step": 3,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -5821,14 +6459,14 @@
    "docNo": "PW/001/08/2026"
   },
   {
-   "id": "l_muky417fjwlj7um",
+   "id": "l_mup1db2okkzycs2",
    "seq": 12,
    "ts": "2026-08-12T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_muky417fifwkzmc",
+   "opId": "op_mup1db2nj28yslq",
    "step": 1,
    "date": "2026-08-12",
    "whId": "wh_zab",
@@ -5839,14 +6477,14 @@
    "docNo": "PZ/002/08/2026"
   },
   {
-   "id": "l_muky417gnaqvhhi",
+   "id": "l_mup1db2poaw5j2t",
    "seq": 13,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": 23.8,
    "direct": false,
-   "opId": "op_muky417gmmzu2is",
+   "opId": "op_mup1db2pnq47hrr",
    "step": 1,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5857,14 +6495,14 @@
    "docNo": "PZ/003/08/2026"
   },
   {
-   "id": "l_muky417goqusvgr",
+   "id": "l_mup1db2pprp84pl",
    "seq": 14,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": -23.8,
    "direct": false,
-   "opId": "op_muky417gmmzu2is",
+   "opId": "op_mup1db2pnq47hrr",
    "step": 2,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5875,14 +6513,14 @@
    "docNo": "RW/002/08/2026"
   },
   {
-   "id": "l_muky417gpn75r1l",
+   "id": "l_mup1db2pqs1n2a5",
    "seq": 15,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_muky417gmmzu2is",
+   "opId": "op_mup1db2pnq47hrr",
    "step": 3,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5893,14 +6531,14 @@
    "docNo": "PW/002/08/2026"
   },
   {
-   "id": "l_muky417gqcwxt9l",
+   "id": "l_mup1db2qrxypcum",
    "seq": 16,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_muky417gmmzu2is",
+   "opId": "op_mup1db2pnq47hrr",
    "step": 4,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -5911,14 +6549,14 @@
    "docNo": "WZ/001/08/2026"
   },
   {
-   "id": "l_muky417iug05pdw",
+   "id": "l_mup1db2rvi7g27j",
    "seq": 17,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 19.04,
    "direct": false,
-   "opId": "op_muky417itko6mkv",
+   "opId": "op_mup1db2rulh374p",
    "step": 1,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5926,17 +6564,17 @@
    "kind": "ZAKUP",
    "cat": "ZAKUP",
    "qty": 20,
-   "docNo": "PZ/001/09/2026"
+   "docNo": "PZ/11"
   },
   {
-   "id": "l_muky417ivyom1y6",
+   "id": "l_mup1db2rwe9wgvr",
    "seq": 18,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -19.04,
    "direct": false,
-   "opId": "op_muky417itko6mkv",
+   "opId": "op_mup1db2rulh374p",
    "step": 2,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5947,14 +6585,14 @@
    "docNo": "RW/001/09/2026"
   },
   {
-   "id": "l_muky417iwnkkfef",
+   "id": "l_mup1db2rxy1bd3h",
    "seq": 19,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 26.4,
    "direct": false,
-   "opId": "op_muky417itko6mkv",
+   "opId": "op_mup1db2rulh374p",
    "step": 3,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5965,14 +6603,14 @@
    "docNo": "PW/001/09/2026"
   },
   {
-   "id": "l_muky417ix5tjnsk",
+   "id": "l_mup1db2rywh6hwv",
    "seq": 20,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": -26.4,
    "direct": false,
-   "opId": "op_muky417itko6mkv",
+   "opId": "op_mup1db2rulh374p",
    "step": 4,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -5983,14 +6621,14 @@
    "docNo": "WZ/001/09/2026"
   },
   {
-   "id": "l_muky417j110i2m50",
+   "id": "l_mup1db2r12qthzza",
    "seq": 21,
    "ts": "2026-09-08T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": 14.28,
    "direct": false,
-   "opId": "op_muky417j10cbsi1x",
+   "opId": "op_mup1db2r11zd7yo5",
    "step": 1,
    "date": "2026-09-08",
    "whId": "wh_bra",
@@ -5998,17 +6636,17 @@
    "kind": "ZAKUP",
    "cat": "ZAKUP",
    "qty": 15,
-   "docNo": "PZ/002/09/2026"
+   "docNo": "PZ/001/09/2026"
   },
   {
-   "id": "l_muky417j15hlo529",
+   "id": "l_mup1db2s16htla5e",
    "seq": 22,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -9.52,
    "direct": false,
-   "opId": "op_muky417j14fnw8n9",
+   "opId": "op_mup1db2s15z27wfk",
    "step": 1,
    "date": "2026-09-10",
    "whId": "wh_bra",
@@ -6019,14 +6657,14 @@
    "docNo": "RW/002/09/2026"
   },
   {
-   "id": "l_muky417j1648jqe6",
+   "id": "l_mup1db2s17z1u75x",
    "seq": 23,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 13.2,
    "direct": false,
-   "opId": "op_muky417j14fnw8n9",
+   "opId": "op_mup1db2s15z27wfk",
    "step": 2,
    "date": "2026-09-10",
    "whId": "wh_bra",
@@ -6037,14 +6675,14 @@
    "docNo": "PW/002/09/2026"
   },
   {
-   "id": "l_muky417j1a879uqw",
+   "id": "l_mup1db2t1d3w3cpv",
    "seq": 24,
    "ts": "2026-09-12T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_muky417j19fk1ks4",
+   "opId": "op_mup1db2t1cr7lina",
    "step": 1,
    "date": "2026-09-12",
    "whId": "wh_bra",
@@ -6055,14 +6693,14 @@
    "docNo": "WZ/002/09/2026"
   },
   {
-   "id": "l_muky417l1e0g8db3",
+   "id": "l_mup1db2u1hkn689d",
    "seq": 25,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 198,
    "direct": true,
-   "opId": "op_muky417l1ddpf13b",
+   "opId": "op_mup1db2u1gjlnui7",
    "step": 1,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -6073,14 +6711,14 @@
    "docNo": "PW/003/09/2026"
   },
   {
-   "id": "l_muky417l1fkv4uy4",
+   "id": "l_mup1db2u1ine740i",
    "seq": 26,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -198,
    "direct": true,
-   "opId": "op_muky417l1ddpf13b",
+   "opId": "op_mup1db2u1gjlnui7",
    "step": 2,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -6091,14 +6729,14 @@
    "docNo": "WZ/003/09/2026"
   },
   {
-   "id": "l_muky417m1j8po6v5",
+   "id": "l_mup1db2u1n5pfes6",
    "seq": 27,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -16.5,
    "direct": false,
-   "opId": "op_muky417m1ikzpcjg",
+   "opId": "op_mup1db2u1mg1hlgy",
    "step": 1,
    "date": "2026-09-16",
    "whId": "wh_zab",
@@ -6109,14 +6747,14 @@
    "docNo": "MM/001/09/2026"
   },
   {
-   "id": "l_muky417m1n9qpx9j",
+   "id": "l_mup1db2v1r10bplp",
    "seq": 28,
    "ts": "2026-09-17T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "t",
    "t": 5,
    "direct": false,
-   "opId": "op_muky417m1m6ejfs0",
+   "opId": "op_mup1db2v1qymm2nx",
    "step": 1,
    "date": "2026-09-17",
    "whId": "wh_bra",
@@ -6124,17 +6762,17 @@
    "kind": "ZAKUP",
    "cat": "ZAKUP",
    "qty": 5,
-   "docNo": "PZ/003/09/2026"
+   "docNo": "PZ/002/09/2026"
   },
   {
-   "id": "l_muky417n1rncomj2",
+   "id": "l_mup1db2v1vopf2aw",
    "seq": 29,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -4.76,
    "direct": false,
-   "opId": "op_muky417n1q6h7odm",
+   "opId": "op_mup1db2v1uzxamh9",
    "step": 1,
    "date": "2026-09-22",
    "whId": "wh_bra",
@@ -6145,14 +6783,14 @@
    "docNo": "RW/003/09/2026"
   },
   {
-   "id": "l_muky417n1szl7mvi",
+   "id": "l_mup1db2v1wf7ewtg",
    "seq": 30,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 6.6,
    "direct": false,
-   "opId": "op_muky417n1q6h7odm",
+   "opId": "op_mup1db2v1uzxamh9",
    "step": 2,
    "date": "2026-09-22",
    "whId": "wh_bra",
@@ -6163,14 +6801,14 @@
    "docNo": "PW/004/09/2026"
   },
   {
-   "id": "l_muky417n1uj6u3vj",
+   "id": "l_mup1db2w1zkn0que",
    "seq": 31,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 16.5,
    "direct": false,
-   "opId": "op_muky417m1ikzpcjg",
+   "opId": "op_mup1db2u1mg1hlgy",
    "step": 50,
    "date": "2026-09-16",
    "whId": "wh_bra",
@@ -6182,14 +6820,14 @@
    "receipt": true
   },
   {
-   "id": "l_muky417p1w4xwx0u",
+   "id": "l_mup1db2y212q9xv0",
    "seq": 32,
    "ts": "2026-09-14T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "MP",
    "t": 3.3,
    "direct": false,
-   "opId": "op_muky417j19fk1ks4",
+   "opId": "op_mup1db2t1cr7lina",
    "step": 100,
    "date": "2026-09-14",
    "whId": "wh_bra",
@@ -6201,14 +6839,14 @@
    "refDoc": "WZ/002/09/2026"
   },
   {
-   "id": "l_muky417r1yrc8fbs",
+   "id": "l_mup1db30232fkjvh",
    "seq": 33,
    "ts": "2026-09-18T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "t",
    "t": -5,
    "direct": false,
-   "opId": "op_muky417m1m6ejfs0",
+   "opId": "op_mup1db2v1qymm2nx",
    "step": 200,
    "date": "2026-09-18",
    "whId": "wh_bra",
@@ -6217,13 +6855,13 @@
    "cat": "ZAKUP",
    "qty": -5,
    "docNo": "AN/001/09/2026",
-   "refDoc": "PZ/003/09/2026"
+   "refDoc": "PZ/002/09/2026"
   }
  ],
  "inventory": [],
  "audit": [
   {
-   "id": "a_muky41787b87gf8",
+   "id": "a_mup1db2i7x0r9df",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -6241,7 +6879,7 @@
    }
   },
   {
-   "id": "a_muky4178avj3bds",
+   "id": "a_mup1db2iayermsg",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -6259,14 +6897,14 @@
    }
   },
   {
-   "id": "a_muky417egzflmlr",
+   "id": "a_mup1db2nh6rg4m8",
    "ts": "2026-08-05T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417dcdt3wm7",
+   "entityId": "op_mup1db2mc9gabhd",
    "opNo": "PZ/001/08/2026",
    "event": "create",
    "act": {
@@ -6298,22 +6936,23 @@
      "purchaseCost": 6900,
      "rawCost": 0,
      "chippingCost": 1200,
+     "extraCost": 500,
      "revenue": 0,
      "transportCost": 675,
-     "result": -8775
+     "result": -9275
     }
    },
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_muky417fkwzpstd",
+   "id": "a_mup1db2ol776ekv",
    "ts": "2026-08-12T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417fifwkzmc",
+   "entityId": "op_mup1db2nj28yslq",
    "opNo": "PZ/002/08/2026",
    "event": "create",
    "act": {
@@ -6341,6 +6980,7 @@
      "purchaseCost": 5500,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 880,
      "result": -6380
@@ -6349,14 +6989,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_muky417hrdz1lu4",
+   "id": "a_mup1db2qsg1c3d1",
    "ts": "2026-08-20T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417gmmzu2is",
+   "entityId": "op_mup1db2pnq47hrr",
    "opNo": "PZ/003/08/2026",
    "event": "create",
    "act": {
@@ -6389,6 +7029,7 @@
      "purchaseCost": 4500,
      "rawCost": 0,
      "chippingCost": 1000,
+     "extraCost": 0,
      "revenue": 9500,
      "transportCost": 924,
      "result": 3076
@@ -6397,15 +7038,15 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_muky417iydd5fvj",
+   "id": "a_mup1db2rz02wwob",
    "ts": "2026-09-03T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417itko6mkv",
-   "opNo": "PZ/001/09/2026",
+   "entityId": "op_mup1db2rulh374p",
+   "opNo": "PZ/11",
    "event": "create",
    "act": {
     "k": "Utworzenie i zatwierdzenie: {type}",
@@ -6427,7 +7068,7 @@
      "wh_zab|pr_zr_lesna": 8293
     },
     "dokumenty": [
-     "PZ/001/09/2026",
+     "PZ/11",
      "RW/001/09/2026",
      "PW/001/09/2026",
      "WZ/001/09/2026",
@@ -6437,6 +7078,7 @@
      "purchaseCost": 4600,
      "rawCost": 0,
      "chippingCost": 800,
+     "extraCost": 0,
      "revenue": 7200,
      "transportCost": 702,
      "result": 1098
@@ -6445,15 +7087,15 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_muky417j12m1jgap",
+   "id": "a_mup1db2s13wbzzrz",
    "ts": "2026-09-08T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417j10cbsi1x",
-   "opNo": "PZ/002/09/2026",
+   "entityId": "op_mup1db2r11zd7yo5",
+   "opNo": "PZ/001/09/2026",
    "event": "create",
    "act": {
     "k": "Utworzenie i zatwierdzenie: {type}",
@@ -6473,13 +7115,14 @@
      "wh_bra|pr_drewno": 45
     },
     "dokumenty": [
-     "PZ/002/09/2026",
+     "PZ/001/09/2026",
      "TR/002/09/2026"
     ],
     "koszty": {
      "purchaseCost": 3150,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": -3150
@@ -6488,21 +7131,21 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_muky417j175ze2p7",
+   "id": "a_mup1db2s1a3v0iu0",
    "ts": "2026-09-10T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417j14fnw8n9",
+   "entityId": "op_mup1db2s15z27wfk",
    "opNo": "PW/002/09/2026",
    "event": "create",
    "act": {
     "k": "Utworzenie i zatwierdzenie: {type}",
     "p": {
      "type": {
-      "t": "Produkcja na magazyn"
+      "t": "Produkcja na magazynie"
      }
     }
    },
@@ -6525,22 +7168,23 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 400,
+     "extraCost": 610,
      "revenue": 0,
      "transportCost": 0,
-     "result": -400
+     "result": -1010
     }
    },
-   "action": "Utworzenie i zatwierdzenie: Produkcja na magazyn"
+   "action": "Utworzenie i zatwierdzenie: Produkcja na magazynie"
   },
   {
-   "id": "a_muky417j1bn476my",
+   "id": "a_mup1db2t1e8oyatz",
    "ts": "2026-09-12T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417j19fk1ks4",
+   "entityId": "op_mup1db2t1cr7lina",
    "opNo": "WZ/002/09/2026",
    "event": "create",
    "act": {
@@ -6568,6 +7212,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 8500,
      "transportCost": 650,
      "result": 7850
@@ -6576,14 +7221,14 @@
    "action": "Utworzenie i zatwierdzenie: Sprzedaż"
   },
   {
-   "id": "a_muky417l1ggh5oeu",
+   "id": "a_mup1db2u1k3li6pn",
    "ts": "2026-09-15T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417l1ddpf13b",
+   "entityId": "op_mup1db2u1gjlnui7",
    "opNo": "PW/003/09/2026",
    "event": "create",
    "act": {
@@ -6612,22 +7257,23 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 6000,
+     "extraCost": 350,
      "revenue": 52800,
      "transportCost": 4950,
-     "result": 41850
+     "result": 41500
     }
    },
    "action": "Utworzenie i zatwierdzenie: Sprzedaż (bezpośrednia)"
   },
   {
-   "id": "a_muky417m1kq52dzw",
+   "id": "a_mup1db2u1os4els9",
    "ts": "2026-09-16T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417m1ikzpcjg",
+   "entityId": "op_mup1db2u1mg1hlgy",
    "opNo": "MM/001/09/2026",
    "event": "create",
    "act": {
@@ -6653,6 +7299,7 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 140,
      "result": -140
@@ -6663,15 +7310,15 @@
    "action": "Wysłanie MM do magazynu RiC Brąszewice — w drodze, oczekuje na przyjęcie"
   },
   {
-   "id": "a_muky417m1onupocu",
+   "id": "a_mup1db2v1sg68ye2",
    "ts": "2026-09-17T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417m1m6ejfs0",
-   "opNo": "PZ/003/09/2026",
+   "entityId": "op_mup1db2v1qymm2nx",
+   "opNo": "PZ/002/09/2026",
    "event": "create",
    "act": {
     "k": "Utworzenie i zatwierdzenie: {type}",
@@ -6691,12 +7338,13 @@
      "wh_bra|pr_lupina": 5
     },
     "dokumenty": [
-     "PZ/003/09/2026"
+     "PZ/002/09/2026"
     ],
     "koszty": {
      "purchaseCost": 3050,
      "rawCost": 0,
      "chippingCost": 0,
+     "extraCost": 0,
      "revenue": 0,
      "transportCost": 0,
      "result": -3050
@@ -6705,21 +7353,21 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_muky417n1tlbx0xe",
+   "id": "a_mup1db2w1ytyxjcq",
    "ts": "2026-09-22T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417n1q6h7odm",
+   "entityId": "op_mup1db2v1uzxamh9",
    "opNo": "PW/004/09/2026",
    "event": "create",
    "act": {
     "k": "Utworzenie i zatwierdzenie: {type}",
     "p": {
      "type": {
-      "t": "Produkcja na magazyn"
+      "t": "Produkcja na magazynie"
      }
     }
    },
@@ -6742,22 +7390,23 @@
      "purchaseCost": 0,
      "rawCost": 0,
      "chippingCost": 200,
+     "extraCost": 240,
      "revenue": 0,
      "transportCost": 0,
-     "result": -200
+     "result": -440
     }
    },
-   "action": "Utworzenie i zatwierdzenie: Produkcja na magazyn"
+   "action": "Utworzenie i zatwierdzenie: Produkcja na magazynie"
   },
   {
-   "id": "a_muky417n1vehaeoe",
+   "id": "a_mup1db2w20jjbjto",
    "ts": "2026-09-16T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417m1ikzpcjg",
+   "entityId": "op_mup1db2u1mg1hlgy",
    "opNo": "MM/001/09/2026",
    "event": "mm-receive",
    "code": "MM_RECEIVED",
@@ -6787,14 +7436,14 @@
    "action": "Przyjęcie MM na magazyn RiC Brąszewice"
   },
   {
-   "id": "a_muky417p1xufteic",
+   "id": "a_mup1db2y22cu215i",
    "ts": "2026-09-14T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417j19fk1ks4",
+   "entityId": "op_mup1db2t1cr7lina",
    "opNo": "WZ/002/09/2026",
    "relatedNo": "KOR/001/09/2026",
    "event": "correction",
@@ -6808,7 +7457,8 @@
      "wh_bra|pr_zr_lesna": 210
     },
     "wartosci": [
-     "Ilość sprzedaży: 100 MP"
+     "Ilość sprzedaży: 100 MP",
+     "Tonaż sprzedaży: 34,6 t"
     ]
    },
    "after": {
@@ -6818,22 +7468,23 @@
      "wh_bra|pr_zr_lesna": 220
     },
     "wartosci": [
-     "Ilość sprzedaży: 90 MP"
+     "Ilość sprzedaży: 90 MP",
+     "Tonaż sprzedaży: 31,1 t"
     ]
    },
    "reason": "błędnie wpisana ilość — kwit wagowy 90 MP",
    "action": "Korekta dokumentu"
   },
   {
-   "id": "a_muky417r1zggfvvi",
+   "id": "a_mup1db302486oyg6",
    "ts": "2026-09-18T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_muky417m1m6ejfs0",
-   "opNo": "PZ/003/09/2026",
+   "entityId": "op_mup1db2v1qymm2nx",
+   "opNo": "PZ/002/09/2026",
    "relatedNo": "AN/001/09/2026",
    "event": "cancel",
    "action": "Anulowanie dokumentu",
@@ -6860,11 +7511,11 @@
   "PW-2026-08": 2,
   "TR-2026-08": 3,
   "WZ-2026-08": 1,
-  "PZ-2026-09": 3,
   "RW-2026-09": 3,
   "PW-2026-09": 4,
   "WZ-2026-09": 3,
   "TR-2026-09": 5,
+  "PZ-2026-09": 2,
   "MM-2026-09": 1,
   "KOR-2026-09": 1,
   "AN-2026-09": 1
@@ -6872,7 +7523,7 @@
  "rolePerms": {},
  "meta": {
   "lastMonthCheck": "2026-09",
-  "createdAt": "2026-09-28T07:48:18.855Z",
+  "createdAt": "2026-10-01T04:30:35.100Z",
   "sample": true
  }
 }

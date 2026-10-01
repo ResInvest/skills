@@ -63,7 +63,7 @@
       const valTotal = valuation.filter(v => v.priced).reduce((a, v) => a + v.closingValue, 0), unpriced = valuation.filter(v => !v.priced).length;
       const mT = cat => (month.turnover.find(x => x.cat === cat) || {});
       const sales = r => r.sales.value + r.sales.valueDirect;
-      const costs = r => r.purchases.value + r.production.chippingCost + r.transport.cost;
+      const costs = r => r.purchases.value + r.production.chippingCost + r.transport.cost + ((r.extras && r.extras.cost) || 0);
       const prevLabel = Dates.label(prevYm);
       const opsMonth = S.operations.filter(o => o.whId === wh.id && Dates.ym(o.date) === ym && o.status !== "CANCELLED").length;
       const series30 = (unit) => { const ids = S.products.filter(p => p.unit === unit).map(p => p.id); const days = 30, out = []; const per = ids.map(id => Stock.series(S, wh.id, id, today, days)); for (let i = 0; i < days; i++) out.push({ date: per[0] ? per[0][i].date : today, qty: per.reduce((a, s) => a + s[i].qty, 0) }); return out; };
@@ -80,7 +80,7 @@
           <div class="actions">${App.can("op.create") ? `<a class="btn primary" href="#/nowa">${ic("plus", 15)} ${th("Nowa operacja")}</a>` : ""}<a class="btn" href="#/raporty">${ic("chart", 15)} ${th("Raport miesiąca")}</a></div></div>
         <div class="hero-stats" id="hero-stats">
           <div><b>${esc(money(sales(month)))}</b><span>${th("Sprzedaż w miesiącu")}</span></div>
-          <div><b>${esc(money(costs(month)))}</b><span>${th("Koszty: zakup, rąbanie, transport")}</span></div>
+          <div><b>${esc(money(costs(month)))}</b><span>${th("Koszty: zakup, rąbanie, transport, operacje dodatkowe")}</span></div>
           <div><b>${esc(money(sales(month) - costs(month)))}</b><span>${th("Wynik operacji w miesiącu")}</span></div>
           <div><b>${opsMonth}</b><span>${esc(tp("operacja w miesiącu|operacje w miesiącu|operacji w miesiącu", opsMonth))}</span></div></div></section>`;
 
@@ -106,6 +106,17 @@
         kpi({ id: "kpi-prod", icon: "factory", title: t("Produkcja (miesiąc)"), value: fmtQ(month.production.chippingMP, 1), unit: "MP", d: delta(month.production.chippingMP, prev.production.chippingMP), sub: esc(t("rąbanie {m}", { m: money(month.production.chippingCost) })), drill: mT("PRODUKCJA").opIds }),
         kpi({ id: "kpi-transport", icon: "truck", tone: "info", title: t("Transport (miesiąc)"), value: String(month.transport.trips), unit: t("kursów"), d: delta(month.transport.cost, prev.transport.cost), sub: `${esc(money(month.transport.cost))} · ${fmtQ(month.transport.km, 0)} km` })
       ].join("");
+
+      /* ---------- operacje dodatkowe (wybrany miesiąc) ---------- */
+      const xf = App.tabs.dashExtras || (App.tabs.dashExtras = { ym });
+      if (!/^\d{4}-\d{2}$/.test(xf.ym || "")) xf.ym = ym;
+      const xr = R.Reports.extras(S, Dates.monthStart(xf.ym), xf.ym === ym ? today : Dates.monthEnd(xf.ym), wh.id);
+      const xRows = xr.rows.slice(0, 12);
+      const extrasCard = `<div class="card mt4" id="dash-extras"><div class="card-h"><h3>${th("OPERACJE DODATKOWE")}</h3><span class="sub">${esc(t("magazyn {w}", { w: wh.name }))}</span><span class="spacer"></span>
+          <label class="sr-only" for="xt-month">${th("Miesiąc")}</label><input class="ctrl sm" type="month" id="xt-month" value="${esc(xf.ym)}" max="${esc(ym)}"></div>
+        <div class="card-b"><div class="xt-sum" id="xt-sum"><div><small>${th("Koszt łączny")}</small><b id="xt-cost">${esc(money(xr.cost))}</b></div><div><small>${th("Liczba operacji dodatkowych")}</small><b id="xt-count">${xr.count}</b></div><div><small>${th("Miesiąc")}</small><b>${esc(Dates.label(xf.ym))}</b></div></div>
+          ${xr.byType.length ? `<div class="xt-types">${xr.byType.map(b => `<span class="chip">${esc(b.name)}: ${b.count} · ${esc(money(b.cost))}</span>`).join("")}</div>` : ""}
+          ${xRows.length ? `<div class="tbl-wrap"><table class="tbl stack" id="xt-table"><thead><tr><th>${th("Data")}</th><th>${th("Rodzaj")}</th><th>${th("Pojazd")}</th><th>${th("Magazyn")}</th><th>${th("Dokument / produkcja")}</th><th class="r">${th("Koszt")}</th></tr></thead><tbody>${xRows.map(r => `<tr class="clickable" data-open-op="${esc(r.opId)}"><td data-l="${th("Data")}">${esc(Dates.pl(r.date))}</td><td data-l="${th("Rodzaj")}">${esc(r.typeName)}${r.desc ? `<div class="dim small">${esc(r.desc)}</div>` : ""}</td><td data-l="${th("Pojazd")}">${esc(r.vehicleName ? r.vehicleName + (r.reg ? " · " + r.reg : "") : "—")}</td><td data-l="${th("Magazyn")}">${esc(r.whName)}</td><td data-l="${th("Dokument / produkcja")}" class="mono">${esc(r.docNo)}</td><td data-l="${th("Koszt")}" class="r">${esc(money(r.cost))}</td></tr>`).join("")}</tbody></table></div>${xr.rows.length > xRows.length ? `<p class="help mt2">${esc(t("Pokazano {n} z {m} — pełna lista w raporcie miesiąca.", { n: xRows.length, m: xr.rows.length }))}</p>` : ""}` : `<div class="empty">${th("Brak operacji dodatkowych w wybranym miesiącu.")}</div>`}</div></div>`;
 
       /* ---------- wykres 6 miesięcy ---------- */
       const months = []; for (let i = 5; i >= 0; i--) months.push(Dates.addMonths(ym, -i));
@@ -176,6 +187,7 @@
 
       return `${hero}${quick}<div class="kpi2-grid" id="kpis">${kpis}</div>
         <div class="dash-main">${chart}${turnover}</div>
+        ${extrasCard}
         <div class="mt4">${stockCard}</div>
         <div class="dash-row">${activity}${todo}</div>
         ${lastOps}`;
@@ -186,6 +198,9 @@
       $$("[data-drill]", page).forEach(el => { if (el.classList.contains("hbar-row")) el.classList.add("drill"); });
       bindDrill(page); bindOps(page); Tip.bind(page);
       $$("[data-stock-product]", page).forEach(b => b.onclick = () => { const S = Store.state; if (root.RIWUI.Views.stany && root.RIWUI.Views.stany.card) root.RIWUI.Views.stany.card(App.user().whId, b.dataset.stockProduct); });
+      const xm = $("#xt-month", page);
+      if (xm) xm.onchange = () => { if (/^\d{4}-\d{2}$/.test(xm.value)) { App.tabs.dashExtras = { ym: xm.value }; App.render(); } };
+      $$("[data-open-op]", page).forEach(tr => tr.onclick = () => root.RIWUI.OpDetail.open(tr.dataset.openOp));
       const tg = $("#trend-toggle", page);
       if (tg) tg.onclick = () => { const on = tg.getAttribute("aria-pressed") !== "true"; tg.setAttribute("aria-pressed", String(on)); $("#trend-table", page).classList.toggle("hidden", !on); $("#trend-chart", page).classList.toggle("hidden", on); };
     }
