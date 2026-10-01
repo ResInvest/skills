@@ -148,6 +148,38 @@ Scenariusz E2E „dokumenty”:
 | web | 17 / 17 |
 | E2E | 42 / 42 (transport: 3 — sprzedaż z dwoma kursami, TR w rejestrze, telefon) |
 
-## 5. Następny krok — F4b-2b-2
-zakup z produkcją (i sprzedażą wyniku), sprzedaż bezpośrednia (produkcja w lesie → odbiorca). Następnie F4c — Planer zakupów
-(decyzja 2026-10-01; przelicznik 0,33 t/MP).
+## 5. F4b-2b-2 — zakup z produkcją i sprzedaż bezpośrednia (2026-10-01)
+
+### Reguły (domena, port `planProduction` / `planSaleOfOutput` z 3.x)
+* **Zakup z produkcją** (zaznaczenie w zakładce Zakup): PZ → RW (zużycie: podane w jednostce zakupu albo cały zakup) →
+  PW (wynik: podany albo zużycie × przelicznik, 1 m³ = 4 MP). Wynik ponad zużycie — błąd; niższy — wymagana przyczyna
+  (wilgotność, jakość surowca, straty przy rębaniu, różnica pomiaru, inna). Surowiec tylko drewno w m³, produkt w MP.
+  Dostępność surowca (stan + zakup) sprawdza księga krok po kroku.
+* **Sprzedaż wyniku** (opcjonalnie): WZ do odbiorcy, ilość ≤ produkcja (puste = cała), cena za MP albo za t,
+  tonaż AUTO (0,33 t/MP) albo RĘCZNY z wagi.
+* **Sprzedaż bezpośrednia** (nowa zakładka): produkcja w lesie — surowiec nie schodzi ze stanu (koszt surowca opcjonalnie),
+  PW + WZ (WZ dokumentem głównym, numer ręczny dotyczy WZ); niesprzedana reszta zostaje na stanie (ostrzeżenie).
+* **Pochodzenie surowca**: las — nadleśnictwo (podpowiadane z kartoteki dostawcy „nadleśnictwo”), leśnictwo (lista z
+  kartoteki), kwit wywozowy przy produkcji albo — gdy są kursy transportu — przy każdym kursie (m³ z kwitu × 4 = MP
+  na aucie, suma m³ ≤ drewno zużyte); wycinka inwestycyjna — miejsce i dokument źródłowy.
+* Wszystkie braki pokazywane naraz (pola sprzedaży sprawdzane także przy błędach produkcji).
+
+### API i interfejs
+* `POST /operations`: zakup z `production` / `sale`, typ `DIRECT_SALE` (w bazie operacja sprzedaży z produkcją DIRECT);
+  uprawnienia: dodatkowo `production.create` (produkcja) i `issues.create` (sprzedaż wyniku); odbiorca w roli odbiorcy;
+  rębak magazynu; zapis `production_runs` z trybem, przyczyną różnicy i pochodzeniem.
+* Szczegóły operacji: „Zakup z produkcją” / „Sprzedaż bezpośrednia”, pochodzenie (nadleśnictwo, leśnictwo, kwit / wycinka).
+* Poprawki przy okazji: podgląd stanów liczy ruchy **krok po kroku** (817 → 842 → 817 m³), tytuł szczegółów według dokumentu
+  głównego (PZ / WZ / MM / PW), nie kolejności zapisu.
+
+### Testy (2026-10-01)
+| Zestaw | Wynik |
+|---|---|
+| domena | 60 / 60 (zakup z produkcją i sprzedaż bezpośrednia: 7) |
+| API | 130 / 130 (6 nowych: łańcuch PZ-RW-PW-WZ z saldami, brak surowca, przyczyna różnicy, rola odbiorcy, kwity w kursach, sprzedaż bezpośrednia z resztą na stanie) |
+| web | 17 / 17 |
+| E2E | 46 / 46 (4 nowe: zakup z produkcją i sprzedażą, sprzedaż bezpośrednia, stany, telefon) |
+
+## 6. Następny krok — F4c Planer zakupów
+Zakładka „Planer zakupów” (decyzja 2026-10-01, przelicznik 0,33 t/MP): plan dzienny MP wpisywany ręcznie z historią
+zmian; wykonanie, tony, ceny, km, transport i kursy kierowców czytane z PZ / PW / TR (prototyp `docs/prototypy/planer-zakupow.html`).

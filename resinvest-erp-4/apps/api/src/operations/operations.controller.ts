@@ -22,6 +22,11 @@ const Transport = z.object({
   runs: z.array(Run).max(60).optional(),
   train: z.object({ trainNo: txt(40), carrier: txt(120), wagonTons: z.array(val).max(80).optional(), priceUnit: unit.nullable().optional(), price: val }).nullable().optional(),
 }).nullable().optional();
+const Chain = z.object({
+  enabled: z.boolean().optional(), outMaterialId: z.string().max(40), consumeQty: val, outQty: val, diffReason: txt(40), chipperId: id40, operatorId: id40, chipRate: val,
+  source: z.enum(["FOREST", "INVESTMENT", "OTHER"]).nullable().optional(), forestDistrict: txt(120), forestry: txt(120), waybill: txt(200), investSite: txt(250), sourceDoc: txt(120),
+});
+const OutSale = z.object({ buyerId: z.string().max(40), qty: val, price: val, priceUnit: z.enum(["MP", "T"]).nullable().optional(), weightManual: val });
 const Common = {
   warehouseId: z.string().uuid("Wybierz magazyn"), date: z.string().max(10), documentDate: z.string().max(10).nullable().optional(),
   externalNumber: z.string().max(60).nullable().optional(), notes: z.string().max(2000).nullable().optional(),
@@ -30,7 +35,9 @@ const Common = {
   transport: Transport,
 };
 const Input = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("PURCHASE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, priceUnit: unit.nullable().optional(), weightManual: val, ...Common }),
+  z.object({ type: z.literal("PURCHASE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, priceUnit: unit.nullable().optional(), weightManual: val,
+    production: Chain.nullable().optional(), sale: OutSale.nullable().optional(), ...Common }),
+  z.object({ type: z.literal("DIRECT_SALE"), rawMaterialId: z.string().max(40), rawCost: val, production: Chain, sale: OutSale, ...Common }),
   z.object({ type: z.literal("SALE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, weightManual: val, ...Common }),
   z.object({ type: z.literal("TRANSFER"), targetWarehouseId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, weightManual: val, ...Common }),
   z.object({ type: z.literal("PRODUCTION"), rawMaterialId: z.string().max(40), outMaterialId: z.string().max(40), outQty: val, chipperId: z.string().max(40).nullable().optional(), operatorId: z.string().max(40).nullable().optional(), chipRate: val, ...Common }),

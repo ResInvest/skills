@@ -1,19 +1,20 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatQty, MAX_EXTRAS, planOperation, TRANSPORT_MODE_LABEL, type TransportFleet, type CompanyRates, type ExtraInput, type OperationInput, type OperationPlan, type PlanExtraType, type PlanMaterial } from "@resinvest/domain";
+import { formatQty, qtySum, MAX_EXTRAS, planOperation, TRANSPORT_MODE_LABEL, type TransportFleet, type CompanyRates, type ExtraInput, type OperationInput, type OperationPlan, type PlanExtraType, type PlanMaterial } from "@resinvest/domain";
 import { ApiRequestError, api, errorText } from "../../api/client";
 import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog } from "../../ui/components";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
+import { ChainProductionFields, EMPTY_CHAIN, EMPTY_SALE, OutputSaleFields, toChainInput, toSaleInput, type ChainState, type SaleState } from "./ChainFields";
 import { EMPTY_TRANSPORT, TransportFields, toTransportInput, type FleetData, type TransportState } from "./TransportFields";
 import { DocBadge, OperationDetail, type OperationView, pln } from "./OperationDetail";
 
 type Kind = OperationInput["type"];
 interface FormData {
-  partners: Array<{ id: string; name: string; role: "SUPPLIER" | "BUYER" | "BOTH" }>;
+  partners: Array<{ id: string; name: string; role: "SUPPLIER" | "BUYER" | "BOTH"; kind: "COMPANY" | "FOREST_DISTRICT"; forestries: string[] }>;
   materials: Array<PlanMaterial & { code: string }>;
   extraTypes: PlanExtraType[];
   vehicles: FleetData["vehicles"];
@@ -35,14 +36,15 @@ interface Preview {
 }
 interface ExtraRow { key: number; typeId: string; vehicleId: string; qty: string; rate: string; cost: string; description: string }
 
-const KINDS: ReadonlyArray<{ kind: Kind; label: string; doc: string; perm: string }> = [
+const KINDS: ReadonlyArray<{ kind: Kind; label: string; doc: string; perm: string; also?: string }> = [
   { kind: "PURCHASE", label: "Zakup", doc: "PZ", perm: "receipts.create" },
   { kind: "SALE", label: "Sprzedaż z magazynu", doc: "WZ", perm: "issues.create" },
   { kind: "PRODUCTION", label: "Produkcja na magazynie", doc: "PW", perm: "production.create" },
   { kind: "TRANSFER", label: "Przesunięcie", doc: "MM", perm: "mm.create" },
+  { kind: "DIRECT_SALE", label: "Sprzedaż bezpośrednia", doc: "WZ", perm: "issues.create", also: "production.create" },
 ];
 const EMPTY = { partnerId: "", materialId: "", qty: "", unit: "" as Unit | "", price: "", priceUnit: "" as Unit | "", weightManual: "",
-  targetWarehouseId: "", rawMaterialId: "", outMaterialId: "", outQty: "", chipperId: "", operatorId: "", chipRate: "",
+  targetWarehouseId: "", rawCost: "", rawMaterialId: "", outMaterialId: "", outQty: "", chipperId: "", operatorId: "", chipRate: "",
   documentDate: "", externalNumber: "", notes: "", numberMode: "AUTO" as "AUTO" | "MANUAL", number: "" };
 let extraSeq = 0;
 
@@ -54,13 +56,15 @@ let extraSeq = 0;
 export function NewOperationPage() {
   const W = useWorkWarehouse();
   const { can } = useSession();
-  const allowed = KINDS.filter(k => can(k.perm));
+  const allowed = KINDS.filter(k => can(k.perm) && (!k.also || can(k.also)));
   const [kind, setKind] = useState<Kind | null>(null);
   const type: Kind | undefined = kind && allowed.some(k => k.kind === kind) ? kind : allowed[0]?.kind;
   const [f, setF] = useState(EMPTY);
   const [date, setDate] = useState("");
   const [extras, setExtras] = useState<ExtraRow[]>([]);
   const [transport, setTransport] = useState<TransportState>(EMPTY_TRANSPORT);
+  const [chain, setChain] = useState<ChainState>(EMPTY_CHAIN);
+  const [outSale, setOutSale] = useState<SaleState>(EMPTY_SALE);
   const [tried, setTried] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [serverErr, setServerErr] = useState<unknown>(null);
@@ -83,7 +87,9 @@ export function NewOperationPage() {
     };
     if (type === "PRODUCTION") return { type, ...base, rawMaterialId: f.rawMaterialId, outMaterialId: f.outMaterialId, outQty: f.outQty, chipperId: f.chipperId || null, operatorId: f.operatorId || null, chipRate: f.chipRate };
     const unit = (f.unit || fd?.materials.find(m => m.id === f.materialId)?.stockUnit || "T") as Unit;
-    if (type === "PURCHASE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, priceUnit: f.priceUnit || null, weightManual: f.weightManual };
+    if (type === "DIRECT_SALE") return { type, ...base, rawMaterialId: f.rawMaterialId, rawCost: f.rawCost, production: toChainInput({ ...chain, enabled: true }), sale: toSaleInput(outSale) };
+    if (type === "PURCHASE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, priceUnit: f.priceUnit || null, weightManual: f.weightManual,
+      production: chain.enabled ? toChainInput(chain) : null, sale: chain.enabled && outSale.enabled ? toSaleInput(outSale) : null };
     if (type === "SALE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, weightManual: f.weightManual };
     return { type, ...base, targetWarehouseId: f.targetWarehouseId, materialId: f.materialId, qty: f.qty, unit, weightManual: f.weightManual };
   })();
@@ -104,7 +110,7 @@ export function NewOperationPage() {
     if (!input || !local?.ok) return;
     check.mutate(input);
   };
-  const reset = () => { setF(EMPTY); setExtras([]); setTransport(EMPTY_TRANSPORT); setTried(false); setPreview(null); setServerErr(null); };
+  const reset = () => { setF(EMPTY); setExtras([]); setTransport(EMPTY_TRANSPORT); setChain(EMPTY_CHAIN); setOutSale(EMPTY_SALE); setTried(false); setPreview(null); setServerErr(null); };
 
   if (!allowed.length) return <section className="card"><h1>Nowa operacja</h1><p className="muted">Twoja rola nie pozwala wprowadzać operacji magazynowych.</p></section>;
   const mats = fd?.materials.filter(m => m.active) ?? [];
@@ -138,7 +144,35 @@ export function NewOperationPage() {
                 {fe("date") && <small className="error">{fe("date")}</small>}</div>
             </div>
 
-            {type === "TRANSFER" ? (
+            {type === "DIRECT_SALE" ? (
+              <>
+                <Alert kind="info">Produkcja w lesie i sprzedaż bezpośrednio odbiorcy: surowiec nie schodzi ze stanu (dokument PW + WZ). Niesprzedana reszta zostaje na stanie magazynu.</Alert>
+                <div className="grid2">
+                  <div className="field"><label htmlFor="op-raw">Surowiec wejściowy <span className="req">*</span></label>
+                    <select id="op-raw" className="ctrl" value={f.rawMaterialId} onChange={e => set("rawMaterialId", e.target.value)}>
+                      <option value="">— wybierz —</option>{mats.filter(m => m.category === "WOOD").map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>{fe("rawMaterialId") && <small className="error">{fe("rawMaterialId")}</small>}</div>
+                  <div className="field"><label htmlFor="op-rawcost">Koszt surowca (zł)</label>
+                    <input id="op-rawcost" className="ctrl r" inputMode="decimal" placeholder="opcjonalnie" value={f.rawCost} onChange={e => set("rawCost", e.target.value)} />
+                    {fe("rawCost") && <small className="error">{fe("rawCost")}</small>}</div>
+                </div>
+                <fieldset className="field"><legend>Produkcja</legend>
+                  <ChainProductionFields value={chain} onChange={c => { setPreview(null); setChain(c); }} data={fd} mode="DIRECT" purchaseUnit="m³"
+                    transportRuns={["OWN", "EXTERNAL", "MIXED"].includes(transport.mode)} fe={fe} /></fieldset>
+                <fieldset className="field"><legend>Sprzedaż</legend>
+                  <OutputSaleFields value={outSale} onChange={x => { setPreview(null); setOutSale(x); }} data={fd} fe={fe} /></fieldset>
+                <div className="grid2">
+                  <div className="field"><label htmlFor="op-numbering">Numer WZ</label>
+                    <select id="op-numbering" className="ctrl" value={f.numberMode} onChange={e => set("numberMode", e.target.value)}>
+                      <option value="AUTO">Automatycznie (WZ/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
+                    </select>
+                    {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label="Numer ręczny WZ" maxLength={40} value={f.number} onChange={e => set("number", e.target.value)} />}
+                    {fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
+                  <div className="field"><label htmlFor="op-ext">Nr dokumentu zewnętrznego</label>
+                    <input id="op-ext" className="ctrl" maxLength={60} value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} /></div>
+                </div>
+              </>
+            ) : type === "TRANSFER" ? (
               <>
                 <Alert kind="info">{fd.mmTwoStage
                   ? "MM dwuetapowe: zatwierdzenie zdejmuje towar ze stanu tego magazynu. Magazyn docelowy przyjmuje go w „Dokumenty → Do przyjęcia”, podając ilość faktycznie przyjętą."
@@ -217,6 +251,18 @@ export function NewOperationPage() {
                     <input id="op-ext" className="ctrl" maxLength={60} placeholder="np. faktura, kwit wagowy" value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />
                     {fe("externalNumber") && <small className="error">{fe("externalNumber")}</small>}</div>
                 </div>
+                {type === "PURCHASE" && can("production.create") && (
+                  <fieldset className="field">
+                    <legend>Produkcja z zakupu</legend>
+                    <label className="check"><input type="checkbox" id="op-chain-on" checked={chain.enabled} onChange={e => { setPreview(null); setChain(c => ({ ...c, enabled: e.target.checked })); }} /> Produkcja zrębki z tego zakupu (RW + PW)</label>
+                    {chain.enabled && <ChainProductionFields value={chain} onChange={c => { setPreview(null); setChain(c); }} data={fd} mode="FROM_PURCHASE" purchaseUnit={UNIT_LABEL[(f.unit || mat?.stockUnit || "M3") as Unit]}
+                      supplierId={f.partnerId} transportRuns={["OWN", "EXTERNAL", "MIXED"].includes(transport.mode)} fe={fe} />}
+                    {chain.enabled && can("issues.create") && <>
+                      <label className="check"><input type="checkbox" id="op-outsale-on" checked={outSale.enabled} onChange={e => { setPreview(null); setOutSale(x => ({ ...x, enabled: e.target.checked })); }} /> Sprzedaż wyniku produkcji odbiorcy (WZ)</label>
+                      {outSale.enabled && <OutputSaleFields value={outSale} onChange={x => { setPreview(null); setOutSale(x); }} data={fd} fe={fe} />}
+                    </>}
+                  </fieldset>
+                )}
               </>
             ) : (
               <>
@@ -303,12 +349,18 @@ export function NewOperationPage() {
               <>
                 <ul className="plain">{plan.documents.map((d, i) => <li key={i}><DocBadge type={d.type} /> {d.lines.map(l => `${formatQty(l.qtyStock)} ${UNIT_LABEL[l.unitStock]}`).join(", ")}{d.type === "RW" ? " (zużycie)" : ""}</li>)}</ul>
                 {plan.summary.map((s, i) => <p key={i} className="summary" data-summary>{s}</p>)}
-                <ul className="plain small">{plan.movements.map((m, i) => {
-                  const mm = fd.materials.find(x => x.id === m.materialId);
-                  if (m.warehouseId !== W.id) return <li key={i}>{mm?.name}: +{formatQty(m.qty)} {mm ? UNIT_LABEL[mm.stockUnit] : ""} w magazynie {whName(m.warehouseId)}</li>;
-                  const after = Number(bal(m.materialId)) + Number(m.qty);
-                  return <li key={i}>{mm?.name}: {formatQty(bal(m.materialId))} → <span className={after < 0 ? "neg" : ""}>{formatQty(String(after))}</span> {mm ? UNIT_LABEL[mm.stockUnit] : ""}</li>;
-                })}
+                <ul className="plain small">{(() => {
+                  // krok po kroku jak w księdze: zakup +, zużycie −, produkcja +, sprzedaż − — każdy ruch zaczyna od stanu po poprzednim
+                  const running = new Map<string, string>();
+                  return plan.movements.map((m, i) => {
+                    const mm = fd.materials.find(x => x.id === m.materialId);
+                    if (m.warehouseId !== W.id) return <li key={i}>{mm?.name}: +{formatQty(m.qty)} {mm ? UNIT_LABEL[mm.stockUnit] : ""} w magazynie {whName(m.warehouseId)}</li>;
+                    const before = running.get(m.materialId) ?? bal(m.materialId);
+                    const after = qtySum(before, m.qty);
+                    running.set(m.materialId, after);
+                    return <li key={i}>{mm?.name}: {formatQty(before)} → <span className={after.startsWith("-") ? "neg" : ""}>{formatQty(after)}</span> {mm ? UNIT_LABEL[mm.stockUnit] : ""}</li>;
+                  });
+                })()}
                 {plan.transfer?.twoStage && <li>W drodze do: <strong>{whName(plan.transfer.targetWarehouseId)}</strong> (przyjęcie w magazynie docelowym)</li>}</ul>
                 <dl className="kv">
                   {Number(plan.totals.purchaseCost) > 0 && <><dt>Zakup</dt><dd className="num">{pln(plan.totals.purchaseCost)}</dd></>}

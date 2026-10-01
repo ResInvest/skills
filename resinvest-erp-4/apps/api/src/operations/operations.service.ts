@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { autoNumber, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, KM_RATE_DEFAULT, type OperationInput, type TransportFleet, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
+import { autoNumber, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, PRODUCTION_DIFF_REASONS, KM_RATE_DEFAULT, type OperationInput, type TransportFleet, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
 import { Prisma } from "../generated/prisma/client.js";
 import type { DocumentType } from "../generated/prisma/enums.js";
 import { AppError, badRequest, conflict, forbidden, notFound } from "../common/errors.js";
@@ -13,7 +13,9 @@ import { companyRates, materialUnits } from "../stock/materials.js";
 import { todayWarsaw } from "../opening/opening.service.js";
 import { SettingsService } from "../settings/settings.service.js";
 
-const PERM: Record<OperationInput["type"], string> = { PURCHASE: "receipts.create", SALE: "issues.create", PRODUCTION: "production.create", TRANSFER: "mm.create" };
+const PERM: Record<OperationInput["type"], string> = { PURCHASE: "receipts.create", SALE: "issues.create", PRODUCTION: "production.create", TRANSFER: "mm.create", DIRECT_SALE: "issues.create" };
+/** Rodzaj operacji w bazie: sprzedaż bezpośrednia to sprzedaż z produkcją w trybie DIRECT. */
+const DB_TYPE = (k: OperationPlan["type"]) => (k === "DIRECT_SALE" ? "SALE" : k);
 const asDate = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 const invalid = (errors: Array<{ field: string; message: string }>) => badRequest("VALIDATION", errors[0]!.message, errors);
@@ -86,7 +88,7 @@ export class OperationsService {
         }
         const now = new Date();
         const op = await tx.operation.create({ data: {
-          type: plan.type, status: "POSTED", warehouseId: plan.warehouseId, operationDate: asDate(plan.date), idempotencyKey,
+          type: DB_TYPE(plan.type), status: "POSTED", warehouseId: plan.warehouseId, operationDate: asDate(plan.date), idempotencyKey,
           targetWarehouseId: plan.transfer?.targetWarehouseId ?? null, transferState: plan.transfer ? (plan.transfer.twoStage ? "IN_TRANSIT" : "RECEIVED") : null,
           notes: input.notes?.trim() || null, purchaseCost: plan.totals.purchaseCost, revenue: plan.totals.revenue, chippingCost: plan.totals.chippingCost,
           additionalCost: plan.totals.additionalCost, transportCost: plan.totals.transportCost, transportMode: plan.transport?.mode ?? "NONE", place: plan.transport?.place ?? null,
@@ -110,11 +112,12 @@ export class OperationsService {
         await this.ledger.post(tx, { operationId: op.id, movementDate: asDate(plan.date), createdById: actor.id, movements: plan.movements.map(m => ({
           warehouseId: m.warehouseId, materialId: m.materialId, qty: m.qty, kind: m.kind, documentId: docs[m.doc]!.doc.id, documentLineId: docs[m.doc]!.lines[m.line]!.id,
         })) });
-        if (plan.production && input.type === "PRODUCTION") {
+        if (plan.production) {
+          const pr = plan.production, who = chipperOf(input);
           await tx.productionRun.create({ data: {
-            operationId: op.id, mode: "FROM_STOCK", rawMaterialId: plan.production.rawMaterialId, outMaterialId: plan.production.outMaterialId, consumeQty: plan.production.consumeQty,
-            outQty: plan.production.outQty, factor: plan.production.factor, chipRate: plan.production.chipRate, chippingCost: plan.production.chippingCost,
-            chipperId: input.chipperId || null, operatorId: input.operatorId || null,
+            operationId: op.id, mode: pr.mode, rawMaterialId: pr.rawMaterialId || null, outMaterialId: pr.outMaterialId, consumeQty: pr.consumeQty,
+            outQty: pr.outQty, factor: pr.factor, chipRate: pr.chipRate, chippingCost: pr.chippingCost, chipperId: who.chipperId, operatorId: who.operatorId,
+            diffReason: pr.diffReason, forestDistrict: pr.forestDistrict, forestry: pr.forestry, waybill: pr.waybill, investSite: pr.investSite, sourceDoc: pr.sourceDoc,
           } });
         }
         for (const r of plan.transport?.runs ?? []) {
@@ -168,7 +171,10 @@ export class OperationsService {
         lines: d.lines.map(l => ({ lineNo: l.lineNo, material: { id: l.material.id, code: l.material.code, name: l.material.name }, qtySource: S(l.qtySource), unitSource: l.unitSource,
           qtyStock: S(l.qtyStock), unitStock: l.unitStock, factor: S(l.conversionFactor), source: l.conversionSource, weightT: S(l.weightT), weightSource: l.weightSource,
           unitPrice: S(l.unitPrice), priceUnit: l.priceUnit, value: S(l.value) })) })),
-      production: op.productionRun ? { consumeQty: S(op.productionRun.consumeQty), outQty: S(op.productionRun.outQty), factor: S(op.productionRun.factor), chipRate: S(op.productionRun.chipRate),
+      production: op.productionRun ? { mode: op.productionRun.mode, diffReason: op.productionRun.diffReason,
+        diffReasonLabel: op.productionRun.diffReason ? (PRODUCTION_DIFF_REASONS as Record<string, string>)[op.productionRun.diffReason] ?? op.productionRun.diffReason : null,
+        forestDistrict: op.productionRun.forestDistrict, forestry: op.productionRun.forestry, waybill: op.productionRun.waybill, investSite: op.productionRun.investSite, sourceDoc: op.productionRun.sourceDoc,
+        consumeQty: S(op.productionRun.consumeQty), outQty: S(op.productionRun.outQty), factor: S(op.productionRun.factor), chipRate: S(op.productionRun.chipRate),
         chippingCost: S(op.productionRun.chippingCost), chipper: op.productionRun.chipper?.name ?? null, operator: op.productionRun.operator?.name ?? op.productionRun.chipper?.externalOperator ?? null } : null,
       extras: op.additionalOperations.map(x => ({ id: x.id, type: x.type.name, vehicle: x.vehicle ? `${x.vehicle.registration} · ${x.vehicle.name}` : null, quantity: S(x.quantity), cost: S(x.cost), description: x.description })),
       movements: op.movements.map(m => ({ warehouseId: m.warehouseId, materialId: m.materialId, kind: m.kind, qty: m.qty.toString(), movementDate: isoDay(m.movementDate) })),
@@ -223,7 +229,7 @@ export class OperationsService {
     if (!canAccessWarehouse(actor, warehouseId)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
     const fleetWh = { OR: [{ warehouseId: null }, { warehouseId }] };
     const [partners, materials, extraTypes, vehicles, chippers, operators, balances, drivers, companies] = await Promise.all([
-      this.db.partner.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true } }),
+      this.db.partner.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true, kind: true, forestries: true } }),
       this.db.material.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       this.db.additionalOperationType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       this.db.vehicle.findMany({ where: { status: { not: "RETIRED" }, ...fleetWh }, orderBy: { registration: "asc" },
@@ -346,6 +352,10 @@ export class OperationsService {
   private async prepare(db: Db, actor: AuthUser, input: OperationInput): Promise<{ plan: OperationPlan }> {
     if (!PERM[input.type]) throw badRequest("VALIDATION", "Nieznany rodzaj operacji");
     if (!can(actor, PERM[input.type]!)) throw forbidden("Nie masz uprawnień do tego rodzaju operacji.");
+    // zakup z produkcją / sprzedaż bezpośrednia: także prawo do produkcji; sprzedaż wyniku zakupu — prawo do wydań
+    const withProduction = input.type === "DIRECT_SALE" || (input.type === "PURCHASE" && !!input.production?.enabled);
+    if (withProduction && !can(actor, "production.create")) throw forbidden("Nie masz uprawnień do produkcji.");
+    if (input.type === "PURCHASE" && input.sale && !can(actor, "issues.create")) throw forbidden("Nie masz uprawnień do sprzedaży.");
     if ((input.extras ?? []).length && !can(actor, "additional.create")) throw forbidden("Nie masz uprawnień do operacji dodatkowych.");
     const wh = await db.warehouse.findUnique({ where: { id: input.warehouseId } });
     if (!wh || !canAccessWarehouse(actor, wh.id)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
@@ -390,16 +400,31 @@ export class OperationsService {
       const v = isUuid(x.vehicleId) ? await db.vehicle.findUnique({ where: { id: x.vehicleId } }) : null;
       if (!v || v.status === "RETIRED" || (v.warehouseId && !canAccessWarehouse(actor, v.warehouseId))) errors.push({ field: `extras.${i}.vehicleId`, message: "Wybierz pojazd z floty tego magazynu" });
     }
-    if (input.type === "PRODUCTION") {
-      if (input.chipperId) {
-        const c = isUuid(input.chipperId) ? await db.chipper.findUnique({ where: { id: input.chipperId } }) : null;
-        if (!c || c.status === "RETIRED" || (c.warehouseId && c.warehouseId !== wh.id)) errors.push({ field: "chipperId", message: "Wybierz rębak tego magazynu (własny albo firmy zewnętrznej)" });
+    if (input.type === "PRODUCTION" || withProduction) {
+      const who = chipperOf(input), pre = input.type === "PRODUCTION" ? "" : "production.";
+      if (who.chipperId) {
+        const c = isUuid(who.chipperId) ? await db.chipper.findUnique({ where: { id: who.chipperId } }) : null;
+        if (!c || c.status === "RETIRED" || (c.warehouseId && c.warehouseId !== wh.id)) errors.push({ field: `${pre}chipperId`, message: "Wybierz rębak tego magazynu (własny albo firmy zewnętrznej)" });
       }
-      if (input.operatorId && !(isUuid(input.operatorId) && await db.operator.findUnique({ where: { id: input.operatorId } }))) errors.push({ field: "operatorId", message: "Nie znaleziono operatora" });
+      if (who.operatorId && !(isUuid(who.operatorId) && await db.operator.findUnique({ where: { id: who.operatorId } }))) errors.push({ field: `${pre}operatorId`, message: "Nie znaleziono operatora" });
+    }
+    // odbiorca wyniku produkcji (zakup ze sprzedażą, sprzedaż bezpośrednia) — aktywny, w roli odbiorcy
+    const sale = input.type === "DIRECT_SALE" ? input.sale : input.type === "PURCHASE" ? input.sale : null;
+    if (sale?.buyerId) {
+      const b = isUuid(sale.buyerId) ? await db.partner.findUnique({ where: { id: sale.buyerId } }) : null;
+      if (!b || !b.active) errors.push({ field: "sale.buyerId", message: "Wybierz aktywnego odbiorcę z kartoteki" });
+      else if (!["BUYER", "BOTH"].includes(b.role)) errors.push({ field: "sale.buyerId", message: `„${b.name}” nie jest odbiorcą` });
     }
     if (errors.length || !r.ok) throw invalid(errors);
     return { plan: r.plan };
   }
+}
+
+/** Rębak i operator produkcji — z pól produkcji na magazynie albo z sekcji produkcji zakupu / sprzedaży bezpośredniej. */
+function chipperOf(input: OperationInput): { chipperId: string | null; operatorId: string | null } {
+  if (input.type === "PRODUCTION") return { chipperId: input.chipperId || null, operatorId: input.operatorId || null };
+  if (input.type === "PURCHASE" || input.type === "DIRECT_SALE") return { chipperId: input.production?.chipperId || null, operatorId: input.production?.operatorId || null };
+  return { chipperId: null, operatorId: null };
 }
 
 /** Flota, kierowcy i firmy przewozowe do sprawdzenia kursów transportu (reguły w domenie: planTransport). */

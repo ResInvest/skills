@@ -19,7 +19,7 @@ test.beforeAll(async ({ browser }) => {
 
 test("1. sprzedaż 60 MP z transportem własnym: 2 kursy, kierowca domyślny, koszt w podglądzie i podsumowaniu", async () => {
   await go(mgr, "Nowa operacja");
-  await mgr.getByRole("tab", { name: /Sprzedaż/ }).click();
+  await mgr.getByRole("tab", { name: /Sprzedaż z magazynu/ }).click();
   await mgr.locator("#op-partner").selectOption({ label: "Elektrociepłownia Zabrze S.A." });
   await mgr.locator("#op-mat").selectOption({ label: "Zrębka produkcyjna leśna (stan 8 513 MP)" });
   await mgr.locator("#op-qty").fill("60");

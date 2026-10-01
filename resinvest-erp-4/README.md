@@ -10,7 +10,7 @@ Windows (Tauri) — w sieci firmy lub przez FortiClient VPN.
 > F3 (silnik stanów: księga ruchów z blokadą, salda, karta materiału, bilans otwarcia z zatwierdzaniem)
 > F4a (kartoteki: materiały, kontrahenci, flota, rębaki własne i zewnętrzne, operacje dodatkowe)
 > F4b-1 (operacje z dokumentami: zakup PZ, sprzedaż WZ, produkcja RW + PW, operacje dodatkowe, rejestr dokumentów)
-> i F4b-2a (przesunięcia MM jedno- i dwuetapowe z przyjęciem w magazynie docelowym) ukończone. F4b-2b-1 (transport: własny, zewnętrzny, mieszany, kolej, dostawca; dokument TR) ukończone. W toku: zakup z produkcją i sprzedaż bezpośrednia, potem F4c (Planer zakupów).**
+> i F4b-2a (przesunięcia MM jedno- i dwuetapowe z przyjęciem w magazynie docelowym) ukończone. F4b-2b-1 (transport: własny, zewnętrzny, mieszany, kolej, dostawca; dokument TR) ukończone. F4b-2b-2 (zakup z produkcją i sprzedażą wyniku, sprzedaż bezpośrednia z lasu, pochodzenie i kwity) ukończone — faza F4b zamknięta. Następna: F4c (Planer zakupów).**
 > Wersja produkcyjna do dnia przełączenia to **ResInvest ERP 3.4** (`../resinvest-erp`).
 > Plan i decyzje: [`../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md`](../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md),
 > raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md), [`docs/RAPORT_F4a.md`](docs/RAPORT_F4a.md), [`docs/RAPORT_F4b.md`](docs/RAPORT_F4b.md).

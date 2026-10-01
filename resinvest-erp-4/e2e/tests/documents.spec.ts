@@ -76,7 +76,7 @@ test("3. produkcja: 400 MP zrębki z drewna — zużycie 100 m³ (RW), przychód
 });
 
 test("4. sprzedaż WZ z numerem ręcznym i tonażem z wagi (RĘCZNY); ten sam numer drugi raz — błąd przy polu", async () => {
-  await mgr.getByRole("tab", { name: /Sprzedaż/ }).click();
+  await mgr.getByRole("tab", { name: /Sprzedaż z magazynu/ }).click();
   await mgr.locator("#op-partner").selectOption({ label: "Elektrociepłownia Zabrze S.A." });
   await mgr.locator("#op-mat").selectOption({ label: "Zrębka produkcyjna leśna (stan 8 693 MP)" });
   await mgr.locator("#op-qty").fill("60");

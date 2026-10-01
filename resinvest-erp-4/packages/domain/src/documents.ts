@@ -11,7 +11,7 @@ import { planTransport, TR_MODES, type PlannedTransport, type TransportFleet, ty
  * Stan (czy wystarczy towaru) sprawdza księga ruchów w transakcji — tutaj tylko reguły danych.
  */
 
-export type OperationKind = "PURCHASE" | "SALE" | "PRODUCTION" | "TRANSFER";
+export type OperationKind = "PURCHASE" | "SALE" | "PRODUCTION" | "TRANSFER" | "DIRECT_SALE";
 export type DocType = "PZ" | "WZ" | "RW" | "PW" | "MM" | "TR";
 export type NumberingMode = "AUTO" | "MANUAL";
 
@@ -39,11 +39,34 @@ interface Base {
   /** Transport (zakup, sprzedaż, MM) — nie zmienia stanu, tworzy dokument TR z kosztem. */
   transport?: TransportInput | null;
 }
-export interface PurchaseInput extends Base { type: "PURCHASE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; priceUnit?: Unit | null; weightManual?: unknown }
+/** Przyczyny wyniku produkcji niższego od zużycia (3.x DIFF_REASONS). */
+export const PRODUCTION_DIFF_REASONS = {
+  MOISTURE: "Wilgotność / osiadanie", QUALITY: "Jakość surowca", LOSSES: "Straty przy rębaniu", MEASUREMENT: "Różnica pomiaru", OTHER: "Inna przyczyna",
+} as const;
+/** Pochodzenie surowca produkcji: las (nadleśnictwo + leśnictwo + kwit), wycinka inwestycyjna (miejsce), inne. */
+export type ProductionSource = "FOREST" | "INVESTMENT" | "OTHER";
+export const PRODUCTION_SOURCE_LABEL: Record<ProductionSource, string> = { FOREST: "Produkcja leśna", INVESTMENT: "Wycinka inwestycyjna", OTHER: "Inne pochodzenie" };
+export interface ChainProductionInput {
+  enabled?: boolean; outMaterialId: string;
+  /** Zużycie surowca w jednostce zakupu (puste = cały zakup) — tylko zakup z produkcją. */
+  consumeQty?: unknown;
+  /** Wynik produkcji w MP (puste = zużycie × przelicznik) — w sprzedaży bezpośredniej wymagany. */
+  outQty?: unknown;
+  diffReason?: string | null; chipperId?: string | null; operatorId?: string | null; chipRate?: unknown;
+  source?: ProductionSource | null; forestDistrict?: string | null; forestry?: string | null; waybill?: string | null; investSite?: string | null; sourceDoc?: string | null;
+}
+export interface OutputSaleInput { buyerId: string; qty?: unknown; price: unknown; priceUnit?: "MP" | "T" | null; weightManual?: unknown }
+export interface PurchaseInput extends Base {
+  type: "PURCHASE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; priceUnit?: Unit | null; weightManual?: unknown;
+  /** Zakup z produkcją zrębki (RW + PW) i — opcjonalnie — sprzedażą wyniku (WZ). */
+  production?: ChainProductionInput | null; sale?: OutputSaleInput | null;
+}
+/** Produkcja w lesie i sprzedaż bezpośrednia: surowiec nie ze stanu (koszt opcjonalnie), PW + WZ. */
+export interface DirectSaleInput extends Base { type: "DIRECT_SALE"; rawMaterialId: string; rawCost?: unknown; production: ChainProductionInput; sale: OutputSaleInput }
 export interface SaleInput extends Base { type: "SALE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; weightManual?: unknown }
 export interface ProductionInput extends Base { type: "PRODUCTION"; rawMaterialId: string; outMaterialId: string; outQty: unknown; chipperId?: string | null; operatorId?: string | null; chipRate?: unknown }
 export interface TransferInput extends Base { type: "TRANSFER"; targetWarehouseId: string; materialId: string; qty: unknown; unit: Unit; weightManual?: unknown }
-export type OperationInput = PurchaseInput | SaleInput | ProductionInput | TransferInput;
+export type OperationInput = PurchaseInput | SaleInput | ProductionInput | TransferInput | DirectSaleInput;
 
 export interface PlannedLine {
   materialId: string; qtySource: string; unitSource: Unit; qtyStock: string; unitStock: Unit; factor: string; source: ValueSource;
@@ -55,7 +78,11 @@ export interface PlannedExtra { typeId: string; typeName: string; vehicleId: str
 export interface OperationPlan {
   type: OperationKind; warehouseId: string; date: string; documentDate: string;
   documents: PlannedDocument[]; movements: PlannedMovement[]; extras: PlannedExtra[];
-  production: { rawMaterialId: string; outMaterialId: string; consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string } | null;
+  production: {
+    mode: "FROM_STOCK" | "FROM_PURCHASE" | "DIRECT"; rawMaterialId: string; outMaterialId: string; consumeQty: string; outQty: string; factor: string;
+    chipRate: string | null; chippingCost: string; maxOut: string | null; diffReason: string | null;
+    source: ProductionSource | null; forestDistrict: string | null; forestry: string | null; waybill: string | null; investSite: string | null; sourceDoc: string | null;
+  } | null;
   /** MM: magazyn docelowy i tryb; przy dwuetapowym przychód w celu powstaje dopiero przy przyjęciu. */
   transfer: { targetWarehouseId: string; twoStage: boolean } | null;
   transport: PlannedTransport | null;
@@ -116,6 +143,94 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
   let production: OperationPlan["production"] = null;
   let transfer: OperationPlan["transfer"] = null;
   const wh = input.warehouseId;
+  const warnings: string[] = [];
+  const txt = (v: unknown, n: number) => (v === null || v === undefined ? "" : String(v).trim().slice(0, n));
+  const transportRuns = !!input.transport && ["OWN", "EXTERNAL", "MIXED"].includes(input.transport.mode);
+  let consumedM3: string | null = null, requireWaybill = false;
+
+  /**
+   * Produkcja zrębki z surowca (3.x planProduction): „chain” — z zakupu w tej samej operacji (zużycie podane albo cały zakup,
+   * wynik ≤ zużycie × przelicznik, niższy wymaga przyczyny); „direct” — w lesie, surowiec nie ze stanu (zużycie informacyjne).
+   */
+  function planChain(mode: "FROM_PURCHASE" | "DIRECT", raw: PlanMaterial | null, consumeStock: Decimal | null, P: ChainProductionInput): { out: PlanMaterial; outQty: Decimal } | null {
+    const out = material("production.outMaterialId", P.outMaterialId, "produkt wyjściowy (zrębka)");
+    if (out && out.stockUnit !== "MP") err("production.outMaterialId", "Produkt wyjściowy (zrębka) musi być prowadzony w MP");
+    if (raw && out && raw.id === out.id) err("production.outMaterialId", "Surowiec i produkt wyjściowy muszą być różnymi materiałami");
+    if (raw && raw.category !== "WOOD") err(mode === "DIRECT" ? "rawMaterialId" : "production.enabled", "Produkcja zrębki jest możliwa tylko z surowca drzewnego (drewno)");
+    else if (raw && raw.stockUnit !== "M3") err(mode === "DIRECT" ? "rawMaterialId" : "production.enabled", "Surowiec do produkcji zrębki musi być prowadzony w m³");
+    const factor = D(raw?.mpPerM3 ?? rates.mpPerM3);
+    const chipRate = num("production.chipRate", P.chipRate, { optional: true, label: "cena za rąbanie" });
+    let outQty: Decimal | null, consume: Decimal | null = consumeStock, maxOut: Decimal | null = null;
+    if (mode === "FROM_PURCHASE") {
+      if (consume) maxOut = consume.mul(factor).toDecimalPlaces(QTY_DP);
+      if (txt(P.outQty, 40) === "") outQty = maxOut;
+      else outQty = num("production.outQty", P.outQty, { positive: true, label: "ilość produkcji" });
+      if (maxOut && outQty && outQty.gt(maxOut)) { err("production.outQty", `Wynik produkcji ${formatQty(outQty)} MP przekracza zużyty surowiec (${formatQty(maxOut)} MP)`); outQty = null; }
+      else if (maxOut && outQty && outQty.lt(maxOut) && !(txt(P.diffReason, 40) in PRODUCTION_DIFF_REASONS))
+        err("production.diffReason", `Wynik niższy od zużycia o ${formatQty(maxOut.minus(outQty))} MP — wskaż przyczynę`);
+    } else {
+      outQty = num("production.outQty", P.outQty, { positive: true, label: "ilość produkcji" });
+      consume = outQty ? outQty.div(factor).toDecimalPlaces(QTY_DP) : null;
+    }
+    // pochodzenie: las — nadleśnictwo, leśnictwo i kwit wywozowy (w kursach transportu albo przy produkcji); wycinka — miejsce
+    const source: ProductionSource = P.source === "FOREST" || P.source === "INVESTMENT" ? P.source : "OTHER";
+    if (source === "FOREST") {
+      if (!txt(P.forestDistrict, 120)) err("production.forestDistrict", "Podaj nadleśnictwo");
+      if (!txt(P.forestry, 120)) err("production.forestry", "Podaj leśnictwo");
+      if (transportRuns) { requireWaybill = true; consumedM3 = consume ? consume.toString() : null; }
+      else if (!txt(P.waybill, 200)) err("production.waybill", "Podaj numer kwitu wywozowego (bez kursów transportu kwit wpisuje się przy produkcji)");
+    } else if (source === "INVESTMENT" && !txt(P.investSite, 250)) err("production.investSite", "Podaj miejsce wycinki / inwestycję");
+    if (!out || !outQty || !consume || (raw && (raw.category !== "WOOD" || raw.stockUnit !== "M3" || raw.id === out.id)) || out.stockUnit !== "MP") return null;
+    chippingCost = chipRate ? D(money(outQty.mul(chipRate))) : D(0);
+    if (mode === "FROM_PURCHASE" && raw) {
+      documents.push({ type: "RW", partnerId: null, main: false, lines: [line(raw, consume, "M3", "1")] });
+      movements.push({ warehouseId: wh, materialId: raw.id, qty: consume.neg().toString(), kind: "CONSUMPTION", doc: documents.length - 1, line: 0 });
+    }
+    documents.push({ type: "PW", partnerId: null, main: false, lines: [line(out, outQty, "MP", "1")] });
+    movements.push({ warehouseId: wh, materialId: out.id, qty: outQty.toString(), kind: "PRODUCTION", doc: documents.length - 1, line: 0 });
+    production = {
+      mode, rawMaterialId: raw?.id ?? "", outMaterialId: out.id, consumeQty: consume.toString(), outQty: outQty.toString(), factor: factor.toString(),
+      chipRate: chipRate ? chipRate.toFixed(2) : null, chippingCost: money(chippingCost), maxOut: maxOut ? maxOut.toString() : null,
+      diffReason: maxOut && outQty.lt(maxOut) ? txt(P.diffReason, 40) : null, source,
+      forestDistrict: source === "FOREST" ? txt(P.forestDistrict, 120) : null, forestry: source === "FOREST" ? txt(P.forestry, 120) : null,
+      waybill: source === "FOREST" && !transportRuns ? txt(P.waybill, 200) : null,
+      investSite: source === "INVESTMENT" ? txt(P.investSite, 250) : null, sourceDoc: txt(P.sourceDoc, 120) || null,
+    };
+    summary.push(mode === "DIRECT"
+      ? `Produkcja w lesie ${formatQty(outQty)} MP (surowiec nie ze stanu: ok. ${formatQty(consume)} m³)`
+      : `Zużycie ${formatQty(consume)} m³ → produkcja ${formatQty(outQty)} MP (1 m³ = ${formatQty(factor)} MP)`);
+    return { out, outQty };
+  }
+
+  /** Pola sprzedaży sprawdzane także wtedy, gdy produkcja ma błędy — użytkownik widzi wszystkie braki naraz. */
+  function checkSaleFields(S: OutputSaleInput) {
+    if (!S.buyerId) err("sale.buyerId", "Wybierz odbiorcę");
+    if (S.priceUnit !== "T" && S.priceUnit !== "MP") err("sale.priceUnit", "Wybierz jednostkę ceny (MP albo t)");
+    num("sale.price", S.price, { label: "cena sprzedaży" });
+  }
+  /** Sprzedaż wyniku produkcji (3.x planSaleOfOutput): ilość ≤ produkcja (puste = cała), cena za MP albo za t, tonaż AUTO / RĘCZNY. */
+  function planOutputSale(out: PlanMaterial, outQty: Decimal, S: OutputSaleInput, main: boolean) {
+    if (!S.buyerId) err("sale.buyerId", "Wybierz odbiorcę");
+    let q: Decimal | null = outQty;
+    if (txt(S.qty, 40) !== "") q = num("sale.qty", S.qty, { positive: true, label: "ilość sprzedaży" });
+    if (q && q.gt(outQty)) { err("sale.qty", `Nie można sprzedać ${formatQty(q)} MP z produkcji ${formatQty(outQty)} MP`); return; }
+    const priceUnit = S.priceUnit === "T" ? "T" : S.priceUnit === "MP" ? "MP" : null;
+    if (!priceUnit) err("sale.priceUnit", "Wybierz jednostkę ceny (MP albo t)");
+    const price = num("sale.price", S.price, { label: "cena sprzedaży" });
+    let manualW: string | null = null;
+    if (txt(S.weightManual, 40) !== "") { const p = parseNumber(S.weightManual); if (p.ok) manualW = p.value; else err("sale.weightManual", p.error); }
+    if (!q) return;
+    let w: ReturnType<typeof tonnage> | null = null;
+    try { w = tonnage(q, out, manualW, rates); } catch { err("sale.weightManual", "Tonaż z wagi: liczba większa od 0"); }
+    const value = price && priceUnit && w ? money((priceUnit === "T" ? D(w.weightT) : q).mul(price)) : null;
+    if (value) revenue = D(value);
+    documents.push({ type: "WZ", partnerId: S.buyerId || null, main, lines: [{
+      materialId: out.id, qtySource: q.toString(), unitSource: "MP", qtyStock: q.toString(), unitStock: "MP", factor: "1", source: "AUTO",
+      weightT: w?.weightT ?? null, weightSource: w?.source ?? null, autoWeightT: w?.autoWeightT ?? null, unitPrice: price ? price.toString() : null, priceUnit, value }] });
+    movements.push({ warehouseId: wh, materialId: out.id, qty: q.neg().toString(), kind: "SALE", doc: documents.length - 1, line: 0 });
+    if (w) summary.push(`Sprzedaż ${formatQty(q)} MP | ${formatQty(w.weightT)} t | ${SOURCE_LABEL[w.source]}`);
+    if (outQty.gt(q)) warnings.push(`Nie cała produkcja jest sprzedana — pozostałe ${formatQty(outQty.minus(q))} MP zostanie przyjęte na stan magazynu.`);
+  }
 
   try {
     if (input.type === "PURCHASE" || input.type === "SALE") {
@@ -148,8 +263,28 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
             unitPrice: price ? price.toString() : null, priceUnit, value }] });
           movements.push({ warehouseId: wh, materialId: m.id, qty: isBuy ? conv.value : D(conv.value).neg().toString(), kind: isBuy ? "PURCHASE" : "SALE", doc: 0, line: 0 });
           if (w) summary.push(`${formatQty(qty)} ${UNIT_LABEL[input.unit]} | ${formatQty(w.weightT)} t | ${SOURCE_LABEL[w.source]}`);
+          if (input.type === "PURCHASE" && input.production?.enabled) {
+            // zużycie: podane (w jednostce zakupu) albo cały zakup; dostępność (stan + zakup) sprawdza księga krok po kroku
+            let consume: Decimal | null = D(conv.value);
+            if (txt(input.production.consumeQty, 40) !== "") {
+              const c = num("production.consumeQty", input.production.consumeQty, { positive: true, label: "zużycie" });
+              try { consume = c ? D(convert(c, input.unit, m.stockUnit, m, rates).value) : null; } catch (e) { err("production.consumeQty", e instanceof UnitError ? e.message : "Nieprawidłowa jednostka"); consume = null; }
+            }
+            const r = planChain("FROM_PURCHASE", m, consume, input.production);
+            if (r && input.sale) planOutputSale(r.out, r.outQty, input.sale, false);
+            else if (input.sale) checkSaleFields(input.sale);
+          }
         }
       }
+      if (input.type === "PURCHASE" && input.sale && !input.production?.enabled) err("sale.buyerId", "W zakupie sprzedaż korzysta z wyniku produkcji — zaznacz produkcję albo użyj operacji „Sprzedaż z magazynu”");
+    } else if (input.type === "DIRECT_SALE") {
+      const raw = material("rawMaterialId", input.rawMaterialId, "surowiec wejściowy (np. drewno z lasu)");
+      const rawCost = num("rawCost", input.rawCost, { optional: true, label: "koszt surowca" });
+      if (rawCost) purchaseCost = D(money(rawCost));
+      const r = planChain("DIRECT", raw, null, input.production ?? { outMaterialId: "" });
+      if (!input.sale) err("sale.buyerId", "Wybierz odbiorcę");
+      else if (r) planOutputSale(r.out, r.outQty, input.sale, true);
+      else checkSaleFields(input.sale);
     } else if (input.type === "TRANSFER") {
       const twoStage = ctx.transferTwoStage !== false;
       if (!input.targetWarehouseId) err("targetWarehouseId", "Wybierz magazyn docelowy przesunięcia");
@@ -194,7 +329,8 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
         documents.push({ type: "PW", partnerId: null, main: true, lines: [line(out, outQty, "MP", "1")] });
         movements.push({ warehouseId: wh, materialId: raw.id, qty: consume.neg().toString(), kind: "CONSUMPTION", doc: 0, line: 0 });
         movements.push({ warehouseId: wh, materialId: out.id, qty: outQty.toString(), kind: "PRODUCTION", doc: 1, line: 0 });
-        production = { rawMaterialId: raw.id, outMaterialId: out.id, consumeQty: consume.toString(), outQty: outQty.toString(), factor: factor.toString(), chipRate: chipRate ? chipRate.toFixed(2) : null, chippingCost: money(chippingCost) };
+        production = { mode: "FROM_STOCK", rawMaterialId: raw.id, outMaterialId: out.id, consumeQty: consume.toString(), outQty: outQty.toString(), factor: factor.toString(), chipRate: chipRate ? chipRate.toFixed(2) : null, chippingCost: money(chippingCost),
+          maxOut: null, diffReason: null, source: null, forestDistrict: null, forestry: null, waybill: null, investSite: null, sourceDoc: null };
         summary.push(`Zużycie ${formatQty(consume)} m³ → produkcja ${formatQty(outQty)} MP (1 m³ = ${formatQty(factor)} MP)`);
       }
     }
@@ -207,9 +343,11 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
   if (input.type === "PRODUCTION") {
     if (input.transport && input.transport.mode !== "NONE") err("transport.mode", "Produkcja na magazynie nie ma transportu");
   } else {
-    const main = documents.find(d => d.main)?.lines[0];
+    // przewożony towar: sprzedany wynik produkcji, inaczej wynik produkcji, inaczej pozycja dokumentu głównego
+    const main = (documents.find(d => d.type === "WZ") ?? documents.find(d => d.type === "PW") ?? documents.find(d => d.main))?.lines[0];
     transport = planTransport(input.transport, { materialId: main?.materialId ?? null, qty: main?.qtyStock ?? "0", unit: main?.unitStock ?? null, weightT: main?.weightT ?? null },
-      { warehouseId: wh, rates, purchase: input.type === "PURCHASE", ...(ctx.fleet ? { fleet: ctx.fleet } : {}), ...(ctx.kmRateDefault ? { kmRateDefault: ctx.kmRateDefault } : {}) }, err);
+      { warehouseId: wh, rates, purchase: input.type === "PURCHASE", requireWaybill, consumedM3,
+        ...(ctx.fleet ? { fleet: ctx.fleet } : {}), ...(ctx.kmRateDefault ? { kmRateDefault: ctx.kmRateDefault } : {}) }, err);
     if (transport && TR_MODES.includes(transport.mode)) documents.push({ type: "TR", partnerId: null, main: false, lines: [] });
   }
   const transportCost = D(transport?.cost ?? 0);
@@ -236,7 +374,7 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
   if (errors.length) return { ok: false, errors };
   const result = revenue.minus(purchaseCost).minus(chippingCost).minus(additionalCost).minus(transportCost);
   return { ok: true, plan: {
-    type: input.type, warehouseId: wh, date: input.date, documentDate, documents, movements, extras, production, transfer, transport, warnings: transport?.warnings ?? [],
+    type: input.type, warehouseId: wh, date: input.date, documentDate, documents, movements, extras, production, transfer, transport, warnings: [...warnings, ...(transport?.warnings ?? [])],
     totals: { purchaseCost: money(purchaseCost), revenue: money(revenue), chippingCost: money(chippingCost), additionalCost: money(additionalCost), transportCost: money(transportCost), result: money(result) },
     numbering: { mode: input.type === "PRODUCTION" ? "AUTO" : mode, number: manualNumber }, summary,
   } };

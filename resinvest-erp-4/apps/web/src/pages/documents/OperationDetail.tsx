@@ -11,7 +11,10 @@ export interface OperationView {
   documents: Array<{ id: string; type: string; number: string; documentDate: string; movementDate: string; externalNumber: string | null; partner: { id: string; name: string } | null;
     lines: Array<{ lineNo: number; material: { id: string; code: string; name: string }; qtySource: string; unitSource: Unit; qtyStock: string; unitStock: Unit; factor: string; source: string;
       weightT: string | null; weightSource: string | null; unitPrice: string | null; priceUnit: Unit | null; value: string | null }> }>;
-  production: { consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string; chipper: string | null; operator: string | null } | null;
+  production: {
+    mode: "FROM_STOCK" | "FROM_PURCHASE" | "DIRECT"; consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string; chipper: string | null; operator: string | null;
+    diffReason: string | null; diffReasonLabel: string | null; forestDistrict: string | null; forestry: string | null; waybill: string | null; investSite: string | null; sourceDoc: string | null;
+  } | null;
   extras: Array<{ id: string; type: string; vehicle: string | null; quantity: string | null; cost: string; description: string | null }>;
   transport: {
     mode: TransportMode; place: string | null; cost: string;
@@ -30,6 +33,11 @@ export const TransferState = ({ state }: { state: string | null | undefined }) =
   state === "IN_TRANSIT" ? <span className="badge warn">w drodze</span> : state === "RECEIVED" ? <span className="badge ok">przyjęte</span> : null;
 
 export const OP_LABEL: Record<string, string> = { PURCHASE: "Zakup", SALE: "Sprzedaż z magazynu", PRODUCTION: "Produkcja na magazynie", TRANSFER: "Przesunięcie MM", OPENING_BALANCE: "Bilans otwarcia", INVENTORY: "Inwentaryzacja" };
+/** Dokument główny do tytułu: kolejność ważności (zakup → PZ, sprzedaż bezpośrednia → WZ, produkcja → PW), nie kolejność zapisu. */
+const titleDoc = (op: OperationView) => ["PZ", "WZ", "MM", "PW", "BO"].map(t => op.documents.find(d => d.type === t)).find(Boolean);
+/** Nazwa operacji z uwzględnieniem produkcji w zakupie i sprzedaży bezpośredniej. */
+export const opLabel = (type: string, productionMode?: string | null) =>
+  type === "PURCHASE" && productionMode === "FROM_PURCHASE" ? "Zakup z produkcją" : type === "SALE" && productionMode === "DIRECT" ? "Sprzedaż bezpośrednia" : OP_LABEL[type] ?? type;
 export const pln = (v: string | number | null | undefined) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(Number(v ?? 0));
 export const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("pl-PL", { timeZone: "UTC" });
 const SRC: Record<string, string> = { AUTO: "AUTO", COMPANY_RATE: "AUTO", MANUAL: "RĘCZNY" };
@@ -43,7 +51,7 @@ export function OperationDetail({ id, onClose }: { id: string; onClose: () => vo
   const q = useQuery({ queryKey: ["operation", id], queryFn: async ({ signal }) => (await api.get<{ operation: OperationView }>(`/operations/${id}`, signal)).operation, staleTime: 0 });
   const op = q.data;
   return (
-    <Dialog title={op ? `${OP_LABEL[op.type] ?? op.type} — ${op.documents.find(d => ["PZ", "WZ", "PW", "MM", "BO"].includes(d.type))?.number ?? ""}` : "Operacja"} onClose={onClose}>
+    <Dialog title={op ? `${opLabel(op.type, op.production?.mode)} — ${titleDoc(op)?.number ?? ""}` : "Operacja"} onClose={onClose}>
       {q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !op ? <p className="muted">Wczytywanie…</p> : (
         <div id="op-detail">
           <dl className="kv">
@@ -79,7 +87,11 @@ export function OperationDetail({ id, onClose }: { id: string; onClose: () => vo
               </table></div>
             </section>
           ))}
-          {op.production && <p>Produkcja: zużycie <strong>{formatQty(op.production.consumeQty)} m³</strong> → <strong>{formatQty(op.production.outQty)} MP</strong> (1 m³ = {formatQty(op.production.factor)} MP)
+          {op.production && <p id="op-production">{op.production.mode === "DIRECT" ? "Produkcja w lesie (surowiec nie ze stanu): ok." : "Produkcja: zużycie"} <strong>{formatQty(op.production.consumeQty)} m³</strong> → <strong>{formatQty(op.production.outQty)} MP</strong> (1 m³ = {formatQty(op.production.factor)} MP)
+            {op.production.diffReasonLabel && <> · przyczyna niższego wyniku: {op.production.diffReasonLabel}</>}
+            {op.production.forestDistrict && <> · Nadl. {op.production.forestDistrict}, leśn. {op.production.forestry}</>}
+            {op.production.waybill && <> · kwit {op.production.waybill}</>}
+            {op.production.investSite && <> · wycinka: {op.production.investSite}{op.production.sourceDoc ? ` (${op.production.sourceDoc})` : ""}</>}
             {op.production.chipper && <> · rębak: {op.production.chipper}{op.production.operator ? ` (${op.production.operator})` : ""}</>}
             {Number(op.production.chippingCost) > 0 && <> · rąbanie: {pln(op.production.chippingCost)}</>}</p>}
           {op.transport && <section className="card" id="op-transport-detail"><header className="card-h"><h2>Transport — {TRANSPORT_MODE_LABEL[op.transport.mode]}</h2>

@@ -129,5 +129,7 @@ export function companyRatesFrom(rows: ReadonlyArray<{ fromUnit: Unit; toUnit: U
 
 /** a − b na łańcuchach dziesiętnych (np. stan przed ruchem = stan po − ruch). */
 export const qtySub = (a: Decimal.Value, b: Decimal.Value): string => D(a).minus(b).toString();
+/** Suma ilości bez błędów zmiennoprzecinkowych (łańcuch dziesiętny). */
+export const qtySum = (a: Decimal.Value, b: Decimal.Value): string => D(a).plus(b).toString();
 /** Postać kanoniczna liczby dziesiętnej („817.000000” → „817”). */
 export const qtyNorm = (a: Decimal.Value): string => D(a).toString();
