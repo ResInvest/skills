@@ -17,12 +17,16 @@ import { UsersService } from "./users/users.service.js";
 import { UsersController } from "./users/users.controller.js";
 import { RolesController } from "./roles/roles.controller.js";
 import { WarehousesController } from "./warehouses/warehouses.controller.js";
+import { LedgerService } from "./stock/ledger.service.js";
+import { StockController } from "./stock/stock.controller.js";
+import { OpeningService } from "./opening/opening.service.js";
+import { OpeningController } from "./opening/opening.controller.js";
 
 @Module({
   imports: [ConfigModule, PrismaModule],
-  controllers: [HealthController, AuthController, UsersController, RolesController, WarehousesController, AuditController],
+  controllers: [HealthController, AuthController, UsersController, RolesController, WarehousesController, AuditController, StockController, OpeningController],
   providers: [
-    AuditService, MailService, SettingsService, SessionService, AuthService, UsersService,
+    AuditService, MailService, SettingsService, SessionService, AuthService, UsersService, LedgerService, OpeningService,
     { provide: APP_FILTER, useClass: ApiErrorFilter },
     // kolejność: sieć (LAN/VPN) → sesja → uprawnienia
     { provide: APP_GUARD, useClass: NetworkGuard },

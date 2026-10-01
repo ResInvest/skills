@@ -132,6 +132,19 @@ code { font-size: .85em; }
 .auth-card h1 { font-size: 1.4rem; margin-top: 8px; }
 .auth-foot { display: grid; gap: 8px; justify-items: center; border-top: 1px solid var(--line); padding-top: 12px; }
 
+/* ---- F3: stany magazynowe, karta materiału, bilans otwarcia ---- */
+.r, .table th.r, .table td.r { text-align: right; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.neg { color: var(--err); font-weight: 600; }
+.pos { color: var(--ok); font-weight: 600; }
+.doc { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .85rem; font-weight: 700; }
+.table tr.group th { background: var(--surface-2); color: var(--text); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; position: static; }
+.table tr.dim td { opacity: .6; }
+.table input.ctrl, .table select.ctrl { min-width: 110px; }
+ul.plain { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.mt { margin-top: 12px; }
+.dialog:has(.table-wrap) { width: min(1040px, 100%); }
+
 @media (max-width: 860px) {
   .btn.menu-btn { display: inline-flex; margin-left: auto; }
   .nav { display: none; order: 3; flex-basis: 100%; flex-direction: column; }
@@ -149,6 +162,9 @@ code { font-size: .85em; }
   .table-wrap:not(.matrix) .table td { display: block; position: relative; padding-left: 118px; min-height: 40px; overflow-wrap: anywhere; }
   .table-wrap:not(.matrix) .table td::before { content: attr(data-label); position: absolute; left: 12px; top: 10px; width: 96px; color: var(--muted); font-size: .8rem; }
   .table-wrap:not(.matrix) .table td:not([data-label]) { padding-left: 12px; }
+  .table-wrap:not(.matrix) .table tr.group { border: 0; background: none; margin: 14px 0 6px; }
+  .table-wrap:not(.matrix) .table tr.group th { display: block; background: none; padding: 0 4px; }
+  .table-wrap:not(.matrix) .table td.r { text-align: left; }
   .pre { max-width: none; }
   .filters .ctrl, .filters .inline { flex: 1 1 100%; }
   .main { padding: 16px 12px; }

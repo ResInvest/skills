@@ -8,6 +8,8 @@ export const STATE = resolve(here, "../.state");
 
 export const ADMIN = { email: "admin.e2e@resinvest.group", password: "Plac-Zrebki-2026" };
 export const MANAGER = { email: "kierownik.zabrze@resinvest.group", first: "Karol", last: "Kierownik", password: "Waga-Kontrola-2026" };
+/** Hasło kierownika po wymuszonej zmianie w scenariuszu 6 tożsamości (używane przez kolejne projekty testów). */
+export const MANAGER_NEW_PASSWORD = "Waga-Kontrola-Nowa-27";
 export const STOREKEEPER = { email: "magazynier.braszewice@resinvest.group", first: "Marek", last: "Magazynier", password: "Brasz-Suwnica-26" };
 
 export const adminLink = (): string => readFileSync(resolve(STATE, "admin-link.txt"), "utf8").trim();

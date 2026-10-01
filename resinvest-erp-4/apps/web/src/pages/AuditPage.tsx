@@ -13,6 +13,7 @@ export const ACTION_LABEL: Record<string, string> = {
   WAREHOUSE_ACCESS_CHANGED: "Zmiana dostępu do magazynów", USER_STATUS_CHANGED: "Zmiana statusu", ACCOUNT_UNLOCKED: "Odblokowanie konta",
   FORCE_PASSWORD_CHANGE: "Wymuszenie zmiany hasła", SESSION_REVOKED: "Zakończenie sesji", SESSIONS_REVOKED: "Zakończenie sesji użytkownika",
   ROLE_PERMISSIONS_CHANGED: "Zmiana uprawnień roli", DEFAULT_WAREHOUSE_CHANGED: "Zmiana magazynu domyślnego", ADMIN_BOOTSTRAP: "Utworzenie pierwszego administratora",
+  OPENING_BALANCE_CREATED: "Bilans otwarcia — szkic", OPENING_BALANCE_UPDATED: "Bilans otwarcia — zmiana szkicu", OPENING_BALANCE_DRAFT_DELETED: "Bilans otwarcia — usunięcie szkicu", OPENING_BALANCE_APPROVED: "Bilans otwarcia — zatwierdzenie",
 };
 const LOGIN_REASON: Record<string, string> = { BAD_PASSWORD: "złe hasło", NO_USER: "brak konta", LOCKED: "konto zablokowane", DOMAIN: "domena spoza firmy", NOT_ACTIVATED: "nieaktywowane", INACTIVE: "konto nieaktywne", RATE: "limit prób" };
 

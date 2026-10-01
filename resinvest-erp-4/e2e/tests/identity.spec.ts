@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { ADMIN, adminLink, expectNoHorizontalScroll, login, mailCount, mailLink, MANAGER, STOREKEEPER } from "./helpers";
+import { ADMIN, adminLink, expectNoHorizontalScroll, login, mailCount, mailLink, MANAGER, MANAGER_NEW_PASSWORD, STOREKEEPER } from "./helpers";
 
 /**
  * Faza F2 — tożsamość, scenariusze §34/§35 przeniesione z 3.x na prawdziwym stosie (PostgreSQL + API + build frontendu).
@@ -133,7 +133,7 @@ test("6. wymuszona zmiana hasła i wylogowanie ze wszystkich urządzeń", async 
   await m.reload();
   await expect(m.getByRole("heading", { name: "Wymagana zmiana hasła" })).toBeVisible();
   await m.getByLabel(/^Obecne hasło/).fill(MANAGER.password);
-  MANAGER.password = "Waga-Kontrola-Nowa-27";
+  MANAGER.password = MANAGER_NEW_PASSWORD;
   await m.getByLabel(/^Nowe hasło/).fill(MANAGER.password);
   await m.getByLabel(/^Powtórz nowe hasło/).fill(MANAGER.password);
   await m.getByRole("button", { name: "Zmień hasło" }).click();
