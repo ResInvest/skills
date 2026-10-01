@@ -10,6 +10,7 @@ export const PERMISSIONS: ReadonlyArray<{ code: string; description: string; gro
   { code: "mm.create", description: "Przesunięcia MM — wysyłanie", group: "Operacje" },
   { code: "mm.receive", description: "Przyjęcie MM na magazynie docelowym", group: "Operacje" },
   { code: "additional.create", description: "Operacje dodatkowe — wprowadzanie", group: "Operacje" },
+  { code: "planner.edit", description: "Planer zakupów — plan dzienny", group: "Operacje" },
   { code: "op.approve", description: "Zatwierdzanie operacji (gdy obieg zatwierdzania jest włączony)", group: "Operacje" },
   { code: "documents.correct", description: "Korekty dokumentów", group: "Dokumenty" },
   { code: "documents.delete", description: "Usuwanie dokumentów (soft delete z odwróceniem ruchów)", group: "Dokumenty" },
@@ -41,7 +42,7 @@ const CREATE = ["receipts.create", "issues.create", "production.create", "mm.cre
 export const ROLES: ReadonlyArray<{ code: string; name: string; description: string; global: boolean; permissions: string[] | "*" }> = [
   { code: "ADMINISTRATOR", name: "Administrator", global: true, permissions: "*", description: "Pełny dostęp: wszystkie magazyny, użytkownicy i role, dane startowe, kopie, konfiguracja." },
   { code: "MANAGER", name: "Manager", global: false, description: "Operacje, korekty i usuwanie w przydzielonych magazynach, zamykanie okresów, flota i kartoteki, podgląd użytkowników.",
-    permissions: [...CREATE, "op.approve", "documents.correct", "documents.delete", "purchases.correct", "sales.correct", "production.correct", "inventory.correct", "opening.manage", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"] },
+    permissions: [...CREATE, "planner.edit", "op.approve", "documents.correct", "documents.delete", "purchases.correct", "sales.correct", "production.correct", "inventory.correct", "opening.manage", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"] },
   { code: "MAGAZYNIER", name: "Magazynier", global: false, description: "Przyjęcia, wydania, produkcja, MM i operacje dodatkowe w przydzielonych magazynach; stany, dokumenty, spis z natury.",
     permissions: [...CREATE, "inv.count", "report.view", "history.read"] },
   { code: "OBSERWATOR", name: "Obserwator", global: false, description: "Tylko odczyt w przydzielonych magazynach.", permissions: ["report.view", "history.read"] },

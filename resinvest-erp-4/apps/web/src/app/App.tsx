@@ -18,6 +18,7 @@ import { OpeningPage } from "../pages/stock/OpeningPage";
 import { CatalogPage } from "../pages/catalog/CatalogPage";
 import { DocumentsPage } from "../pages/documents/DocumentsPage";
 import { NewOperationPage } from "../pages/documents/NewOperationPage";
+import { PlannerPage } from "../pages/planner/PlannerPage";
 
 /** Wymaga zalogowania; przy wymuszonej zmianie hasła pokazuje wyłącznie ekran zmiany hasła. */
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -56,6 +57,7 @@ export function AppRoutes() {
         <Route path="stany" element={<RequirePerm perm="report.view"><StockPage /></RequirePerm>} />
         <Route path="dokumenty" element={<RequirePerm perm="report.view"><DocumentsPage /></RequirePerm>} />
         <Route path="nowa-operacja" element={<RequirePerm perm="report.view"><NewOperationPage /></RequirePerm>} />
+        <Route path="planer-zakupow" element={<RequirePerm perm="report.view"><PlannerPage /></RequirePerm>} />
         <Route path="kartoteki" element={<Navigate to="/kartoteki/materials" replace />} />
         <Route path="kartoteki/:kind" element={<RequirePerm perm="report.view"><CatalogPage /></RequirePerm>} />
         <Route path="bilans-otwarcia" element={<RequirePerm perm="report.view"><OpeningPage /></RequirePerm>} />

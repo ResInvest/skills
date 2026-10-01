@@ -366,6 +366,7 @@ model Warehouse {
   additionalOperations AdditionalOperation[]
   vehicles             Vehicle[]
   chippers             Chipper[]
+  purchasePlans        PurchasePlan[]
 
   @@map("warehouses")
 }
@@ -1012,4 +1013,23 @@ model BackupRun {
 
   @@index([startedAt])
   @@map("backup_runs")
+}
+
+/// Planer zakupów: plan dzienny (MP) magazynu — jedyna wartość planera wpisywana ręcznie; wykonanie, tony, ceny,
+/// km, transport i kursy są liczone z dokumentów (PZ / PW / TR). Zmiany planu w dzienniku audytu (PLAN_UPDATED).
+model PurchasePlan {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  warehouseId String    @map("warehouse_id") @db.Uuid
+  day         DateTime  @db.Date
+  planMp      Decimal   @map("plan_mp") @db.Decimal(12, 2)
+  note        String?   @db.VarChar(500)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdById String    @map("created_by_id") @db.Uuid
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedById String    @map("updated_by_id") @db.Uuid
+  version     Int       @default(1)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([warehouseId, day])
+  @@map("purchase_plans")
 }

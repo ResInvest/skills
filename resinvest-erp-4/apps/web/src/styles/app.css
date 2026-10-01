@@ -173,6 +173,40 @@ fieldset.field legend { font-weight: 600; margin-bottom: 4px; }
 .run-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; }
 .run-grid .field { min-width: 0; }
 @media (max-width: 640px) { .run-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* ---- F4c: planer zakupów ---- */
+.pl-period { min-width: 0; align-self: center; }
+.pl-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.pl-k { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.pl-k small { color: var(--muted); font-weight: 600; }
+.pl-k strong { font-size: 1.5rem; }
+.pl-k.lead { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.pl-k.lead small { color: inherit; opacity: .85; }
+.pl-meter { height: 6px; border-radius: 4px; background: rgb(255 255 255 / .25); overflow: hidden; margin-top: 6px; }
+.pl-meter i { display: block; height: 100%; background: var(--brand-ink); }
+.src-auto { color: var(--info); }
+.src-man { color: var(--warn); }
+.table tr.pl-today td:first-child { box-shadow: inset 4px 0 var(--warn); }
+.table tr.pl-future td { color: var(--muted); }
+.table input.pl-plan { min-width: 0; width: 96px; }
+.pl-grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.pl-chart { position: relative; overflow-x: auto; }
+.pl-chart svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.pl-chart text { fill: var(--muted); font-size: 11px; }
+.pl-chart .pl-axis-sel { fill: var(--text); font-weight: 700; }
+.pl-grid { stroke: var(--line); }
+.pl-bar-plan { fill: var(--line); }
+.pl-bar-act { fill: var(--brand); }
+.pl-bar-sel { fill: var(--warn); }
+.pl-mbar { cursor: pointer; outline: none; }
+.pl-mbar:focus-visible rect:first-child { stroke: var(--focus); stroke-width: 2; }
+.pl-tip { position: absolute; top: 4px; transform: translateX(-50%); background: var(--text); color: var(--surface); padding: 6px 9px; border-radius: 6px; font-size: .8rem; white-space: nowrap; pointer-events: none; }
+.legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin: 0 5px 0 8px; vertical-align: -1px; }
+.pl-sw-plan { background: var(--line); } .pl-sw-act { background: var(--brand); } .pl-sw-sel { background: var(--warn); }
+.pl-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.pl-heat { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 6px; background: var(--ok-bg); color: var(--ok); font-weight: 700; }
+.pl-docs { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+@media (max-width: 900px) { .pl-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pl-grid2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .pl-kpis { grid-template-columns: minmax(0, 1fr); } }
 .op-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .op-layout > .card { margin-top: 12px; }
 .op-preview { position: sticky; top: 72px; }
