@@ -66,7 +66,9 @@ test("3. Brąszewice: konto bez prawa przyjęcia widzi MM bez przycisku; adminis
   await expect(seen).toContainText("przyjmuje osoba z uprawnieniem „Przyjęcie MM”");
 
   await go(admin, "Dokumenty");
-  await admin.getByLabel("Magazyn").selectOption({ label: "RiC Brąszewice" });
+  // poczekaj na ekran rejestru — pulpit administratora też ma sekcję „Magazyny”
+  await expect(admin.getByRole("heading", { name: "Dokumenty", exact: true })).toBeVisible();
+  await admin.getByRole("combobox", { name: "Magazyn", exact: true }).selectOption({ label: "RiC Brąszewice" });
   const inbound = admin.locator("#mm-inbound");
   await inbound.getByRole("button", { name: "Przyjmij" }).click();
   const dlg = admin.locator("#mm-receive");
