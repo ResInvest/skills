@@ -10,7 +10,7 @@ COPY packages ./packages
 COPY apps/api ./apps/api
 RUN pnpm install --frozen-lockfile --filter @resinvest/api... --filter resinvest-erp-4
 RUN pnpm --filter @resinvest/api run build
-RUN pnpm --filter @resinvest/api deploy --prod --legacy /out && cp -r apps/api/dist /out/dist
+RUN pnpm --filter @resinvest/api deploy --prod --legacy /out && cp -r apps/api/dist /out/dist && cp -r apps/api/assets /out/assets
 
 # Etap migracji: prisma migrate deploy (uruchamiany jako osobna usługa przed API)
 FROM build AS migrate

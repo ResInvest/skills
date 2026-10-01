@@ -44,7 +44,7 @@ test("2. logowanie: domena spoza firmy, złe hasło, poprawne — pełne menu ad
   await expect(admin.getByRole("heading", { name: "Dzień dobry, Administrator" })).toBeVisible();
   const nav = admin.getByRole("navigation", { name: "Główna nawigacja" });
   for (const t of ["Użytkownicy", "Role i uprawnienia", "Dziennik audytu", "Moje konto"]) await expect(nav.getByRole("link", { name: t })).toBeVisible();
-  await expect(admin.getByText("RiC Zabrze")).toBeVisible();
+  await expect(admin.locator(".tiles").getByText("RiC Zabrze")).toBeVisible();
   await expect(admin.getByText("połączona")).toBeVisible(); // stan bazy
   await expectNoHorizontalScroll(admin);
 });

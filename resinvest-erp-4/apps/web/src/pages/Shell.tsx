@@ -9,6 +9,7 @@ export const NAV: ReadonlyArray<{ to: string; label: string; perm?: string }> = 
   { to: "/nowa-operacja", label: "Nowa operacja", perm: "receipts.create|issues.create|production.create" },
   { to: "/dokumenty", label: "Dokumenty", perm: "report.view" },
   { to: "/planer-zakupow", label: "Planer zakupów", perm: "report.view" },
+  { to: "/raporty", label: "Raporty", perm: "report.view" },
   { to: "/kartoteki", label: "Kartoteki", perm: "report.view" },
   { to: "/bilans-otwarcia", label: "Bilans otwarcia", perm: "opening.manage|opening.approve" },
   { to: "/uzytkownicy", label: "Użytkownicy", perm: "users.read" },

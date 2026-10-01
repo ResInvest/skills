@@ -248,6 +248,29 @@ div.field:has(> small.error) .ctrl, .extra-row:has(> small.error) .ctrl { border
 .corr-reason label { color: var(--warn); }
 .deleted-row td { color: var(--muted); }
 .nowrap { white-space: nowrap; }
+/* F6: raporty, eksport, pulpit */
+.export { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.export .alert { flex-basis: 100%; }
+.kpis { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.kpis li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); min-width: 0; }
+.kpis small { color: var(--muted); } .kpis strong { font-size: 1.15rem; overflow-wrap: anywhere; }
+.dash-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+.tile-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.tile-box h3 { margin: 0 0 8px; font-size: 1rem; }
+.kv-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.card-h .filters { margin: 0; }
+.card-h .filters .ctrl { width: auto; max-width: 100%; }
+.month-nav { display: inline-flex; align-items: center; gap: 6px; }
+.month-nav .ctrl { min-width: 0; width: 11em; }
+.table tfoot td, .table tr.total td { font-weight: 700; }
+@media (max-width: 960px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .dash-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .table-wrap:not(.matrix) .table tfoot { display: block; }
+  .table-wrap:not(.matrix) .table tfoot tr { display: block; border: 1px solid var(--line); border-radius: 10px; }
+  .table-wrap:not(.matrix) .table tfoot td { display: block; }
+  .table-wrap:not(.matrix) .table tfoot td:empty { display: none; }
+}
 .join { display: flex; gap: 6px; }
 .join .ctrl:first-child { flex: 1; min-width: 0; }
 .join select.ctrl { width: auto; flex: none; }

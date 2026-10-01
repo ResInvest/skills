@@ -27,14 +27,16 @@ import { OperationsService } from "./operations/operations.service.js";
 import { OperationsController } from "./operations/operations.controller.js";
 import { ChangesController } from "./operations/changes.controller.js";
 import { ChangesService } from "./operations/changes.service.js";
+import { ReportsController } from "./reports/reports.controller.js";
+import { ReportsService } from "./reports/reports.service.js";
 import { PlannerService } from "./planner/planner.service.js";
 import { PlannerController } from "./planner/planner.controller.js";
 
 @Module({
   imports: [ConfigModule, PrismaModule],
-  controllers: [HealthController, AuthController, UsersController, RolesController, WarehousesController, AuditController, StockController, OpeningController, CatalogController, OperationsController, ChangesController, PlannerController],
+  controllers: [HealthController, AuthController, UsersController, RolesController, WarehousesController, AuditController, StockController, OpeningController, CatalogController, OperationsController, ChangesController, PlannerController, ReportsController],
   providers: [
-    AuditService, MailService, SettingsService, SessionService, AuthService, UsersService, LedgerService, OpeningService, CatalogService, OperationsService, ChangesService, PlannerService,
+    AuditService, MailService, SettingsService, SessionService, AuthService, UsersService, LedgerService, OpeningService, CatalogService, OperationsService, ChangesService, PlannerService, ReportsService,
     { provide: APP_FILTER, useClass: ApiErrorFilter },
     // kolejność: sieć (LAN/VPN) → sesja → uprawnienia
     { provide: APP_GUARD, useClass: NetworkGuard },

@@ -7,6 +7,7 @@ import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog } from "../../ui/components";
 import { ColumnHelp, Hint, TutorialToggle } from "../../ui/tutorial";
+import { ExportButtons } from "../../ui/download";
 import { OP_HELP } from "./help";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
@@ -99,6 +100,7 @@ export function DocumentsPage() {
             </table>
           </div>
           <ColumnHelp id="docs-cols" items={DOC_COLUMNS} />
+          <ExportButtons label="Eksport rejestru (wg filtrów)" query={{ report: "documents", warehouseId: W.id, type: f.type || undefined, from: f.from || undefined, to: f.to || undefined, q: f.q || undefined, aux: f.aux ? "1" : undefined }} />
           <nav className="pager" aria-label="Strony">
             <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Poprzednia</button>
             <span>Strona {page} z {pages} · {q.data.total} dokumentów</span>
