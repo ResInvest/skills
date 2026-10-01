@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { autoNumber, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, PRODUCTION_DIFF_REASONS, KM_RATE_DEFAULT, type OperationInput, type TransportFleet, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
+import { autoNumber, eventsForDocuments, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, PRODUCTION_DIFF_REASONS, KM_RATE_DEFAULT, type OperationInput, type TransportFleet, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
 import { Prisma } from "../generated/prisma/client.js";
 import type { DocumentType } from "../generated/prisma/enums.js";
 import { AppError, badRequest, conflict, forbidden, notFound } from "../common/errors.js";
@@ -12,6 +12,7 @@ import { LedgerService, isNegativeStockViolation } from "../stock/ledger.service
 import { companyRates, materialUnits } from "../stock/materials.js";
 import { todayWarsaw } from "../opening/opening.service.js";
 import { SettingsService } from "../settings/settings.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 
 const PERM: Record<OperationInput["type"], string> = { PURCHASE: "receipts.create", SALE: "issues.create", PRODUCTION: "production.create", TRANSFER: "mm.create", DIRECT_SALE: "issues.create" };
 /** Rodzaj operacji w bazie: sprzedaż bezpośrednia to sprzedaż z produkcją w trybie DIRECT. */
@@ -28,7 +29,8 @@ const invalid = (errors: Array<{ field: string; message: string }>) => badReques
  */
 @Injectable()
 export class OperationsService {
-  constructor(private readonly db: PrismaService, private readonly ledger: LedgerService, private readonly audit: AuditService, private readonly settings: SettingsService) {}
+  constructor(private readonly db: PrismaService, private readonly ledger: LedgerService, private readonly audit: AuditService, private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService) {}
 
   /** Podgląd przed zatwierdzeniem: plan + numery + stan przed / po (bez zapisu, bez blokad). */
   async preview(actor: AuthUser, input: OperationInput) {
@@ -135,6 +137,14 @@ export class OperationsService {
         await this.audit.log(tx, actor, meta, { action: "OPERATION_CREATED", entity: "operation", entityId: op.id, warehouseId: plan.warehouseId,
           after: { rodzaj: plan.type, dokumenty: numbers, data: plan.date, kwoty: plan.totals, operacjeDodatkowe: plan.extras.length,
             ...(plan.transfer ? { magazynDocelowy: plan.transfer.targetWarehouseId, mm: plan.transfer.twoStage ? "dwuetapowe — w drodze" : "jednoetapowe — przyjęte" } : {}) } });
+        // powiadomienia — do kolejki poczty w tej samej transakcji (błąd poczty nie cofa operacji)
+        const whs = await tx.warehouse.findMany({ where: { id: { in: [plan.warehouseId, ...(plan.transfer ? [plan.transfer.targetWarehouseId] : [])] } }, select: { id: true, name: true } });
+        const whName = (id: string) => whs.find(w => w.id === id)?.name ?? "";
+        await this.notifications.notify(tx, actor, {
+          events: eventsForDocuments(plan.documents.map(d => d.type), plan.extras.length), warehouseIds: whs.map(w => w.id), numbers, path: "/dokumenty", ref: `operation:${op.id}`,
+          lines: [`Magazyn: ${whName(plan.warehouseId)}${plan.transfer ? ` → ${whName(plan.transfer.targetWarehouseId)}` : ""}`, `Data operacji: ${plan.date}`, `Dokumenty: ${numbers.join(", ")}`,
+            ...plan.summary, ...moneyLines(plan.totals), ...plan.extras.map(x => `Operacja dodatkowa: ${x.typeName} — ${x.cost} zł`)],
+        });
         return op.id;
       }, { timeout: 20_000 });
     } catch (e) {
@@ -303,6 +313,9 @@ export class OperationsService {
           reason: r.plan.reason, note: r.plan.note, weightT: r.plan.weightT, weightSource: r.plan.weightSource, idempotencyKey, createdById: actor.id,
         } });
         await tx.operation.update({ where: { id: op.id }, data: { transferState: "RECEIVED", version: { increment: 1 } } });
+        await this.notifications.notify(tx, actor, { events: ["STOCK_OPERATION"], warehouseIds: [op.warehouseId, op.targetWarehouse.id], numbers: [doc.number], path: "/dokumenty", ref: `operation:${op.id}`,
+          lines: [`Przyjęcie MM ${doc.number} w magazynie ${op.targetWarehouse.name}`, `Przyjęto: ${r.plan.qtyStock} (wysłano ${line.qtyStock.toString()})`, `Data przyjęcia: ${r.plan.date}`,
+            ...(r.plan.reason ? [`Różnica: ${r.plan.diffStock} — ${MM_DIFF_REASONS[r.plan.reason]}`] : [])] });
         await this.audit.log(tx, actor, meta, { action: "MM_RECEIVED", entity: "operation", entityId: op.id, warehouseId: op.targetWarehouse.id,
           before: { mm: "w drodze", wyslano: line.qtyStock.toString() },
           after: { mm: "przyjęte", dokument: doc.number, przyjeto: r.plan.qtyStock, roznica: r.plan.diffStock, przyczyna: r.plan.reason ? MM_DIFF_REASONS[r.plan.reason] : null, opis: r.plan.note, data: r.plan.date, tonaz: r.plan.weightT } });
@@ -429,6 +442,13 @@ export class OperationsService {
     if (errors.length || !r.ok) throw invalid(errors);
     return { plan: r.plan };
   }
+}
+
+/** Kwoty operacji do treści powiadomienia (tylko niezerowe). */
+function moneyLines(t: OperationPlan["totals"]): string[] {
+  const z = (v: string) => Number(v) !== 0;
+  return [z(t.purchaseCost) && `Wartość zakupu: ${t.purchaseCost} zł`, z(t.revenue) && `Przychód: ${t.revenue} zł`, z(t.chippingCost) && `Rąbanie: ${t.chippingCost} zł`,
+    z(t.transportCost) && `Transport: ${t.transportCost} zł`, z(t.additionalCost) && `Operacje dodatkowe: ${t.additionalCost} zł`].filter((x): x is string => !!x);
 }
 
 /** Rębak i operator produkcji — z pól produkcji na magazynie albo z sekcji produkcji zakupu / sprzedaży bezpośredniej. */

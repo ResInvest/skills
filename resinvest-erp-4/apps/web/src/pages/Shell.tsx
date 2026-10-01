@@ -15,6 +15,7 @@ export const NAV: ReadonlyArray<{ to: string; label: string; perm?: string }> = 
   { to: "/uzytkownicy", label: "Użytkownicy", perm: "users.read" },
   { to: "/role", label: "Role i uprawnienia", perm: "users.read" },
   { to: "/audyt", label: "Dziennik audytu", perm: "audit.read" },
+  { to: "/poczta", label: "Poczta", perm: "notifications.manage" },
   { to: "/konto", label: "Moje konto" },
 ];
 

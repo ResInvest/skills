@@ -1,5 +1,7 @@
 /** Szablony wiadomości (PL) z marką ResInvest ERP. Tekst + HTML (proste, czytelne w każdym kliencie poczty). */
-export type MailTemplate = "invite" | "password-reset" | "password-changed" | "account-disabled" | "self-registration";
+export type MailTemplate = "invite" | "password-reset" | "password-changed" | "account-disabled" | "self-registration" | "notification" | "test";
+/** Szablony z jednorazowym linkiem — ich treść jest usuwana z bazy także po porzuceniu wysyłki (DEAD). */
+export const LINK_TEMPLATES: ReadonlySet<string> = new Set(["invite", "password-reset"]);
 export interface RenderedMail { subject: string; text: string; html: string }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
@@ -24,6 +26,10 @@ export function renderMail(t: MailTemplate, d: Record<string, string>): Rendered
     case "password-reset": return layout("Reset hasła — ResInvest ERP", ["Otrzymaliśmy prośbę o zmianę hasła do Twojego konta.", `Link jest ważny ${d.minutes ?? "60"} minut i można go użyć tylko raz. Jeśli to nie Ty — zignoruj tę wiadomość; hasło pozostanie bez zmian.`], { label: "Ustaw nowe hasło", url: d.url ?? "" });
     case "password-changed": return layout("Hasło zostało zmienione", [`Hasło do konta ${d.email ?? ""} zostało zmienione ${d.when ?? ""}.`, "Jeśli to nie Ty — natychmiast skontaktuj się z administratorem systemu."]);
     case "account-disabled": return layout("Konto zostało wyłączone", [`Konto ${d.email ?? ""} w ResInvest ERP zostało ${d.status ?? "wyłączone"}.`, "W razie pytań skontaktuj się z administratorem systemu."]);
+    // powiadomienie o zdarzeniu: temat gotowy (z numerami dokumentów), linie „Pole: wartość” rozdzielone \n
+    case "notification": return { ...layout(d.title ?? "Powiadomienie", [`Dzień dobry ${d.name ?? ""},`, ...(d.lines ?? "").split("\n").filter(Boolean),
+      "Powiadomienia włączasz i wyłączasz w ResInvest ERP: Moje konto → Powiadomienia e-mail."], d.url ? { label: "Otwórz w ResInvest ERP", url: d.url } : undefined), subject: d.subject ?? d.title ?? "Powiadomienie" };
+    case "test": return layout("Wiadomość testowa — ResInvest ERP", [`Wysłano na prośbę: ${d.by ?? ""} (${d.when ?? ""}).`, `Kanał wysyłki: ${d.transport ?? ""}. Jeśli ją widzisz — poczta systemu działa.`]);
     case "self-registration": return layout("Nowe zgłoszenie konta", [`Zgłoszenie konta: ${d.name ?? ""} (${d.email ?? ""}).`, "Nadaj rolę i magazyny w module Użytkownicy albo odrzuć zgłoszenie."], d.url ? { label: "Otwórz Użytkowników", url: d.url } : undefined);
   }
 }

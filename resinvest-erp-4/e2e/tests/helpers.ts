@@ -40,6 +40,8 @@ export async function mailLink(to: string, path: "/aktywacja" | "/reset-hasla", 
   return found as string;
 }
 export const mailCount = (to: string): number => readMails().filter(m => m.to === to).length;
+/** Treści (text/plain) wiadomości do adresata, od najstarszej. */
+export const mailTexts = (to: string): string[] => readMails().filter(m => m.to === to).map(m => m.text);
 
 export async function login(page: Page, email: string, password: string): Promise<void> {
   await page.goto("/logowanie");

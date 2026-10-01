@@ -2,11 +2,11 @@ import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } f
 import { ENV, type Env } from "../config/env.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import type { Db } from "../prisma/tx.js";
-import { renderMail, type MailTemplate } from "./templates.js";
+import { LINK_TEMPLATES, renderMail, type MailTemplate } from "./templates.js";
 import { createTransport, type MailTransport } from "./transports.js";
 
 /** Odstępy kolejnych prób wysyłki (po błędzie): 1 min, 5 min, 15 min, 1 h, 6 h — potem DEAD. */
-const BACKOFF_MS = [60_000, 300_000, 900_000, 3_600_000, 21_600_000];
+export const BACKOFF_MS = [60_000, 300_000, 900_000, 3_600_000, 21_600_000];
 const SCRUBBED = { scrubbed: true, note: "Treść usunięta po wysyłce (zawierała jednorazowy link)" };
 
 /**
@@ -63,7 +63,8 @@ export class MailService implements OnModuleInit, OnModuleDestroy {
       const err = e instanceof Error ? e.message : String(e);
       const dead = m.attempts > BACKOFF_MS.length;
       await this.db.mailOutbox.update({ where: { id }, data: dead
-        ? { status: "DEAD", lastError: err.slice(0, 500), payload: SCRUBBED }
+        // porzucona wiadomość z jednorazowym linkiem traci treść; powiadomienie zostaje — administrator może je ponowić
+        ? { status: "DEAD", lastError: err.slice(0, 500), ...(LINK_TEMPLATES.has(m.template) ? { payload: SCRUBBED } : {}) }
         : { status: "FAILED", lastError: err.slice(0, 500), nextAttemptAt: new Date(Date.now() + (BACKOFF_MS[m.attempts - 1] ?? BACKOFF_MS.at(-1)!)) } });
       this.log.warn(`Wysyłka do ${m.toAddress} nieudana (próba ${m.attempts}): ${err}`);
     }

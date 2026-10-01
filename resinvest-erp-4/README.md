@@ -10,10 +10,10 @@ Windows (Tauri) — w sieci firmy lub przez FortiClient VPN.
 > F3 (silnik stanów: księga ruchów z blokadą, salda, karta materiału, bilans otwarcia z zatwierdzaniem)
 > F4a (kartoteki: materiały, kontrahenci, flota, rębaki własne i zewnętrzne, operacje dodatkowe)
 > F4b-1 (operacje z dokumentami: zakup PZ, sprzedaż WZ, produkcja RW + PW, operacje dodatkowe, rejestr dokumentów)
-> i F4b-2a (przesunięcia MM jedno- i dwuetapowe z przyjęciem w magazynie docelowym) ukończone. F4b-2b-1 (transport: własny, zewnętrzny, mieszany, kolej, dostawca; dokument TR) ukończone. F4b-2b-2 (zakup z produkcją i sprzedażą wyniku, sprzedaż bezpośrednia z lasu, pochodzenie i kwity) ukończone — faza F4b zamknięta. F4c (Planer zakupów: plan dzienny ręcznie, wykonanie / tony / ceny / transport / kursy kierowców z dokumentów) ukończone. F4d (prowadzenie w „Nowej operacji”: lista „Co jeszcze uzupełnić” z czerwonymi brakami, samouczek pod polami i kolumnami) ukończone. F5 (korekty BYŁO / JEST z odwróceniem i ponownym zaksięgowaniem ruchów, usuwanie z odwróceniem ruchów, historia zmian, zakładki Korekty / Edytowane / Usunięte) ukończone. F6 (raporty: obroty magazynowe z kontrolą spójności, zestawienie miesięczne i roczne, pulpit miesiąca z kaflem „Operacje dodatkowe”, eksport CSV / XLSX / PDF / DOCX) ukończone. Następna: F7 (powiadomienia).**
+> i F4b-2a (przesunięcia MM jedno- i dwuetapowe z przyjęciem w magazynie docelowym) ukończone. F4b-2b-1 (transport: własny, zewnętrzny, mieszany, kolej, dostawca; dokument TR) ukończone. F4b-2b-2 (zakup z produkcją i sprzedażą wyniku, sprzedaż bezpośrednia z lasu, pochodzenie i kwity) ukończone — faza F4b zamknięta. F4c (Planer zakupów: plan dzienny ręcznie, wykonanie / tony / ceny / transport / kursy kierowców z dokumentów) ukończone. F4d (prowadzenie w „Nowej operacji”: lista „Co jeszcze uzupełnić” z czerwonymi brakami, samouczek pod polami i kolumnami) ukończone. F5 (korekty BYŁO / JEST z odwróceniem i ponownym zaksięgowaniem ruchów, usuwanie z odwróceniem ruchów, historia zmian, zakładki Korekty / Edytowane / Usunięte) ukończone. F6 (raporty: obroty magazynowe z kontrolą spójności, zestawienie miesięczne i roczne, pulpit miesiąca z kaflem „Operacje dodatkowe”, eksport CSV / XLSX / PDF / DOCX) ukończone. F7 (powiadomienia e-mail: zdarzenia z operacji w kolejce poczty w tej samej transakcji, zgody administratora i wybór użytkownika, dziennik wysyłki z ponawianiem, wiadomość testowa) ukończone. Następna: F8 (klienci: PWA, aplikacja Windows, instalator).**
 > Wersja produkcyjna do dnia przełączenia to **ResInvest ERP 3.4** (`../resinvest-erp`).
 > Plan i decyzje: [`../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md`](../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md),
-> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md), [`docs/RAPORT_F4a.md`](docs/RAPORT_F4a.md), [`docs/RAPORT_F4b.md`](docs/RAPORT_F4b.md), [`docs/RAPORT_F4c.md`](docs/RAPORT_F4c.md), [`docs/RAPORT_F4d.md`](docs/RAPORT_F4d.md), [`docs/RAPORT_F5.md`](docs/RAPORT_F5.md), [`docs/RAPORT_F6.md`](docs/RAPORT_F6.md).
+> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md), [`docs/RAPORT_F4a.md`](docs/RAPORT_F4a.md), [`docs/RAPORT_F4b.md`](docs/RAPORT_F4b.md), [`docs/RAPORT_F4c.md`](docs/RAPORT_F4c.md), [`docs/RAPORT_F4d.md`](docs/RAPORT_F4d.md), [`docs/RAPORT_F5.md`](docs/RAPORT_F5.md), [`docs/RAPORT_F6.md`](docs/RAPORT_F6.md), [`docs/RAPORT_F7.md`](docs/RAPORT_F7.md).
 
 ## Architektura
 
@@ -116,7 +116,7 @@ resinvest-erp-4/
 ├── packages/domain/     reguły domenowe (przeliczniki, tonaż, liczby)
 ├── prisma/              schema.prisma + migrations/
 ├── deploy/nginx/        konfiguracja Nginx (TLS, nagłówki, limity, proxy)
-├── docs/                RAPORT_F1.md, RAPORT_F2.md, RAPORT_F3.md, RAPORT_F4a.md, RAPORT_F4b.md, RAPORT_F4c.md, RAPORT_F4d.md, RAPORT_F5.md, RAPORT_F6.md, prototypy/, WDROZENIE.md
+├── docs/                RAPORT_F1.md, RAPORT_F2.md, RAPORT_F3.md, RAPORT_F4a.md, RAPORT_F4b.md, RAPORT_F4c.md, RAPORT_F4d.md, RAPORT_F5.md, RAPORT_F6.md, RAPORT_F7.md, prototypy/, WDROZENIE.md
 ├── docker-compose.yml   środowisko testowe / serwer Linux
 ├── .env.example         wzór konfiguracji
 └── LICENSE

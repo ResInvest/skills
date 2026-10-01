@@ -8,6 +8,7 @@ import { Alert, Dialog, Field, fmtDateTime, StatusBadge, TextInput } from "../..
 import { SessionsTable, useWarehouses } from "../account/AccountPage";
 import { assignableRoles, useRoles, WarehousePicker } from "./UserForm";
 import { USERS_KEY } from "./UsersPage";
+import { NotificationSettings } from "../notifications/NotificationSettings";
 
 type Draft = Pick<UserRow, "firstName" | "lastName" | "warehouseIds" | "defaultWarehouseId"> & { roleCode: string; status: UserRow["status"] };
 const draftOf = (u: UserRow): Draft => ({ firstName: u.firstName, lastName: u.lastName, roleCode: u.role.code, warehouseIds: u.warehouseIds, defaultWarehouseId: u.defaultWarehouseId, status: u.status });
@@ -67,6 +68,12 @@ export function UserDetailPage() {
         <section className="card" aria-labelledby="a-h">
           <header className="card-h"><h2 id="a-h">Działania</h2></header>
           <div className="actions">{available.map(a => <button key={a} type="button" className={`btn ${a === "revoke-sessions" ? "danger" : ""}`} onClick={() => { setMsg(null); setConfirm(a); }}>{ACTIONS[a].label}</button>)}</div>
+        </section>
+      )}
+      {session.can("notifications.manage") && (
+        <section className="card" aria-labelledby="n-h">
+          <header className="card-h"><h2 id="n-h">Powiadomienia e-mail — zgody</h2></header>
+          <NotificationSettings mode="admin" userId={u.id} />
         </section>
       )}
       {manage && (

@@ -12,6 +12,7 @@ import type { Db } from "../prisma/tx.js";
 import { can, canAccessWarehouse, displayName, type AuthUser } from "../auth/auth-user.js";
 import { LedgerService, isNegativeStockViolation } from "../stock/ledger.service.js";
 import { chipperOf, OperationsService } from "./operations.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 
 const asDate = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
@@ -38,7 +39,8 @@ type Loaded = Prisma.OperationGetPayload<{ include: typeof LOAD }>;
  */
 @Injectable()
 export class ChangesService {
-  constructor(private readonly db: PrismaService, private readonly ops: OperationsService, private readonly ledger: LedgerService, private readonly audit: AuditService) {}
+  constructor(private readonly db: PrismaService, private readonly ops: OperationsService, private readonly ledger: LedgerService, private readonly audit: AuditService,
+    private readonly notifications: NotificationsService) {}
 
   /** Podgląd korekty: zmiany BYŁO / JEST i stan przed / po (netto) — bez zapisu. */
   async previewCorrection(actor: AuthUser, id: string, input: OperationInput, version: number) {
@@ -113,6 +115,10 @@ export class ChangesService {
         const cor = await tx.correction.create({ data: { operationId: op.id, number, reason: reason.trim(), createdById: actor.id, idempotencyKey } });
         await tx.documentRevision.createMany({ data: changes.map(c => ({ operationId: op.id, documentId: op.documents[0]?.id ?? null, correctionId: cor.id,
           field: c.field.slice(0, 80), before: c.before ?? Prisma.DbNull, after: c.after ?? Prisma.DbNull, reason: reason.trim(), createdById: actor.id })) });
+        await this.notifications.notify(tx, actor, { events: ["CORRECTION"], warehouseIds: [op.warehouseId, ...(op.targetWarehouseId ? [op.targetWarehouseId] : [])],
+          numbers: [number, ...op.documents.map(d => d.number)], path: "/dokumenty", ref: `operation:${op.id}`,
+          lines: [`Korekta ${number} dokumentów: ${op.documents.map(d => d.number).join(", ")}`, `Powód: ${reason.trim()}`,
+            ...changes.slice(0, 15).map(c => `${c.field}: ${c.before ?? "—"} → ${c.after ?? "—"}`), ...(changes.length > 15 ? [`… i ${changes.length - 15} innych zmian`] : [])] });
         await this.audit.log(tx, actor, meta, { action: "OPERATION_CORRECTED", entity: "operation", entityId: op.id, warehouseId: op.warehouseId, reason: reason.trim(),
           before: Object.fromEntries(changes.map(c => [c.field, c.before])), after: { korekta: number, dokumenty: op.documents.map(d => d.number), ...Object.fromEntries(changes.map(c => [c.field, c.after])) } });
       }, { timeout: 30_000 });
@@ -153,6 +159,9 @@ export class ChangesService {
         await tx.additionalOperation.updateMany({ where: { operationId: op.id, deletedAt: null }, data: { deletedAt: now } });
         await tx.documentRevision.create({ data: { operationId: op.id, documentId: op.documents[0]?.id ?? null, field: "Status", before: "zatwierdzona", after: "usunięta",
           reason: reason.trim(), createdById: actor.id } });
+        await this.notifications.notify(tx, actor, { events: ["DOCUMENT_DELETED"], warehouseIds: [op.warehouseId, ...(op.targetWarehouseId ? [op.targetWarehouseId] : [])],
+          numbers: op.documents.map(d => d.number), path: "/dokumenty", ref: `operation:${op.id}`,
+          lines: [`Usunięto dokumenty: ${op.documents.map(d => d.number).join(", ")} (data operacji ${isoDay(op.operationDate)})`, `Powód: ${reason.trim()}`, "Ruchy magazynowe zostały odwrócone."] });
         await this.audit.log(tx, actor, meta, { action: "OPERATION_DELETED", entity: "operation", entityId: op.id, warehouseId: op.warehouseId, reason: reason.trim(),
           before: { status: "zatwierdzona", dokumenty: op.documents.map(d => d.number), data: isoDay(op.operationDate) },
           after: { status: "usunięta", ruchyOdwrocone: reversals.length } });

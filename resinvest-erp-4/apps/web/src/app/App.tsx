@@ -19,6 +19,7 @@ import { CatalogPage } from "../pages/catalog/CatalogPage";
 import { DocumentsPage } from "../pages/documents/DocumentsPage";
 import { NewOperationPage } from "../pages/documents/NewOperationPage";
 import { ReportsPage } from "../pages/reports/ReportsPage";
+import { MailPage } from "../pages/notifications/MailPage";
 import { PlannerPage } from "../pages/planner/PlannerPage";
 
 /** Wymaga zalogowania; przy wymuszonej zmianie hasła pokazuje wyłącznie ekran zmiany hasła. */
@@ -67,6 +68,7 @@ export function AppRoutes() {
         <Route path="uzytkownicy/:id" element={<RequirePerm perm="users.read"><UserDetailPage /></RequirePerm>} />
         <Route path="role" element={<RequirePerm perm="users.read"><RolesPage /></RequirePerm>} />
         <Route path="audyt" element={<RequirePerm perm="audit.read"><AuditPage /></RequirePerm>} />
+        <Route path="poczta" element={<RequirePerm perm="notifications.manage"><MailPage /></RequirePerm>} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
