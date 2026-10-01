@@ -150,6 +150,33 @@ ul.plain { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px;
 fieldset.field { border: 0; padding: 0; margin: 0; }
 fieldset.field legend { font-weight: 600; margin-bottom: 4px; }
 
+/* ---- F4b: dokumenty PZ / WZ / MM (mocne kolory jak w 3.4.1), formularz operacji ---- */
+.badge.doc { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .03em; color: #fff; }
+.badge.doc-PZ { background: #15803D; }
+.badge.doc-WZ { background: #C2410C; }
+.badge.doc-MM { background: #1D4ED8; }
+.badge.doc-aux { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.table tr.doc-row td:first-child { border-left: 4px solid transparent; }
+.table tr.doc-row-PZ td:first-child { border-left-color: #15803D; }
+.table tr.doc-row-WZ td:first-child { border-left-color: #C2410C; }
+.table tr.doc-row-MM td:first-child { border-left-color: #1D4ED8; }
+.table tr.doc-row-aux td { opacity: .85; }
+.linkish { border: 0; background: none; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; min-height: 32px; }
+.linkish.doc { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9rem; font-weight: 700; }
+.op-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.op-layout > .card { margin-top: 12px; }
+.op-preview { position: sticky; top: 72px; }
+.join { display: flex; gap: 6px; }
+.join .ctrl:first-child { flex: 1; min-width: 0; }
+.join select.ctrl { width: auto; flex: none; }
+.extra-row { display: grid; grid-template-columns: 1.3fr 1.1fr .7fr .7fr .8fr 1.3fr auto; gap: 6px; align-items: start; margin-bottom: 8px; }
+.extra-row .error { grid-column: 1 / -1; }
+@media (max-width: 960px) {
+  .op-layout { grid-template-columns: minmax(0, 1fr); }
+  .op-preview { position: static; }
+  .extra-row { grid-template-columns: 1fr 1fr; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+}
+
 @media (max-width: 860px) {
   .btn.menu-btn { display: inline-flex; margin-left: auto; }
   .nav { display: none; order: 3; flex-basis: 100%; flex-direction: column; }

@@ -6,6 +6,8 @@ import { useSession } from "../auth/session";
 export const NAV: ReadonlyArray<{ to: string; label: string; perm?: string }> = [
   { to: "/", label: "Pulpit" },
   { to: "/stany", label: "Stany magazynowe", perm: "report.view" },
+  { to: "/nowa-operacja", label: "Nowa operacja", perm: "receipts.create|issues.create|production.create" },
+  { to: "/dokumenty", label: "Dokumenty", perm: "report.view" },
   { to: "/kartoteki", label: "Kartoteki", perm: "report.view" },
   { to: "/bilans-otwarcia", label: "Bilans otwarcia", perm: "opening.manage|opening.approve" },
   { to: "/uzytkownicy", label: "Użytkownicy", perm: "users.read" },

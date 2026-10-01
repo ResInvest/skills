@@ -23,12 +23,14 @@ import { OpeningService } from "./opening/opening.service.js";
 import { OpeningController } from "./opening/opening.controller.js";
 import { CatalogService } from "./catalog/catalog.service.js";
 import { CatalogController } from "./catalog/catalog.controller.js";
+import { OperationsService } from "./operations/operations.service.js";
+import { OperationsController } from "./operations/operations.controller.js";
 
 @Module({
   imports: [ConfigModule, PrismaModule],
-  controllers: [HealthController, AuthController, UsersController, RolesController, WarehousesController, AuditController, StockController, OpeningController, CatalogController],
+  controllers: [HealthController, AuthController, UsersController, RolesController, WarehousesController, AuditController, StockController, OpeningController, CatalogController, OperationsController],
   providers: [
-    AuditService, MailService, SettingsService, SessionService, AuthService, UsersService, LedgerService, OpeningService, CatalogService,
+    AuditService, MailService, SettingsService, SessionService, AuthService, UsersService, LedgerService, OpeningService, CatalogService, OperationsService,
     { provide: APP_FILTER, useClass: ApiErrorFilter },
     // kolejność: sieć (LAN/VPN) → sesja → uprawnienia
     { provide: APP_GUARD, useClass: NetworkGuard },
