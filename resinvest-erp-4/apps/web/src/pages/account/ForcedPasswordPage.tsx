@@ -8,7 +8,7 @@ export function ForcedPasswordPage() {
   const { user, logout } = useSession();
   return (
     <AuthLayout title="Wymagana zmiana hasła" footer={<button type="button" className="btn ghost sm" onClick={() => void logout()}>Wyloguj</button>}>
-      <Alert kind="warn">Administrator wymaga ustawienia nowego hasła dla konta <strong>{user?.email}</strong> przed dalszą pracą.</Alert>
+      <Alert kind="warn"><span>Administrator wymaga ustawienia nowego hasła dla konta <strong>{user?.email}</strong> przed dalszą pracą.</span></Alert>
       <ChangePasswordForm />
     </AuthLayout>
   );

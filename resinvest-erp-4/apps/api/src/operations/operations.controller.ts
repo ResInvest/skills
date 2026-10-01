@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
 import { z } from "zod";
-import type { OperationInput } from "@resinvest/domain";
+import type { OperationInput, ReceiptInput } from "@resinvest/domain";
 import { Meta, type RequestMeta } from "../common/request-meta.js";
 import { ZodPipe, zbody } from "../common/zod.pipe.js";
 import type { AuthUser } from "../auth/auth-user.js";
@@ -19,9 +19,15 @@ const Common = {
 const Input = z.discriminatedUnion("type", [
   z.object({ type: z.literal("PURCHASE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, priceUnit: unit.nullable().optional(), weightManual: val, ...Common }),
   z.object({ type: z.literal("SALE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, weightManual: val, ...Common }),
+  z.object({ type: z.literal("TRANSFER"), targetWarehouseId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, weightManual: val, ...Common }),
   z.object({ type: z.literal("PRODUCTION"), rawMaterialId: z.string().max(40), outMaterialId: z.string().max(40), outQty: val, chipperId: z.string().max(40).nullable().optional(), operatorId: z.string().max(40).nullable().optional(), chipRate: val, ...Common }),
 ], { message: "Wybierz rodzaj operacji" });
-const Create = z.object({ idempotencyKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/), operation: Input });
+const Key = z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/);
+const Create = z.object({ idempotencyKey: Key, operation: Input });
+const Receive = z.object({ idempotencyKey: Key, receipt: z.object({
+  date: z.string().max(10).nullable().optional(), qty: val, unit: unit.nullable().optional(), weightManual: val,
+  reason: z.string().max(40).nullable().optional(), note: z.string().max(300).nullable().optional(),
+}) });
 const RegisterQ = z.object({
   warehouseId: z.string().uuid("Wybierz magazyn"), type: z.enum(["PZ", "WZ", "MM", "RW", "PW", "TR", "BO", "IN"]).optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), q: z.string().max(100).optional(),
@@ -51,6 +57,17 @@ export class OperationsController {
   @Post("operations") @RequirePermissions("report.view")
   async create(@CurrentUser() u: AuthUser, @Body(zbody(Create)) dto: z.infer<typeof Create>, @Meta() meta: RequestMeta) {
     return { ok: true, operation: await this.svc.create(u, dto.operation as OperationInput, dto.idempotencyKey, meta) };
+  }
+
+  /** Przyjęcie MM dwuetapowego w magazynie docelowym (uprawnienie mm.receive i dostęp do magazynu docelowego — w serwisie). */
+  @Post("operations/:id/receive") @HttpCode(200) @RequirePermissions("report.view")
+  async receive(@CurrentUser() u: AuthUser, @Param("id", new ParseUUIDPipe()) id: string, @Body(zbody(Receive)) dto: z.infer<typeof Receive>, @Meta() meta: RequestMeta) {
+    return { ok: true, operation: await this.svc.receive(u, id, dto.receipt as ReceiptInput, dto.idempotencyKey, meta) };
+  }
+
+  @Get("transfers/in-transit") @RequirePermissions("report.view")
+  async inTransit(@CurrentUser() u: AuthUser, @Query(new ZodPipe(z.object({ warehouseId: z.string().uuid() }))) q: { warehouseId: string }) {
+    return { ok: true, transfers: await this.svc.inTransit(u, q.warehouseId) };
   }
 
   @Get("operations/:id") @RequirePermissions("report.view")

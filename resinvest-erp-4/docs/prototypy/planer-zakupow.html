@@ -162,8 +162,7 @@ dl.kv dd { margin: 0; }
   /* ---------------- stałe i formatowanie ---------------- */
   const TODAY = "2026-10-01";                // „dziś” prototypu = data historii przykładowej
   const RATE_T_PER_MP = 0.33;                // przelicznik firmowy ERP (konfiguracja 4.0)
-  const PLANNER_FACTOR = 0.63;               // współczynnik z obecnego planera (do decyzji)
-  const KM_RATE = 5;                         // zł/km — stawka domyślna transportu własnego
+    const KM_RATE = 5;                         // zł/km — stawka domyślna transportu własnego
   const MN = ["styczeń","luty","marzec","kwiecień","maj","czerwiec","lipiec","sierpień","wrzesień","październik","listopad","grudzień"];
   const DN = ["Pn","Wt","Śr","Cz","Pt","So","Nd"];
   const WH = [
@@ -467,8 +466,7 @@ dl.kv dd { margin: 0; }
     const row = (field, src, rule, status) => `<tr><td class="l">${field}</td><td class="l">${src}</td><td class="l">${rule}</td><td class="l">${status}</td></tr>`;
     const now = `<span class="pill ok">dostępne</span>`, soon = `<span class="pill warn">po F4b-2</span>`, man = `<span class="pill n">ręcznie</span>`, newT = `<span class="pill info">nowa tabela</span>`;
     $("#view").innerHTML = `
-      <div class="callout"><b>Do decyzji: przelicznik ton.</b> Obecny planer liczy ${String(PLANNER_FACTOR).replace(".", ",")} t/MP, a konfiguracja ERP ma ${String(RATE_T_PER_MP).replace(".", ",")} t/MP (1 MP = 0,33 t).
-        W prototypie tony biorą się z wagi kursu, a gdy kursu nie zważono — z przelicznika ERP. Jeden przelicznik firmowy dla całego systemu, zmieniany w konfiguracji z datą obowiązywania.</div>
+      <div class="callout"><b>Ustalone: przelicznik 0,33 t/MP.</b> Tony biorą się z wagi kursu, a gdy kursu nie zważono — z przelicznika firmowego ERP (1 MP = 0,33 t), zmienianego w konfiguracji z datą obowiązywania. Wartość 0,63 t/MP z dawnego planera nie jest używana.</div>
       <div class="card">
         <h2>Pola planera i ich źródło w ERP</h2>
         <div class="scroll"><table class="map">

@@ -46,6 +46,7 @@ test("2. zakup PZ: 100 m³ × 120 zł + praca ładowarką 2 h × 150 zł — pod
   await expect(live).toContainText("817 → 917");
   await expect(live).toContainText("12 000,00");
   await expect(live).toContainText("300,00");
+  await expectNoHorizontalScroll(mgr);
   await shot(mgr, "f4b-nowa-operacja-zakup");
   await mgr.locator("#op-next").click();
   const sum = mgr.locator("#op-summary");

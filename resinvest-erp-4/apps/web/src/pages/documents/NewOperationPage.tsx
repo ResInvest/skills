@@ -7,6 +7,7 @@ import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog } from "../../ui/components";
 import { useWorkWarehouse } from "../stock/StockPage";
+import { newKey } from "./idempotency";
 import { DocBadge, OperationDetail, type OperationView, pln } from "./OperationDetail";
 
 type Kind = OperationInput["type"];
@@ -20,6 +21,8 @@ interface FormData {
   balances: Record<string, string>;
   rates: CompanyRates;
   today: string;
+  warehouses: Array<{ id: string; code: string; name: string }>;
+  mmTwoStage: boolean;
 }
 interface Preview {
   plan: OperationPlan; numbers: string[];
@@ -32,12 +35,12 @@ const KINDS: ReadonlyArray<{ kind: Kind; label: string; doc: string; perm: strin
   { kind: "PURCHASE", label: "Zakup", doc: "PZ", perm: "receipts.create" },
   { kind: "SALE", label: "Sprzedaż z magazynu", doc: "WZ", perm: "issues.create" },
   { kind: "PRODUCTION", label: "Produkcja na magazynie", doc: "PW", perm: "production.create" },
+  { kind: "TRANSFER", label: "Przesunięcie", doc: "MM", perm: "mm.create" },
 ];
 const EMPTY = { partnerId: "", materialId: "", qty: "", unit: "" as Unit | "", price: "", priceUnit: "" as Unit | "", weightManual: "",
-  rawMaterialId: "", outMaterialId: "", outQty: "", chipperId: "", operatorId: "", chipRate: "",
+  targetWarehouseId: "", rawMaterialId: "", outMaterialId: "", outQty: "", chipperId: "", operatorId: "", chipRate: "",
   documentDate: "", externalNumber: "", notes: "", numberMode: "AUTO" as "AUTO" | "MANUAL", number: "" };
 let extraSeq = 0;
-const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `k${Date.now()}${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, "");
 
 /**
  * Nowa operacja: zakup (PZ), sprzedaż z magazynu (WZ), produkcja (RW + PW) z operacjami dodatkowymi.
@@ -76,11 +79,11 @@ export function NewOperationPage() {
     const unit = (f.unit || fd?.materials.find(m => m.id === f.materialId)?.stockUnit || "T") as Unit;
     if (type === "PURCHASE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, priceUnit: f.priceUnit || null, weightManual: f.weightManual };
     if (type === "SALE") return { type, ...base, partnerId: f.partnerId, materialId: f.materialId, qty: f.qty, unit, price: f.price, weightManual: f.weightManual };
-    return null; // MM — osobna zakładka (F4b-2)
+    return { type, ...base, targetWarehouseId: f.targetWarehouseId, materialId: f.materialId, qty: f.qty, unit, weightManual: f.weightManual };
   })();
 
   const local = !fd || !input ? null
-    : planOperation(input, { materials: new Map(fd.materials.map(m => [m.id, m])), extraTypes: new Map(fd.extraTypes.map(t => [t.id, t])), rates: fd.rates, today: fd.today });
+    : planOperation(input, { materials: new Map(fd.materials.map(m => [m.id, m])), extraTypes: new Map(fd.extraTypes.map(t => [t.id, t])), rates: fd.rates, today: fd.today, transferTwoStage: fd.mmTwoStage });
   const localErr = (field: string) => (tried && local && !local.ok ? local.errors.find(e => e.field === field)?.message : undefined);
   const fe = (field: string) => (serverErr instanceof ApiRequestError ? serverErr.field(field) : undefined) ?? localErr(field);
 
@@ -100,6 +103,7 @@ export function NewOperationPage() {
   const mats = fd?.materials.filter(m => m.active) ?? [];
   const mat = fd?.materials.find(m => m.id === f.materialId);
   const raw = fd?.materials.find(m => m.id === f.rawMaterialId);
+  const whName = (id: string) => fd?.warehouses.find(w => w.id === id)?.name ?? W.warehouses.find(w => w.id === id)?.name ?? "magazyn";
   const partners = (fd?.partners ?? []).filter(p => p.role === "BOTH" || p.role === (type === "PURCHASE" ? "SUPPLIER" : "BUYER"));
   const bal = (id: string) => fd?.balances[id] ?? "0";
   const docLabel = KINDS.find(k => k.kind === type)?.doc ?? "";
@@ -115,7 +119,7 @@ export function NewOperationPage() {
         {allowed.map(k => <button key={k.kind} type="button" role="tab" aria-selected={type === k.kind} className={type === k.kind ? "on" : ""} id={`op-tab-${k.kind}`}
           onClick={() => { setKind(k.kind); setTried(false); setPreview(null); setServerErr(null); }}>{k.label} <DocBadge type={k.doc} /></button>)}
       </div>
-      {created && <Alert kind="ok">Zapisano operację — dokumenty: <strong className="doc">{created.numbers.join(", ")}</strong>. <button type="button" className="linkish" id="op-created-open" onClick={() => setDetail(created.id)}>Pokaż szczegóły</button></Alert>}
+      {created && <Alert kind="ok"><span>Zapisano operację — dokumenty: <strong className="doc">{created.numbers.join(", ")}</strong>. <button type="button" className="linkish" id="op-created-open" onClick={() => setDetail(created.id)}>Pokaż szczegóły</button></span></Alert>}
       {form.isError ? <Alert kind="err">{errorText(form.error)}</Alert> : !fd ? <p className="muted">Wczytywanie…</p> : (
         <div className="op-layout">
           <form className="card form" id="op-form" noValidate onSubmit={e => { e.preventDefault(); next(); }}>
@@ -127,7 +131,45 @@ export function NewOperationPage() {
                 {fe("date") && <small className="error">{fe("date")}</small>}</div>
             </div>
 
-            {type !== "PRODUCTION" ? (
+            {type === "TRANSFER" ? (
+              <>
+                <Alert kind="info">{fd.mmTwoStage
+                  ? "MM dwuetapowe: zatwierdzenie zdejmuje towar ze stanu tego magazynu. Magazyn docelowy przyjmuje go w „Dokumenty → Do przyjęcia”, podając ilość faktycznie przyjętą."
+                  : "MM jednoetapowe: zatwierdzenie zdejmuje towar tutaj i od razu przyjmuje go w magazynie docelowym."}</Alert>
+                <div className="grid2">
+                  <div className="field"><label htmlFor="op-target">Magazyn docelowy <span className="req">*</span></label>
+                    <select id="op-target" className="ctrl" value={f.targetWarehouseId} onChange={e => set("targetWarehouseId", e.target.value)}>
+                      <option value="">— wybierz —</option>{fd.warehouses.filter(w => w.id !== W.id).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>{fe("targetWarehouseId") && <small className="error">{fe("targetWarehouseId")}</small>}</div>
+                  <div className="field"><label htmlFor="op-mat">Materiał <span className="req">*</span></label>
+                    <select id="op-mat" className="ctrl" value={f.materialId} onChange={e => { const m = fd.materials.find(x => x.id === e.target.value); setPreview(null); setF(s => ({ ...s, materialId: e.target.value, unit: m?.stockUnit ?? "" })); }}>
+                      <option value="">— wybierz —</option>{mats.map(m => <option key={m.id} value={m.id}>{m.name} (stan {formatQty(bal(m.id))} {UNIT_LABEL[m.stockUnit]})</option>)}
+                    </select>{fe("materialId") && <small className="error">{fe("materialId")}</small>}</div>
+                </div>
+                <div className="grid2">
+                  <div className="field"><label htmlFor="op-qty">Ilość <span className="req">*</span></label>
+                    <div className="join">
+                      <input id="op-qty" className="ctrl r" inputMode="decimal" placeholder="np. 120" value={f.qty} onChange={e => set("qty", e.target.value)} />
+                      <select className="ctrl" aria-label="Jednostka ilości" value={f.unit} disabled={!mat} onChange={e => set("unit", e.target.value)}>
+                        {(mat?.allowedUnits ?? ["T" as Unit]).map(u => <option key={u} value={u}>{UNIT_LABEL[u]}</option>)}</select>
+                    </div>{(fe("qty") ?? fe("unit")) && <small className="error">{fe("qty") ?? fe("unit")}</small>}</div>
+                  <div className="field"><label htmlFor="op-weight">Tonaż z wagi (t)</label>
+                    <input id="op-weight" className="ctrl r" inputMode="decimal" placeholder="puste = AUTO z przelicznika" value={f.weightManual} onChange={e => set("weightManual", e.target.value)} />
+                    {fe("weightManual") && <small className="error">{fe("weightManual")}</small>}</div>
+                </div>
+                <div className="grid2">
+                  <div className="field"><label htmlFor="op-numbering">Numer MM</label>
+                    <select id="op-numbering" className="ctrl" value={f.numberMode} onChange={e => set("numberMode", e.target.value)}>
+                      <option value="AUTO">Automatycznie (MM/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
+                    </select>
+                    {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label="Numer ręczny MM" maxLength={40} placeholder="np. MM 3/2026" value={f.number} onChange={e => set("number", e.target.value)} />}
+                    {fe("numbering.number") && <small className="error">{fe("numbering.number")}</small>}</div>
+                  <div className="field"><label htmlFor="op-ext">Nr dokumentu zewnętrznego</label>
+                    <input id="op-ext" className="ctrl" maxLength={60} placeholder="np. kwit wagowy" value={f.externalNumber} onChange={e => set("externalNumber", e.target.value)} />
+                    {fe("externalNumber") && <small className="error">{fe("externalNumber")}</small>}</div>
+                </div>
+              </>
+            ) : type !== "PRODUCTION" ? (
               <>
                 <div className="field"><label htmlFor="op-partner">{type === "PURCHASE" ? "Dostawca" : "Odbiorca"} <span className="req">*</span></label>
                   <select id="op-partner" className="ctrl" value={f.partnerId} onChange={e => set("partnerId", e.target.value)}>
@@ -250,11 +292,14 @@ export function NewOperationPage() {
             {!plan ? <p className="muted small">Uzupełnij pola — podgląd dokumentów i kwot pojawi się automatycznie.</p> : (
               <>
                 <ul className="plain">{plan.documents.map((d, i) => <li key={i}><DocBadge type={d.type} /> {d.lines.map(l => `${formatQty(l.qtyStock)} ${UNIT_LABEL[l.unitStock]}`).join(", ")}{d.type === "RW" ? " (zużycie)" : ""}</li>)}</ul>
-                {plan.summary.map((s, i) => <p key={i} className="num" data-summary>{s}</p>)}
+                {plan.summary.map((s, i) => <p key={i} className="summary" data-summary>{s}</p>)}
                 <ul className="plain small">{plan.movements.map((m, i) => {
-                  const mm = fd.materials.find(x => x.id === m.materialId); const after = Number(bal(m.materialId)) + Number(m.qty);
+                  const mm = fd.materials.find(x => x.id === m.materialId);
+                  if (m.warehouseId !== W.id) return <li key={i}>{mm?.name}: +{formatQty(m.qty)} {mm ? UNIT_LABEL[mm.stockUnit] : ""} w magazynie {whName(m.warehouseId)}</li>;
+                  const after = Number(bal(m.materialId)) + Number(m.qty);
                   return <li key={i}>{mm?.name}: {formatQty(bal(m.materialId))} → <span className={after < 0 ? "neg" : ""}>{formatQty(String(after))}</span> {mm ? UNIT_LABEL[mm.stockUnit] : ""}</li>;
-                })}</ul>
+                })}
+                {plan.transfer?.twoStage && <li>W drodze do: <strong>{whName(plan.transfer.targetWarehouseId)}</strong> (przyjęcie w magazynie docelowym)</li>}</ul>
                 <dl className="kv">
                   {Number(plan.totals.purchaseCost) > 0 && <><dt>Zakup</dt><dd className="num">{pln(plan.totals.purchaseCost)}</dd></>}
                   {Number(plan.totals.revenue) > 0 && <><dt>Przychód</dt><dd className="num">{pln(plan.totals.revenue)}</dd></>}
@@ -287,7 +332,12 @@ function ConfirmDialog({ preview, input, fd, onClose, onDone }: { preview: Previ
       onDone(r.operation);
     },
   });
-  const name = (k: string) => { const id = k.split("|")[1] ?? k; const m = fd.materials.find(x => x.id === id); return { name: m?.name ?? "materiał", unit: m ? UNIT_LABEL[m.stockUnit] : "" }; };
+  const multiWh = new Set(preview.steps.map(s => s.key.split("|")[0])).size > 1;
+  const name = (k: string) => {
+    const [wh, id] = k.split("|"); const m = fd.materials.find(x => x.id === id);
+    const w = fd.warehouses.find(x => x.id === wh)?.name;
+    return { name: `${m?.name ?? "materiał"}${multiWh && w ? ` — ${w}` : ""}`, unit: m ? UNIT_LABEL[m.stockUnit] : "" };
+  };
   const p = preview.plan;
   const blocked = preview.shortages.length > 0;
   return (
@@ -301,7 +351,7 @@ function ConfirmDialog({ preview, input, fd, onClose, onDone }: { preview: Previ
         {preview.shortages.map((s, i) => <Alert key={i} kind="err">{s.message}</Alert>)}
         <ul className="plain">{p.documents.map((d, i) => <li key={i}><DocBadge type={d.type} /> <strong className="doc" data-number>{preview.numbers[i]}</strong>
           {d.lines.map((l, j) => <span key={j}> — {formatQty(l.qtySource)} {UNIT_LABEL[l.unitSource]}{l.unitSource !== l.unitStock ? ` = ${formatQty(l.qtyStock)} ${UNIT_LABEL[l.unitStock]}` : ""}{l.value ? ` · ${pln(l.value)}` : ""}</span>)}</li>)}</ul>
-        {p.summary.map((s, i) => <p key={i} className="num">{s}</p>)}
+        {p.summary.map((s, i) => <p key={i} className="summary">{s}</p>)}
         <div className="table-wrap"><table className="table">
           <thead><tr><th>Materiał</th><th className="r">Przed</th><th className="r">Zmiana</th><th className="r">Po</th></tr></thead>
           <tbody>{preview.steps.map((s, i) => { const n = name(s.key); return (

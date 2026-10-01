@@ -13,7 +13,15 @@ export interface OperationView {
       weightT: string | null; weightSource: string | null; unitPrice: string | null; priceUnit: Unit | null; value: string | null }> }>;
   production: { consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string; chipper: string | null; operator: string | null } | null;
   extras: Array<{ id: string; type: string; vehicle: string | null; quantity: string | null; cost: string; description: string | null }>;
+  transfer: {
+    target: { id: string; code: string; name: string }; state: "IN_TRANSIT" | "RECEIVED" | null; twoStage: boolean;
+    receipt: { date: string; qty: string; unit: Unit; qtyStock: string; diffStock: string; reason: string | null; reasonLabel: string | null; note: string | null;
+      weightT: string | null; weightSource: string | null; createdAt: string; createdBy: string | null } | null;
+  } | null;
 }
+/** Stan MM: plakietka „w drodze” / „przyjęte”. */
+export const TransferState = ({ state }: { state: string | null | undefined }) =>
+  state === "IN_TRANSIT" ? <span className="badge warn">w drodze</span> : state === "RECEIVED" ? <span className="badge ok">przyjęte</span> : null;
 
 export const OP_LABEL: Record<string, string> = { PURCHASE: "Zakup", SALE: "Sprzedaż z magazynu", PRODUCTION: "Produkcja na magazynie", TRANSFER: "Przesunięcie MM", OPENING_BALANCE: "Bilans otwarcia", INVENTORY: "Inwentaryzacja" };
 export const pln = (v: string | number | null | undefined) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" }).format(Number(v ?? 0));
@@ -38,7 +46,16 @@ export function OperationDetail({ id, onClose }: { id: string; onClose: () => vo
             <dt>Utworzono</dt><dd>{fmtDateTime(op.createdAt)} · {op.createdBy ?? "—"}</dd>
             <dt>Status</dt><dd><span className="badge ok">{op.status === "POSTED" ? "zatwierdzony" : op.status}</span></dd>
             {op.notes && <><dt>Uwagi</dt><dd>{op.notes}</dd></>}
+            {op.transfer && <><dt>Przesunięcie</dt><dd id="op-transfer">{op.warehouse.name} → <strong>{op.transfer.target.name}</strong> <TransferState state={op.transfer.state} />
+              <small className="muted"> · {op.transfer.twoStage ? "dwuetapowe" : "jednoetapowe"}</small></dd></>}
           </dl>
+          {op.transfer?.receipt && (() => { const r = op.transfer.receipt, diff = Number(r.diffStock); return (
+            <Alert kind={diff === 0 ? "ok" : "warn"}>
+              <span id="op-receipt">Przyjęto {day(r.date)}: <strong className="num">{formatQty(r.qty)} {UNIT_LABEL[r.unit]}</strong>
+                {diff !== 0 && <> · {diff > 0 ? "ubytek" : "nadwyżka"} <strong className="num">{formatQty(Math.abs(diff).toString())}</strong> ({r.reasonLabel}{r.note ? ` — ${r.note}` : ""})</>}
+                {r.weightT && <> · {formatQty(r.weightT)} t {r.weightSource === "MANUAL" ? "RĘCZNY" : "AUTO"}</>}
+                {r.createdBy && <> · {r.createdBy}</>}</span>
+            </Alert>); })()}
           {op.documents.map(d => (
             <section key={d.id} className="card">
               <header className="card-h"><h2><DocBadge type={d.type} /> <span className="doc">{d.number}</span></h2>

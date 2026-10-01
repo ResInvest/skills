@@ -11,6 +11,8 @@ export const MANAGER = { email: "kierownik.zabrze@resinvest.group", first: "Karo
 /** Hasło kierownika po wymuszonej zmianie w scenariuszu 6 tożsamości (używane przez kolejne projekty testów). */
 export const MANAGER_NEW_PASSWORD = "Waga-Kontrola-Nowa-27";
 export const STOREKEEPER = { email: "magazynier.braszewice@resinvest.group", first: "Marek", last: "Magazynier", password: "Brasz-Suwnica-26" };
+/** Hasło magazyniera po resecie z e-maila w scenariuszu 8 tożsamości (używane przez kolejne projekty testów). */
+export const STOREKEEPER_NEW_PASSWORD = "Brasz-Suwnica-Nowa-27";
 
 export const adminLink = (): string => readFileSync(resolve(STATE, "admin-link.txt"), "utf8").trim();
 

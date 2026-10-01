@@ -36,7 +36,7 @@ export function UsersPage() {
         {can("users.manage") && <button type="button" className="btn primary" onClick={() => setInviting(true)}>Zaproś użytkownika</button>}
       </div>
       {info && <Alert kind="ok">{info}</Alert>}
-      {pending > 0 && <Alert kind="warn">Zgłoszenia rejestracji oczekujące na decyzję: <strong>{pending}</strong> (status „zaproszony”, oznaczenie „rejestracja”).</Alert>}
+      {pending > 0 && <Alert kind="warn"><span>Zgłoszenia rejestracji oczekujące na decyzję: <strong>{pending}</strong> (status „zaproszony”, oznaczenie „rejestracja”).</span></Alert>}
       <div className="filters" role="search">
         <input className="ctrl" type="search" placeholder="Szukaj: imię, nazwisko, e-mail" aria-label="Szukaj użytkownika" value={q} onChange={e => setQ(e.target.value)} />
         <select className="ctrl" aria-label="Status" value={status} onChange={e => setStatus(e.target.value as UserStatus | "")}>

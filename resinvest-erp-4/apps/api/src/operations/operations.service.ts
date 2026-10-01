@@ -298,7 +298,7 @@ export class OperationsService {
       const d = op.documents[0], l = d?.lines[0];
       return { operationId: op.id, number: d?.number ?? "", date: isoDay(op.operationDate), direction: op.targetWarehouseId === warehouseId ? "IN" as const : "OUT" as const,
         from: { id: op.warehouse.id, name: op.warehouse.name }, to: { id: op.targetWarehouse?.id ?? "", name: op.targetWarehouse?.name ?? "" },
-        material: l ? { id: l.material.id, name: l.material.name, stockUnit: l.material.stockUnit, allowedUnits: l.material.allowedUnits } : null,
+        material: l ? materialUnits(l.material) : null,
         qtySource: l?.qtySource.toString() ?? "0", unitSource: l?.unitSource ?? "T", qtyStock: l?.qtyStock.toString() ?? "0", weightT: l?.weightT?.toString() ?? null };
     });
   }

@@ -163,6 +163,10 @@ fieldset.field legend { font-weight: 600; margin-bottom: 4px; }
 .table tr.doc-row-aux td { opacity: .85; }
 .linkish { border: 0; background: none; padding: 0; color: var(--brand); text-decoration: underline; cursor: pointer; font: inherit; min-height: 32px; }
 .linkish.doc { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9rem; font-weight: 700; }
+.transit-row { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.transit-row:last-child { border-bottom: 0; }
+.mm-route { overflow-wrap: anywhere; }
+.summary { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 6px 0; }
 .op-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .op-layout > .card { margin-top: 12px; }
 .op-preview { position: sticky; top: 72px; }

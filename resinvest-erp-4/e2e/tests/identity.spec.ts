@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { ADMIN, adminLink, expectNoHorizontalScroll, login, mailCount, mailLink, MANAGER, MANAGER_NEW_PASSWORD, STOREKEEPER } from "./helpers";
+import { ADMIN, adminLink, expectNoHorizontalScroll, login, mailCount, mailLink, MANAGER, MANAGER_NEW_PASSWORD, STOREKEEPER, STOREKEEPER_NEW_PASSWORD } from "./helpers";
 
 /**
  * Faza F2 — tożsamość, scenariusze §34/§35 przeniesione z 3.x na prawdziwym stosie (PostgreSQL + API + build frontendu).
@@ -188,7 +188,7 @@ test("8. reset hasła z e-maila: ta sama odpowiedź dla nieistniejącego konta, 
 
   await p.goto(await mailLink(STOREKEEPER.email, "/reset-hasla", before));
   await expect(p.getByRole("heading", { name: "Ustaw nowe hasło" })).toBeVisible();
-  STOREKEEPER.password = "Brasz-Suwnica-Nowa-27";
+  STOREKEEPER.password = STOREKEEPER_NEW_PASSWORD;
   await p.getByLabel(/^Nowe hasło/).fill(STOREKEEPER.password);
   await p.getByLabel(/^Powtórz hasło/).fill(STOREKEEPER.password);
   await p.getByRole("button", { name: "Zapisz hasło" }).click();

@@ -75,6 +75,49 @@ Scenariusz E2E „dokumenty”:
 9. audyt u administratora;
 10. telefon 390 px.
 
-## 3. Następny krok — F4b-2
-Przesunięcia MM (jedno- i dwuetapowe, przyjęcie w magazynie docelowym, tonaż), transport, sprzedaż bezpośrednia,
-zakup z produkcją.
+## 3. F4b-2a — przesunięcia MM (2026-10-01)
+
+### Reguły (domena)
+* `planOperation` typ **TRANSFER**: dokument MM z jedną pozycją (ilość w dowolnej dozwolonej jednostce → jednostka
+  magazynowa, tonaż AUTO z przelicznika 0,33 t/MP albo RĘCZNY z wagi), numer automatyczny `MM/NNN/MM/RRRR` albo ręczny.
+  * **dwuetapowe** (ustawienie `mm.mode = two`, domyślne): rozchód `TRANSFER_OUT` w źródle, stan „w drodze”,
+  * **jednoetapowe** (`mm.mode = one`): rozchód w źródle i przychód `TRANSFER_IN` w celu jednym zatwierdzeniem.
+  * ten sam magazyn / brak celu / ilość 0 — błędy przy polach.
+* `planReceipt` (port `planReceive` z 3.x): ilość przyjęta (puste = cała wysłana), data nie wcześniejsza niż wysłanie
+  i nie z przyszłości, **przy różnicy przyczyna** (ubytek w transporcie, różnica pomiaru, wilgotność, uszkodzenie,
+  nadwyżka, inna — „inna” i przyjęcie zerowe wymagają opisu), tonaż AUTO / RĘCZNY.
+
+### API
+* `POST /operations` z `type: "TRANSFER"` — uprawnienie `mm.create`, dostęp do magazynu źródłowego, cel aktywny,
+  przy MM jednoetapowym sprawdzany zamknięty okres w celu.
+* `POST /operations/:id/receive` — uprawnienie `mm.receive` i dostęp do **magazynu docelowego**; blokada wiersza
+  operacji (`SELECT … FOR UPDATE`) — z równoczesnych przyjęć skuteczne jest dokładnie jedno; klucz idempotencji
+  (powtórzenie zwraca operację bez drugiego ruchu); zapis `transfer_receipts`, stan `RECEIVED`, audyt `MM_RECEIVED`.
+* `GET /transfers/in-transit?warehouseId` — MM w drodze do magazynu (do przyjęcia) i z magazynu (wysłane).
+* MM widać w rejestrze **obu** magazynów (z trasą i stanem); szczegóły operacji dostępne także dla magazynu docelowego.
+
+### Interfejs
+* Nowa operacja → zakładka **Przesunięcie MM** (magazyn docelowy, materiał ze stanem, ilość, tonaż z wagi, numer
+  automatyczny / ręczny, operacje dodatkowe); podgląd: stan źródła przed → po i „W drodze do …”.
+* Dokumenty → sekcja **Do przyjęcia** (przycisk „Przyjmij” tylko z uprawnieniem; bez niego informacja, kto przyjmuje),
+  okno przyjęcia z podglądem różnicy i przyczyną; wiersz MM: „Zabrze → Brąszewice” + „w drodze / przyjęte”.
+* Szczegóły operacji: trasa, tryb, przyjęcie (data, ilość, różnica, przyczyna, tonaż, kto).
+
+### Poprawki przy okazji
+* Podsumowanie przed zapisem: tabela stanów pokazywała „materiał” zamiast nazwy (zły separator klucza salda).
+* Długie zdania podglądu nie zawijały się (strona szersza niż ekran) — wykryte testem E2E, poprawione.
+* Komunikaty z pogrubieniem w treści (rejestracje oczekujące, wymuszona zmiana hasła, zapis operacji) rozbijały się
+  na osobne wiersze — poprawione.
+
+### Testy (uruchomione 2026-10-01)
+| Zestaw | Wynik |
+|---|---|
+| domena | 45 / 45 (MM: 3, przyjęcie: 4) |
+| API (PostgreSQL) | 117 / 117, w tym MM 11 / 11 (dwuetapowe z różnicą, idempotencja, równoczesne przyjęcia, jednoetapowe, uprawnienia, izolacja magazynów, spójność sald) |
+| web | 17 / 17 |
+| E2E | 39 / 39, w tym MM 5 / 5 (wysłanie, rejestr Zabrza, konto bez prawa przyjęcia, przyjęcie z ubytkiem, stany obu magazynów, telefon) |
+
+## 4. Następny krok — F4b-2b
+Transport (własny, zewnętrzny, mieszany, kolej, „zapewnia dostawca”; kursy, kwity, km × stawka, fracht, dokument TR),
+zakup z produkcją (i sprzedażą wyniku), sprzedaż bezpośrednia (produkcja w lesie → odbiorca). Następnie F4c — Planer zakupów
+(decyzja 2026-10-01; przelicznik 0,33 t/MP).
