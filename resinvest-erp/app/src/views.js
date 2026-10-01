@@ -35,7 +35,9 @@
   /** Status operacji / dokumentu z uwzględnieniem usunięcia (soft delete). */
   const opStatusBadge = o => o && o.deleted ? `<span class="badge err" data-deleted="1">${th("USUNIĘTY")}</span>` : statusBadge(o.status);
   /** Typ dokumentu z kolorem: PZ — zielony, WZ — złoty, MM — niebieski, PW / RW — marka, KOR / AN — ostrzegawcze. */
-  const docBadge = ty => `<span class="badge doc-badge doc-${esc(ty)}">${esc(ty)}</span>`;
+  /** Dokumenty główne — wyróżnione mocnym kolorem (PZ zielony, WZ pomarańczowo-złoty, MM niebieski); pozostałe neutralnie. */
+  const MAIN_DOCS = ["PZ", "WZ", "MM"];
+  const docBadge = ty => `<span class="badge doc-badge ${MAIN_DOCS.includes(ty) ? "doc-" + esc(ty) : "doc-aux"}">${esc(ty)}</span>`;
   const extrasTotal = op => R.round((op.extras || []).reduce((a, x) => a + x.cost, 0), 2);
   const extraLine = x => `${x.typeName}${x.reg ? ` (${x.reg})` : ""}: ${money(x.cost)}${x.qty !== null && x.qty !== undefined && x.rate !== null && x.rate !== undefined && x.costBasis === "qtyRate" ? ` (${fmtQ(x.qty)} × ${fmt(x.rate)} zł)` : ""}${x.desc ? " — " + x.desc : ""}`;
   const tonLine = s => s && s.weightT != null ? `${fmtQ(s.qty)} ${Units.label(s.unit)} | ${fmt(s.weightT, 2)} t | ${t(R.WEIGHT_SOURCES[s.weightMode] || "AUTO")}` : "";
@@ -652,6 +654,8 @@
         const q = f.q.trim().toLowerCase(), wh = App.user().whId;
         return allDocuments(Store.state).filter(d => {
           if (d.deleted && !f.showDeleted && f.status !== "DELETED") return false;
+          // domyślnie tylko dokumenty główne PZ / WZ / MM; pomocnicze (PW, RW, TR, KOR, AN…) po zaznaczeniu
+          if (!f.showAux && !MAIN_DOCS.includes(d.type) && f.type !== d.type) return false;
           if (cfg.types && !cfg.types.includes(d.type)) return false;
           const inWh = d.whId === wh || (d.type === "MM" && d.toWhId === wh);
           if (!inWh) return false;
@@ -665,6 +669,8 @@
         const rows = this.filtered();
         const S = Store.state;
         const opOf = d => d.opId ? R.byId(S.operations, d.opId) : null;
+        const auxTypes = (cfg.typeOptions || []).map(([v]) => v).filter(v => !MAIN_DOCS.includes(v)), hasAux = auxTypes.length > 0;
+        const typeOpts = (cfg.typeOptions || []).filter(([v]) => f.showAux || MAIN_DOCS.includes(v) || f.type === v);
         const primary = d => d.opId && ["PZ", "WZ", "PW", "MM"].includes(d.type) && !(d.type === "PW" && opOf(d) && opOf(d).type !== "PRODUKCJA");
         const canCorr = op => op && op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && R.canAccessWh(App.user(), op.whId);
         const canDel = op => op && op.status !== "CANCELLED" && !op.deleted && App.can("documents.delete") && R.canAccessWh(App.user(), op.whId);
@@ -676,11 +682,12 @@
             <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="reg-xlsx">${ic("dl", 15)} XLSX</button></div></div>
           ${cfg.pre ? cfg.pre() : ""}
           <div class="card"><div class="toolbar">
-            ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${cfg.typeOptions.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
+            ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${typeOpts.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
             <div class="field"><label for="r-status">${th("Status")}</label><select class="ctrl" id="r-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED", "DELETED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(statusText(s))}</option>`).join("")}</select></div>
             <div class="field"><label for="r-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="r-ym" value="${esc(f.ym)}"></div>
             ${searchInput("r-q", f.q, t("numer, kontrahent, miejsce…"))}
-            <label class="inline-opt"><input type="checkbox" id="r-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label></div>
+            <label class="inline-opt"><input type="checkbox" id="r-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label>
+            ${hasAux ? `<label class="inline-opt"><input type="checkbox" id="r-aux" ${f.showAux ? "checked" : ""}> ${esc(t("Pokaż dokumenty pomocnicze ({l})", { l: auxTypes.join(", ") }))}</label>` : ""}</div>
             ${rows.length ? `<div class="tbl-wrap"><table class="tbl sticky-act" id="docs-table"><thead><tr><th>${th("Nr dokumentu")}</th><th>${th("Typ")}</th><th>${th("Data")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th><th>${th("Kontrahent")}</th><th>${th("Miejsce transportu")}</th><th>${th("Wpływ na stan")}</th><th>${th("Status")}</th><th><span class="sr-only">${th("Akcje")}</span></th></tr></thead><tbody>
               ${rows.map((d, i) => `<tr class="doc-row doc-row-${esc(d.type)} ${d.status === "CANCELLED" ? "void" : ""}" data-docno="${esc(d.no)}"><td class="mono nowrap"><b>${esc(d.no)}</b>${d.manualNo ? ` <small class="dim" title="${th("numer wpisany ręcznie")}">✎</small>` : ""}</td><td>${docBadge(d.type)}</td><td class="nowrap">${esc(Dates.pl(d.date))}${d.docDate && d.docDate !== d.date ? `<br><small class="dim">${esc(t("dok. {d}", { d: Dates.pl(d.docDate) }))}</small>` : ""}</td>
                 <td>${esc(docContent(d))}</td><td class="r nowrap">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td>
@@ -695,6 +702,7 @@
         const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
         on("#r-type", "type"); on("#r-status", "status"); on("#r-ym", "ym");
         const rd = $("#r-deleted", page); if (rd) rd.onchange = e => { f.showDeleted = e.target.checked; App.render(); };
+        const ra = $("#r-aux", page); if (ra) ra.onchange = e => { f.showAux = e.target.checked; if (!f.showAux && f.type && !MAIN_DOCS.includes(f.type)) f.type = ""; App.render(); };
         $$("[data-del]", page).forEach(b => b.onclick = () => DeleteDialog.open(b.dataset.del));
         const rx = $("#reg-xlsx", page); if (rx) rx.onclick = () => xlsxTable(`${cfg.id}_${App.today()}`, t(cfg.title), [t("Nr dokumentu"), t("Typ"), t("Data operacji"), t("Data dokumentu"), t("Treść"), t("Ilość"), t("Jednostka"), t("Tonaż t"), t("Źródło tonażu"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja"), t("Utworzono"), t("Użytkownik")],
           rows.map(d => [d.no, d.type, d.date, d.docDate || d.date, docContent(d), num(d.qty), d.unit ? Units.label(d.unit) : "", num(d.weightT), d.type === "WZ" ? t(R.WEIGHT_SOURCES[d.weightMode] || "AUTO") : "", num(d.value), d.partner || "", d.place || "", d.stock, statusText(d.deleted ? "DELETED" : d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || "", d.createdAt ? Dates.ts(d.createdAt, true) : "", d.userName || ""]), App.whName(App.user().whId));
@@ -730,7 +738,7 @@
   Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], pre: mmTransitPanel,
     desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym. W trybie dwuetapowym towar jest „w drodze” do czasu przyjęcia MM przez magazyn docelowy."),
     buttons: [{ label: N_("Nowe przesunięcie MM"), href: "#/nowa?preset=mm", primary: true }] });
-  Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie / usunięcie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
+  Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie / usunięcie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
     desc: N_("Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie, usunięcie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje w historii. Akcje: Otwórz, Podgląd, Koryguj, Usuń."),
     buttons: [] });
 

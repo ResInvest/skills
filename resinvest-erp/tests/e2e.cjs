@@ -374,7 +374,9 @@ async function fillForestDirect(page) {
 
     /* ------------- dokumenty, rejestry ------------- */
     await go(page, "dokumenty");
+    await page.check("#r-aux"); await page.waitForTimeout(150); // KOR / AN to dokumenty pomocnicze (od 3.4.1 domyślnie ukryte)
     check("Dokumenty: kolumna Status i dokumenty KOR / AN", (await page.$$eval("#docs-table thead th", t => t.map(x => x.textContent))).includes("Status") && nb(await page.textContent("#docs-table")).includes("KOR/") && nb(await page.textContent("#docs-table")).includes("AN/"));
+    await page.uncheck("#r-aux"); await page.waitForTimeout(150);
     await page.click("#docs-table [data-view] >> nth=0"); await page.waitForSelector("#doc-preview");
     const pdfD = await downloadPdf(page, "#doc-preview [data-pdf]", "dok.pdf");
     check("Dokument: PDF pojedynczego dokumentu", pdfD.structural);
@@ -735,22 +737,37 @@ async function fillForestDirect(page) {
     await page.selectOption("#f-sale-weightMode", "manual"); await page.waitForSelector("#f-sale-weightManual");
     await fillTab(page, "#f-sale-weightManual", "20,35");
     check("3.4 Sprzedaż: linia „60 MP | 20,35 t | RĘCZNY”", (await out(page, "sale.tonLine")) === "60 MP | 20,35 t | RĘCZNY", await out(page, "sale.tonLine"));
+    check("3.4.1 Numeracja WZ: lista „Automatycznie / Ręcznie”, domyślnie automatycznie", (await page.inputValue("#f-docNoMode-WZ")) === "auto" && !(await page.$("#f-docNos-WZ")) && (await page.$$eval("#f-docNoMode-WZ option", o => o.map(x => x.value).join(","))) === "auto,manual");
+    await page.selectOption("#f-docNoMode-WZ", "manual"); await page.waitForSelector("#f-docNos-WZ");
     await fillTab(page, "#f-docNos-WZ", "WZ/27");
     await fillTab(page, "#f-docDate", "2026-09-22");
+    check("3.4.1 Sprzedaż z magazynu: sekcja operacji dodatkowych dostępna", !!(await page.$("#f-extras-enabled")));
+    await tick(page, "f-extras-enabled"); await page.waitForSelector("#f-extras-items-0-typeId");
+    await page.selectOption("#f-extras-items-0-typeId", "xt_holowanie"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-extras-items-0-cost", "150");
     check("3.4 Sprzedaż z ręcznym numerem WZ zapisana", (await approve(page)) === 1);
     const wz = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1), d = o.documents.find(x => x.type === "WZ"); return { id: o.id, no: d.no, docDate: d.docDate, mode: d.weightMode, w: o.sale.weightT }; });
     check("3.4 WZ: numer ręczny WZ/27, data dokumentu 22.09, tonaż RĘCZNY 20,35 t", wz.no === "WZ/27" && wz.docDate === "2026-09-22" && wz.mode === "manual" && wz.w === 20.35, wz);
+    check("3.4.1 WZ: operacja dodatkowa zapisana przy sprzedaży (150 zł)", await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return o.extras.length === 1 && o.totals.extraCost === 150; }));
     await preset(page, "wz");
     await page.selectOption("#f-sale-productId", "pr_zr_lesna"); await page.waitForTimeout(100);
     await fillTab(page, "#f-sale-qty", "10"); await page.fill("#f-sale-price", "90"); await page.selectOption("#f-sale-buyerId", "pa_ec_zab"); await page.waitForTimeout(100);
+    await page.selectOption("#f-docNoMode-WZ", "manual"); await page.waitForSelector("#f-docNos-WZ");
     await fillTab(page, "#f-docNos-WZ", "wz/27");
     check("3.4 Numer WZ/27 drugi raz w magazynie i roku — odrzucony", (await msg(page, "docNos.WZ")).includes("już użyty"), await msg(page, "docNos.WZ"));
     // rejestr dokumentów: akcje, kolory, eksport XLSX
     await go(page, "dokumenty"); await page.waitForTimeout(150);
     check("3.4 Rejestr dokumentów: akcje Otwórz / Podgląd / Koryguj / Usuń", await allExist(page, ["[data-corr]", "[data-del]"]) && nb(await page.textContent("#page")).includes("Podgląd"));
     check("3.4 Rejestr: PZ i WZ oznaczone kolorem (klasy dokumentu)", !!(await page.$("tr.doc-row-WZ .doc-badge.doc-WZ")) && !!(await page.$("tr.doc-row-PZ .doc-badge.doc-PZ")));
-    const pzColor = await page.$eval(".doc-badge.doc-PZ", e => getComputedStyle(e).color), wzColor = await page.$eval(".doc-badge.doc-WZ", e => getComputedStyle(e).color);
-    check("3.4 Rejestr: PZ i WZ w różnych kolorach", pzColor !== wzColor, { pzColor, wzColor });
+    const bg = sel => page.$eval(sel, e => getComputedStyle(e).backgroundColor);
+    const pzColor = await bg(".doc-badge.doc-PZ"), wzColor = await bg(".doc-badge.doc-WZ"), mmColor = await bg(".doc-badge.doc-MM");
+    check("3.4.1 Rejestr: PZ, WZ, MM w różnych, mocnych kolorach (pełne tło)", new Set([pzColor, wzColor, mmColor]).size === 3 && pzColor === "rgb(21, 128, 61)", { pzColor, wzColor, mmColor });
+    const types = await page.$$eval("#docs-table tbody tr td:nth-child(2)", t => [...new Set(t.map(x => x.textContent.trim()))].sort().join(","));
+    check("3.4.1 Rejestr: domyślnie tylko PZ, WZ, MM", types.split(",").every(x => ["PZ", "WZ", "MM"].includes(x)), types);
+    await page.check("#r-aux"); await page.waitForTimeout(200);
+    const types2 = await page.$$eval("#docs-table tbody tr td:nth-child(2)", t => [...new Set(t.map(x => x.textContent.trim()))]);
+    check("3.4.1 Rejestr: „Pokaż dokumenty pomocnicze” dodaje PW / RW / TR (szare)", ["PW", "RW", "TR"].every(x => types2.includes(x)) && !!(await page.$(".doc-badge.doc-aux")), types2);
+    await page.uncheck("#r-aux"); await page.waitForTimeout(150);
     const [dlx] = await Promise.all([page.waitForEvent("download"), page.click("#reg-xlsx")]);
     const xfile = path.join(TMP, "rejestr.xlsx"); await dlx.saveAs(xfile);
     const xb = fs.readFileSync(xfile);

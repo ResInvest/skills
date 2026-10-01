@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.4.0";
+  const VERSION = "3.4.1";
   const SCHEMA = 8;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -546,7 +546,7 @@
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
       extras: { enabled: false, items: [blankExtra()] },
-      docNos: { PZ: "", WZ: "" }, docDate: "",
+      docNos: { PZ: "", WZ: "", MM: "" }, docNoMode: { PZ: "auto", WZ: "auto", MM: "auto" }, docDate: "",
       notes: "", extDoc: ""
     };
   }
@@ -1103,11 +1103,10 @@
 
     /* ---------- operacje dodatkowe (holowanie, praca ładowarką…): osobne rekordy z kosztem ----------
        Rodzaj z kartoteki „Dodatkowe operacje”, opcjonalnie pojazd z Floty. Koszt = kwota albo ilość × stawka
-       (stawka domyślna z kartoteki). Dotyczy operacji z produkcją. Nie zmienia stanu magazynowego.            */
+       (stawka domyślna z kartoteki). Dostępne w każdej operacji (zakup, sprzedaż, produkcja, MM). Nie zmienia stanu. */
     const XS = draft.extras || {};
     if (XS.enabled) {
       const corr = !!(ctx && ctx.correction);
-      if (!norm.production) err("extras.enabled", t("Operacje dodatkowe dodaje się do produkcji — wybierz „Produkcja na magazynie” albo zaznacz produkcję"));
       const items = Array.isArray(XS.items) ? XS.items : [];
       if (!items.length) err("extras.items", t("Dodaj co najmniej jedną operację dodatkową"));
       if (items.length > MAX_EXTRAS) err("extras.items", t("Maksymalnie {n} operacji dodatkowych w jednej operacji", { n: MAX_EXTRAS }));
@@ -1137,13 +1136,17 @@
       totals.extraCost = round(norm.extras.reduce((a, x) => a + x.cost, 0), 2);
     }
 
-    /* ---------- numery PZ / WZ (ręczne z podpowiedzią albo automatyczne) i data dokumentu ----------
-       Numer ręczny jest unikalny w obrębie typu, magazynu i roku. Korekta nie zmienia numeru dokumentu.     */
-    const DN = draft.docNos || {};
-    for (const ty of ["PZ", "WZ"]) {
+    /* ---------- numery PZ / WZ / MM (tryb z listy: automatyczny albo ręczny) i data dokumentu ----------
+       Numer ręczny jest unikalny w obrębie typu, magazynu i roku. Korekta nie zmienia numeru dokumentu.
+       Bez wybranego trybu (starsze szkice): wpisany numer = ręczny, puste pole = automatyczny.            */
+    const DN = draft.docNos || {}, DM = draft.docNoMode || {};
+    for (const ty of DOC_NO_TYPES) {
+      if (!documents.some(d => d.type === ty) || (ctx && ctx.correction)) continue;
+      const mode = docNoModeOf(draft, ty), K = `docNos.${ty}`;
+      if (DM[ty] && !NO_MODES[DM[ty]]) { err(`docNoMode.${ty}`, t("Wybierz sposób numeracji")); continue; }
+      if (mode !== "manual") continue;
       const want = str(DN[ty]).replace(/\s+/g, " ");
-      if (!want || !documents.some(d => d.type === ty) || (ctx && ctx.correction)) continue;
-      const K = `docNos.${ty}`;
+      if (!want) { err(K, t("Wpisz numer dokumentu albo wybierz numerację automatyczną")); continue; }
       if (want.length > 40 || !/^[\p{L}0-9][\p{L}0-9 /._-]*$/u.test(want)) err(K, t("Numer dokumentu: litery, cyfry oraz znaki / . - _ (do 40 znaków)"));
       else if (whId && Dates.isISO(date) && docNoTaken(state, ty, whId, date.slice(0, 4), want)) err(K, t("Numer {no} jest już użyty w magazynie {w} w roku {y}", { no: want, w: wh ? wh.name : "", y: date.slice(0, 4) }), "DOC_NO");
       else norm.docNos[ty] = want;
@@ -1152,7 +1155,7 @@
     if (docDate && !Dates.isISO(docDate)) err("docDate", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (docDate && docDate > today) err("docDate", t("Data dokumentu nie może być z przyszłości"));
     norm.docDate = docDate && Dates.isISO(docDate) ? docDate : (Dates.isISO(date) ? date : "");
-    documents.forEach(d => { if (d.type === "PZ" || d.type === "WZ") { d.docDate = norm.docDate; if (norm.docNos[d.type]) d.manualNo = norm.docNos[d.type]; } });
+    documents.forEach(d => { if (DOC_NO_TYPES.includes(d.type)) { d.docDate = norm.docDate; if (norm.docNos[d.type]) d.manualNo = norm.docNos[d.type]; } });
 
     /* ---------- symulacja sald krok po kroku (magazyn × produkt) ---------- */
     postings.forEach((p, i) => { p.step = i + 1; p.doc = KINDS[p.kind].doc; });
@@ -1184,6 +1187,15 @@
     state.seq[k] = (state.seq[k] || 0) + 1;
     return `${type}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
   }
+  /** Dokumenty z wyborem numeracji (automatyczna / ręczna). */
+  const DOC_NO_TYPES = ["PZ", "WZ", "MM"];
+  const NO_MODES = { auto: N_("Automatycznie"), manual: N_("Ręcznie") };
+  /** Tryb numeracji dokumentu w szkicu: wybrany z listy albo (starsze szkice) „ręczny”, gdy wpisano numer. */
+  function docNoModeOf(draft, ty) {
+    const m = draft && draft.docNoMode && draft.docNoMode[ty];
+    if (m === "auto" || m === "manual") return m;
+    return draft && draft.docNos && str(draft.docNos[ty]) ? "manual" : "auto";
+  }
   const normNo = no => String(no == null ? "" : no).replace(/\s+/g, "").toUpperCase();
   /** Czy numer dokumentu danego typu jest już użyty w magazynie w danym roku (numer ręczny lub automatyczny). */
   function docNoTaken(state, type, whId, year, no) {
@@ -1193,7 +1205,7 @@
   /** Kolejny numer automatyczny — z pominięciem numerów wpisanych ręcznie. */
   function autoNo(state, type, date, whId) {
     let no = nextNo(state, type, date), guard = 0;
-    while (whId && (type === "PZ" || type === "WZ") && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
+    while (whId && DOC_NO_TYPES.includes(type) && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
     return no;
   }
   /** Podpowiedź numeru (bez rezerwacji) — pokazywana w formularzu przy polu numeru PZ / WZ. */
@@ -2388,7 +2400,9 @@
       const ops = (opsIn || state.operations).filter(op => (!whId || op.whId === whId) && op.date >= from && op.date <= to && opLiveAt(op, to) && Array.isArray(op.extras) && op.extras.length);
       const rows = [];
       for (const op of ops) for (const x of op.extras) {
-        const doc = op.type === "PRODUKCJA" ? (op.documents.find(d => d.type === "PW") || {}).no : op.no;
+        // dokument główny operacji: PZ (zakup), WZ (sprzedaż), MM (przesunięcie), PW (produkcja)
+        const main = ["PZ", "WZ", "MM", "PW"].map(ty => op.documents.find(d => d.type === ty)).find(Boolean);
+        const doc = main ? main.no : op.no;
         rows.push({ id: x.id, opId: op.id, date: op.date, typeId: x.typeId, typeName: x.typeName, vehicleName: x.vehicleName || "", reg: x.reg || "", whId: op.whId, whName: (byId(state.warehouses, op.whId) || {}).name || "",
           docNo: doc || op.no, opNo: op.no, opType: op.type, qty: x.qty, unit: x.unit, rate: x.rate, cost: x.cost, desc: x.desc || "", status: op.status });
       }
@@ -2448,7 +2462,7 @@
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
-    CHIPPER_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    CHIPPER_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,

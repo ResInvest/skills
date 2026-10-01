@@ -1,5 +1,14 @@
 # TASKS — ResInvest ERP
 
+## 3.4.1 — zgłoszenie po 3.4.0
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| operacje dodatkowe w każdej operacji (zakup, sprzedaż, produkcja, MM) | DONE | `features34.test` „3.4.1: operacje dodatkowe w każdej operacji…”, E2E „3.4.1 WZ: operacja dodatkowa…” |
+| rejestry: typy zminimalizowane do PZ, WZ, MM; pozostałe pod „Pokaż dokumenty pomocnicze” | DONE | E2E „3.4.1 Rejestr: domyślnie tylko PZ, WZ, MM” |
+| mocniejsze kolory PZ / WZ / MM | DONE | E2E „3.4.1 Rejestr: PZ, WZ, MM w różnych, mocnych kolorach” |
+| lista rozwijana numeracji: automatycznie / ręcznie dla PZ, WZ, MM | DONE | `features34.test` „3.4.1: numeracja z listy…”, E2E „3.4.1 Numeracja WZ…” |
+
 ## 3.4.0 — operacje dodatkowe, rębaki zewnętrzne, tonaż, numery ręczne, usuwanie, XLSX/DOCX
 
 | Kryterium | Status | Dowód |

@@ -107,6 +107,17 @@ Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z
 | E2E OFFLINE | 187/187 |
 | E2E FIRMOWY | 24/24 |
 
+## 3.4.1 — operacje dodatkowe w każdej operacji, numeracja z listy (PZ/WZ/MM), rejestry PZ/WZ/MM (2026-10-01)
+
+| Zestaw | Wynik |
+|---|---|
+| `npm run check`, `npm run i18n`, `npm run themes` | OK · CS/EN 0 braków / 0 nieużywanych |
+| unit (engine, features34, pdf, platform) | 127/127 (2 nowe testy: operacje dodatkowe w PZ/WZ/MM, tryby numeracji i numer ręczny MM) |
+| server + auth | 35/35 |
+| E2E OFFLINE (`e2e.cjs`) | 234/234 (nowe: lista numeracji, operacja dodatkowa w WZ, kolory PZ/WZ/MM, dokumenty pomocnicze) |
+| E2E FIRMOWY (`e2e-server.cjs`) | 24/24 |
+| Instalator 3.4.1 | Inno Setup 6.4.1 (Wine): instalacja / aktualizacja cicha — OK. Prawdziwy Windows — NIEPOTWIERDZONE |
+
 ## 3.4.0 — operacje dodatkowe, rębaki zewnętrzne, tonaż AUTO/RĘCZNY, numery ręczne, usuwanie, XLSX/DOCX (2026-10-01)
 
 | Zestaw | Wynik |

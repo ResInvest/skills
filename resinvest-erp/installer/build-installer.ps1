@@ -67,4 +67,4 @@ if (-not $iscc) { throw "Nie znaleziono ISCC.exe (Inno Setup 7 lub 6). Pobierz: 
 Write-Host "Kompilator: $iscc"
 & $iscc "installer\ResInvestERP.iss"
 if ($LASTEXITCODE -ne 0) { throw "Kompilacja instalatora nieudana" }
-Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.4.0.exe"
+Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.4.1.exe"

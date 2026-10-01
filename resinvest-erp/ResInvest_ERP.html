@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="description" content="ResInvest ERP 3.3 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
-<meta name="generator" content="ResInvest ERP build 3.4.0 · 2026-10-01">
+<meta name="generator" content="ResInvest ERP build 3.4.1 · 2026-10-01">
 <title>ResInvest ERP</title>
 <script>
 /* Przed pierwszym malowaniem: motyw (bez „mignięcia” jasnego tła) i decyzja o intro (ekran z pierwszą klatką filmu). */
@@ -655,16 +655,20 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
 .badge.role-audytor{background:var(--warn-soft);color:var(--warn)}
 
 /* ---- 3.4: dokumenty PZ/WZ, akcje w wierszach, operacje dodatkowe ---- */
-.badge.doc-badge{font-family:var(--mono,ui-monospace,monospace);letter-spacing:.02em}
-.badge.doc-PZ,.badge.doc-PW{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok-line)}
-.badge.doc-WZ{background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-strong)}
-.badge.doc-MM,.badge.doc-TR{background:var(--info-soft);color:var(--info);border:1px solid var(--info-line)}
-.badge.doc-RW{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line)}
-.badge.doc-KOR{background:var(--warn-soft);color:var(--warn)} .badge.doc-AN{background:var(--err-soft);color:var(--err)}
-.tbl tr.doc-row-PZ td:first-child,.tbl tr.doc-row-PW td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
-.tbl tr.doc-row-WZ td:first-child{box-shadow:inset 3px 0 0 var(--gold-strong)}
-.tbl tr.doc-row-MM td:first-child,.tbl tr.doc-row-TR td:first-child{box-shadow:inset 3px 0 0 var(--info)}
-.tbl tr.doc-row-AN td:first-child{box-shadow:inset 3px 0 0 var(--err)}
+.badge.doc-badge{font-family:var(--mono,ui-monospace,monospace);letter-spacing:.04em;font-weight:800;min-width:38px;justify-content:center}
+/* dokumenty główne — mocne, pełne kolory (biały tekst, kontrast ≥ 4,5:1) */
+.badge.doc-PZ{background:#15803D;color:#fff;border:1px solid #116B33}
+.badge.doc-WZ{background:#C2410C;color:#fff;border:1px solid #A3360A}
+.badge.doc-MM{background:#1D4ED8;color:#fff;border:1px solid #1940B4}
+/* dokumenty pomocnicze (PW, RW, TR, KOR, AN, IN, BO) — neutralnie, jak dawniej */
+.badge.doc-aux{background:var(--surface-3);color:var(--text-2);border:1px solid var(--border)}
+.tbl tr.doc-row-PZ td:first-child{box-shadow:inset 5px 0 0 #15803D}
+.tbl tr.doc-row-WZ td:first-child{box-shadow:inset 5px 0 0 #C2410C}
+.tbl tr.doc-row-MM td:first-child{box-shadow:inset 5px 0 0 #1D4ED8}
+.tbl tr.doc-row-PZ td:first-child b{color:#15803D} .tbl tr.doc-row-WZ td:first-child b{color:#C2410C} .tbl tr.doc-row-MM td:first-child b{color:#1D4ED8}
+[data-theme="graphite"] .tbl tr.doc-row-PZ td:first-child b,[data-theme="azure"] .tbl tr.doc-row-PZ td:first-child b,[data-theme="ultra"] .tbl tr.doc-row-PZ td:first-child b{color:#4ADE80}
+[data-theme="graphite"] .tbl tr.doc-row-WZ td:first-child b,[data-theme="azure"] .tbl tr.doc-row-WZ td:first-child b,[data-theme="ultra"] .tbl tr.doc-row-WZ td:first-child b{color:#FB923C}
+[data-theme="graphite"] .tbl tr.doc-row-MM td:first-child b,[data-theme="azure"] .tbl tr.doc-row-MM td:first-child b,[data-theme="ultra"] .tbl tr.doc-row-MM td:first-child b{color:#7AA7FF}
 .tbl tr.doc-row[data-deleted="1"],.tbl tr.doc-row.is-deleted{opacity:.62}
 .row-actions{display:flex;flex-wrap:nowrap;gap:4px;justify-content:flex-end}
 @media (max-width:900px){.row-actions{flex-wrap:wrap}}
@@ -3173,7 +3177,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "nieaktywna": ["neaktivní", "inactive"],
   "Nieaktywna pozycja nie pojawia się w nowych operacjach; historia zostaje.": ["Neaktivní položka se nezobrazuje v nových operacích; historie zůstává.", "An inactive item does not appear in new operations; history is kept."],
   "Dodatkowe operacje": ["Doplňkové operace", "Additional operations"],
-  "Kartoteka rodzajów operacji dodatkowych (np. holowanie, podgarnianie pryzm, praca ładowarką). Wybierasz je w produkcji po zaznaczeniu „Dodaj operację dodatkową”. Pozycji użytych w dokumentach nie usuwa się — tylko dezaktywuje.": ["Číselník druhů doplňkových operací (např. odtah, shrnování hromad, práce nakladače). Vybíráte je ve výrobě po zaškrtnutí „Přidat doplňkovou operaci“. Položky použité v dokladech se nemažou — pouze deaktivují.", "Catalogue of additional operation types (e.g. towing, pile pushing, loader work). You select them in production after ticking “Add an additional operation”. Items used in documents are not deleted — only deactivated."],
   "Nowa operacja dodatkowa": ["Nová doplňková operace", "New additional operation"],
   "Stawka domyślna": ["Výchozí sazba", "Default rate"],
   "Użycia": ["Použití", "Uses"],
@@ -3249,7 +3252,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
   /* --- operacje dodatkowe w formularzu i silniku --- */
   "Schemat 7 → 8: operacje dodatkowe i ich kartoteka, rębaki firm zewnętrznych, ręczne numery PZ/WZ, tonaż ręczny w sprzedaży, usuwanie dokumentów": ["Schéma 7 → 8: doplňkové operace a jejich číselník, štěpkovače externích firem, ruční čísla PZ/WZ, ruční tonáž při prodeji, mazání dokladů", "Schema 7 → 8: additional operations and their catalogue, external company chippers, manual PZ/WZ numbers, manual sale tonnage, document deletion"],
-  "Operacje dodatkowe dodaje się do produkcji — wybierz „Produkcja na magazynie” albo zaznacz produkcję": ["Doplňkové operace se přidávají k výrobě — zvolte „Výroba na skladě“ nebo zaškrtněte výrobu", "Additional operations are added to production — choose “Production at the warehouse” or tick production"],
   "Dodaj co najmniej jedną operację dodatkową": ["Přidejte alespoň jednu doplňkovou operaci", "Add at least one additional operation"],
   "Maksymalnie {n} operacji dodatkowych w jednej operacji": ["Nejvýše {n} doplňkových operací v jedné operaci", "At most {n} additional operations in one operation"],
   "Wybierz rodzaj operacji dodatkowej": ["Vyberte druh doplňkové operace", "Select the additional operation type"],
@@ -3260,7 +3262,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "Podaj koszt (kwotę) albo ilość i stawkę": ["Zadejte náklad (částku) nebo množství a sazbu", "Enter the cost (amount) or quantity and rate"],
   "Operacje dodatkowe": ["Doplňkové operace", "Additional operations"],
   "Koszt operacji dodatkowych": ["Náklad doplňkových operací", "Additional operations cost"],
-  "<b>Co:</b> prace towarzyszące produkcji, np. holowanie, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia.": ["<b>Co:</b> práce související s výrobou, např. odtah, shrnování hromad, práce nakladače. Každá položka je samostatný záznam s nákladem — druh vybíráte z číselníku <b>Doplňkové operace</b>, vozidlo (volitelně) z <b>Vozového parku</b>. Náklad snižuje výsledek operace; zásoba skladu se nemění.", "<b>What:</b> work accompanying production, e.g. towing, pile pushing, loader work. Each item is a separate record with a cost — the type comes from the <b>Additional operations</b> catalogue, the vehicle (optional) from the <b>Fleet</b>. The cost reduces the operation result; warehouse stock does not change."],
   "Operacja dodatkowa {n}": ["Doplňková operace {n}", "Additional operation {n}"],
   "Usuń pozycję {n}": ["Odebrat položku {n}", "Remove item {n}"],
   "Rodzaj operacji (Kartoteki → Dodatkowe operacje)": ["Druh operace (Číselníky → Doplňkové operace)", "Operation type (Master data → Additional operations)"],
@@ -3272,7 +3273,6 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "Koszt (zł)": ["Náklad (zł)", "Cost (PLN)"],
   "kwota albo ilość × stawka": ["částka nebo množství × sazba", "amount or quantity × rate"],
   "Holowanie rębaka z drogi leśnej": ["Odtah štěpkovače z lesní cesty", "Towing the chipper from a forest road"],
-  "Prace towarzyszące produkcji z kosztem — np. holowanie, podgarnianie pryzm, praca ładowarką.": ["Práce související s výrobou s nákladem — např. odtah, shrnování hromad, práce nakladače.", "Work accompanying production with a cost — e.g. towing, pile pushing, loader work."],
   "Dodaj operację dodatkową": ["Přidat doplňkovou operaci", "Add an additional operation"],
   "Rodzaj z kartoteki, opcjonalnie pojazd z floty, koszt i opis. Każda pozycja jest osobnym zapisem powiązanym z tą operacją.": ["Druh z číselníku, volitelně vozidlo z vozového parku, náklad a popis. Každá položka je samostatný záznam navázaný na tuto operaci.", "Type from the catalogue, optionally a vehicle from the fleet, cost and description. Each item is a separate record linked to this operation."],
   "Dodaj kolejną operację dodatkową": ["Přidat další doplňkovou operaci", "Add another additional operation"],
@@ -3288,12 +3288,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "Numer {no} jest już użyty w magazynie {w} w roku {y}": ["Číslo {no} je již použito ve skladu {w} v roce {y}", "Number {no} is already used in warehouse {w} in {y}"],
   "Data dokumentu nie może być z przyszłości": ["Datum dokladu nemůže být v budoucnosti", "The document date cannot be in the future"],
   "Data dokumentu": ["Datum dokladu", "Document date"],
-  "<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku.": ["<b>Co:</b> číslo PZ z dokladu (zadejte ručně, např. <b>PZ/11</b>). Prázdné = číslo přidělené automaticky (návrh vedle). Číslo musí být ve skladu v daném roce jedinečné.", "<b>What:</b> the PZ number from the document (enter manually, e.g. <b>PZ/11</b>). Empty = number assigned automatically (suggestion alongside). The number must be unique in the warehouse within the year."],
-  "<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku.": ["<b>Co:</b> číslo WZ (zadejte ručně, např. <b>WZ/27</b>). Prázdné = číslo přidělené automaticky (návrh vedle). Číslo musí být ve skladu v daném roce jedinečné.", "<b>What:</b> the WZ number (enter manually, e.g. <b>WZ/27</b>). Empty = number assigned automatically (suggestion alongside). The number must be unique in the warehouse within the year."],
   "<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data operacji. <b>Data operacji</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system.": ["<b>Co:</b> datum vystavení dokladu (např. datum z dokladu dodavatele). Prázdné = datum operace. <b>Datum operace</b> je den příjmu / výdeje zboží; datum a čas vytvoření záznamu ukládá systém.", "<b>What:</b> the document issue date (e.g. the date on the supplier's document). Empty = operation date. The <b>operation date</b> is the day goods are received / issued; the system stores the date and time the entry was created."],
   "Nr {t}": ["Č. {t}", "{t} no."],
   "Nr {t} (ręcznie)": ["Č. {t} (ručně)", "{t} no. (manual)"],
-  "np. {x} — puste: {s}": ["např. {x} — prázdné: {s}", "e.g. {x} — empty: {s}"],
   "Podpowiedź: <b>{s}</b>": ["Návrh: <b>{s}</b>", "Suggestion: <b>{s}</b>"],
   "użyj": ["použít", "use"],
   "Numery dokumentów": ["Čísla dokladů", "Document numbers"],
@@ -3343,6 +3340,22 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   "anulowanie / usunięcie": ["storno / smazání", "cancellation / deletion"],
   "Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie, usunięcie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje w historii. Akcje: Otwórz, Podgląd, Koryguj, Usuń.": ["Všechny doklady aktivního skladu se sloupcem Stav. Storno, smazání a oprava vytvářejí nové doklady (AN, KOR) — původní doklad zůstává v historii. Akce: Otevřít, Náhled, Opravit, Smazat.", "All documents of the active warehouse with a Status column. Cancellation, deletion and correction create new documents (AN, KOR) — the original document remains in the history. Actions: Open, Preview, Correct, Delete."],
 
+  /* --- 3.4.1: numeracja automatyczna / ręczna (PZ, WZ, MM), operacje dodatkowe w każdej operacji, dokumenty pomocnicze --- */
+  "Kartoteka rodzajów operacji dodatkowych (np. holowanie, podgarnianie pryzm, praca ładowarką). Wybierasz je w każdej operacji (zakup, sprzedaż, produkcja, MM) po zaznaczeniu „Dodaj operację dodatkową”. Pozycji użytych w dokumentach nie usuwa się — tylko dezaktywuje.": ["Číselník druhů doplňkových operací (např. odtah, shrnování hromad, práce nakladače). Vybíráte je v každé operaci (nákup, prodej, výroba, MM) po zaškrtnutí „Přidat doplňkovou operaci“. Položky použité v dokladech se nemažou — pouze deaktivují.", "Catalogue of additional operation types (e.g. towing, pile pushing, loader work). You select them in every operation (purchase, sale, production, MM) after ticking “Add an additional operation”. Items used in documents are not deleted — only deactivated."],
+  "Wybierz sposób numeracji": ["Vyberte způsob číslování", "Select the numbering method"],
+  "Wpisz numer dokumentu albo wybierz numerację automatyczną": ["Zadejte číslo dokladu nebo zvolte automatické číslování", "Enter the document number or choose automatic numbering"],
+  "Automatycznie": ["Automaticky", "Automatic"],
+  "Ręcznie": ["Ručně", "Manual"],
+  "<b>Co:</b> prace towarzyszące operacji (zakup, sprzedaż, produkcja, MM), np. holowanie, rozładunek, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia.": ["<b>Co:</b> práce související s operací (nákup, prodej, výroba, MM), např. odtah, vykládka, shrnování hromad, práce nakladače. Každá položka je samostatný záznam s nákladem — druh vybíráte z číselníku <b>Doplňkové operace</b>, vozidlo (volitelně) z <b>Vozového parku</b>. Náklad snižuje výsledek operace; zásoba skladu se nemění.", "<b>What:</b> work accompanying the operation (purchase, sale, production, MM), e.g. towing, unloading, pile pushing, loader work. Each item is a separate record with a cost — the type comes from the <b>Additional operations</b> catalogue, the vehicle (optional) from the <b>Fleet</b>. The cost reduces the operation result; warehouse stock does not change."],
+  "<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Numer musi być unikalny w magazynie w danym roku.": ["<b>Co:</b> číslo PZ z dokladu (zadejte ručně, např. <b>PZ/11</b>). Číslo musí být ve skladu v daném roce jedinečné.", "<b>What:</b> the PZ number from the document (enter manually, e.g. <b>PZ/11</b>). The number must be unique in the warehouse within the year."],
+  "<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Numer musi być unikalny w magazynie w danym roku.": ["<b>Co:</b> číslo WZ (zadejte ručně, např. <b>WZ/27</b>). Číslo musí být ve skladu v daném roce jedinečné.", "<b>What:</b> the WZ number (enter manually, e.g. <b>WZ/27</b>). The number must be unique in the warehouse within the year."],
+  "<b>Co:</b> numer MM (wpisz ręcznie, np. <b>MM/5</b>). Numer musi być unikalny w magazynie źródłowym w danym roku.": ["<b>Co:</b> číslo MM (zadejte ručně, např. <b>MM/5</b>). Číslo musí být ve zdrojovém skladu v daném roce jedinečné.", "<b>What:</b> the MM number (enter manually, e.g. <b>MM/5</b>). The number must be unique in the source warehouse within the year."],
+  "Prace towarzyszące operacji z kosztem — np. holowanie, rozładunek, podgarnianie pryzm, praca ładowarką.": ["Práce související s operací s nákladem — např. odtah, vykládka, shrnování hromad, práce nakladače.", "Work accompanying the operation with a cost — e.g. towing, unloading, pile pushing, loader work."],
+  "Numeracja {t}": ["Číslování {t}", "{t} numbering"],
+  "Automatycznie — {s}": ["Automaticky — {s}", "Automatic — {s}"],
+  "Ręcznie — wpisz numer": ["Ručně — zadejte číslo", "Manual — enter the number"],
+  "Pokaż dokumenty pomocnicze ({l})": ["Zobrazit pomocné doklady ({l})", "Show supporting documents ({l})"],
+
   /* --- eksport XLSX / DOCX --- */
   "Eksport XLSX: {title}": ["Export XLSX: {title}", "XLSX export: {title}"],
   "Eksport DOCX: {title}": ["Export DOCX: {title}", "DOCX export: {title}"],
@@ -3384,7 +3397,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.4.0";
+  const VERSION = "3.4.1";
   const SCHEMA = 8;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -3905,7 +3918,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
       extras: { enabled: false, items: [blankExtra()] },
-      docNos: { PZ: "", WZ: "" }, docDate: "",
+      docNos: { PZ: "", WZ: "", MM: "" }, docNoMode: { PZ: "auto", WZ: "auto", MM: "auto" }, docDate: "",
       notes: "", extDoc: ""
     };
   }
@@ -4462,11 +4475,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
     /* ---------- operacje dodatkowe (holowanie, praca ładowarką…): osobne rekordy z kosztem ----------
        Rodzaj z kartoteki „Dodatkowe operacje”, opcjonalnie pojazd z Floty. Koszt = kwota albo ilość × stawka
-       (stawka domyślna z kartoteki). Dotyczy operacji z produkcją. Nie zmienia stanu magazynowego.            */
+       (stawka domyślna z kartoteki). Dostępne w każdej operacji (zakup, sprzedaż, produkcja, MM). Nie zmienia stanu. */
     const XS = draft.extras || {};
     if (XS.enabled) {
       const corr = !!(ctx && ctx.correction);
-      if (!norm.production) err("extras.enabled", t("Operacje dodatkowe dodaje się do produkcji — wybierz „Produkcja na magazynie” albo zaznacz produkcję"));
       const items = Array.isArray(XS.items) ? XS.items : [];
       if (!items.length) err("extras.items", t("Dodaj co najmniej jedną operację dodatkową"));
       if (items.length > MAX_EXTRAS) err("extras.items", t("Maksymalnie {n} operacji dodatkowych w jednej operacji", { n: MAX_EXTRAS }));
@@ -4496,13 +4508,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       totals.extraCost = round(norm.extras.reduce((a, x) => a + x.cost, 0), 2);
     }
 
-    /* ---------- numery PZ / WZ (ręczne z podpowiedzią albo automatyczne) i data dokumentu ----------
-       Numer ręczny jest unikalny w obrębie typu, magazynu i roku. Korekta nie zmienia numeru dokumentu.     */
-    const DN = draft.docNos || {};
-    for (const ty of ["PZ", "WZ"]) {
+    /* ---------- numery PZ / WZ / MM (tryb z listy: automatyczny albo ręczny) i data dokumentu ----------
+       Numer ręczny jest unikalny w obrębie typu, magazynu i roku. Korekta nie zmienia numeru dokumentu.
+       Bez wybranego trybu (starsze szkice): wpisany numer = ręczny, puste pole = automatyczny.            */
+    const DN = draft.docNos || {}, DM = draft.docNoMode || {};
+    for (const ty of DOC_NO_TYPES) {
+      if (!documents.some(d => d.type === ty) || (ctx && ctx.correction)) continue;
+      const mode = docNoModeOf(draft, ty), K = `docNos.${ty}`;
+      if (DM[ty] && !NO_MODES[DM[ty]]) { err(`docNoMode.${ty}`, t("Wybierz sposób numeracji")); continue; }
+      if (mode !== "manual") continue;
       const want = str(DN[ty]).replace(/\s+/g, " ");
-      if (!want || !documents.some(d => d.type === ty) || (ctx && ctx.correction)) continue;
-      const K = `docNos.${ty}`;
+      if (!want) { err(K, t("Wpisz numer dokumentu albo wybierz numerację automatyczną")); continue; }
       if (want.length > 40 || !/^[\p{L}0-9][\p{L}0-9 /._-]*$/u.test(want)) err(K, t("Numer dokumentu: litery, cyfry oraz znaki / . - _ (do 40 znaków)"));
       else if (whId && Dates.isISO(date) && docNoTaken(state, ty, whId, date.slice(0, 4), want)) err(K, t("Numer {no} jest już użyty w magazynie {w} w roku {y}", { no: want, w: wh ? wh.name : "", y: date.slice(0, 4) }), "DOC_NO");
       else norm.docNos[ty] = want;
@@ -4511,7 +4527,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     if (docDate && !Dates.isISO(docDate)) err("docDate", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (docDate && docDate > today) err("docDate", t("Data dokumentu nie może być z przyszłości"));
     norm.docDate = docDate && Dates.isISO(docDate) ? docDate : (Dates.isISO(date) ? date : "");
-    documents.forEach(d => { if (d.type === "PZ" || d.type === "WZ") { d.docDate = norm.docDate; if (norm.docNos[d.type]) d.manualNo = norm.docNos[d.type]; } });
+    documents.forEach(d => { if (DOC_NO_TYPES.includes(d.type)) { d.docDate = norm.docDate; if (norm.docNos[d.type]) d.manualNo = norm.docNos[d.type]; } });
 
     /* ---------- symulacja sald krok po kroku (magazyn × produkt) ---------- */
     postings.forEach((p, i) => { p.step = i + 1; p.doc = KINDS[p.kind].doc; });
@@ -4543,6 +4559,15 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     state.seq[k] = (state.seq[k] || 0) + 1;
     return `${type}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
   }
+  /** Dokumenty z wyborem numeracji (automatyczna / ręczna). */
+  const DOC_NO_TYPES = ["PZ", "WZ", "MM"];
+  const NO_MODES = { auto: N_("Automatycznie"), manual: N_("Ręcznie") };
+  /** Tryb numeracji dokumentu w szkicu: wybrany z listy albo (starsze szkice) „ręczny”, gdy wpisano numer. */
+  function docNoModeOf(draft, ty) {
+    const m = draft && draft.docNoMode && draft.docNoMode[ty];
+    if (m === "auto" || m === "manual") return m;
+    return draft && draft.docNos && str(draft.docNos[ty]) ? "manual" : "auto";
+  }
   const normNo = no => String(no == null ? "" : no).replace(/\s+/g, "").toUpperCase();
   /** Czy numer dokumentu danego typu jest już użyty w magazynie w danym roku (numer ręczny lub automatyczny). */
   function docNoTaken(state, type, whId, year, no) {
@@ -4552,7 +4577,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Kolejny numer automatyczny — z pominięciem numerów wpisanych ręcznie. */
   function autoNo(state, type, date, whId) {
     let no = nextNo(state, type, date), guard = 0;
-    while (whId && (type === "PZ" || type === "WZ") && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
+    while (whId && DOC_NO_TYPES.includes(type) && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
     return no;
   }
   /** Podpowiedź numeru (bez rezerwacji) — pokazywana w formularzu przy polu numeru PZ / WZ. */
@@ -5747,7 +5772,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const ops = (opsIn || state.operations).filter(op => (!whId || op.whId === whId) && op.date >= from && op.date <= to && opLiveAt(op, to) && Array.isArray(op.extras) && op.extras.length);
       const rows = [];
       for (const op of ops) for (const x of op.extras) {
-        const doc = op.type === "PRODUKCJA" ? (op.documents.find(d => d.type === "PW") || {}).no : op.no;
+        // dokument główny operacji: PZ (zakup), WZ (sprzedaż), MM (przesunięcie), PW (produkcja)
+        const main = ["PZ", "WZ", "MM", "PW"].map(ty => op.documents.find(d => d.type === ty)).find(Boolean);
+        const doc = main ? main.no : op.no;
         rows.push({ id: x.id, opId: op.id, date: op.date, typeId: x.typeId, typeName: x.typeName, vehicleName: x.vehicleName || "", reg: x.reg || "", whId: op.whId, whName: (byId(state.warehouses, op.whId) || {}).name || "",
           docNo: doc || op.no, opNo: op.no, opType: op.type, qty: x.qty, unit: x.unit, rate: x.rate, cost: x.cost, desc: x.desc || "", status: op.status });
       }
@@ -5807,7 +5834,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
-    CHIPPER_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    CHIPPER_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,
@@ -6111,7 +6138,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     d.type = over.type || "ZAKUP";
     for (const k of ["purchase", "production", "sale", "mm"]) Object.assign(d[k], over[k] || {});
     if (over.extras) d.extras = { enabled: true, items: over.extras.map(x => Object.assign(RIW.blankExtra(), x)) };
-    if (over.docNos) Object.assign(d.docNos, over.docNos);
+    if (over.docNos) { Object.assign(d.docNos, over.docNos); for (const k of Object.keys(over.docNos)) if (over.docNos[k]) d.docNoMode[k] = "manual"; }
     if (over.docDate) d.docDate = over.docDate;
     // grupa dostawcy wynika z kartoteki kontrahenta, jeśli nie podano jej wprost
     if (over.purchase && !over.purchase.supplierKind) d.purchase.supplierKind = "";
@@ -8184,11 +8211,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     "transport.train.sameT": N_("<b>Co:</b> tonaż jednego wagonu — trafi do każdego wagonu. <b>Przykład:</b> 20 × 60 t = 1 200 t."),
     "transport.train.price": N_("<b>Co:</b> stawka frachtu kolejowego. Ilość do rozliczenia wynika z tonażu składu."),
     "transport.train.priceUnit": N_("<b>Co:</b> za co płacimy przewoźnikowi: t, MP czy m³."),
-    "extras.enabled": N_("<b>Co:</b> prace towarzyszące produkcji, np. holowanie, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia."),
+    "extras.enabled": N_("<b>Co:</b> prace towarzyszące operacji (zakup, sprzedaż, produkcja, MM), np. holowanie, rozładunek, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia."),
     "sale.weightMode": N_("<b>AUTO</b> = przelicznik firmowy produktu (np. 1 MP = 0,33 t). <b>RĘCZNY</b> = tonaż z wagi rzeczywistej — zapisany na dokumencie i nigdy nie nadpisywany automatycznie."),
     "sale.weightManual": N_("<b>Co:</b> tonaż z kwitu wagowego, w tonach. <b>Przykład:</b> 20,35."),
-    "docNos.PZ": N_("<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku."),
-    "docNos.WZ": N_("<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.PZ": N_("<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.WZ": N_("<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.MM": N_("<b>Co:</b> numer MM (wpisz ręcznie, np. <b>MM/5</b>). Numer musi być unikalny w magazynie źródłowym w danym roku."),
     "docDate": N_("<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data operacji. <b>Data operacji</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system."),
     "production.operatorName": N_("<b>Co:</b> operator rębaka firmy zewnętrznej (opcjonalnie) — domyślnie z kartoteki rębaka."),
     "notes": N_("<b>Co:</b> dodatkowe informacje (opcjonalnie)."),
@@ -8446,7 +8474,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
             ${field({ key: k("desc"), label: t("Opis"), help: false, control: textIn(k("desc"), it.desc, { placeholder: eg(t("Holowanie rębaka z drogi leśnej")) }) })}
           </div></div>`;
       }).join("") : "";
-      return section(n, "extras", t("Operacje dodatkowe"), t("Prace towarzyszące produkcji z kosztem — np. holowanie, podgarnianie pryzm, praca ładowarką."), `
+      return section(n, "extras", t("Operacje dodatkowe"), t("Prace towarzyszące operacji z kosztem — np. holowanie, rozładunek, podgarnianie pryzm, praca ładowarką."), `
         <div class="scope one" data-field="extras.enabled">${optCard("extras.enabled", { checked: on, disabled: false, title: t("Dodaj operację dodatkową"), text: t("Rodzaj z kartoteki, opcjonalnie pojazd z floty, koszt i opis. Każda pozycja jest osobnym zapisem powiązanym z tą operacją.") })}
           <div class="msg hidden" data-msg="extras.enabled" role="alert"></div></div>
         <div class="help tut">${t(HELP["extras.enabled"])}</div>
@@ -8463,16 +8491,21 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (!d.extras.items.length) d.extras.items.push(R.blankExtra());
       return d.extras;
     },
-    /** Pola numeru dokumentu PZ / WZ (ręczny z podpowiedzią) i daty dokumentu. */
+    /** Numeracja dokumentów PZ / WZ / MM: lista „Automatycznie / Ręcznie”, przy ręcznej — pole numeru z podpowiedzią; data dokumentu. */
     docNoFields(types) {
       const d = this.draft, corr = this.mode === "correct";
-      if (!d.docNos) d.docNos = { PZ: "", WZ: "" };
+      if (!d.docNos) d.docNos = { PZ: "", WZ: "", MM: "" };
+      if (!d.docNoMode) d.docNoMode = {};
       const op = this.op;
       return types.map(ty => {
         const key = `docNos.${ty}`;
         if (corr) { const doc = op && op.documents.find(x => x.type === ty); return field({ key, label: t("Nr {t}", { t: ty }), help: false, control: outBox(key, esc(doc ? doc.no : "—")) }); }
-        const sug = R.suggestDocNo(Store.state, ty, this.whId(), d.date);
-        return field({ key, label: t("Nr {t} (ręcznie)", { t: ty }), control: textIn(key, d.docNos[ty], { placeholder: t("np. {x} — puste: {s}", { x: `${ty}/11`, s: sug }) }) + `<div class="help">${t("Podpowiedź: <b>{s}</b>", { s: esc(sug) })} <button class="btn ghost sm" type="button" data-use-no="${ty}" data-no="${esc(sug)}">${esc(t("użyj"))}</button></div>` });
+        const sug = R.suggestDocNo(Store.state, ty, this.whId(), d.date), mode = R.docNoModeOf(d, ty);
+        d.docNoMode[ty] = mode;
+        const sel = field({ key: `docNoMode.${ty}`, label: t("Numeracja {t}", { t: ty }), req: true, help: false,
+          control: selIn(`docNoMode.${ty}`, [{ v: "auto", l: t("Automatycznie — {s}", { s: sug }) }, { v: "manual", l: t("Ręcznie — wpisz numer") }], mode, { struct: true }) });
+        if (mode !== "manual") return sel;
+        return sel + field({ key, label: t("Nr {t} (ręcznie)", { t: ty }), req: true, control: textIn(key, d.docNos[ty], { placeholder: eg(`${ty}/11`) }) + `<div class="help">${t("Podpowiedź: <b>{s}</b>", { s: esc(sug) })} <button class="btn ghost sm" type="button" data-use-no="${ty}" data-no="${esc(sug)}">${esc(t("użyj"))}</button></div>` });
       }).join("") + field({ key: "docDate", label: t("Data dokumentu"), control: `<input class="ctrl" type="date" id="${fid("docDate")}" data-bind="docDate" value="${esc(d.docDate || "")}" max="${esc(App.today())}">` });
     },
     buyers(currentId) { return Store.state.partners.filter(p => (p.active !== false || p.id === currentId) && ["buyer", "both"].includes(p.role)); },
@@ -8605,10 +8638,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
               : field({ key: "mm.weightAuto", label: t("Tonaż wyliczony"), control: outBox("mm.weightAuto", "—"), help: false })}
             ${field({ key: "mm.srcBal", label: t("Źródło: stan przed → po"), span: "span2", control: outBox("mm.srcBal", "—"), help: false })}
             ${field({ key: "mm.dstBal", label: twoStage ? t("Cel: stan teraz → po przyjęciu") : t("Cel: stan przed → po"), span: "span2", control: outBox("mm.dstBal", "—"), help: false })}
+            ${this.docNoFields(["MM"])}
           </div>`);
       }
 
-      if (type === "PRODUKCJA" || (type === "ZAKUP" && d.production.enabled) || (type === "SPRZEDAZ" && d.sale.direct)) html += this.extrasHtml(n++);
+      html += this.extrasHtml(n++); // operacje dodatkowe — w każdym rodzaju operacji
       if (type !== "PRODUKCJA") html += this.transportHtml(n++);
       html += section(n++, "notes", t("Uwagi i dokument zewnętrzny"), "", `<div class="fgrid four">
         ${field({ key: "extDoc", label: t("Nr dokumentu zewnętrznego"), span: "span2", control: textIn("extDoc", d.extDoc, { placeholder: t("np. FV 123/09/2026, kwit wagowy") }) })}
@@ -8815,7 +8849,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (!b || !form.contains(b)) return;
         if (b.id === "extra-add") { const X = this.extras(); if (X.items.length < R.MAX_EXTRAS) X.items.push(R.blankExtra()); this.persist(); this.rerender(); const el = document.getElementById(fid(`extras.items.${X.items.length - 1}.typeId`)); if (el) el.focus(); return; }
         if (b.dataset.extraDel !== undefined) { const X = this.extras(); X.items.splice(+b.dataset.extraDel, 1); this.persist(); this.rerender(); return; }
-        if (b.dataset.useNo) { this.draft.docNos[b.dataset.useNo] = b.dataset.no; this.touched.add(`docNos.${b.dataset.useNo}`); this.persist(); this.rerender(); }
+        if (b.dataset.useNo) { this.draft.docNos[b.dataset.useNo] = b.dataset.no; (this.draft.docNoMode || (this.draft.docNoMode = {}))[b.dataset.useNo] = "manual"; this.touched.add(`docNos.${b.dataset.useNo}`); this.persist(); this.rerender(); }
       });
       form.addEventListener("submit", e => { e.preventDefault(); this.save(); });
       form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); this.save(); } });
@@ -9289,7 +9323,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (n.extras && n.extras.length) add(t("Operacje dodatkowe"), n.extras.map(x => `${esc(x.typeName)}${x.reg ? ` <small class="dim">(${esc(x.reg)})</small>` : ""}: <b>${money(x.cost)}</b>${x.desc ? ` <small class="dim">— ${esc(x.desc)}</small>` : ""}`).join("<br>"));
         const nos = plan.documents.filter(dc => dc.manualNo).map(dc => `${dc.type}: <b>${esc(dc.manualNo)}</b>`);
         add(t("Numery dokumentów"), nos.length ? nos.join(" · ") + ` <small class="dim">${esc(t("(ręczne)"))}</small>` : esc(t("automatyczne")));
-        if (n.docDate && n.docDate !== plan.date && plan.documents.some(dc => dc.type === "PZ" || dc.type === "WZ")) add(t("Data dokumentu"), esc(Dates.pl(n.docDate)));
+        if (n.docDate && n.docDate !== plan.date && plan.documents.some(dc => R.DOC_NO_TYPES.includes(dc.type))) add(t("Data dokumentu"), esc(Dates.pl(n.docDate)));
         if (n.sale) { add(t("Odbiorca"), esc((App.partner(n.sale.buyerId) || {}).name)); add(t("Sprzedaż"), `${esc(fmtQ(n.sale.qty))} ${Units.label(n.sale.unit)} | ${esc(fmt(n.sale.weightT, 2))} t | ${esc(t(R.WEIGHT_SOURCES[n.sale.weightMode] || "AUTO"))} → <b>${money(n.sale.revenue)}</b>`); }
         if (n.mm) {
           add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);
@@ -9421,7 +9455,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Status operacji / dokumentu z uwzględnieniem usunięcia (soft delete). */
   const opStatusBadge = o => o && o.deleted ? `<span class="badge err" data-deleted="1">${th("USUNIĘTY")}</span>` : statusBadge(o.status);
   /** Typ dokumentu z kolorem: PZ — zielony, WZ — złoty, MM — niebieski, PW / RW — marka, KOR / AN — ostrzegawcze. */
-  const docBadge = ty => `<span class="badge doc-badge doc-${esc(ty)}">${esc(ty)}</span>`;
+  /** Dokumenty główne — wyróżnione mocnym kolorem (PZ zielony, WZ pomarańczowo-złoty, MM niebieski); pozostałe neutralnie. */
+  const MAIN_DOCS = ["PZ", "WZ", "MM"];
+  const docBadge = ty => `<span class="badge doc-badge ${MAIN_DOCS.includes(ty) ? "doc-" + esc(ty) : "doc-aux"}">${esc(ty)}</span>`;
   const extrasTotal = op => R.round((op.extras || []).reduce((a, x) => a + x.cost, 0), 2);
   const extraLine = x => `${x.typeName}${x.reg ? ` (${x.reg})` : ""}: ${money(x.cost)}${x.qty !== null && x.qty !== undefined && x.rate !== null && x.rate !== undefined && x.costBasis === "qtyRate" ? ` (${fmtQ(x.qty)} × ${fmt(x.rate)} zł)` : ""}${x.desc ? " — " + x.desc : ""}`;
   const tonLine = s => s && s.weightT != null ? `${fmtQ(s.qty)} ${Units.label(s.unit)} | ${fmt(s.weightT, 2)} t | ${t(R.WEIGHT_SOURCES[s.weightMode] || "AUTO")}` : "";
@@ -10038,6 +10074,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const q = f.q.trim().toLowerCase(), wh = App.user().whId;
         return allDocuments(Store.state).filter(d => {
           if (d.deleted && !f.showDeleted && f.status !== "DELETED") return false;
+          // domyślnie tylko dokumenty główne PZ / WZ / MM; pomocnicze (PW, RW, TR, KOR, AN…) po zaznaczeniu
+          if (!f.showAux && !MAIN_DOCS.includes(d.type) && f.type !== d.type) return false;
           if (cfg.types && !cfg.types.includes(d.type)) return false;
           const inWh = d.whId === wh || (d.type === "MM" && d.toWhId === wh);
           if (!inWh) return false;
@@ -10051,6 +10089,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const rows = this.filtered();
         const S = Store.state;
         const opOf = d => d.opId ? R.byId(S.operations, d.opId) : null;
+        const auxTypes = (cfg.typeOptions || []).map(([v]) => v).filter(v => !MAIN_DOCS.includes(v)), hasAux = auxTypes.length > 0;
+        const typeOpts = (cfg.typeOptions || []).filter(([v]) => f.showAux || MAIN_DOCS.includes(v) || f.type === v);
         const primary = d => d.opId && ["PZ", "WZ", "PW", "MM"].includes(d.type) && !(d.type === "PW" && opOf(d) && opOf(d).type !== "PRODUKCJA");
         const canCorr = op => op && op.status !== "CANCELLED" && App.can("documents.correct") && App.can(R.OP_TYPES[op.type].correctPerm) && R.canAccessWh(App.user(), op.whId);
         const canDel = op => op && op.status !== "CANCELLED" && !op.deleted && App.can("documents.delete") && R.canAccessWh(App.user(), op.whId);
@@ -10062,11 +10102,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
             <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="reg-xlsx">${ic("dl", 15)} XLSX</button></div></div>
           ${cfg.pre ? cfg.pre() : ""}
           <div class="card"><div class="toolbar">
-            ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${cfg.typeOptions.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
+            ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${typeOpts.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
             <div class="field"><label for="r-status">${th("Status")}</label><select class="ctrl" id="r-status"><option value="">${th("Wszystkie")}</option>${["POSTED", "CORRECTED", "CANCELLED", "DELETED"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${esc(statusText(s))}</option>`).join("")}</select></div>
             <div class="field"><label for="r-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="r-ym" value="${esc(f.ym)}"></div>
             ${searchInput("r-q", f.q, t("numer, kontrahent, miejsce…"))}
-            <label class="inline-opt"><input type="checkbox" id="r-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label></div>
+            <label class="inline-opt"><input type="checkbox" id="r-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label>
+            ${hasAux ? `<label class="inline-opt"><input type="checkbox" id="r-aux" ${f.showAux ? "checked" : ""}> ${esc(t("Pokaż dokumenty pomocnicze ({l})", { l: auxTypes.join(", ") }))}</label>` : ""}</div>
             ${rows.length ? `<div class="tbl-wrap"><table class="tbl sticky-act" id="docs-table"><thead><tr><th>${th("Nr dokumentu")}</th><th>${th("Typ")}</th><th>${th("Data")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th><th>${th("Kontrahent")}</th><th>${th("Miejsce transportu")}</th><th>${th("Wpływ na stan")}</th><th>${th("Status")}</th><th><span class="sr-only">${th("Akcje")}</span></th></tr></thead><tbody>
               ${rows.map((d, i) => `<tr class="doc-row doc-row-${esc(d.type)} ${d.status === "CANCELLED" ? "void" : ""}" data-docno="${esc(d.no)}"><td class="mono nowrap"><b>${esc(d.no)}</b>${d.manualNo ? ` <small class="dim" title="${th("numer wpisany ręcznie")}">✎</small>` : ""}</td><td>${docBadge(d.type)}</td><td class="nowrap">${esc(Dates.pl(d.date))}${d.docDate && d.docDate !== d.date ? `<br><small class="dim">${esc(t("dok. {d}", { d: Dates.pl(d.docDate) }))}</small>` : ""}</td>
                 <td>${esc(docContent(d))}</td><td class="r nowrap">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td>
@@ -10081,6 +10122,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
         on("#r-type", "type"); on("#r-status", "status"); on("#r-ym", "ym");
         const rd = $("#r-deleted", page); if (rd) rd.onchange = e => { f.showDeleted = e.target.checked; App.render(); };
+        const ra = $("#r-aux", page); if (ra) ra.onchange = e => { f.showAux = e.target.checked; if (!f.showAux && f.type && !MAIN_DOCS.includes(f.type)) f.type = ""; App.render(); };
         $$("[data-del]", page).forEach(b => b.onclick = () => DeleteDialog.open(b.dataset.del));
         const rx = $("#reg-xlsx", page); if (rx) rx.onclick = () => xlsxTable(`${cfg.id}_${App.today()}`, t(cfg.title), [t("Nr dokumentu"), t("Typ"), t("Data operacji"), t("Data dokumentu"), t("Treść"), t("Ilość"), t("Jednostka"), t("Tonaż t"), t("Źródło tonażu"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja"), t("Utworzono"), t("Użytkownik")],
           rows.map(d => [d.no, d.type, d.date, d.docDate || d.date, docContent(d), num(d.qty), d.unit ? Units.label(d.unit) : "", num(d.weightT), d.type === "WZ" ? t(R.WEIGHT_SOURCES[d.weightMode] || "AUTO") : "", num(d.value), d.partner || "", d.place || "", d.stock, statusText(d.deleted ? "DELETED" : d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || "", d.createdAt ? Dates.ts(d.createdAt, true) : "", d.userName || ""]), App.whName(App.user().whId));
@@ -10116,7 +10158,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   Views.mm = docRegister({ id: "mm", title: N_("Przesunięcia międzymagazynowe (MM)"), types: ["MM"], pre: mmTransitPanel,
     desc: N_("Rozchód z magazynu źródłowego i przychód w docelowym. W trybie dwuetapowym towar jest „w drodze” do czasu przyjęcia MM przez magazyn docelowy."),
     buttons: [{ label: N_("Nowe przesunięcie MM"), href: "#/nowa?preset=mm", primary: true }] });
-  Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie / usunięcie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
+  Views.dokumenty = docRegister({ id: "dokumenty", title: N_("Dokumenty"), typeOptions: [["PZ", N_("zakup")], ["WZ", N_("sprzedaż")], ["MM", N_("przesunięcie")], ["RW", N_("zużycie")], ["PW", N_("produkcja")], ["TR", N_("transport")], ["KOR", N_("korekta")], ["AN", N_("anulowanie / usunięcie")], ["IN", N_("inwentaryzacja")], ["BO", N_("bilans otwarcia")]],
     desc: N_("Wszystkie dokumenty aktywnego magazynu z kolumną Status. Anulowanie, usunięcie i korekta tworzą nowe dokumenty (AN, KOR) — dokument pierwotny pozostaje w historii. Akcje: Otwórz, Podgląd, Koryguj, Usuń."),
     buttons: [] });
 
@@ -11041,7 +11083,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const S = Store.state, list = S.extraTypes || [];
       const use = new Map();
       for (const op of S.operations) if (op.status !== "CANCELLED") for (const x of op.extras || []) { const u = use.get(x.typeId) || { n: 0, cost: 0, last: "" }; u.n++; u.cost += x.cost; if (op.date > u.last) u.last = op.date; use.set(x.typeId, u); }
-      return `<div class="page-head"><div class="titles"><h2>${th("Dodatkowe operacje")}</h2><p>${th("Kartoteka rodzajów operacji dodatkowych (np. holowanie, podgarnianie pryzm, praca ładowarką). Wybierasz je w produkcji po zaznaczeniu „Dodaj operację dodatkową”. Pozycji użytych w dokumentach nie usuwa się — tylko dezaktywuje.")}</p></div>
+      return `<div class="page-head"><div class="titles"><h2>${th("Dodatkowe operacje")}</h2><p>${th("Kartoteka rodzajów operacji dodatkowych (np. holowanie, podgarnianie pryzm, praca ładowarką). Wybierasz je w każdej operacji (zakup, sprzedaż, produkcja, MM) po zaznaczeniu „Dodaj operację dodatkową”. Pozycji użytych w dokumentach nie usuwa się — tylko dezaktywuje.")}</p></div>
           <div class="actions">${addBtn("extraTypes", N_("Nowa operacja dodatkowa"))}</div></div>
         <div class="card"><div class="tbl-wrap"><table class="tbl" id="extra-types-table"><thead><tr><th>ID</th><th>${th("Nazwa")}</th><th>${th("Opis")}</th><th>${th("Jednostka")}</th><th class="r">${th("Stawka domyślna")}</th><th>${th("Status")}</th><th class="r">${th("Użycia")}</th><th class="r">${th("Koszt łącznie")}</th><th>${th("Utworzono")}</th><th>${th("Zmieniono")}</th><th></th></tr></thead><tbody>
           ${list.length ? list.map(x => { const u = use.get(x.id) || { n: 0, cost: 0 }; return `<tr class="${x.active === false ? "void" : ""}" data-xt="${esc(x.id)}"><td class="mono small">${esc(x.id)}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.desc || "—")}</td><td>${esc(t(R.EXTRA_UNITS[x.unit || ""] || x.unit))}</td><td class="r">${x.rate != null ? esc(money(x.rate)) : "—"}</td><td>${x.active === false ? `<span class="badge">${th("nieaktywna")}</span>` : `<span class="badge ok">${th("aktywna")}</span>`}</td><td class="r">${u.n}</td><td class="r">${esc(money(u.cost))}</td><td class="nowrap">${esc(Dates.ts(x.createdAt))}</td><td class="nowrap">${esc(Dates.ts(x.updatedAt))}</td><td class="r">${editBtn("extraTypes", x.id)}</td></tr>`; }).join("")

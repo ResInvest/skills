@@ -78,7 +78,7 @@ test("§13: walidacja operacji dodatkowych — rodzaj wymagany, koszt albo iloś
   const many = Array.from({ length: R.MAX_EXTRAS + 1 }, () => ({ typeId: "xt_holowanie", cost: "1" }));
   assert.ok(Object.values(err(many)).some(v => /Maksymalnie/.test(v)));
   const sale = R.planOperation(s, WZ({}, { extras: [{ typeId: "xt_holowanie", cost: "10" }] }), ctx(s));
-  assert.ok(Object.values(sale.errors).some(v => /do produkcji/.test(v)), "sprzedaż z magazynu bez produkcji nie przyjmuje operacji dodatkowych");
+  assert.deepEqual(sale.errors, {}, "operacje dodatkowe dozwolone także w sprzedaży z magazynu");
   const off = R.planOperation(s, PROD({}, { enabled: false, items: [{ typeId: "", cost: "" }] }), ctx(s));
   assert.deepEqual(off.errors, {}, "odznaczony checkbox — pozycje ignorowane");
 });
@@ -93,6 +93,38 @@ test("§13–§14: rodzaju użytego w dokumencie nie da się usunąć z kartotek
   assert.equal(op.totals.extraCost, 650);
   const c = op.corrections[op.corrections.length - 1];
   assert.ok(c.changes.some(ch => /extras/.test(ch.field)), "zmiana operacji dodatkowych widoczna w korekcie");
+});
+
+test("3.4.1: operacje dodatkowe w każdej operacji — zakup (PZ), sprzedaż (WZ), MM; zestawienie wskazuje dokument główny", () => {
+  const s = fresh();
+  const X = [{ typeId: "xt_holowanie", cost: "200", desc: "rozładunek" }];
+  const pz = commit(s, PZ({ extras: X }));
+  const wz = commit(s, WZ({}, { extras: X }));
+  const mm = commit(s, draft({ type: "MM", mm: { productId: "pr_zr_lesna", qty: "30", unit: "MP", toWhId: "wh_bra" }, transport: { mode: "none", place: "RiC Brąszewice" }, extras: X }));
+  for (const op of [pz, wz, mm]) { assert.equal(op.extras.length, 1, op.type); assert.equal(op.totals.extraCost, 200); assert.equal(op.extras[0].opId, op.id); }
+  const rep = R.Reports.extras(s, "2026-09-01", "2026-09-30", "wh_zab");
+  assert.equal(rep.rows.find(r => r.opId === pz.id).docNo, docOf(pz, "PZ").no);
+  assert.equal(rep.rows.find(r => r.opId === wz.id).docNo, docOf(wz, "WZ").no);
+  assert.equal(rep.rows.find(r => r.opId === mm.id).docNo, docOf(mm, "MM").no);
+});
+
+test("3.4.1: numeracja z listy — automatyczna ignoruje wpisany numer; ręczna wymaga numeru; MM z numerem ręcznym", () => {
+  const s = fresh();
+  const auto = PZ({ docNos: { PZ: "PZ/500" } }); auto.docNoMode.PZ = "auto";
+  const a = commit(s, auto);
+  assert.notEqual(docOf(a, "PZ").no, "PZ/500", "tryb automatyczny — numer z licznika");
+  assert.ok(!docOf(a, "PZ").manualNo);
+  const man = PZ(); man.docNoMode.PZ = "manual";
+  assert.ok(R.planOperation(s, man, ctx(s)).errors["docNos.PZ"], "tryb ręczny bez numeru — błąd");
+  const bad = PZ(); bad.docNoMode.PZ = "xyz";
+  assert.ok(R.planOperation(s, bad, ctx(s)).errors["docNoMode.PZ"]);
+  const MMd = no => { const d = draft({ type: "MM", mm: { productId: "pr_zr_lesna", qty: "10", unit: "MP", toWhId: "wh_bra" }, transport: { mode: "none", place: "RiC Brąszewice" }, docNos: { MM: no } }); return d; };
+  const m = commit(s, MMd("MM/5/2026"));
+  assert.equal(docOf(m, "MM").no, "MM/5/2026");
+  assert.equal(docOf(m, "MM").manualNo, "MM/5/2026");
+  assert.ok(Object.values(R.planOperation(s, MMd("mm/5/2026"), ctx(s)).errors).some(v => /już użyty/.test(v)), "duplikat numeru MM w magazynie źródłowym");
+  assert.equal(R.docNoModeOf({ docNos: { WZ: "WZ/1" } }, "WZ"), "manual", "starsze szkice: wpisany numer = ręczny");
+  assert.equal(R.docNoModeOf({ docNos: { WZ: "" } }, "WZ"), "auto");
 });
 
 /* ----------------------------------- §16 kafel / raport ----------------------------------- */

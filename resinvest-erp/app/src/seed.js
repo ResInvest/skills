@@ -105,7 +105,7 @@
     d.type = over.type || "ZAKUP";
     for (const k of ["purchase", "production", "sale", "mm"]) Object.assign(d[k], over[k] || {});
     if (over.extras) d.extras = { enabled: true, items: over.extras.map(x => Object.assign(RIW.blankExtra(), x)) };
-    if (over.docNos) Object.assign(d.docNos, over.docNos);
+    if (over.docNos) { Object.assign(d.docNos, over.docNos); for (const k of Object.keys(over.docNos)) if (over.docNos[k]) d.docNoMode[k] = "manual"; }
     if (over.docDate) d.docDate = over.docDate;
     // grupa dostawcy wynika z kartoteki kontrahenta, jeśli nie podano jej wprost
     if (over.purchase && !over.purchase.supplierKind) d.purchase.supplierKind = "";

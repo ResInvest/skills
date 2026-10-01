@@ -71,11 +71,12 @@
     "transport.train.sameT": N_("<b>Co:</b> tonaż jednego wagonu — trafi do każdego wagonu. <b>Przykład:</b> 20 × 60 t = 1 200 t."),
     "transport.train.price": N_("<b>Co:</b> stawka frachtu kolejowego. Ilość do rozliczenia wynika z tonażu składu."),
     "transport.train.priceUnit": N_("<b>Co:</b> za co płacimy przewoźnikowi: t, MP czy m³."),
-    "extras.enabled": N_("<b>Co:</b> prace towarzyszące produkcji, np. holowanie, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia."),
+    "extras.enabled": N_("<b>Co:</b> prace towarzyszące operacji (zakup, sprzedaż, produkcja, MM), np. holowanie, rozładunek, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia."),
     "sale.weightMode": N_("<b>AUTO</b> = przelicznik firmowy produktu (np. 1 MP = 0,33 t). <b>RĘCZNY</b> = tonaż z wagi rzeczywistej — zapisany na dokumencie i nigdy nie nadpisywany automatycznie."),
     "sale.weightManual": N_("<b>Co:</b> tonaż z kwitu wagowego, w tonach. <b>Przykład:</b> 20,35."),
-    "docNos.PZ": N_("<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku."),
-    "docNos.WZ": N_("<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.PZ": N_("<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.WZ": N_("<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.MM": N_("<b>Co:</b> numer MM (wpisz ręcznie, np. <b>MM/5</b>). Numer musi być unikalny w magazynie źródłowym w danym roku."),
     "docDate": N_("<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data operacji. <b>Data operacji</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system."),
     "production.operatorName": N_("<b>Co:</b> operator rębaka firmy zewnętrznej (opcjonalnie) — domyślnie z kartoteki rębaka."),
     "notes": N_("<b>Co:</b> dodatkowe informacje (opcjonalnie)."),
@@ -333,7 +334,7 @@
             ${field({ key: k("desc"), label: t("Opis"), help: false, control: textIn(k("desc"), it.desc, { placeholder: eg(t("Holowanie rębaka z drogi leśnej")) }) })}
           </div></div>`;
       }).join("") : "";
-      return section(n, "extras", t("Operacje dodatkowe"), t("Prace towarzyszące produkcji z kosztem — np. holowanie, podgarnianie pryzm, praca ładowarką."), `
+      return section(n, "extras", t("Operacje dodatkowe"), t("Prace towarzyszące operacji z kosztem — np. holowanie, rozładunek, podgarnianie pryzm, praca ładowarką."), `
         <div class="scope one" data-field="extras.enabled">${optCard("extras.enabled", { checked: on, disabled: false, title: t("Dodaj operację dodatkową"), text: t("Rodzaj z kartoteki, opcjonalnie pojazd z floty, koszt i opis. Każda pozycja jest osobnym zapisem powiązanym z tą operacją.") })}
           <div class="msg hidden" data-msg="extras.enabled" role="alert"></div></div>
         <div class="help tut">${t(HELP["extras.enabled"])}</div>
@@ -350,16 +351,21 @@
       if (!d.extras.items.length) d.extras.items.push(R.blankExtra());
       return d.extras;
     },
-    /** Pola numeru dokumentu PZ / WZ (ręczny z podpowiedzią) i daty dokumentu. */
+    /** Numeracja dokumentów PZ / WZ / MM: lista „Automatycznie / Ręcznie”, przy ręcznej — pole numeru z podpowiedzią; data dokumentu. */
     docNoFields(types) {
       const d = this.draft, corr = this.mode === "correct";
-      if (!d.docNos) d.docNos = { PZ: "", WZ: "" };
+      if (!d.docNos) d.docNos = { PZ: "", WZ: "", MM: "" };
+      if (!d.docNoMode) d.docNoMode = {};
       const op = this.op;
       return types.map(ty => {
         const key = `docNos.${ty}`;
         if (corr) { const doc = op && op.documents.find(x => x.type === ty); return field({ key, label: t("Nr {t}", { t: ty }), help: false, control: outBox(key, esc(doc ? doc.no : "—")) }); }
-        const sug = R.suggestDocNo(Store.state, ty, this.whId(), d.date);
-        return field({ key, label: t("Nr {t} (ręcznie)", { t: ty }), control: textIn(key, d.docNos[ty], { placeholder: t("np. {x} — puste: {s}", { x: `${ty}/11`, s: sug }) }) + `<div class="help">${t("Podpowiedź: <b>{s}</b>", { s: esc(sug) })} <button class="btn ghost sm" type="button" data-use-no="${ty}" data-no="${esc(sug)}">${esc(t("użyj"))}</button></div>` });
+        const sug = R.suggestDocNo(Store.state, ty, this.whId(), d.date), mode = R.docNoModeOf(d, ty);
+        d.docNoMode[ty] = mode;
+        const sel = field({ key: `docNoMode.${ty}`, label: t("Numeracja {t}", { t: ty }), req: true, help: false,
+          control: selIn(`docNoMode.${ty}`, [{ v: "auto", l: t("Automatycznie — {s}", { s: sug }) }, { v: "manual", l: t("Ręcznie — wpisz numer") }], mode, { struct: true }) });
+        if (mode !== "manual") return sel;
+        return sel + field({ key, label: t("Nr {t} (ręcznie)", { t: ty }), req: true, control: textIn(key, d.docNos[ty], { placeholder: eg(`${ty}/11`) }) + `<div class="help">${t("Podpowiedź: <b>{s}</b>", { s: esc(sug) })} <button class="btn ghost sm" type="button" data-use-no="${ty}" data-no="${esc(sug)}">${esc(t("użyj"))}</button></div>` });
       }).join("") + field({ key: "docDate", label: t("Data dokumentu"), control: `<input class="ctrl" type="date" id="${fid("docDate")}" data-bind="docDate" value="${esc(d.docDate || "")}" max="${esc(App.today())}">` });
     },
     buyers(currentId) { return Store.state.partners.filter(p => (p.active !== false || p.id === currentId) && ["buyer", "both"].includes(p.role)); },
@@ -492,10 +498,11 @@
               : field({ key: "mm.weightAuto", label: t("Tonaż wyliczony"), control: outBox("mm.weightAuto", "—"), help: false })}
             ${field({ key: "mm.srcBal", label: t("Źródło: stan przed → po"), span: "span2", control: outBox("mm.srcBal", "—"), help: false })}
             ${field({ key: "mm.dstBal", label: twoStage ? t("Cel: stan teraz → po przyjęciu") : t("Cel: stan przed → po"), span: "span2", control: outBox("mm.dstBal", "—"), help: false })}
+            ${this.docNoFields(["MM"])}
           </div>`);
       }
 
-      if (type === "PRODUKCJA" || (type === "ZAKUP" && d.production.enabled) || (type === "SPRZEDAZ" && d.sale.direct)) html += this.extrasHtml(n++);
+      html += this.extrasHtml(n++); // operacje dodatkowe — w każdym rodzaju operacji
       if (type !== "PRODUKCJA") html += this.transportHtml(n++);
       html += section(n++, "notes", t("Uwagi i dokument zewnętrzny"), "", `<div class="fgrid four">
         ${field({ key: "extDoc", label: t("Nr dokumentu zewnętrznego"), span: "span2", control: textIn("extDoc", d.extDoc, { placeholder: t("np. FV 123/09/2026, kwit wagowy") }) })}
@@ -702,7 +709,7 @@
         if (!b || !form.contains(b)) return;
         if (b.id === "extra-add") { const X = this.extras(); if (X.items.length < R.MAX_EXTRAS) X.items.push(R.blankExtra()); this.persist(); this.rerender(); const el = document.getElementById(fid(`extras.items.${X.items.length - 1}.typeId`)); if (el) el.focus(); return; }
         if (b.dataset.extraDel !== undefined) { const X = this.extras(); X.items.splice(+b.dataset.extraDel, 1); this.persist(); this.rerender(); return; }
-        if (b.dataset.useNo) { this.draft.docNos[b.dataset.useNo] = b.dataset.no; this.touched.add(`docNos.${b.dataset.useNo}`); this.persist(); this.rerender(); }
+        if (b.dataset.useNo) { this.draft.docNos[b.dataset.useNo] = b.dataset.no; (this.draft.docNoMode || (this.draft.docNoMode = {}))[b.dataset.useNo] = "manual"; this.touched.add(`docNos.${b.dataset.useNo}`); this.persist(); this.rerender(); }
       });
       form.addEventListener("submit", e => { e.preventDefault(); this.save(); });
       form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); this.save(); } });
@@ -1176,7 +1183,7 @@
         if (n.extras && n.extras.length) add(t("Operacje dodatkowe"), n.extras.map(x => `${esc(x.typeName)}${x.reg ? ` <small class="dim">(${esc(x.reg)})</small>` : ""}: <b>${money(x.cost)}</b>${x.desc ? ` <small class="dim">— ${esc(x.desc)}</small>` : ""}`).join("<br>"));
         const nos = plan.documents.filter(dc => dc.manualNo).map(dc => `${dc.type}: <b>${esc(dc.manualNo)}</b>`);
         add(t("Numery dokumentów"), nos.length ? nos.join(" · ") + ` <small class="dim">${esc(t("(ręczne)"))}</small>` : esc(t("automatyczne")));
-        if (n.docDate && n.docDate !== plan.date && plan.documents.some(dc => dc.type === "PZ" || dc.type === "WZ")) add(t("Data dokumentu"), esc(Dates.pl(n.docDate)));
+        if (n.docDate && n.docDate !== plan.date && plan.documents.some(dc => R.DOC_NO_TYPES.includes(dc.type))) add(t("Data dokumentu"), esc(Dates.pl(n.docDate)));
         if (n.sale) { add(t("Odbiorca"), esc((App.partner(n.sale.buyerId) || {}).name)); add(t("Sprzedaż"), `${esc(fmtQ(n.sale.qty))} ${Units.label(n.sale.unit)} | ${esc(fmt(n.sale.weightT, 2))} t | ${esc(t(R.WEIGHT_SOURCES[n.sale.weightMode] || "AUTO"))} → <b>${money(n.sale.revenue)}</b>`); }
         if (n.mm) {
           add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);

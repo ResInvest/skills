@@ -1,4 +1,4 @@
-# ResInvest ERP 3.4 (3.4.0)
+# ResInvest ERP 3.4 (3.4.1)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
@@ -30,6 +30,16 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.4.1
+
+* **Operacje dodatkowe w każdej operacji** — zakup (PZ), sprzedaż z magazynu i bezpośrednia (WZ), produkcja, MM.
+  W zestawieniu i na kaflu pulpitu kolumna „Dokument” wskazuje dokument główny operacji (PZ / WZ / MM / PW).
+* **Numeracja z listy rozwijanej** przy PZ, WZ i **MM**: „Automatycznie — PZ/004/09/2026” (domyślnie) albo
+  „Ręcznie — wpisz numer”. Numer ręczny jest unikalny dla typu + magazynu + roku (dla MM: magazynu źródłowego).
+* **Rejestry dokumentów — tylko PZ, WZ i MM** (jak dawniej), w mocnych kolorach: PZ zielony, WZ pomarańczowy,
+  MM niebieski (pełne tło, kolorowy numer i pasek wiersza). Dokumenty pomocnicze (PW, RW, TR, KOR, AN, IN, BO)
+  po zaznaczeniu „Pokaż dokumenty pomocnicze” — szare, neutralne.
+
 ## Nowe w 3.4
 
 * **Operacje dodatkowe (produkcja):** pole wyboru **„Dodaj operację dodatkową”** w produkcji na magazynie, w zakupie z
@@ -52,7 +62,7 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
 * **Usuwanie dokumentu („Usuń”):** soft delete z obowiązkowym powodem — ruchy odwracane dokumentem AN, dokument
   znika z rejestrów (filtr „Pokaż usunięte”), ale zostaje w historii i dzienniku audytu. Zablokowane, gdy towar z
   dokumentu został już wydany/zużyty lub MM przyjęto. Uprawnienie `documents.delete` (Kierownik, Administrator).
-* **Rejestry dokumentów:** akcje **Otwórz / Podgląd / Koryguj / Usuń**, PZ oznaczone na zielono, WZ na złoto.
+* **Rejestry dokumentów:** akcje **Otwórz / Podgląd / Koryguj / Usuń** (kolumna przypięta do prawej krawędzi).
 * **Eksport XLSX i DOCX:** rejestry, operacje, raporty i podgląd dokumentu — pliki Office tworzone w programie
   (bez bibliotek zewnętrznych), liczby w XLSX zapisane jako liczby.
 * **Schemat danych 8:** migracja 7 → 8 automatyczna przy pierwszym uruchomieniu (kartoteka operacji dodatkowych,
@@ -177,7 +187,7 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
 
 ## Instalacja (Windows)
 
-Uruchom **`ResInvestERP_Setup_3.4.0.exe`** (budowanie — niżej) i wybierz:
+Uruchom **`ResInvestERP_Setup_3.4.1.exe`** (budowanie — niżej) i wybierz:
 
 * **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
   tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
@@ -333,10 +343,10 @@ npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
 npm run themes        # kontrast WCAG wszystkich 5 motywów
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
-npm run test:unit     # silnik (w tym MM dwuetapowe), PDF, platforma: jednostki, korekty, transport, i18n, hasła, role, funkcje 3.4: operacje dodatkowe, numery ręczne, tonaż, usuwanie, XLSX/DOCX (125)
+npm run test:unit     # silnik (w tym MM dwuetapowe), PDF, platforma: jednostki, korekty, transport, i18n, hasła, role, funkcje 3.4: operacje dodatkowe, numery ręczne, tonaż, usuwanie, XLSX/DOCX (127)
 npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35, MM przez serwer: zaproszenia, reset, izolacja magazynów, 403 (26)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # przeglądarka: tryb OFFLINE (229 kontroli) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
+npm run test:e2e      # przeglądarka: tryb OFFLINE (234 kontrole) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
 FFMPEG=ffmpeg node tests/e2e-intro.cjs   # intro na prawdziwym filmie (wariant WebM dla Chromium bez H.264)
 ```
 
@@ -348,7 +358,7 @@ Plik `.iss` jest zapisany w UTF-8 z BOM (polskie i czeskie znaki w Inno Setup 7)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Setup_3.4.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
+# → installer\Output\ResInvestERP_Setup_3.4.1.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
 Bez Windows (serwer budowania Linux): `bash installer/build-installer-wine.sh` — ten sam plik `.iss`,

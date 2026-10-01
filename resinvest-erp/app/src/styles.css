@@ -636,16 +636,20 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
 .badge.role-audytor{background:var(--warn-soft);color:var(--warn)}
 
 /* ---- 3.4: dokumenty PZ/WZ, akcje w wierszach, operacje dodatkowe ---- */
-.badge.doc-badge{font-family:var(--mono,ui-monospace,monospace);letter-spacing:.02em}
-.badge.doc-PZ,.badge.doc-PW{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok-line)}
-.badge.doc-WZ{background:var(--gold-soft);color:var(--gold);border:1px solid var(--gold-strong)}
-.badge.doc-MM,.badge.doc-TR{background:var(--info-soft);color:var(--info);border:1px solid var(--info-line)}
-.badge.doc-RW{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line)}
-.badge.doc-KOR{background:var(--warn-soft);color:var(--warn)} .badge.doc-AN{background:var(--err-soft);color:var(--err)}
-.tbl tr.doc-row-PZ td:first-child,.tbl tr.doc-row-PW td:first-child{box-shadow:inset 3px 0 0 var(--ok)}
-.tbl tr.doc-row-WZ td:first-child{box-shadow:inset 3px 0 0 var(--gold-strong)}
-.tbl tr.doc-row-MM td:first-child,.tbl tr.doc-row-TR td:first-child{box-shadow:inset 3px 0 0 var(--info)}
-.tbl tr.doc-row-AN td:first-child{box-shadow:inset 3px 0 0 var(--err)}
+.badge.doc-badge{font-family:var(--mono,ui-monospace,monospace);letter-spacing:.04em;font-weight:800;min-width:38px;justify-content:center}
+/* dokumenty główne — mocne, pełne kolory (biały tekst, kontrast ≥ 4,5:1) */
+.badge.doc-PZ{background:#15803D;color:#fff;border:1px solid #116B33}
+.badge.doc-WZ{background:#C2410C;color:#fff;border:1px solid #A3360A}
+.badge.doc-MM{background:#1D4ED8;color:#fff;border:1px solid #1940B4}
+/* dokumenty pomocnicze (PW, RW, TR, KOR, AN, IN, BO) — neutralnie, jak dawniej */
+.badge.doc-aux{background:var(--surface-3);color:var(--text-2);border:1px solid var(--border)}
+.tbl tr.doc-row-PZ td:first-child{box-shadow:inset 5px 0 0 #15803D}
+.tbl tr.doc-row-WZ td:first-child{box-shadow:inset 5px 0 0 #C2410C}
+.tbl tr.doc-row-MM td:first-child{box-shadow:inset 5px 0 0 #1D4ED8}
+.tbl tr.doc-row-PZ td:first-child b{color:#15803D} .tbl tr.doc-row-WZ td:first-child b{color:#C2410C} .tbl tr.doc-row-MM td:first-child b{color:#1D4ED8}
+[data-theme="graphite"] .tbl tr.doc-row-PZ td:first-child b,[data-theme="azure"] .tbl tr.doc-row-PZ td:first-child b,[data-theme="ultra"] .tbl tr.doc-row-PZ td:first-child b{color:#4ADE80}
+[data-theme="graphite"] .tbl tr.doc-row-WZ td:first-child b,[data-theme="azure"] .tbl tr.doc-row-WZ td:first-child b,[data-theme="ultra"] .tbl tr.doc-row-WZ td:first-child b{color:#FB923C}
+[data-theme="graphite"] .tbl tr.doc-row-MM td:first-child b,[data-theme="azure"] .tbl tr.doc-row-MM td:first-child b,[data-theme="ultra"] .tbl tr.doc-row-MM td:first-child b{color:#7AA7FF}
 .tbl tr.doc-row[data-deleted="1"],.tbl tr.doc-row.is-deleted{opacity:.62}
 .row-actions{display:flex;flex-wrap:nowrap;gap:4px;justify-content:flex-end}
 @media (max-width:900px){.row-actions{flex-wrap:wrap}}
