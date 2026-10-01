@@ -20,8 +20,14 @@
   /** Konto administratora (e-mail firmowy) — pierwsze logowanie. */
   const ADMIN_EMAIL = "magazyn@resinvest.group";
 
+  /** Kartoteka „Dodatkowe operacje” — pozycje startowe (stawki domyślne można zmienić w programie). */
+  function extraTypes(rates) {
+    const ts = "2026-08-01T08:00:00.000Z";
+    return RIW.DEFAULT_EXTRA_TYPES.map(x => Object.assign({}, x, { rate: rates && rates[x.id] !== undefined ? rates[x.id] : x.rate, active: true, createdAt: ts, updatedAt: ts, createdBy: "System" }));
+  }
   function base() {
     const s = RIW.emptyState(root.RIW_CONFIG || null);
+    s.extraTypes = extraTypes({ xt_pryzmy: 180, xt_ladowarka: 160 });
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
     // konto: e-mail firmowy = login; magazyn domyślny (whId) + przydzielone (warehouseIds); status konta
     const U = (id, email, name, role, whId, more) => {
@@ -83,9 +89,11 @@
         { id: "op_dudek", name: "Rafał Dudek", phone: "601 555 666", whId: "wh_rok" }
       ],
       chippers: [
-        { id: "ch_jenz", name: "Jenz HEM 583", status: "aktywny", operatorId: "op_lis", whId: "wh_zab" },
-        { id: "ch_biber", name: "Eschlböck Biber 92", status: "aktywny", operatorId: "op_mazur", whId: "wh_bra" },
-        { id: "ch_albach", name: "Albach Diamant 2000", status: "aktywny", operatorId: "op_dudek", whId: "wh_rok" }
+        { id: "ch_jenz", name: "Jenz HEM 583", owner: "own", status: "aktywny", operatorId: "op_lis", whId: "wh_zab" },
+        { id: "ch_biber", name: "Eschlböck Biber 92", owner: "own", status: "aktywny", operatorId: "op_mazur", whId: "wh_bra" },
+        { id: "ch_albach", name: "Albach Diamant 2000", owner: "own", status: "aktywny", operatorId: "op_dudek", whId: "wh_rok" },
+        // rębak firmy zewnętrznej (usługa rębania) — dostępny we wszystkich magazynach
+        { id: "ch_ext_drwal", name: "Bandit 2590XP", owner: "external", company: "Usługi Leśne Drwal sp. z o.o.", reg: "SGL 7Z412", status: "aktywny", operatorId: "", operatorName: "Zbigniew Kos", info: "Usługa rębania z operatorem; rozliczenie za MP", whId: "" }
       ]
     };
     return s;
@@ -96,6 +104,9 @@
     d.date = date;
     d.type = over.type || "ZAKUP";
     for (const k of ["purchase", "production", "sale", "mm"]) Object.assign(d[k], over[k] || {});
+    if (over.extras) d.extras = { enabled: true, items: over.extras.map(x => Object.assign(RIW.blankExtra(), x)) };
+    if (over.docNos) Object.assign(d.docNos, over.docNos);
+    if (over.docDate) d.docDate = over.docDate;
     // grupa dostawcy wynika z kartoteki kontrahenta, jeśli nie podano jej wprost
     if (over.purchase && !over.purchase.supplierKind) d.purchase.supplierKind = "";
     if (over.transport) {
@@ -141,6 +152,8 @@
       ["u_mag", "2026-08-05", {
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "30", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Stanica", kwit: "KW 0142/08/2026", chipperId: "ch_jenz" },
+        // operacja dodatkowa: holowanie rębaka pojazdem z floty
+        extras: [{ typeId: "xt_holowanie", vehicleId: "ve_scania", cost: "500", desc: "Holowanie rębaka z drogi leśnej" }],
         // trzy kursy własne z rębakiem w lesie → magazyn Zabrze; każdy kurs z własnym kwitem wywozowym (3 × 10 m³ × 4 = 120 MP)
         transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "3", runs: [
           { vehicleId: "ve_scania", driverId: "", km: "45", rate: "5", kwit: "KW 0142/1/08/2026", kwitM3: "10", qty: "40", weightT: "13,4" },
@@ -161,6 +174,8 @@
         transport: { mode: "train", place: "EC Katowice — bocznica", train: { trainNo: "RC 44120", carrier: "PKP Cargo", docNo: "CIM 4412/08", loadPlace: "Bocznica Gliwice Port", wagonCount: "2", capUnit: "MP", capacity: "120", tonMode: "same", sameT: "16,5", price: "28", priceUnit: "t" } }
       }],
       ["u_mag", "2026-09-03", {
+        // numer PZ wpisany ręcznie z dokumentu dostawcy; data dokumentu ≠ data przyjęcia
+        docNos: { PZ: "PZ/11" }, docDate: "2026-09-02",
         purchase: { supplierId: "pa_lander", basis: "KZR", productId: "pr_drewno", qty: "20", unit: "m3", price: "230" },
         production: { enabled: true, type: "lesna", ndl: "Rybnik", lesnictwo: "Wielopole", kwit: "KW 0217/09/2026", chipperId: "ch_jenz" },
         sale: { enabled: true, buyerId: "pa_ec_zab", price: "90", priceUnit: "MP" },
@@ -182,19 +197,23 @@
       ["u_bra", "2026-09-10", {
         type: "PRODUKCJA",
         production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "40", chipperId: "ch_biber", chipRate: "10" },
+        extras: [{ typeId: "xt_pryzmy", qty: "2", desc: "Podgarnianie pryzmy P2 po rębaniu" }, { typeId: "xt_plac", cost: "250" }],
         notes: "Rębanie na placu — pryzma P2", extDoc: "KP 12/09/2026"
       }],
       // sprzedaż z magazynu (WZ)
       ["u_bra", "2026-09-12", {
         type: "SPRZEDAZ",
-        sale: { productId: "pr_zr_lesna", qty: "100", unit: "MP", buyerId: "pa_ciep_ryb", price: "85" },
+        sale: { productId: "pr_zr_lesna", qty: "100", unit: "MP", buyerId: "pa_ciep_ryb", price: "85", weightMode: "manual", weightManual: "34,6" },
         transport: { mode: "external", place: "Ciepłownia Rybnik", external: { company: "DAP Trans", reg: "SZA 7K901", km: "35", freight: "650" } }
       }],
       // produkcja w lesie + sprzedaż bezpośrednia: stan zrębki bez zmian
       ["u_kier", "2026-09-15", {
         type: "SPRZEDAZ",
-        production: { type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Kuźnia", kwit: "KW 0233/09/2026", rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "600", chipperId: "ch_jenz", chipRate: "10" },
+        // rąbanie w lesie usługą firmy zewnętrznej (rębak firmy Drwal z operatorem)
+        production: { type: "lesna", ndl: "Rudy Raciborskie", lesnictwo: "Kuźnia", kwit: "KW 0233/09/2026", rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "600", chipperId: "ch_ext_drwal", chipRate: "10" },
         sale: { direct: true, buyerId: "pa_elektrownia", qtyMP: "600", price: "88", priceUnit: "MP" },
+        // operacja dodatkowa przy produkcji w lesie: podciągnięcie rębaka ciągnikiem z floty
+        extras: [{ typeId: "xt_holowanie", vehicleId: "ve_scania", cost: "350", desc: "Podciągnięcie rębaka na składnicę" }],
         transport: { mode: "train", place: "Elektrownia Łaziska", train: { trainNo: "RC 50931", carrier: "PKP Cargo", docNo: "CIM 5093/09", loadPlace: "Bocznica Kuźnia Raciborska", wagonCount: "5", capUnit: "t", capacity: "60", tonMode: "each", wagonT: ["39,6", "39,8", "39,4", "39,7", "39,5"], price: "25", priceUnit: "t" } }
       }]
     ];
@@ -212,7 +231,9 @@
       // produkcja na magazynie z wczoraj (kwit produkcji dnia)
       ["u_bra", "2026-09-22", {
         type: "PRODUKCJA",
+        // praca ładowarką (operacja dodatkowa, ilość × stawka z kartoteki)
         production: { rawProductId: "pr_drewno", outProductId: "pr_zr_lesna", outQty: "20", chipperId: "ch_biber", chipRate: "10" },
+        extras: [{ typeId: "xt_ladowarka", qty: "1,5", desc: "Załadunek rębaka" }],
         notes: "Pryzma P3"
       }]
     );
@@ -231,7 +252,7 @@
     }
     // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
     const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);
-    cd.sale.qty = "90";
+    cd.sale.qty = "90"; cd.sale.weightManual = "31,1";
     let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }));
     if (!r.ok) throw new Error("Dane przykładowe (korekta): " + r.error);
     r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }), "pomyłka operatora — dostawa nie dotarła");
@@ -250,6 +271,7 @@
     const s = RIW.emptyState(root.RIW_CONFIG || null);
     const b = base();
     s.products = b.products;
+    s.extraTypes = extraTypes();
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
     const email = String(opts.email || opts.login || ADMIN_EMAIL).trim().toLowerCase();
     const name = String(opts.name || "Administrator").trim(), [firstName, ...rest] = name.split(/\s+/);

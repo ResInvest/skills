@@ -1,6 +1,6 @@
 # ResInvest ERP — audyt repozytorium i plan przebudowy 4.0
 
-Data: 2026-09-30 · Stan wyjściowy: **ResInvest ERP 3.3.0** (commit `519c205`, gałąź `claude/nifty-knuth-od1ibq`)
+Data: 2026-09-30 · Stan wyjściowy: **ResInvest ERP 3.3.0** (commit `519c205`)
 Podstawa: *RESINVEST ERP — MASTER PROMPT* (§1–§35). Zgodnie z §35 dokument powstał **przed** zmianami w kodzie.
 
 ---
@@ -51,14 +51,14 @@ Legenda: ✅ spełnia · 🟡 do poprawy · 🔁 do przebudowy · ❌ brak
 | 5 | Wiele magazynów, `warehouse_id` w każdym rekordzie, izolacja | ✅ | projekcja stanu po stronie serwera |
 | 6 | Administracja → Bilans otwarcia (zatwierdzanie, historia) | ❌ | `openingBalance()` istnieje tylko dla danych przykładowych, bez UI i bez obiegu zatwierdzania |
 | 7 | Przeliczniki konfigurowalne, zapis źródła AUTO/MANUAL/COMPANY_RATE | 🟡 | przeliczniki w konfiguracji i kartotece produktu; źródło zapisywane tylko dla masy zakupu i tonażu MM |
-| 8 | Sprzedaż w MP/m³/t + tonaż AUTO/RĘCZNY | 🟡 | brak ręcznego tonażu i jego źródła w sprzedaży |
+| 8 | Sprzedaż w MP/m³/t + tonaż AUTO/RĘCZNY | ✅ | 3.4.0: tonaż AUTO (przelicznik) / RĘCZNY (waga) zapisany na WZ ze źródłem, np. „60 MP \| 20,35 t \| RĘCZNY”; korekta zachowuje tryb |
 | 9 | Nazwa „PRODUKCJA NA MAGAZYNIE” | ✅ | zmienione w 3.x z „Produkcja na magazyn” (etykiety, pulpit, formularz, listy, słowniki CS/EN, testy); w 4.0 od początku |
-| 10 | Numery PZ/WZ wpisywane ręcznie, osobne daty dokumentu/przyjęcia/utworzenia | 🔁 | numeracja automatyczna; jedna data operacji + `createdAt` |
-| 11 | Otwórz / Podgląd / Koryguj / Usuń, BYŁO/JEST | 🟡 | korekty z tabelą przed/po są; **„Usuń” nie ma** — jest anulowanie z dokumentem AN |
-| 12 | Wydruk, PDF, CSV, **XLSX**, **DOCX** | 🟡 | brak XLSX, DOCX |
-| 13–14 | Operacje dodatkowe + kartoteka | ❌ | brak |
-| 15 | Rębaki firm zewnętrznych | ❌ | tylko rębaki własne |
-| 16 | Kafel „Operacje dodatkowe” na pulpicie | ❌ | — |
+| 10 | Numery PZ/WZ wpisywane ręcznie, osobne daty dokumentu/przyjęcia/utworzenia | ✅ | 3.4.0: numer ręczny z podpowiedzią, unikalny dla typu + magazynu + roku; data dokumentu, data przyjęcia/wydania (data operacji) i `createdAt` |
+| 11 | Otwórz / Podgląd / Koryguj / Usuń, BYŁO/JEST | ✅ | 3.4.0: akcje w rejestrach; „Usuń” = soft delete z powodem (odwrócenie ruchów dokumentem AN, dokument w historii i audycie, uprawnienie `documents.delete`); PZ zielone, WZ złote |
+| 12 | Wydruk, PDF, CSV, **XLSX**, **DOCX** | ✅ | 3.4.0: XLSX i DOCX tworzone w programie (rejestry, operacje, raporty, podgląd dokumentu) |
+| 13–14 | Operacje dodatkowe + kartoteka | ✅ | 3.4.0: pole „Dodaj operację dodatkową” w produkcji; pozycje jako osobne rekordy z `opId`; kartoteka w bazie (Kartoteki → Dodatkowe operacje) |
+| 15 | Rębaki firm zewnętrznych | ✅ | 3.4.0: właściciel (własny / firma), firma, nr rej., operator opisowo; w produkcji osobna grupa na liście |
+| 16 | Kafel „Operacje dodatkowe” na pulpicie | ✅ | 3.4.0: wybór miesiąca, koszt, liczba, lista; te same liczby w raporcie miesięcznym |
 | 17 | Powiadomienia e-mail o zdarzeniach, kolejka, retry | ❌/🟡 | poczta kont działa; brak powiadomień, brak kolejki z ponowieniem |
 | 18 | CSV/XLSX szczegółowe, kolumny rozdzielone | 🟡 | CSV są, ale część kolumn łączy informacje (np. „Treść”) |
 | 19 | Stan wyłącznie z operacji, brak ujemnego przy równoczesnej sprzedaży | ✅ | księga append-only, symulacja sald; równoczesność bezpieczna, bo zapisy są serializowane (koszt: brak równoległości) |

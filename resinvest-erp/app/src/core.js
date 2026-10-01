@@ -419,6 +419,7 @@
     { group: N_("Kartoteki") },
     { id: "flota", label: N_("Flota"), icon: "truck" },
     { id: "produkty", label: N_("Produkty"), icon: "box" },
+    { id: "dodatkowe", label: N_("Dodatkowe operacje"), icon: "layers" },
     { id: "kontrahenci", label: N_("Kontrahenci"), icon: "users" },
     { id: "magazyny", label: N_("Magazyny"), icon: "building" },
     { group: N_("System") },

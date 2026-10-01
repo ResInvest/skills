@@ -326,7 +326,9 @@ async function fillForestDirect(page) {
     await page.fill("#h-from", "2026-09-15"); await page.press("#h-from", "Tab"); await page.fill("#h-to", "2026-09-16"); await page.press("#h-to", "Tab"); await page.waitForTimeout(150);
     const dates = await page.$$eval("#hist-table tbody tr td:first-child", t => [...new Set(t.map(x => x.textContent))]);
     check("§23 Historia: zakres dat 15.09–16.09", dates.every(d => d === "15.09.2026" || d === "16.09.2026") && dates.length === 2, dates);
-    await page.selectOption("#h-mode", "month"); await page.waitForTimeout(150);
+    // dziennik audytu zapisuje rzeczywisty czas zdarzenia (zegar systemu), a „dziś” programu jest w teście ustawione na 23.09.2026 —
+    // zakres roczny obejmuje oba niezależnie od daty uruchomienia testu
+    await page.selectOption("#h-mode", "year"); await page.waitForTimeout(150);
     await page.click('[data-htab="audit"]');
     check("Dziennik audytu: anulowanie z powodem", nb(await page.textContent("#audit-table")).includes("Anulowanie dokumentu") && nb(await page.textContent("#audit-table")).includes("błędny kontrahent"));
 
@@ -615,7 +617,7 @@ async function fillForestDirect(page) {
     check("3.1 Administrator przełącza magazyn roboczy", nb(await page.textContent("#wh-chip")).includes("RiC Rokitki"));
     await preset(page, "produkcja");
     const chOpts = await page.$$eval("#f-production-chipperId option", o => o.map(x => x.value).filter(Boolean));
-    check("3.1 Formularz: tylko rębaki magazynu operacji", chOpts.length === 1 && chOpts[0] === "ch_albach", chOpts);
+    check("3.1 Formularz: rębaki własne tylko z magazynu operacji (+ rębaki firm zewnętrznych)", chOpts.includes("ch_albach") && !chOpts.includes("ch_biber") && chOpts.filter(v => !/^__/.test(v)).every(v => v === "ch_albach" || /^ch_ext_/.test(v)), chOpts);
     // 3.2: zakup — ilość w m³, cena za MP; zmiana jednostki ilości przelicza ilość; transport zapewnia dostawca
     await preset(page, "zakup");
     await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "10");
@@ -685,6 +687,103 @@ async function fillForestDirect(page) {
     await page.click("#wh-chip"); await page.click('[data-wh="wh_zab"]'); await page.waitForTimeout(200);
     await login(page, LOGINS.u_bra);
     check("3.2 Magazynier jednego magazynu: bez przełącznika", !(await page.evaluate(() => document.querySelector("#wh-chip").classList.contains("switchable"))));
+    await ctx.close();
+  }
+
+  /* ------------- 3.4: operacje dodatkowe, kartoteka, kafel pulpitu, tonaż, numery ręczne, usuwanie, XLSX/DOCX ------------- */
+  {
+    const ctx = await newCtx(browser); const page = await ctx.newPage(); watch(page, "3.4");
+    await boot(page);
+    // kafel pulpitu z wyborem miesiąca
+    check("3.4 Pulpit: kafel OPERACJE DODATKOWE z wyborem miesiąca", await allExist(page, ["#dash-extras", "#xt-month", "#xt-cost", "#xt-count"]) && nb(await page.textContent("#dash-extras h3")) === "OPERACJE DODATKOWE");
+    const expSep = await page.evaluate(() => { const R = RIW_DEBUG.R, S = RIW_DEBUG.store.state; return R.Reports.extras(S, "2026-09-01", "2026-09-23", "wh_zab"); });
+    check("3.4 Pulpit: koszt i liczba = zestawienie silnika (wrzesień)", nb(await page.textContent("#xt-count")) === String(expSep.count) && nb(await page.textContent("#xt-cost")).replace(/\s/g, "") === (await page.evaluate(v => RIW_DEBUG.R.money(v), expSep.cost)).replace(/[\s  ]/g, ""), { exp: expSep.count, got: await page.textContent("#xt-count") });
+    await page.fill("#xt-month", "2026-08"); await page.dispatchEvent("#xt-month", "change"); await page.waitForTimeout(250);
+    const expAug = await page.evaluate(() => RIW_DEBUG.R.Reports.extras(RIW_DEBUG.store.state, "2026-08-01", "2026-08-31", "wh_zab"));
+    check("3.4 Pulpit: zmiana miesiąca (sierpień) przelicza kafel", nb(await page.textContent("#xt-count")) === String(expAug.count) && expAug.count >= 1 && nb(await page.textContent("#xt-table")).includes("Holowanie"), expAug.count);
+    // kartoteka
+    await go(page, "dodatkowe"); await page.waitForSelector("#extra-types-table");
+    check("3.4 Kartoteki → Dodatkowe operacje: lista rodzajów z bazy", (await page.$$eval("#extra-types-table tbody tr", r => r.length)) >= 5 && nb(await page.textContent("#extra-types-table")).includes("Holowanie"));
+    check("3.4 Menu: pozycja „Dodatkowe operacje” w Kartotekach", nb(await page.textContent("#nav")).includes("Dodatkowe operacje"));
+    // produkcja z operacjami dodatkowymi
+    await preset(page, "produkcja");
+    await fillTab(page, "#f-production-outQty", "100");
+    check("3.4 Produkcja: checkbox „Dodaj operację dodatkową”", !!(await page.$("#f-extras-enabled")) && nb(await page.textContent("#opf")).includes("Dodaj operację dodatkową"));
+    await tick(page, "f-extras-enabled"); await page.waitForSelector("#f-extras-items-0-typeId");
+    await page.selectOption("#f-extras-items-0-typeId", "xt_holowanie"); await page.waitForTimeout(120);
+    await page.selectOption("#f-extras-items-0-vehicleId", "ve_scania"); await page.waitForTimeout(80);
+    await fillTab(page, "#f-extras-items-0-cost", "500");
+    await page.click("#extra-add"); await page.waitForSelector("#f-extras-items-1-typeId");
+    await page.selectOption("#f-extras-items-1-typeId", "xt_ladowarka"); await page.waitForTimeout(120);
+    await fillTab(page, "#f-extras-items-1-qty", "2");
+    check("3.4 Produkcja: koszt pozycji = ilość × stawka domyślna (2 h × 160 zł)", (await out(page, "extra.1.cost")).includes("320,00"), await out(page, "extra.1.cost"));
+    check("3.4 Produkcja: suma operacji dodatkowych 820,00 zł", (await out(page, "extras.total")).includes("820,00"), await out(page, "extras.total"));
+    await page.click("#summary [data-save]"); await page.waitForSelector("#confirm-op");
+    check("3.4 Podsumowanie: operacje dodatkowe w oknie zatwierdzenia", nb(await page.textContent("#confirm-op")).includes("Holowanie"));
+    await page.click("#confirm-op [data-no]"); await page.waitForTimeout(100);
+    check("3.4 Produkcja z operacjami dodatkowymi zapisana", (await approve(page)) === 1);
+    const xo = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { id: o.id, n: o.extras.length, cost: o.totals.extraCost, linked: o.extras.every(x => x.opId === o.id) }; });
+    check("3.4 Operacje dodatkowe: 2 osobne rekordy powiązane z operacją, koszt 820 zł", xo.n === 2 && xo.cost === 820 && xo.linked, xo);
+    await openOp(page, xo.id);
+    check("3.4 Szczegóły operacji: lista operacji dodatkowych", nb(await page.textContent("#op-extras")).includes("Holowanie") && nb(await page.textContent("#op-extras")).includes("SGL 4T821"));
+    await closeModals(page);
+    // sprzedaż z tonażem ręcznym i ręcznym numerem WZ
+    await preset(page, "wz");
+    await page.selectOption("#f-sale-productId", "pr_zr_lesna"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-sale-qty", "60");
+    await page.fill("#f-sale-price", "90"); await page.selectOption("#f-sale-buyerId", "pa_ec_zab"); await page.waitForTimeout(100);
+    await page.selectOption("#f-sale-weightMode", "manual"); await page.waitForSelector("#f-sale-weightManual");
+    await fillTab(page, "#f-sale-weightManual", "20,35");
+    check("3.4 Sprzedaż: linia „60 MP | 20,35 t | RĘCZNY”", (await out(page, "sale.tonLine")) === "60 MP | 20,35 t | RĘCZNY", await out(page, "sale.tonLine"));
+    await fillTab(page, "#f-docNos-WZ", "WZ/27");
+    await fillTab(page, "#f-docDate", "2026-09-22");
+    check("3.4 Sprzedaż z ręcznym numerem WZ zapisana", (await approve(page)) === 1);
+    const wz = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1), d = o.documents.find(x => x.type === "WZ"); return { id: o.id, no: d.no, docDate: d.docDate, mode: d.weightMode, w: o.sale.weightT }; });
+    check("3.4 WZ: numer ręczny WZ/27, data dokumentu 22.09, tonaż RĘCZNY 20,35 t", wz.no === "WZ/27" && wz.docDate === "2026-09-22" && wz.mode === "manual" && wz.w === 20.35, wz);
+    await preset(page, "wz");
+    await page.selectOption("#f-sale-productId", "pr_zr_lesna"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-sale-qty", "10"); await page.fill("#f-sale-price", "90"); await page.selectOption("#f-sale-buyerId", "pa_ec_zab"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-docNos-WZ", "wz/27");
+    check("3.4 Numer WZ/27 drugi raz w magazynie i roku — odrzucony", (await msg(page, "docNos.WZ")).includes("już użyty"), await msg(page, "docNos.WZ"));
+    // rejestr dokumentów: akcje, kolory, eksport XLSX
+    await go(page, "dokumenty"); await page.waitForTimeout(150);
+    check("3.4 Rejestr dokumentów: akcje Otwórz / Podgląd / Koryguj / Usuń", await allExist(page, ["[data-corr]", "[data-del]"]) && nb(await page.textContent("#page")).includes("Podgląd"));
+    check("3.4 Rejestr: PZ i WZ oznaczone kolorem (klasy dokumentu)", !!(await page.$("tr.doc-row-WZ .doc-badge.doc-WZ")) && !!(await page.$("tr.doc-row-PZ .doc-badge.doc-PZ")));
+    const pzColor = await page.$eval(".doc-badge.doc-PZ", e => getComputedStyle(e).color), wzColor = await page.$eval(".doc-badge.doc-WZ", e => getComputedStyle(e).color);
+    check("3.4 Rejestr: PZ i WZ w różnych kolorach", pzColor !== wzColor, { pzColor, wzColor });
+    const [dlx] = await Promise.all([page.waitForEvent("download"), page.click("#reg-xlsx")]);
+    const xfile = path.join(TMP, "rejestr.xlsx"); await dlx.saveAs(xfile);
+    const xb = fs.readFileSync(xfile);
+    check("3.4 Eksport XLSX rejestru: plik ZIP/OOXML z arkuszem", xb.readUInt32LE(0) === 0x04034b50 && xb.includes(Buffer.from("xl/worksheets/sheet1.xml")) && dlx.suggestedFilename().endsWith(".xlsx"), dlx.suggestedFilename());
+    // usuwanie (soft delete) WZ/27
+    await page.click(`[data-del="${wz.id}"]`).catch(async () => { await openOp(page, wz.id); await page.click("#op-delete-btn"); });
+    await page.waitForSelector("#delete-dialog");
+    await page.click("#delete-yes"); await page.waitForTimeout(150);
+    check("3.4 Usuń: wymagany powód", !!(await page.$("#delete-dialog")));
+    const opt = await page.$$eval("#delete-reason option", o => o.map(x => x.value).filter(Boolean)[0]);
+    await page.selectOption("#delete-reason", opt);
+    if (await page.$("#delete-reason-text")) await page.fill("#delete-reason-text", "dokument wprowadzony podwójnie");
+    await page.click("#delete-yes"); await page.waitForTimeout(400);
+    const del = await page.evaluate(id => { const o = RIW_DEBUG.store.state.operations.find(x => x.id === id); return { exists: !!o, deleted: !!(o && o.deleted), audit: RIW_DEBUG.store.state.audit.some(a => a.entityId === id && a.event === "delete") }; }, wz.id);
+    check("3.4 Usuń = soft delete: rekord zostaje, znacznik usunięcia, wpis w audycie", del.exists && del.deleted && del.audit, del);
+    await closeModals(page); await go(page, "dokumenty"); await page.waitForTimeout(150);
+    check("3.4 Rejestr: usunięty dokument ukryty domyślnie", !nb(await page.textContent("#page")).includes("WZ/27"));
+    await page.check("#r-deleted"); await page.waitForTimeout(200);
+    check("3.4 Rejestr: filtr „Pokaż usunięte” pokazuje WZ/27 jako USUNIĘTY", nb(await page.textContent("#page")).includes("WZ/27") && nb(await page.textContent("#page")).includes("USUNIĘTY"));
+    // DOCX z podglądu dokumentu (rejestr → Podgląd)
+    await page.click("[data-view] >> nth=0"); await page.waitForSelector('[data-docx="doc"]');
+    const [dd] = await Promise.all([page.waitForEvent("download"), page.click('[data-docx="doc"]')]);
+    const dfile = path.join(TMP, "dok.docx"); await dd.saveAs(dfile);
+    const db = fs.readFileSync(dfile);
+    check("3.4 Eksport DOCX dokumentu z podglądu", dd.suggestedFilename().endsWith(".docx") && db.readUInt32LE(0) === 0x04034b50 && db.includes(Buffer.from("word/document.xml")), dd.suggestedFilename());
+    await closeModals(page);
+    // rębak firmy zewnętrznej w produkcji (operator opisowy)
+    await preset(page, "produkcja");
+    await page.selectOption("#f-production-chipperId", "ch_ext_drwal"); await page.waitForTimeout(150);
+    check("3.4 Rębak firmy zewnętrznej: pole operatora opisowego zamiast operatora z floty", !!(await page.$("#f-production-operatorName")) && !(await page.$("#f-production-operatorId")));
+    // telefon: kafel bez poziomego przewijania
+    await page.setViewportSize({ width: 390, height: 844 }); await go(page, "pulpit"); await page.waitForTimeout(250);
+    check("3.4 Telefon: kafel operacji dodatkowych mieści się w szerokości", await page.evaluate(() => { const e = document.querySelector("#dash-extras"); return e && e.getBoundingClientRect().right <= window.innerWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; }));
     await ctx.close();
   }
 

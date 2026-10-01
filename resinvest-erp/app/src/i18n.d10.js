@@ -96,7 +96,6 @@
   "Domyślny przy rębakach": ["Výchozí u štěpkovačů", "Default for chippers"],
   "Samochody / ruchome podłogi": ["Nákladní vozy / posuvné podlahy", "Trucks / walking floors"],
   "Kierowcy": ["Řidiči", "Drivers"],
-  "Rębaki": ["Štěpkovače", "Chippers"],
   "Operatorzy rębaków": ["Obsluha štěpkovačů", "Chipper operators"],
   "Transport własny w „Nowej operacji” korzysta z tej listy. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.": ["Vlastní doprava v „Nové operaci“ používá tento seznam. Jízda ukládá řidiče zvoleného pro konkrétní jízdu — pozdější změna výchozího řidiče historii nemění.", "Own transport in “New operation” uses this list. Each trip records the driver chosen for that trip — changing the default driver later does not alter history."],
   "Dodaj: {k}": ["Přidat: {k}", "Add: {k}"],

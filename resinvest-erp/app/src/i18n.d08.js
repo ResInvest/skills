@@ -155,6 +155,5 @@
   "Zakres własny": ["Vlastní rozsah", "Custom range"],
   "Dowolny dzień tygodnia": ["Libovolný den v týdnu", "Any day of the week"],
   "Od": ["Od", "From"],
-  "Do": ["Do", "To"],
-  "Rejestr wszystkich operacji magazynu {w} ze statusem dokumentu. Kliknij wiersz — szczegóły, powiązania, korekta, anulowanie. Dokumentów zatwierdzonych nie usuwa się.": ["Registr všech operací skladu {w} se stavem dokladu. Klikněte na řádek — podrobnosti, vazby, oprava, storno. Potvrzené doklady se nemažou.", "Register of all operations in warehouse {w} with document status. Click a row — details, links, correction, cancellation. Approved documents are never deleted."]
+  "Do": ["Do", "To"]
 }); })(typeof globalThis !== "undefined" ? globalThis : this);

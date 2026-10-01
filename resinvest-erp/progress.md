@@ -107,6 +107,22 @@ Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z
 | E2E OFFLINE | 187/187 |
 | E2E FIRMOWY | 24/24 |
 
+## 3.4.0 — operacje dodatkowe, rębaki zewnętrzne, tonaż AUTO/RĘCZNY, numery ręczne, usuwanie, XLSX/DOCX (2026-10-01)
+
+| Zestaw | Wynik |
+|---|---|
+| `npm run check`, `npm run i18n`, `npm run themes` | OK · CS/EN 0 braków / 0 nieużywanych (172 nowe teksty) · kontrast 5 motywów OK |
+| unit (engine, features34, pdf, platform) | 125/125 (w tym 12 nowych testów funkcji 3.4) |
+| server + auth | 35/35 |
+| E2E OFFLINE (`e2e.cjs`) | 229/229 (27 nowych kontroli 3.4), konsola bez błędów |
+| E2E FIRMOWY (`e2e-server.cjs`) | 24/24 |
+| Układ na telefonie (390 px): kafel „Operacje dodatkowe” | bez poziomego przewijania (kontrola E2E) |
+| XLSX / DOCX | struktura ZIP/OOXML i sumy CRC sprawdzane w testach; pliki otwierane w openpyxl i python-docx |
+| Instalator 3.4.0 | Inno Setup 6.4.1 (Wine); instalacja cicha w Wine 9 (win64) i `--check` serwera na dołączonym Node.js — OK. Prawdziwy Windows / Inno Setup 7 — NIEPOTWIERDZONE |
+
+Naprawione w trakcie: raport okresowy wiązał tabele z nagłówkami po pozycji — po dodaniu sekcji „Operacje dodatkowe”
+nagłówek „Wycena” trafiał nad niewłaściwą tabelę (wykryte przez E2E, poprawione przed wydaniem).
+
 ## 3.3.0 — przesunięcia MM: magazyn źródłowy, tryb dwuetapowy, przyjęcie MM, tonaż (2026-09-28)
 
 | Zestaw | Wynik |

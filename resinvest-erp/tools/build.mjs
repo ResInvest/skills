@@ -17,14 +17,16 @@ const noVideo = process.argv.includes("--no-video");
 /** Kolejność ładowania warstw (zależności: i18n + słowniki → silnik → usługa → interfejs). */
 export const DICTS = readdirSync(SRC).filter(f => /^i18n\.d\d+\.js$/.test(f)).sort();
 // intro.js jako pierwszy — buforowanie filmu rusza, zanim przeglądarka przeczyta resztę programu
-export const SCRIPTS = ["intro.js", "i18n.js", ...DICTS, "engine.js", "service.js", "seed.js", "pdf.js", "auth.js", "core.js", "form.js", "views.js", "dashboard.js", "admin.js"];
+export const SCRIPTS = ["intro.js", "i18n.js", ...DICTS, "engine.js", "service.js", "seed.js", "pdf.js", "office.js", "auth.js", "core.js", "form.js", "views.js", "dashboard.js", "admin.js"];
 
 const read = f => readFileSync(join(SRC, f), "utf8");
 for (const f of SCRIPTS.concat(["styles.css"])) {
   const v = read(f);
   if (/<\/(script|style)/i.test(v)) throw new Error(`${f} zawiera </script> lub </style>`);
   if (f.endsWith(".js")) {
-    const external = (v.match(/https?:\/\/[^\s"'`)]+/g) || []).filter(u => !u.startsWith("http://www.w3.org/"));
+    // identyfikatory przestrzeni nazw XML (SVG, OOXML, Dublin Core) nie są pobierane — to tylko nazwy
+    const XML_NS = ["http://www.w3.org/", "http://schemas.openxmlformats.org/", "http://purl.org/dc/"];
+    const external = (v.match(/https?:\/\/[^\s"'`)]+/g) || []).filter(u => !XML_NS.some(ns => u.startsWith(ns)));
     if (external.length) throw new Error(`${f} odwołuje się do zasobów zewnętrznych: ${external.join(", ")}`);
   }
 }

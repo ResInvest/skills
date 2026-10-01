@@ -59,6 +59,8 @@
     /** Przyjęcie MM (tryb dwuetapowy) — użytkownik magazynu docelowego; ilość faktyczna, tonaż, przyczyna różnicy. */
     "mm.receive": { perm: "mm.receive", run: (s, a, c) => R.receiveTransfer(s, str(a.opId), a.receipt || {}, c) },
     "op.cancel": { perm: "documents.cancel", run: (s, a, c) => R.cancelOperation(s, a.opId, c, a.reason, { ack: !!a.ack }) },
+    /** Usunięcie dokumentu (soft delete z odwróceniem ruchów) — Administrator / Kierownik, powód wymagany. */
+    "op.delete": { perm: "documents.delete", run: (s, a, c) => R.deleteOperation(s, str(a.opId), c, a.reason) },
     "print.register": { perm: "report.view", run: (s, a, c) => R.registerPrint(s, c, { kind: a.kind, title: a.title, range: a.range, wh: a.wh, format: a.format }) },
     /* ---- inwentaryzacja ---- */
     "inv.open": { perm: "inv.open", run: (s, a, c) => R.Inventory.open(s, a.ym, c) },

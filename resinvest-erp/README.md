@@ -1,8 +1,13 @@
-# ResInvest ERP 3.3 (3.3.0)
+# ResInvest ERP 3.4 (3.4.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
-> Wersja 3.3.0 przebudowuje **przesunięcia międzymagazynowe (MM)**: dowolny wybór magazynu źródłowego i docelowego,
+> Wersja 3.4.0 dodaje **operacje dodatkowe** w produkcji (holowanie, pryzmy, ładowarka… — z kartoteką
+> „Kartoteki → Dodatkowe operacje” i kafelkiem na pulpicie z wyborem miesiąca), **rębaki firm zewnętrznych**,
+> **tonaż sprzedaży AUTO / RĘCZNY** ze źródłem na dokumencie, **ręczne numery PZ / WZ** z osobną datą dokumentu,
+> **usuwanie dokumentu** (soft delete — z odwróceniem ruchów, dokument zostaje w historii) oraz **eksport XLSX i DOCX**.
+>
+> Wersja 3.3.0 przebudowała **przesunięcia międzymagazynowe (MM)**: dowolny wybór magazynu źródłowego i docelowego,
 > tryb **dwuetapowy** (wysłanie → „W drodze” → **Przyjmij MM** z ilością faktyczną) przełączany w Administracji
 > oraz **tonaż** automatyczny lub ręczny z kwitu wagowego. Szczegóły: [`docs/MM_PRZESUNIECIA.md`](docs/MM_PRZESUNIECIA.md).
 >
@@ -24,6 +29,34 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.4
+
+* **Operacje dodatkowe (produkcja):** pole wyboru **„Dodaj operację dodatkową”** w produkcji na magazynie, w zakupie z
+  produkcją i w produkcji ze sprzedażą bezpośrednią. Każda pozycja: rodzaj z kartoteki, opcjonalnie pojazd z Floty,
+  ilość × stawka albo kwota, opis. Pozycje są **osobnymi rekordami** powiązanymi z operacją (`extras[].opId`);
+  koszt obniża wynik operacji, stan magazynu się nie zmienia. Korekta pokazuje zmianę BYŁO / JEST.
+* **Kartoteki → Dodatkowe operacje:** rodzaje zapisane w bazie (ID, nazwa, opis, aktywna, jednostka, stawka domyślna,
+  data utworzenia i zmiany). Rodzaju użytego w dokumentach nie można usunąć — tylko dezaktywować.
+* **Pulpit — kafel OPERACJE DODATKOWE:** wybór miesiąca, koszt łączny, liczba, lista (data, rodzaj, pojazd, magazyn,
+  dokument / produkcja, koszt); kliknięcie wiersza otwiera operację. Te same liczby w raporcie miesięcznym (sekcja
+  „Operacje dodatkowe”) i w kosztach pulpitu.
+* **Rębaki firm zewnętrznych:** we Flocie rębak ma właściciela (własny / firma zewnętrzna), firmę, nr rejestracyjny,
+  operatora opisowo i informacje dodatkowe. W produkcji lista rębaków ma dwie grupy; dla rębaka zewnętrznego
+  operator jest polem tekstowym.
+* **Sprzedaż — tonaż AUTO / RĘCZNY:** AUTO z przelicznika produktu, RĘCZNY z wagi rzeczywistej (nigdy nie nadpisywany
+  automatycznie). Na formularzu, WZ, PDF i w rejestrze: np. **„60 MP | 20,35 t | RĘCZNY”**.
+* **Ręczne numery PZ / WZ:** pole numeru z podpowiedzią kolejnego numeru; numer unikalny dla typu + magazynu + roku
+  (bez względu na wielkość liter i spacje). Osobno: **data dokumentu**, **data przyjęcia / wydania** (data operacji)
+  i **data i godzina utworzenia** (system).
+* **Usuwanie dokumentu („Usuń”):** soft delete z obowiązkowym powodem — ruchy odwracane dokumentem AN, dokument
+  znika z rejestrów (filtr „Pokaż usunięte”), ale zostaje w historii i dzienniku audytu. Zablokowane, gdy towar z
+  dokumentu został już wydany/zużyty lub MM przyjęto. Uprawnienie `documents.delete` (Kierownik, Administrator).
+* **Rejestry dokumentów:** akcje **Otwórz / Podgląd / Koryguj / Usuń**, PZ oznaczone na zielono, WZ na złoto.
+* **Eksport XLSX i DOCX:** rejestry, operacje, raporty i podgląd dokumentu — pliki Office tworzone w programie
+  (bez bibliotek zewnętrznych), liczby w XLSX zapisane jako liczby.
+* **Schemat danych 8:** migracja 7 → 8 automatyczna przy pierwszym uruchomieniu (kartoteka operacji dodatkowych,
+  właściciel rębaków, uprawnienie `documents.delete`). Dane nie są kasowane.
 
 ## Nowe w 3.3
 
@@ -144,7 +177,7 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
 
 ## Instalacja (Windows)
 
-Uruchom **`ResInvestERP_Setup_3.3.0.exe`** (budowanie — niżej) i wybierz:
+Uruchom **`ResInvestERP_Setup_3.4.0.exe`** (budowanie — niżej) i wybierz:
 
 * **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
   tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
@@ -300,10 +333,10 @@ npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
 npm run themes        # kontrast WCAG wszystkich 5 motywów
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
-npm run test:unit     # silnik (w tym MM dwuetapowe), PDF, platforma: jednostki, korekty, transport, i18n, hasła, role (113)
+npm run test:unit     # silnik (w tym MM dwuetapowe), PDF, platforma: jednostki, korekty, transport, i18n, hasła, role, funkcje 3.4: operacje dodatkowe, numery ręczne, tonaż, usuwanie, XLSX/DOCX (125)
 npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35, MM przez serwer: zaproszenia, reset, izolacja magazynów, 403 (26)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # przeglądarka: tryb OFFLINE (202 kontrole) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
+npm run test:e2e      # przeglądarka: tryb OFFLINE (229 kontroli) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
 FFMPEG=ffmpeg node tests/e2e-intro.cjs   # intro na prawdziwym filmie (wariant WebM dla Chromium bez H.264)
 ```
 
@@ -315,7 +348,7 @@ Plik `.iss` jest zapisany w UTF-8 z BOM (polskie i czeskie znaki w Inno Setup 7)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Setup_3.3.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
+# → installer\Output\ResInvestERP_Setup_3.4.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
 Bez Windows (serwer budowania Linux): `bash installer/build-installer-wine.sh` — ten sam plik `.iss`,

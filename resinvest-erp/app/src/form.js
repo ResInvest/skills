@@ -71,6 +71,13 @@
     "transport.train.sameT": N_("<b>Co:</b> tonaż jednego wagonu — trafi do każdego wagonu. <b>Przykład:</b> 20 × 60 t = 1 200 t."),
     "transport.train.price": N_("<b>Co:</b> stawka frachtu kolejowego. Ilość do rozliczenia wynika z tonażu składu."),
     "transport.train.priceUnit": N_("<b>Co:</b> za co płacimy przewoźnikowi: t, MP czy m³."),
+    "extras.enabled": N_("<b>Co:</b> prace towarzyszące produkcji, np. holowanie, podgarnianie pryzm, praca ładowarką. Każda pozycja to osobny zapis z kosztem — rodzaj wybierasz z kartoteki <b>Dodatkowe operacje</b>, pojazd (opcjonalnie) z <b>Floty</b>. Koszt obniża wynik operacji; stan magazynu się nie zmienia."),
+    "sale.weightMode": N_("<b>AUTO</b> = przelicznik firmowy produktu (np. 1 MP = 0,33 t). <b>RĘCZNY</b> = tonaż z wagi rzeczywistej — zapisany na dokumencie i nigdy nie nadpisywany automatycznie."),
+    "sale.weightManual": N_("<b>Co:</b> tonaż z kwitu wagowego, w tonach. <b>Przykład:</b> 20,35."),
+    "docNos.PZ": N_("<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku."),
+    "docNos.WZ": N_("<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Puste = numer nadany automatycznie (podpowiedź obok). Numer musi być unikalny w magazynie w danym roku."),
+    "docDate": N_("<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data operacji. <b>Data operacji</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system."),
+    "production.operatorName": N_("<b>Co:</b> operator rębaka firmy zewnętrznej (opcjonalnie) — domyślnie z kartoteki rębaka."),
     "notes": N_("<b>Co:</b> dodatkowe informacje (opcjonalnie)."),
     "extDoc": N_("<b>Co:</b> numer dokumentu zewnętrznego (faktura, kwit wagowy, zlecenie) — opcjonalnie.")
   };
@@ -289,10 +296,71 @@
           ${field({ key: "production.chipRate", label: t("Cena za rąbanie [zł/MP]"), control: numIn("production.chipRate", P_.chipRate, { suffix: "zł/MP", placeholder: fmt(10, 2) }) })}
           ${field({ key: "production.chipCost", label: t("Koszt rąbania"), control: outBox("production.chipCost", "—"), help: false })}
           ${origin}
-          ${field({ key: "production.chipperId", label: t("Rębak (Flota)"), span: "span2", control: selIn("production.chipperId", [pick(t("bez wskazania rębaka"))].concat(this.fleetOf("chippers", P_.chipperId).map(c => ({ v: c.id, l: `${c.name}${c.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[c.status]) : ""}`, disabled: c.status !== "aktywny" }))), P_.chipperId, { struct: true }) })}
-          ${P_.chipperId ? field({ key: "production.operatorId", label: t("Operator rębaka"), span: "span2", control: selIn("production.operatorId", this.fleetOf("operators", P_.operatorId).map(o => ({ v: o.id, l: o.name + (chipper && chipper.operatorId === o.id ? " " + t("(domyślny)") : "") })), P_.operatorId || (chipper ? chipper.operatorId : "")) }) : ""}
+          ${field({ key: "production.chipperId", label: t("Rębak (Flota — własny lub firmy zewnętrznej)"), span: "span2", control: selIn("production.chipperId", [pick(t("bez wskazania rębaka"))].concat(this.chipperOptions(P_.chipperId)), P_.chipperId, { struct: true }) })}
+          ${chipper && chipper.owner === "external"
+            ? field({ key: "production.operatorName", label: t("Operator (firma zewnętrzna)"), span: "span2", control: textIn("production.operatorName", P_.operatorName, { placeholder: chipper.operatorName || t("opcjonalnie") }) + `<div class="help">${esc(t("Rębak firmy {c}{r}", { c: chipper.company || "—", r: chipper.reg ? " · " + chipper.reg : "" }))}</div>` })
+            : P_.chipperId ? field({ key: "production.operatorId", label: t("Operator rębaka"), span: "span2", control: selIn("production.operatorId", this.fleetOf("operators", P_.operatorId).map(o => ({ v: o.id, l: o.name + (chipper && chipper.operatorId === o.id ? " " + t("(domyślny)") : "") })), P_.operatorId || (chipper ? chipper.operatorId : "")) }) : ""}
         </div>
         <datalist id="dl-ndl">${["Rudy Raciborskie", "Rybnik", "Katowice", "Brynek", "Gliwice"].map(x => `<option value="${esc(x)}">`).join("")}</datalist>`;
+    },
+    /** Rębaki do wyboru: własne (magazyn operacji / wspólne) i firm zewnętrznych — z oznaczeniem właściciela. */
+    chipperOptions(keepId) {
+      const own = [], ext = [];
+      for (const c of this.fleetOf("chippers", keepId)) {
+        const off = c.status !== "aktywny";
+        const o = { v: c.id, disabled: off && c.id !== keepId, l: c.owner === "external" ? `${c.name} — ${c.company || t("firma zewnętrzna")}${c.reg ? " (" + c.reg + ")" : ""}${off ? " — " + t(R.ASSET_STATUS[c.status]) : ""}` : `${c.name}${off ? " — " + t(R.ASSET_STATUS[c.status]) : ""}` };
+        (c.owner === "external" ? ext : own).push(o);
+      }
+      return own.concat(ext.length ? [{ v: "__sep", l: "── " + t("Rębaki firm zewnętrznych") + " ──", disabled: true }].concat(ext) : []);
+    },
+    /** Operacje dodatkowe (holowanie, ładowarka…) — pole wyboru + pozycje z kartoteki; osobne rekordy z kosztem. */
+    extrasHtml(n) {
+      const S = Store.state, d = this.draft, X = this.extras(), on = !!X.enabled, corr = this.mode === "correct";
+      const types = (S.extraTypes || []).filter(x => x.active !== false || X.items.some(i => i.typeId === x.id));
+      const vehicles = S.fleet.vehicles.filter(v => (!v.whId || v.whId === this.whId() || X.items.some(i => i.vehicleId === v.id)));
+      const rows = on ? X.items.map((it, i) => {
+        const k = f => `extras.items.${i}.${f}`, ty = R.byId(S.extraTypes, it.typeId);
+        const uLbl = ty && ty.unit ? t(R.EXTRA_UNITS[ty.unit] || ty.unit) : t("ilość");
+        return `<div class="run-card" data-extra="${i}">
+          <div class="run-h"><b>${esc(t("Operacja dodatkowa {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="extra.${i}.cost">—</span>
+            ${X.items.length > 1 ? `<button class="btn ghost sm" type="button" data-extra-del="${i}" aria-label="${esc(t("Usuń pozycję {n}", { n: i + 1 }))}">${ic("x", 14)}</button>` : ""}</div>
+          <div class="fgrid four">
+            ${field({ key: k("typeId"), label: t("Rodzaj operacji (Kartoteki → Dodatkowe operacje)"), req: true, span: "span2", help: false, control: selIn(k("typeId"), [pick(t("wybierz rodzaj"))].concat(types.map(x => ({ v: x.id, l: x.name + (x.active === false ? " — " + t("nieaktywny") : "") + (x.rate !== null && x.rate !== undefined ? ` · ${fmt(x.rate)} zł/${x.unit ? t(R.EXTRA_UNITS[x.unit] || x.unit) : t("ryczałt")}` : "") }))), it.typeId, { struct: true }) })}
+            ${field({ key: k("vehicleId"), label: t("Pojazd z Floty (opcjonalnie)"), span: "span2", help: false, control: selIn(k("vehicleId"), [pick(t("bez pojazdu"))].concat(vehicles.map(v => ({ v: v.id, l: `${v.reg} · ${v.name}${v.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[v.status]) : ""}`, disabled: v.status === "wycofany" && v.id !== it.vehicleId }))), it.vehicleId) })}
+            ${field({ key: k("qty"), label: t("Ilość ({u})", { u: uLbl }), help: false, control: numIn(k("qty"), it.qty, { placeholder: t("opcjonalnie") }) })}
+            ${field({ key: k("rate"), label: t("Stawka (zł)"), help: false, control: numIn(k("rate"), it.rate, { suffix: "zł", placeholder: ty && ty.rate !== null && ty.rate !== undefined ? fmt(ty.rate) : t("opcjonalnie") }) })}
+            ${field({ key: k("cost"), label: t("Koszt (zł)"), req: true, help: false, control: numIn(k("cost"), it.cost, { suffix: "zł", placeholder: t("kwota albo ilość × stawka") }) })}
+            ${field({ key: k("desc"), label: t("Opis"), help: false, control: textIn(k("desc"), it.desc, { placeholder: eg(t("Holowanie rębaka z drogi leśnej")) }) })}
+          </div></div>`;
+      }).join("") : "";
+      return section(n, "extras", t("Operacje dodatkowe"), t("Prace towarzyszące produkcji z kosztem — np. holowanie, podgarnianie pryzm, praca ładowarką."), `
+        <div class="scope one" data-field="extras.enabled">${optCard("extras.enabled", { checked: on, disabled: false, title: t("Dodaj operację dodatkową"), text: t("Rodzaj z kartoteki, opcjonalnie pojazd z floty, koszt i opis. Każda pozycja jest osobnym zapisem powiązanym z tą operacją.") })}
+          <div class="msg hidden" data-msg="extras.enabled" role="alert"></div></div>
+        <div class="help tut">${t(HELP["extras.enabled"])}</div>
+        ${on ? `<div class="runs" id="extras-list">${rows}</div>
+          <div class="row wrap mt3"><button class="btn" type="button" id="extra-add" ${X.items.length >= R.MAX_EXTRAS ? "disabled" : ""}>${ic("plus", 15)} ${esc(t("Dodaj kolejną operację dodatkową"))}</button>
+          <span class="dim" data-out="extras.total"></span></div>
+          <div class="msg hidden" data-msg="extras.items" role="alert"></div>
+          ${!types.length ? `<div class="info-line warn mt3">${ic("alert", 15)}<span>${esc(t("Kartoteka „Dodatkowe operacje” jest pusta — dodaj rodzaje w Kartoteki → Dodatkowe operacje."))}</span></div>` : ""}` : ""}
+        ${corr ? "" : ""}`);
+    },
+    extras() {
+      const d = this.draft;
+      if (!d.extras || !Array.isArray(d.extras.items)) d.extras = { enabled: !!(d.extras && d.extras.enabled), items: [R.blankExtra()] };
+      if (!d.extras.items.length) d.extras.items.push(R.blankExtra());
+      return d.extras;
+    },
+    /** Pola numeru dokumentu PZ / WZ (ręczny z podpowiedzią) i daty dokumentu. */
+    docNoFields(types) {
+      const d = this.draft, corr = this.mode === "correct";
+      if (!d.docNos) d.docNos = { PZ: "", WZ: "" };
+      const op = this.op;
+      return types.map(ty => {
+        const key = `docNos.${ty}`;
+        if (corr) { const doc = op && op.documents.find(x => x.type === ty); return field({ key, label: t("Nr {t}", { t: ty }), help: false, control: outBox(key, esc(doc ? doc.no : "—")) }); }
+        const sug = R.suggestDocNo(Store.state, ty, this.whId(), d.date);
+        return field({ key, label: t("Nr {t} (ręcznie)", { t: ty }), control: textIn(key, d.docNos[ty], { placeholder: t("np. {x} — puste: {s}", { x: `${ty}/11`, s: sug }) }) + `<div class="help">${t("Podpowiedź: <b>{s}</b>", { s: esc(sug) })} <button class="btn ghost sm" type="button" data-use-no="${ty}" data-no="${esc(sug)}">${esc(t("użyj"))}</button></div>` });
+      }).join("") + field({ key: "docDate", label: t("Data dokumentu"), control: `<input class="ctrl" type="date" id="${fid("docDate")}" data-bind="docDate" value="${esc(d.docDate || "")}" max="${esc(App.today())}">` });
     },
     buyers(currentId) { return Store.state.partners.filter(p => (p.active !== false || p.id === currentId) && ["buyer", "both"].includes(p.role)); },
     saleOfOutputFields() {
@@ -301,12 +369,21 @@
         ${field({ key: "sale.buyerId", label: t("Odbiorca"), req: true, span: "span2", control: selIn("sale.buyerId", [pick(t("wybierz odbiorcę"))].concat(this.buyers(d.sale.buyerId).map(p => ({ v: p.id, l: p.name }))), d.sale.buyerId, { struct: true }) })}
         ${field({ key: "sale.qtyMP", label: t("Ilość sprzedaży (MP)"), control: numIn("sale.qtyMP", d.sale.qtyMP, { suffix: "MP", placeholder: t("cała produkcja") }) })}
         ${field({ key: "sale.weight", label: t("Masa · energia"), control: outBox("sale.weight", "—"), help: false })}
+        ${this.saleWeightFields()}
         ${field({ key: "sale.price", label: t("Cena sprzedaży (zł/{u})", { u: d.sale.priceUnit }), req: true, control: numIn("sale.price", d.sale.price, { suffix: `zł/${d.sale.priceUnit}`, placeholder: eg("90") }) })}
         ${field({ key: "sale.priceUnit", label: t("Cena za"), control: selIn("sale.priceUnit", [{ v: "MP", l: "MP" }, { v: "t", l: t("t (tonę)") }], d.sale.priceUnit, { struct: true }) })}
         ${field({ key: "sale.revenue", label: t("Przychód ze sprzedaży"), span: "span2", control: outBox("sale.revenue", "—"), help: false })}
       </div>`;
     },
 
+    /** Tonaż sprzedaży: AUTO (przelicznik) / RĘCZNY (waga) — prezentacja „60 MP | 19,80 t | AUTO”. */
+    saleWeightFields() {
+      const d = this.draft, m = d.sale.weightMode === "manual" ? "manual" : "auto";
+      return `${field({ key: "sale.weightMode", label: t("Tonaż"), req: true, control: selIn("sale.weightMode", [{ v: "auto", l: t("Automatyczny / przelicznik firmowy") }, { v: "manual", l: t("Ręczny — z wagi rzeczywistej") }], m, { struct: true }) })}
+        ${m === "manual" ? field({ key: "sale.weightManual", label: t("Tonaż z wagi (t)"), req: true, control: numIn("sale.weightManual", d.sale.weightManual, { suffix: "t", placeholder: eg(fmt(20.35, 2)) }) })
+          : field({ key: "sale.weightAuto", label: t("Tonaż wyliczony"), control: outBox("sale.weightAuto", "—"), help: false })}
+        ${field({ key: "sale.tonLine", label: t("Ilość | tonaż | źródło"), span: "span2", control: outBox("sale.tonLine", "—"), help: false })}`;
+    },
     sectionsHtml() {
       const S = Store.state, d = this.draft, wh = R.byId(S.warehouses, this.whId());
       const type = d.type, corr = this.mode === "correct";
@@ -353,6 +430,7 @@
             ${d.purchase.weightMode === "manual"
               ? field({ key: "purchase.weightManual", label: t("Waga rzeczywista (t)"), req: true, control: numIn("purchase.weightManual", d.purchase.weightManual, { suffix: "t", placeholder: eg(fmt(19.2, 2)) }) })
               : field({ key: "purchase.weightAuto", label: t("Masa · energia (orientacyjnie)"), control: outBox("purchase.weightAuto", "—"), help: false })}
+            ${this.docNoFields(d.sale.enabled ? ["PZ", "WZ"] : ["PZ"])}
           </div>`);
         html += d.production.enabled ? section(n++, "prod", t("Produkcja z automatycznym zużyciem"), t("Zakupione drewno jest od razu dostępne do pobrania. Kolejność: zakup → zużycie → produkcja."), this.productionFields("chain")) : "";
         html += d.sale.enabled ? section(n++, "sale", t("Sprzedaż wyniku produkcji"), t("Sprzedajemy zrębkę z tej produkcji. Zmniejsza stan zrębki."), this.saleOfOutputFields()) : "";
@@ -376,11 +454,13 @@
               ${field({ key: "sale.revenue", label: t("Wartość sprzedaży"), control: outBox("sale.revenue", "—"), help: false })}
               ${field({ key: "sale.buyerId", label: t("Kupujący / odbiorca"), req: true, span: "span2", control: selIn("sale.buyerId", [pick(t("wybierz odbiorcę"))].concat(this.buyers(d.sale.buyerId).map(p => ({ v: p.id, l: p.name }))), d.sale.buyerId, { struct: true }) })}
               ${field({ key: "sale.weight", label: t("Masa · energia (orientacyjnie)"), span: "span2", control: outBox("sale.weight", "—"), help: false })}
+              ${this.saleWeightFields()}
+              ${this.docNoFields(["WZ"])}
             </div>`);
         } else {
           html += section(n++, "sale", t("Sprzedaż bezpośrednia"), t("las → produkcja → sprzedaż. Bez zakupu i bez pobierania z magazynu."), toggle);
           html += section(n++, "prod", t("Produkcja (w lesie)"), t("Surowiec, produkt i ilość. Zużycie surowca liczy system (MP ÷ 4 = m³)."), this.productionFields("direct"));
-          html += section(n++, "sale2", t("Odbiorca i cena"), t("Sprzedaż nie może przekroczyć ilości wyprodukowanej."), this.saleOfOutputFields());
+          html += section(n++, "sale2", t("Odbiorca i cena"), t("Sprzedaż nie może przekroczyć ilości wyprodukowanej."), this.saleOfOutputFields() + `<div class="fgrid four mt3">${this.docNoFields(["WZ"])}</div>`);
         }
       } else if (type === "PRODUKCJA") {
         html += section(n++, "prod", t("Produkcja na magazynie"), t("Podajesz ilość wyprodukowaną — zużycie surowca liczy system (MP ÷ 4 = m³). Bez zakupu, bez transportu, bez odbiorcy."), this.productionFields("stock"));
@@ -415,6 +495,7 @@
           </div>`);
       }
 
+      if (type === "PRODUKCJA" || (type === "ZAKUP" && d.production.enabled) || (type === "SPRZEDAZ" && d.sale.direct)) html += this.extrasHtml(n++);
       if (type !== "PRODUKCJA") html += this.transportHtml(n++);
       html += section(n++, "notes", t("Uwagi i dokument zewnętrzny"), "", `<div class="fgrid four">
         ${field({ key: "extDoc", label: t("Nr dokumentu zewnętrznego"), span: "span2", control: textIn("extDoc", d.extDoc, { placeholder: t("np. FV 123/09/2026, kwit wagowy") }) })}
@@ -616,6 +697,13 @@
         }
         this.refresh();
       });
+      form.addEventListener("click", e => {
+        const b = e.target.closest && e.target.closest("button");
+        if (!b || !form.contains(b)) return;
+        if (b.id === "extra-add") { const X = this.extras(); if (X.items.length < R.MAX_EXTRAS) X.items.push(R.blankExtra()); this.persist(); this.rerender(); const el = document.getElementById(fid(`extras.items.${X.items.length - 1}.typeId`)); if (el) el.focus(); return; }
+        if (b.dataset.extraDel !== undefined) { const X = this.extras(); X.items.splice(+b.dataset.extraDel, 1); this.persist(); this.rerender(); return; }
+        if (b.dataset.useNo) { this.draft.docNos[b.dataset.useNo] = b.dataset.no; this.touched.add(`docNos.${b.dataset.useNo}`); this.persist(); this.rerender(); }
+      });
       form.addEventListener("submit", e => { e.preventDefault(); this.save(); });
       form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); this.save(); } });
       $$("[data-save]", page).forEach(b => b.onclick = () => this.save());
@@ -709,7 +797,8 @@
       }
       if (key === "production.type" && R.PROD_TYPES[v] && d.type !== "PRODUKCJA") d.production.outProductId = R.PROD_TYPES[v].productId;
       if (key === "production.enabled" && !v) d.sale.enabled = false;
-      if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c ? c.operatorId : ""; }
+      if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c && c.owner !== "external" ? c.operatorId : ""; d.production.operatorName = ""; }
+      if (key === "extras.enabled" && v) this.extras();
       const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
       if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
       const m3Key = key.match(/^transport\.(own|external)\.runs\.(\d+)\.kwitM3$/);
@@ -849,6 +938,18 @@
           if (Sa.price !== null) add("sale.revenue", Sa.priceUnit === "t" ? `${fmtQ(Sa.weightT)} t × ${fmt(Sa.price)} zł/t` : `${fmtQ(Sa.qty)} MP × ${fmt(Sa.price)} zł/MP`);
         }
       }
+      if (n.sale) {
+        const Sa = n.sale, p = App.product(Sa.productId);
+        if (p) {
+          out("sale.weightAuto", `${p.unit === "t" ? "" : "≈ "}<b>${esc(fmt(Sa.autoWeight || 0, 2))} t</b>`);
+          out("sale.tonLine", Sa.qty !== null ? `<b>${esc(fmtQ(Sa.qty))} ${Units.label(Sa.unit)}</b> | <b>${esc(fmt(Sa.weightT, 2))} t</b> | <span class="badge ${Sa.weightMode === "manual" ? "warn" : "info"}">${esc(t(R.WEIGHT_SOURCES[Sa.weightMode] || "AUTO"))}</span>` : "—");
+          if (Sa.weightMode === "manual" && Sa.qty !== null) add("sale.weightManual", esc(t("z przelicznika: {q} t — ilość na stanie się nie zmienia", { q: fmtQ(Sa.autoWeight) })));
+        }
+      }
+      if (n.extras && n.extras.length) {
+        n.extras.forEach((x, i) => out(`extra.${i}.cost`, x.costBasis === "qtyRate" && x.qty !== null && x.rate !== null ? `${fmtQ(x.qty)} × ${fmt(x.rate)} zł = <b>${money(x.cost)}</b>` : `<b>${money(x.cost)}</b>`));
+        out("extras.total", t("Razem operacje dodatkowe: <b>{m}</b>", { m: money(plan.totals.extraCost) }));
+      }
       if (n.mm) {
         const M = n.mm, p = App.product(M.productId);
         const b = w => plan.balances.find(x => x.whId === w && x.productId === M.productId);
@@ -928,6 +1029,7 @@
           ${tt.purchaseCost ? `<dt>${esc(t("Koszt zakupu"))}</dt><dd data-sum="purchase">${money(tt.purchaseCost)}</dd>` : ""}
           ${tt.rawCost ? `<dt>${esc(t("Koszt surowca z lasu"))}</dt><dd data-sum="raw">${money(tt.rawCost)}</dd>` : ""}
           ${plan.norm.production ? `<dt>${esc(t("Koszt rąbania"))}</dt><dd data-sum="chipping">${money(tt.chippingCost)}</dd>` : ""}
+          ${tt.extraCost ? `<dt>${esc(t("Operacje dodatkowe"))}</dt><dd data-sum="extras">${money(tt.extraCost)}</dd>` : ""}
           <dt>${esc(t("Koszt transportu"))}</dt><dd data-sum="transport">${money(tt.transportCost)}</dd>
           <dt>${esc(t("Przychód ze sprzedaży"))}</dt><dd data-sum="revenue">${money(tt.revenue)}</dd>
           <dt class="total">${esc(t("Wynik operacji"))}</dt><dd class="total" data-sum="result" style="color:${tt.result < 0 ? "var(--warn)" : "var(--ok)"}">${money(tt.result)}</dd></dl>`);
@@ -959,7 +1061,7 @@
       $("#corr-badge").innerHTML = `<span class="badge ${pc.descriptiveOnly ? "info" : "warn"}">${esc(pc.descriptiveOnly ? t("korekta opisowa") : pc.deltas.length ? t("korekta ilościowa") : t("korekta wartościowa"))}</span>`;
       const ch = pc.changes.map(c => `<tr><td>${esc(t(c.label))}</td><td class="r">${esc(c.beforeText)}</td><td class="r"><b>${esc(c.afterText)}</b></td><td class="r">${c.diff !== null ? `<span class="${c.diff < 0 ? "neg" : "pos"}">${c.diff > 0 ? "+" : ""}${esc(fmtQ(c.diff, 6))}${c.unit ? " " + esc(c.unit) : ""}</span>` : esc(t("zmiana"))}</td></tr>`).join("");
       const eff = pc.deltas.map(x => `<tr><td>${esc(name(x.productId))}<br><small class="dim">${esc(App.whName(x.whId))} · ${esc(t(R.CATS[x.cat] || x.cat))}${x.direct ? " " + esc(t("(bezp.)")) : ""}</small></td><td class="r"><span class="${x.qty < 0 ? "neg" : "pos"}">${x.qty > 0 ? "+" : ""}${esc(App.qtyNative(x.qty, x.productId, 6))}</span></td><td class="r">${esc(App.qtyNative(x.before, x.productId))}</td><td class="r"><b>${esc(App.qtyNative(x.after, x.productId))}</b></td></tr>`).join("");
-      const VD = { purchaseCost: N_("Koszt zakupu"), rawCost: N_("Koszt surowca"), chippingCost: N_("Koszt rąbania"), revenue: N_("Przychód"), transportCost: N_("Transport") };
+      const VD = { purchaseCost: N_("Koszt zakupu"), rawCost: N_("Koszt surowca"), chippingCost: N_("Koszt rąbania"), extraCost: N_("Operacje dodatkowe"), revenue: N_("Przychód"), transportCost: N_("Transport") };
       const vd = Object.entries(pc.valueDelta).filter(([k, v]) => Math.abs(v) > 0.004 && k !== "result").map(([k, v]) => `<dt>${esc(t(VD[k] || k))}</dt><dd><span class="${v < 0 ? "neg" : "pos"}">${v > 0 ? "+" : ""}${money(v)}</span></dd>`).join("");
       box.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="corr-changes"><thead><tr><th>${esc(t("Pole"))}</th><th class="r">${esc(t("Oryginał"))}</th><th class="r">${esc(t("Korekta"))}</th><th class="r">${esc(t("Różnica"))}</th></tr></thead><tbody>${ch || `<tr><td colspan="4" class="dim">${esc(t("Zmiana wyłącznie wyliczeń (koszt / wartość)."))}</td></tr>`}</tbody></table></div>
         <h4 class="mini-h">${esc(t("Wpływ na stan (dokument KOR z datą {d})", { d: Dates.pl(App.today()) }))}</h4>
@@ -1069,8 +1171,13 @@
           if (outP) add(t("Produkt wyjściowy"), `${esc(outP.name)} — <b>${esc(App.qtyNative(X.outQty, outP.id, 6))}</b>`);
           if (outP) { const o = Units.orient(X.outQty, outP, cfg); add(t("Masa · energia (orientacyjnie)"), `≈ ${fmt(o.t, 2)} t · ≈ ${fmt(o.gj, 1)} GJ`); }
           if (X.outUnit === "MP") add(t("Cena za rąbanie / koszt"), `${fmt(X.chipRate)} zł/MP → <b>${money(X.chippingCost)}</b>`);
+          if (X.chipperName) add(t("Rębak"), esc(X.chipperOwner === "external" ? `${X.chipperName} — ${X.chipperCompany}${X.operatorName ? " · " + X.operatorName : ""}` : `${X.chipperName}${X.operatorName ? " · " + X.operatorName : ""}`));
         }
-        if (n.sale) { add(t("Odbiorca"), esc((App.partner(n.sale.buyerId) || {}).name)); add(t("Sprzedaż"), `${esc(fmtQ(n.sale.qty))} ${Units.label(n.sale.unit)} → <b>${money(n.sale.revenue)}</b>`); }
+        if (n.extras && n.extras.length) add(t("Operacje dodatkowe"), n.extras.map(x => `${esc(x.typeName)}${x.reg ? ` <small class="dim">(${esc(x.reg)})</small>` : ""}: <b>${money(x.cost)}</b>${x.desc ? ` <small class="dim">— ${esc(x.desc)}</small>` : ""}`).join("<br>"));
+        const nos = plan.documents.filter(dc => dc.manualNo).map(dc => `${dc.type}: <b>${esc(dc.manualNo)}</b>`);
+        add(t("Numery dokumentów"), nos.length ? nos.join(" · ") + ` <small class="dim">${esc(t("(ręczne)"))}</small>` : esc(t("automatyczne")));
+        if (n.docDate && n.docDate !== plan.date && plan.documents.some(dc => dc.type === "PZ" || dc.type === "WZ")) add(t("Data dokumentu"), esc(Dates.pl(n.docDate)));
+        if (n.sale) { add(t("Odbiorca"), esc((App.partner(n.sale.buyerId) || {}).name)); add(t("Sprzedaż"), `${esc(fmtQ(n.sale.qty))} ${Units.label(n.sale.unit)} | ${esc(fmt(n.sale.weightT, 2))} t | ${esc(t(R.WEIGHT_SOURCES[n.sale.weightMode] || "AUTO"))} → <b>${money(n.sale.revenue)}</b>`); }
         if (n.mm) {
           add(t("Przesunięcie"), `${esc(App.whName(plan.whId))} → <b>${esc(n.mm.toWhName)}</b>: ${esc(fmtQ(n.mm.qty))} ${Units.label(n.mm.unit)} ${esc(name(n.mm.productId))}`);
           add(t("Tonaż"), `${esc(fmtQ(n.mm.weightT))} t ${n.mm.weightMode === "manual" ? esc(t("(z wagi)")) : esc(t("(z przelicznika)"))}`);

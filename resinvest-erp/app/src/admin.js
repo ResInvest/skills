@@ -27,7 +27,7 @@
   /* ================================================================== */
   const Master = {
     edit(kind, id) {
-      const S = Store.state, rec = id ? R.clone(R.byId(S[kind], id)) : ({ products: { code: "", name: "", cat: "zrebka", unit: "MP", units: ["MP", "t"], active: true }, partners: { name: "", role: "supplier", kind: "firma", city: "", address: "", nip: "", phone: "", email: "", lesnictwa: [], active: true }, warehouses: { code: "", name: "", address: "", active: true } })[kind];
+      const S = Store.state, rec = id ? R.clone(R.byId(S[kind], id)) : ({ products: { code: "", name: "", cat: "zrebka", unit: "MP", units: ["MP", "t"], active: true }, partners: { name: "", role: "supplier", kind: "firma", city: "", address: "", nip: "", phone: "", email: "", lesnictwa: [], active: true }, warehouses: { code: "", name: "", address: "", active: true }, extraTypes: { name: "", desc: "", unit: "", rate: null, active: true } })[kind];
       let body = "";
       if (kind === "products") {
         const used = id && R.Master.usedProduct(S, id);
@@ -53,6 +53,12 @@
           ${ff("email", t("E-mail"), `<input class="ctrl" id="me-email" type="email" value="${esc(rec.email || "")}">`)}
           ${ff("lesnictwa", t("Leśnictwa (dla nadleśnictwa, oddzielone przecinkami)"), `<input class="ctrl" id="me-lesnictwa" value="${esc((rec.lesnictwa || []).join(", "))}">`, "", "span-all")}
           ${ff("active", t("Status"), `<select class="ctrl" id="me-active">${opts([["true", t("aktywny")], ["false", t("nieaktywny")]], String(rec.active !== false))}</select>`, t("Nieaktywny kontrahent nie pojawia się w nowych operacjach; historia zostaje."))}</div>`;
+      } else if (kind === "extraTypes") {
+        body = `<div class="fgrid">${ff("name", t("Nazwa"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}" placeholder="${esc(t("np. {x}", { x: t("Holowanie") }))}">`, "", "span-all")}
+          ${ff("desc", t("Opis"), `<input class="ctrl" id="me-desc" value="${esc(rec.desc || "")}" maxlength="300">`, "", "span-all")}
+          ${ff("unit", t("Jednostka (opcjonalnie)"), `<select class="ctrl" id="me-unit">${opts(Object.entries(R.EXTRA_UNITS).map(([k, v]) => [k, t(v)]), rec.unit || "")}</select>`, t("Przy jednostce i stawce koszt w operacji = ilość × stawka (można też wpisać kwotę)."))}
+          ${ff("rate", t("Stawka domyślna [zł] (opcjonalnie)"), `<input class="ctrl num-in" id="me-rate" inputmode="decimal" value="${esc(rec.rate != null ? fmt(rec.rate, 2) : "")}" placeholder="${esc(t("np. {x}", { x: fmt(180, 2) }))}">`)}
+          ${ff("active", t("Status"), `<select class="ctrl" id="me-active">${opts([["true", t("aktywna")], ["false", t("nieaktywna")]], String(rec.active !== false))}</select>`, t("Nieaktywna pozycja nie pojawia się w nowych operacjach; historia zostaje."))}</div>`;
       } else {
         body = `<div class="fgrid">${ff("code", t("Kod"), `<input class="ctrl" id="me-code" value="${esc(rec.code)}" maxlength="12" autocapitalize="characters">`)}
           ${ff("name", t("Nazwa"), `<input class="ctrl" id="me-name" value="${esc(rec.name)}">`)}
@@ -109,6 +115,21 @@
         <div class="card"><div class="tbl-wrap"><table class="tbl" id="products-table"><thead><tr><th>${th("Kod")}</th><th>${th("Nazwa")}</th><th>${th("Kategoria")}</th><th>${th("Jedn. magazynowa")}</th><th>${th("Dozwolone jednostki")}</th><th class="r">${th("Masa ≈ t / jedn.")}</th><th class="r">${th("Energia ≈ GJ / jedn.")}</th><th>${th("Przeliczniki")}</th><th class="r">${th("Stan firmy")}</th><th>${th("Status")}</th><th></th></tr></thead><tbody>
           ${S.products.map(p => { const m = Units.massPerUnit(p, cfg); return `<tr class="${p.active === false ? "void" : ""}"><td class="mono">${esc(p.code)}</td><td><b>${esc(p.name)}</b></td><td>${esc(t(R.PRODUCT_CATS[p.cat] || p.cat))}</td><td>${Units.label(p.unit)}</td><td>${Units.allowed(p).map(Units.label).join(", ")}</td><td class="r">${fmt(m, 3)}</td><td class="r">${fmt(m * cfg.t_gj, 2)}</td><td>${esc(Units.allowed(p).length < 2 ? t("brak (tylko {u})", { u: Units.label(p.unit) }) : [Units.allowed(p).includes("m3") && Units.allowed(p).includes("MP") ? `1 m³ = ${fmtQ(Units.factors(p, cfg).k)} MP` : "", Units.factors(p, cfg).tm3 ? `1 m³ ≈ ${fmt(Units.factors(p, cfg).tm3, 3)} t` : ""].filter(Boolean).join(" · "))}</td><td class="r">${esc(App.qtyNative(stock.get(p.id) || 0, p.id))}</td><td>${activeBadge(p.active)}</td><td class="r">${editBtn("products", p.id)}</td></tr>`; }).join("")}</tbody></table></div></div>
         <div class="card mt4"><div class="card-h"><h3>${th("Przeliczniki (config/app.config.json)")}</h3></div><div class="card-b"><dl class="money-list" style="max-width:560px"><dt>${th("1 m³ drewna")}</dt><dd>${fmtQ(cfg.m3_mp)} MP</dd><dt>1 MP</dt><dd>${fmtQ(1 / cfg.m3_mp, 3)} m³ · ${fmt(cfg.mp_t, 2)} t</dd><dt>${th("1 m³ drewna (masa)")}</dt><dd>${fmt(cfg.woodTPerM3, 3)} t</dd><dt>1 t</dt><dd>${fmt(cfg.t_gj, 1)} GJ</dd></dl></div></div>`;
+    },
+    bind(page) { bindMaster(page); }
+  };
+
+  /** Kartoteki → Dodatkowe operacje (rodzaje prac towarzyszących produkcji, z bazy — nie na stałe w programie). */
+  Views.dodatkowe = {
+    html() {
+      const S = Store.state, list = S.extraTypes || [];
+      const use = new Map();
+      for (const op of S.operations) if (op.status !== "CANCELLED") for (const x of op.extras || []) { const u = use.get(x.typeId) || { n: 0, cost: 0, last: "" }; u.n++; u.cost += x.cost; if (op.date > u.last) u.last = op.date; use.set(x.typeId, u); }
+      return `<div class="page-head"><div class="titles"><h2>${th("Dodatkowe operacje")}</h2><p>${th("Kartoteka rodzajów operacji dodatkowych (np. holowanie, podgarnianie pryzm, praca ładowarką). Wybierasz je w produkcji po zaznaczeniu „Dodaj operację dodatkową”. Pozycji użytych w dokumentach nie usuwa się — tylko dezaktywuje.")}</p></div>
+          <div class="actions">${addBtn("extraTypes", N_("Nowa operacja dodatkowa"))}</div></div>
+        <div class="card"><div class="tbl-wrap"><table class="tbl" id="extra-types-table"><thead><tr><th>ID</th><th>${th("Nazwa")}</th><th>${th("Opis")}</th><th>${th("Jednostka")}</th><th class="r">${th("Stawka domyślna")}</th><th>${th("Status")}</th><th class="r">${th("Użycia")}</th><th class="r">${th("Koszt łącznie")}</th><th>${th("Utworzono")}</th><th>${th("Zmieniono")}</th><th></th></tr></thead><tbody>
+          ${list.length ? list.map(x => { const u = use.get(x.id) || { n: 0, cost: 0 }; return `<tr class="${x.active === false ? "void" : ""}" data-xt="${esc(x.id)}"><td class="mono small">${esc(x.id)}</td><td><b>${esc(x.name)}</b></td><td>${esc(x.desc || "—")}</td><td>${esc(t(R.EXTRA_UNITS[x.unit || ""] || x.unit))}</td><td class="r">${x.rate != null ? esc(money(x.rate)) : "—"}</td><td>${x.active === false ? `<span class="badge">${th("nieaktywna")}</span>` : `<span class="badge ok">${th("aktywna")}</span>`}</td><td class="r">${u.n}</td><td class="r">${esc(money(u.cost))}</td><td class="nowrap">${esc(Dates.ts(x.createdAt))}</td><td class="nowrap">${esc(Dates.ts(x.updatedAt))}</td><td class="r">${editBtn("extraTypes", x.id)}</td></tr>`; }).join("")
+            : `<tr><td colspan="11" class="empty">${th("Brak pozycji — dodaj pierwszą operację dodatkową.")}</td></tr>`}</tbody></table></div></div>`;
     },
     bind(page) { bindMaster(page); }
   };

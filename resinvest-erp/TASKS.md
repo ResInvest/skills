@@ -1,5 +1,23 @@
 # TASKS — ResInvest ERP
 
+## 3.4.0 — operacje dodatkowe, rębaki zewnętrzne, tonaż, numery ręczne, usuwanie, XLSX/DOCX
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| §13 pole „Dodaj operację dodatkową” w produkcji; rodzaj z kartoteki, pojazd z Floty (opcjonalnie), koszt, opis | DONE | `features34.test` „§13…”, E2E „3.4 Produkcja…” |
+| §13 osobne rekordy powiązane z operacją, koszt obniża wynik, korekta BYŁO/JEST | DONE | `features34.test` |
+| §14 kartoteka „Dodatkowe operacje” w bazie (ID, nazwa, opis, aktywna, jednostka, stawka, daty) | DONE | `features34.test` „§14…”, E2E „Kartoteki → Dodatkowe operacje” |
+| §15 rębaki firm zewnętrznych (firma, nr rej., operator opisowo) | DONE | `features34.test` „§15…”, E2E |
+| §16 kafel pulpitu z wyborem miesiąca (koszt, liczba, lista) | DONE | `features34.test` „§16…”, E2E „3.4 Pulpit…” |
+| §8 tonaż sprzedaży AUTO / RĘCZNY ze źródłem („60 MP \| 20,35 t \| RĘCZNY”) | DONE | `features34.test` „§8…”, E2E |
+| §10 ręczne numery PZ/WZ (unikalne: typ + magazyn + rok), data dokumentu / przyjęcia / utworzenia | DONE | `features34.test` „§10…”, E2E „WZ/27…” |
+| §11 Otwórz / Podgląd / Koryguj / Usuń; „Usuń” = soft delete z powodem; PZ zielone, WZ złote | DONE | `features34.test` „§11…”, `engine.test` TEST 9, E2E |
+| §12 eksport XLSX i DOCX | DONE | `features34.test` „§12…”, E2E (pobranie plików) |
+| migracja danych 7 → 8 | DONE | `features34.test` „Migracja 7 → 8” |
+| tłumaczenia CS / EN | DONE | `npm run i18n`: 0 braków, 0 nieużywanych |
+| §17 powiadomienia e-mail o zdarzeniach (kolejka, ponowienia) | NIE ZROBIONE | poza zakresem 3.4 — planowane w 4.0 |
+| instalator 3.4.0 | DONE (Inno Setup 6.4.1 w Wine) | instalacja cicha + `--check` serwera w Wine 9; prawdziwy Windows — NIEPOTWIERDZONE |
+
 ## 3.3.0 — przesunięcia MM: magazyn źródłowy, tryb dwuetapowy, przyjęcie, tonaż
 
 | Kryterium | Status | Dowód |
