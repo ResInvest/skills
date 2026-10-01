@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatQty, MAX_EXTRAS, planOperation, type CompanyRates, type ExtraInput, type OperationInput, type OperationPlan, type PlanExtraType, type PlanMaterial } from "@resinvest/domain";
+import { formatQty, MAX_EXTRAS, planOperation, TRANSPORT_MODE_LABEL, type TransportFleet, type CompanyRates, type ExtraInput, type OperationInput, type OperationPlan, type PlanExtraType, type PlanMaterial } from "@resinvest/domain";
 import { ApiRequestError, api, errorText } from "../../api/client";
 import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog } from "../../ui/components";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
+import { EMPTY_TRANSPORT, TransportFields, toTransportInput, type FleetData, type TransportState } from "./TransportFields";
 import { DocBadge, OperationDetail, type OperationView, pln } from "./OperationDetail";
 
 type Kind = OperationInput["type"];
@@ -15,7 +16,10 @@ interface FormData {
   partners: Array<{ id: string; name: string; role: "SUPPLIER" | "BUYER" | "BOTH" }>;
   materials: Array<PlanMaterial & { code: string }>;
   extraTypes: PlanExtraType[];
-  vehicles: Array<{ id: string; name: string; registration: string }>;
+  vehicles: FleetData["vehicles"];
+  drivers: FleetData["drivers"];
+  companies: FleetData["companies"];
+  kmRateDefault: string;
   chippers: Array<{ id: string; name: string; ownership: string; company: string | null; operatorId: string | null; externalOperator: string | null }>;
   operators: Array<{ id: string; name: string }>;
   balances: Record<string, string>;
@@ -56,6 +60,7 @@ export function NewOperationPage() {
   const [f, setF] = useState(EMPTY);
   const [date, setDate] = useState("");
   const [extras, setExtras] = useState<ExtraRow[]>([]);
+  const [transport, setTransport] = useState<TransportState>(EMPTY_TRANSPORT);
   const [tried, setTried] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [serverErr, setServerErr] = useState<unknown>(null);
@@ -74,6 +79,7 @@ export function NewOperationPage() {
       warehouseId: W.id, date: day, documentDate: f.documentDate || null, externalNumber: f.externalNumber.trim() || null, notes: f.notes.trim() || null,
       numbering: { mode: f.numberMode, number: f.numberMode === "MANUAL" ? f.number : null },
       extras: extras.map<ExtraInput>(x => ({ typeId: x.typeId, vehicleId: x.vehicleId || null, qty: x.qty, rate: x.rate, cost: x.cost, description: x.description || null })),
+      ...(type !== "PRODUCTION" ? { transport: toTransportInput(transport) } : {}),
     };
     if (type === "PRODUCTION") return { type, ...base, rawMaterialId: f.rawMaterialId, outMaterialId: f.outMaterialId, outQty: f.outQty, chipperId: f.chipperId || null, operatorId: f.operatorId || null, chipRate: f.chipRate };
     const unit = (f.unit || fd?.materials.find(m => m.id === f.materialId)?.stockUnit || "T") as Unit;
@@ -83,7 +89,8 @@ export function NewOperationPage() {
   })();
 
   const local = !fd || !input ? null
-    : planOperation(input, { materials: new Map(fd.materials.map(m => [m.id, m])), extraTypes: new Map(fd.extraTypes.map(t => [t.id, t])), rates: fd.rates, today: fd.today, transferTwoStage: fd.mmTwoStage });
+    : planOperation(input, { materials: new Map(fd.materials.map(m => [m.id, m])), extraTypes: new Map(fd.extraTypes.map(t => [t.id, t])), rates: fd.rates, today: fd.today, transferTwoStage: fd.mmTwoStage,
+      kmRateDefault: fd.kmRateDefault, fleet: fleetOf(fd, W.id) });
   const localErr = (field: string) => (tried && local && !local.ok ? local.errors.find(e => e.field === field)?.message : undefined);
   const fe = (field: string) => (serverErr instanceof ApiRequestError ? serverErr.field(field) : undefined) ?? localErr(field);
 
@@ -97,7 +104,7 @@ export function NewOperationPage() {
     if (!input || !local?.ok) return;
     check.mutate(input);
   };
-  const reset = () => { setF(EMPTY); setExtras([]); setTried(false); setPreview(null); setServerErr(null); };
+  const reset = () => { setF(EMPTY); setExtras([]); setTransport(EMPTY_TRANSPORT); setTried(false); setPreview(null); setServerErr(null); };
 
   if (!allowed.length) return <section className="card"><h1>Nowa operacja</h1><p className="muted">Twoja rola nie pozwala wprowadzać operacji magazynowych.</p></section>;
   const mats = fd?.materials.filter(m => m.active) ?? [];
@@ -253,6 +260,9 @@ export function NewOperationPage() {
                 <input id="op-notes" className="ctrl" maxLength={2000} value={f.notes} onChange={e => set("notes", e.target.value)} /></div>
             </div>
 
+            {type !== "PRODUCTION" && <TransportFields value={transport} onChange={t => { setPreview(null); setTransport(t); }}
+              fleet={fd} unit={(type === "TRANSFER" || type === "SALE" || type === "PURCHASE") && mat ? mat.stockUnit : null} purchase={type === "PURCHASE"} fe={fe} />}
+
             <fieldset className="field" id="op-extras-form">
               <legend>Operacje dodatkowe (transport, załadunek, usługi)</legend>
               {extras.map((x, i) => {
@@ -305,6 +315,7 @@ export function NewOperationPage() {
                   {Number(plan.totals.revenue) > 0 && <><dt>Przychód</dt><dd className="num">{pln(plan.totals.revenue)}</dd></>}
                   {Number(plan.totals.chippingCost) > 0 && <><dt>Rąbanie</dt><dd className="num">{pln(plan.totals.chippingCost)}</dd></>}
                   {Number(plan.totals.additionalCost) > 0 && <><dt>Dodatkowe</dt><dd className="num">{pln(plan.totals.additionalCost)}</dd></>}
+                  {Number(plan.totals.transportCost) > 0 && <><dt>Transport</dt><dd className="num" id="op-live-transport">{pln(plan.totals.transportCost)}</dd></>}
                 </dl>
               </>
             )}
@@ -365,9 +376,21 @@ function ConfirmDialog({ preview, input, fd, onClose, onDone }: { preview: Previ
           {Number(p.totals.revenue) > 0 && <><dt>Przychód</dt><dd>{pln(p.totals.revenue)}</dd></>}
           {Number(p.totals.chippingCost) > 0 && <><dt>Rąbanie</dt><dd>{pln(p.totals.chippingCost)}</dd></>}
           {Number(p.totals.additionalCost) > 0 && <><dt>Operacje dodatkowe</dt><dd>{pln(p.totals.additionalCost)}</dd></>}
+          {p.transport && p.transport.mode !== "NONE" && <><dt>Transport</dt><dd>{TRANSPORT_MODE_LABEL[p.transport.mode]} · {p.transport.runs.length > 0 ? `${p.transport.runs.length} ${p.transport.runs.length === 1 ? "kurs" : "kursy"} · ` : ""}{pln(p.totals.transportCost)}</dd></>}
         </dl>
+        {p.warnings.map((w, i) => <Alert key={i} kind="warn">{w}</Alert>)}
         {blocked && <p className="muted small">Zapis zablokowany — w magazynie brakuje towaru. Zmniejsz ilość albo najpierw wprowadź przyjęcie.</p>}
       </div>
     </Dialog>
   );
+}
+
+/** Kartoteka floty z danych formularza — ten sam zestaw reguł w podglądzie co w API (planTransport). */
+function fleetOf(fd: FormData, warehouseId: string): TransportFleet {
+  return {
+    vehicles: new Map(fd.vehicles.map(v => [v.id, { id: v.id, registration: v.registration, status: v.status as "ACTIVE" | "SERVICE" | "RETIRED", warehouseId: v.warehouseId ?? warehouseId, defaultDriverId: v.defaultDriverId, ownership: v.ownership }])),
+    drivers: new Map(fd.drivers.map(d => [d.id, { id: d.id, name: d.name, active: true }])),
+    companies: new Map(fd.companies.map(c => [c.id, { id: c.id, name: c.name, active: true }])),
+    warehouseNames: new Map(fd.warehouses.map(w => [w.id, w.name])),
+  };
 }

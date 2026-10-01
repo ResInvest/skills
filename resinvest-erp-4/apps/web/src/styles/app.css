@@ -167,6 +167,12 @@ fieldset.field legend { font-weight: 600; margin-bottom: 4px; }
 .transit-row:last-child { border-bottom: 0; }
 .mm-route { overflow-wrap: anywhere; }
 .summary { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 6px 0; }
+.run-row { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; display: grid; gap: 8px; }
+.run-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.run-h .ctrl { width: auto; }
+.run-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; }
+.run-grid .field { min-width: 0; }
+@media (max-width: 640px) { .run-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .op-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .op-layout > .card { margin-top: 12px; }
 .op-preview { position: sticky; top: 72px; }

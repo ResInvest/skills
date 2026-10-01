@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from "@nestjs/common";
-import { autoNumber, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, type OperationInput, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
+import { autoNumber, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, KM_RATE_DEFAULT, type OperationInput, type TransportFleet, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
 import { Prisma } from "../generated/prisma/client.js";
 import type { DocumentType } from "../generated/prisma/enums.js";
 import { AppError, badRequest, conflict, forbidden, notFound } from "../common/errors.js";
@@ -89,7 +89,8 @@ export class OperationsService {
           type: plan.type, status: "POSTED", warehouseId: plan.warehouseId, operationDate: asDate(plan.date), idempotencyKey,
           targetWarehouseId: plan.transfer?.targetWarehouseId ?? null, transferState: plan.transfer ? (plan.transfer.twoStage ? "IN_TRANSIT" : "RECEIVED") : null,
           notes: input.notes?.trim() || null, purchaseCost: plan.totals.purchaseCost, revenue: plan.totals.revenue, chippingCost: plan.totals.chippingCost,
-          additionalCost: plan.totals.additionalCost, input: input as unknown as Prisma.InputJsonValue, createdById: actor.id, postedAt: now, postedById: actor.id,
+          additionalCost: plan.totals.additionalCost, transportCost: plan.totals.transportCost, transportMode: plan.transport?.mode ?? "NONE", place: plan.transport?.place ?? null,
+          input: input as unknown as Prisma.InputJsonValue, createdById: actor.id, postedAt: now, postedById: actor.id,
         } });
         const docs: Array<{ doc: { id: string }; lines: Array<{ id: string }> }> = [];
         for (const [i, d] of plan.documents.entries()) {
@@ -114,6 +115,14 @@ export class OperationsService {
             operationId: op.id, mode: "FROM_STOCK", rawMaterialId: plan.production.rawMaterialId, outMaterialId: plan.production.outMaterialId, consumeQty: plan.production.consumeQty,
             outQty: plan.production.outQty, factor: plan.production.factor, chipRate: plan.production.chipRate, chippingCost: plan.production.chippingCost,
             chipperId: input.chipperId || null, operatorId: input.operatorId || null,
+          } });
+        }
+        for (const r of plan.transport?.runs ?? []) {
+          await tx.transportRun.create({ data: {
+            operationId: op.id, runNo: r.runNo, ownership: r.ownership, vehicleId: r.vehicleId, driverId: r.driverId, externalCompanyId: r.externalCompanyId,
+            registration: r.registration, driverName: r.driverName, km: r.km, ratePerKm: r.ratePerKm, freight: r.freight, cost: r.cost,
+            qty: r.qty, unit: r.unit, weightT: r.weightT, waybillNo: r.waybillNo, waybillM3: r.waybillM3,
+            train: r.train ? (r.train as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
           } });
         }
         for (const x of plan.extras) {
@@ -141,6 +150,7 @@ export class OperationsService {
     const op = await this.db.operation.findUnique({ where: { id }, include: {
       warehouse: true, documents: { include: { lines: { include: { material: true } }, partner: true }, orderBy: { createdAt: "asc" } },
       movements: { orderBy: { seq: "asc" } }, productionRun: { include: { chipper: true, operator: true } }, additionalOperations: { include: { type: true, vehicle: true } },
+      transportRuns: { include: { vehicle: true, driver: true, externalCompany: true }, orderBy: { runNo: "asc" } },
       targetWarehouse: true, transferReceipt: true,
     } });
     // MM widzi także magazyn docelowy (przyjęcie); pozostałe operacje — tylko magazyn operacji
@@ -162,6 +172,12 @@ export class OperationsService {
         chippingCost: S(op.productionRun.chippingCost), chipper: op.productionRun.chipper?.name ?? null, operator: op.productionRun.operator?.name ?? op.productionRun.chipper?.externalOperator ?? null } : null,
       extras: op.additionalOperations.map(x => ({ id: x.id, type: x.type.name, vehicle: x.vehicle ? `${x.vehicle.registration} · ${x.vehicle.name}` : null, quantity: S(x.quantity), cost: S(x.cost), description: x.description })),
       movements: op.movements.map(m => ({ warehouseId: m.warehouseId, materialId: m.materialId, kind: m.kind, qty: m.qty.toString(), movementDate: isoDay(m.movementDate) })),
+      transport: op.transportMode === "NONE" ? null : {
+        mode: op.transportMode, place: op.place, cost: S(op.transportCost),
+        runs: op.transportRuns.map(r => ({ runNo: r.runNo, ownership: r.ownership, vehicle: r.vehicle ? `${r.vehicle.registration} · ${r.vehicle.name}` : null, registration: r.registration,
+          driver: r.driver?.name ?? r.driverName ?? null, company: r.externalCompany?.name ?? null, km: S(r.km), ratePerKm: S(r.ratePerKm), freight: S(r.freight), cost: S(r.cost),
+          qty: S(r.qty), unit: r.unit, weightT: S(r.weightT), waybillNo: r.waybillNo, waybillM3: S(r.waybillM3), train: r.train })),
+      },
       transfer: op.type === "TRANSFER" && op.targetWarehouse ? {
         target: { id: op.targetWarehouse.id, code: op.targetWarehouse.code, name: op.targetWarehouse.name }, state: op.transferState,
         twoStage: !!rc || op.transferState === "IN_TRANSIT",
@@ -186,7 +202,7 @@ export class OperationsService {
     };
     const [total, rows] = await Promise.all([
       this.db.document.count({ where }),
-      this.db.document.findMany({ where, include: { partner: true, lines: { include: { material: true } }, operation: { select: { id: true, type: true, status: true, transferState: true, warehouse: { select: { id: true, name: true } }, targetWarehouse: { select: { id: true, name: true } } } } },
+      this.db.document.findMany({ where, include: { partner: true, lines: { include: { material: true } }, operation: { select: { id: true, type: true, status: true, transferState: true, transportCost: true, transportMode: true, place: true, warehouse: { select: { id: true, name: true } }, targetWarehouse: { select: { id: true, name: true } } } } },
         orderBy: [{ movementDate: "desc" }, { createdAt: "desc" }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
     ]);
     return { total, rows: rows.map(d => ({
@@ -196,7 +212,9 @@ export class OperationsService {
         direction: d.operation.targetWarehouse.id === q.warehouseId ? "IN" : "OUT" } : null,
       lines: d.lines.map(l => ({ material: l.material.name, qtySource: l.qtySource.toString(), unitSource: l.unitSource, qtyStock: l.qtyStock.toString(), unitStock: l.unitStock,
         weightT: l.weightT?.toString() ?? null, weightSource: l.weightSource, value: l.value?.toString() ?? null })),
-      value: d.lines.reduce((a, l) => a.plus(l.value ?? 0), new Prisma.Decimal(0)).toString(),
+      // TR nie ma pozycji towarowych — wartością dokumentu jest koszt transportu operacji
+      value: d.type === "TR" ? d.operation.transportCost.toString() : d.lines.reduce((a, l) => a.plus(l.value ?? 0), new Prisma.Decimal(0)).toString(),
+      place: d.operation.place,
     })) };
   }
 
@@ -204,17 +222,20 @@ export class OperationsService {
   async formData(actor: AuthUser, warehouseId: string) {
     if (!canAccessWarehouse(actor, warehouseId)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
     const fleetWh = { OR: [{ warehouseId: null }, { warehouseId }] };
-    const [partners, materials, extraTypes, vehicles, chippers, operators, balances] = await Promise.all([
+    const [partners, materials, extraTypes, vehicles, chippers, operators, balances, drivers, companies] = await Promise.all([
       this.db.partner.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true } }),
       this.db.material.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
       this.db.additionalOperationType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-      this.db.vehicle.findMany({ where: { status: { not: "RETIRED" }, ...fleetWh }, orderBy: { registration: "asc" }, select: { id: true, name: true, registration: true } }),
+      this.db.vehicle.findMany({ where: { status: { not: "RETIRED" }, ...fleetWh }, orderBy: { registration: "asc" },
+        select: { id: true, name: true, registration: true, status: true, ownership: true, defaultDriverId: true, warehouseId: true } }),
       this.db.chipper.findMany({ where: { status: { not: "RETIRED" }, ...fleetWh }, orderBy: { name: "asc" }, include: { externalCompany: true } }),
       this.db.operator.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
       this.db.stockBalance.findMany({ where: { warehouseId } }),
+      this.db.driver.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, active: true } }),
+      this.db.externalCompany.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, kind: true, active: true } }),
     ]);
     return {
-      partners, operators, vehicles,
+      partners, operators, vehicles, drivers, companies, kmRateDefault: KM_RATE_DEFAULT,
       materials: materials.map(m => ({ ...materialUnits(m), code: m.code, category: m.category })),
       extraTypes: extraTypes.map(t => ({ id: t.id, name: t.name, active: t.active, unit: t.unit, defaultRate: t.defaultRate?.toString() ?? null })),
       chippers: chippers.map(c => ({ id: c.id, name: c.name, ownership: c.ownership, company: c.externalCompany?.name ?? null, operatorId: c.operatorId, externalOperator: c.externalOperator })),
@@ -337,6 +358,7 @@ export class OperationsService {
     const [materials, extraTypes, rates, mmMode] = await Promise.all([
       db.material.findMany(), db.additionalOperationType.findMany(), companyRates(db, asDate(day)), this.settings.get("mm.mode"),
     ]);
+    const fleet = input.transport && input.transport.mode !== "NONE" ? await loadFleet(db) : undefined;
     const twoStage = mmMode !== "one";
     const targetErrors: Array<{ field: string; message: string }> = [];
     if (input.type === "TRANSFER" && input.targetWarehouseId && input.targetWarehouseId !== wh.id) {
@@ -352,7 +374,7 @@ export class OperationsService {
     const ctx: PlanContext = {
       materials: new Map(materials.map(m => [m.id, { ...materialUnits(m), category: m.category }])),
       extraTypes: new Map(extraTypes.map(t => [t.id, { id: t.id, name: t.name, active: t.active, unit: t.unit, defaultRate: t.defaultRate?.toString() ?? null }])),
-      rates, today, transferTwoStage: twoStage,
+      rates, today, transferTwoStage: twoStage, kmRateDefault: KM_RATE_DEFAULT, ...(fleet ? { fleet } : {}),
     };
     const r = planOperation(input, ctx);
     const errors = [...(r.ok ? [] : r.errors), ...targetErrors];
@@ -378,6 +400,19 @@ export class OperationsService {
     if (errors.length || !r.ok) throw invalid(errors);
     return { plan: r.plan };
   }
+}
+
+/** Flota, kierowcy i firmy przewozowe do sprawdzenia kursów transportu (reguły w domenie: planTransport). */
+async function loadFleet(db: Db): Promise<TransportFleet> {
+  const [vehicles, drivers, companies, whs] = await Promise.all([
+    db.vehicle.findMany(), db.driver.findMany(), db.externalCompany.findMany(), db.warehouse.findMany({ select: { id: true, name: true } }),
+  ]);
+  return {
+    vehicles: new Map(vehicles.map(v => [v.id, { id: v.id, registration: v.registration, status: v.status, warehouseId: v.warehouseId, defaultDriverId: v.defaultDriverId, ownership: v.ownership }])),
+    drivers: new Map(drivers.map(d => [d.id, { id: d.id, name: d.name, active: d.active }])),
+    companies: new Map(companies.map(c => [c.id, { id: c.id, name: c.name, active: c.active }])),
+    warehouseNames: new Map(whs.map(w => [w.id, w.name])),
+  };
 }
 
 const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { formatQty } from "@resinvest/domain";
+import { formatQty, TRANSPORT_MODE_LABEL, type TransportMode } from "@resinvest/domain";
 import { api, errorText } from "../../api/client";
 import { UNIT_LABEL, type Unit } from "../../api/types";
 import { Alert, Dialog, fmtDateTime } from "../../ui/components";
@@ -13,6 +13,12 @@ export interface OperationView {
       weightT: string | null; weightSource: string | null; unitPrice: string | null; priceUnit: Unit | null; value: string | null }> }>;
   production: { consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string; chipper: string | null; operator: string | null } | null;
   extras: Array<{ id: string; type: string; vehicle: string | null; quantity: string | null; cost: string; description: string | null }>;
+  transport: {
+    mode: TransportMode; place: string | null; cost: string;
+    runs: Array<{ runNo: number; ownership: "OWN" | "EXTERNAL"; vehicle: string | null; registration: string | null; driver: string | null; company: string | null;
+      km: string; ratePerKm: string | null; freight: string | null; cost: string; qty: string | null; unit: Unit | null; weightT: string | null;
+      waybillNo: string | null; waybillM3: string | null; train: { trainNo: string | null; carrier: string | null; wagonTons: string[]; totalT: string; priceUnit: Unit; price: string } | null }>;
+  } | null;
   transfer: {
     target: { id: string; code: string; name: string }; state: "IN_TRANSIT" | "RECEIVED" | null; twoStage: boolean;
     receipt: { date: string; qty: string; unit: Unit; qtyStock: string; diffStock: string; reason: string | null; reasonLabel: string | null; note: string | null;
@@ -76,6 +82,24 @@ export function OperationDetail({ id, onClose }: { id: string; onClose: () => vo
           {op.production && <p>Produkcja: zużycie <strong>{formatQty(op.production.consumeQty)} m³</strong> → <strong>{formatQty(op.production.outQty)} MP</strong> (1 m³ = {formatQty(op.production.factor)} MP)
             {op.production.chipper && <> · rębak: {op.production.chipper}{op.production.operator ? ` (${op.production.operator})` : ""}</>}
             {Number(op.production.chippingCost) > 0 && <> · rąbanie: {pln(op.production.chippingCost)}</>}</p>}
+          {op.transport && <section className="card" id="op-transport-detail"><header className="card-h"><h2>Transport — {TRANSPORT_MODE_LABEL[op.transport.mode]}</h2>
+            <small className="muted">{op.transport.place ?? ""}{Number(op.transport.cost) > 0 ? ` · ${pln(op.transport.cost)}` : ""}</small></header>
+            {op.transport.runs.some(r => r.train) ? op.transport.runs.map(r => r.train && <p key={r.runNo} className="summary">Skład {r.train.trainNo ?? ""} {r.train.carrier ? `(${r.train.carrier})` : ""}: {r.train.wagonTons.length} wagonów,
+              {" "}{formatQty(r.train.totalT)} t · {pln(r.train.price)}/{UNIT_LABEL[r.train.priceUnit]} = {pln(r.cost)}</p>)
+            : op.transport.runs.length > 0 && <div className="table-wrap"><table className="table">
+              <thead><tr><th>Kurs</th><th>Pojazd / przewoźnik</th><th>Kierowca</th><th className="r">Km</th><th className="r">Ilość</th><th className="r">Waga</th><th>Kwit</th><th className="r">Koszt</th></tr></thead>
+              <tbody>{op.transport.runs.map(r => (
+                <tr key={r.runNo}>
+                  <td data-label="Kurs">{r.runNo} <small className="muted">{r.ownership === "OWN" ? "własny" : "zewn."}</small></td>
+                  <td data-label="Pojazd">{r.vehicle ?? r.registration ?? "—"}{r.company && <><br /><small className="muted">{r.company}</small></>}</td>
+                  <td data-label="Kierowca">{r.driver ?? "—"}</td>
+                  <td data-label="Km" className="r num">{formatQty(r.km)}</td>
+                  <td data-label="Ilość" className="r num">{r.qty ? `${formatQty(r.qty)} ${r.unit ? UNIT_LABEL[r.unit] : ""}` : "—"}</td>
+                  <td data-label="Waga" className="r num">{r.weightT ? `${formatQty(r.weightT)} t` : "—"}</td>
+                  <td data-label="Kwit">{r.waybillNo ?? "—"}{r.waybillM3 ? ` · ${formatQty(r.waybillM3)} m³` : ""}</td>
+                  <td data-label="Koszt" className="r num">{r.freight ? `${pln(r.cost)} (fracht)` : r.ratePerKm ? `${pln(r.cost)} (${pln(r.ratePerKm)}/km)` : pln(r.cost)}</td>
+                </tr>))}</tbody></table></div>}
+          </section>}
           {op.extras.length > 0 && <section className="card" id="op-extras"><header className="card-h"><h2>Operacje dodatkowe</h2></header>
             <ul className="plain">{op.extras.map(x => <li key={x.id}><strong>{x.type}</strong>{x.vehicle ? ` · ${x.vehicle}` : ""}{x.quantity ? ` · ${formatQty(x.quantity)}` : ""} — {pln(x.cost)}{x.description ? <small className="muted"> — {x.description}</small> : null}</li>)}</ul></section>}
           <dl className="kv mt">
@@ -83,6 +107,7 @@ export function OperationDetail({ id, onClose }: { id: string; onClose: () => vo
             {Number(op.totals.revenue) > 0 && <><dt>Przychód</dt><dd>{pln(op.totals.revenue)}</dd></>}
             {Number(op.totals.chippingCost) > 0 && <><dt>Rąbanie</dt><dd>{pln(op.totals.chippingCost)}</dd></>}
             {Number(op.totals.additionalCost) > 0 && <><dt>Operacje dodatkowe</dt><dd>{pln(op.totals.additionalCost)}</dd></>}
+            {Number(op.totals.transportCost) > 0 && <><dt>Transport</dt><dd>{pln(op.totals.transportCost)}</dd></>}
           </dl>
         </div>
       )}

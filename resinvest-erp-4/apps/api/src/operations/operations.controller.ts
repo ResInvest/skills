@@ -10,11 +10,24 @@ import { OperationsService } from "./operations.service.js";
 const val = z.union([z.string().max(40), z.number()]).nullable().optional();
 const unit = z.enum(["M3", "MP", "T"], { message: "Wybierz jednostkę" });
 const Extra = z.object({ typeId: z.string().max(40), vehicleId: z.string().max(40).nullable().optional(), qty: val, rate: val, cost: val, description: z.string().max(300).nullable().optional() });
+const id40 = z.string().max(40).nullable().optional();
+const txt = (n: number) => z.string().max(n).nullable().optional();
+const Run = z.object({
+  ownership: z.enum(["OWN", "EXTERNAL"], { message: "Wybierz: kurs własny albo zewnętrzny" }), vehicleId: id40, driverId: id40,
+  registration: txt(20), driverName: txt(120), km: val, rate: val, freight: val, qty: val, weightT: val, waybillNo: txt(60), waybillM3: val,
+});
+const Transport = z.object({
+  mode: z.enum(["NONE", "OWN", "EXTERNAL", "MIXED", "TRAIN", "SUPPLIER"], { message: "Nieznany tryb transportu" }),
+  place: txt(250), externalCompanyId: id40, includedInPrice: z.boolean().optional(),
+  runs: z.array(Run).max(60).optional(),
+  train: z.object({ trainNo: txt(40), carrier: txt(120), wagonTons: z.array(val).max(80).optional(), priceUnit: unit.nullable().optional(), price: val }).nullable().optional(),
+}).nullable().optional();
 const Common = {
   warehouseId: z.string().uuid("Wybierz magazyn"), date: z.string().max(10), documentDate: z.string().max(10).nullable().optional(),
   externalNumber: z.string().max(60).nullable().optional(), notes: z.string().max(2000).nullable().optional(),
   numbering: z.object({ mode: z.enum(["AUTO", "MANUAL"]), number: z.string().max(60).nullable().optional() }).optional(),
   extras: z.array(Extra).max(50).optional(),
+  transport: Transport,
 };
 const Input = z.discriminatedUnion("type", [
   z.object({ type: z.literal("PURCHASE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, priceUnit: unit.nullable().optional(), weightManual: val, ...Common }),

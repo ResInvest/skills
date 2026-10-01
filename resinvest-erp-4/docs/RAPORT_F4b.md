@@ -117,7 +117,37 @@ Scenariusz E2E „dokumenty”:
 | web | 17 / 17 |
 | E2E | 39 / 39, w tym MM 5 / 5 (wysłanie, rejestr Zabrza, konto bez prawa przyjęcia, przyjęcie z ubytkiem, stany obu magazynów, telefon) |
 
-## 4. Następny krok — F4b-2b
-Transport (własny, zewnętrzny, mieszany, kolej, „zapewnia dostawca”; kursy, kwity, km × stawka, fracht, dokument TR),
+## 4. F4b-2b-1 — transport (2026-10-01)
+
+### Reguły (domena, `packages/domain/src/transport.ts`, port z 3.x)
+* Tryby: **brak**, **własny** (pojazd z floty magazynu + kierowca — domyślny pojazdu albo wybrany), **zewnętrzny**
+  (firma przewozowa z kartoteki, nr rej. auta przewoźnika, kierowca opisowo), **mieszany** (kursy obu rodzajów),
+  **kolej** (wagony × tonaż, cena za t / MP / m³ — 0,33 t/MP, 1 m³ = 4 MP), **zapewnia dostawca** (tylko zakup, bez kosztu i TR).
+* Miejsce załadunku / dostawy wymagane przy każdym transporcie.
+* Koszt kursu: km × stawka (domyślnie 5 zł/km) albo fracht z faktury przewoźnika; „fracht wliczony w cenę” = 0 zł.
+* Ilość kursu: podana, z kwitu (m³ × 4 = MP) albo — przy jednym kursie — cała ilość operacji; przy wielu kursach wymagana.
+  Suma kursów ponad ilość operacji — błąd; mniej — ostrzeżenie „do rozwiezienia pozostało …”; brak wagi części kursów — ostrzeżenie.
+* Pojazd: aktywny, z floty tego magazynu albo wspólny (komunikat z nazwą magazynu, gdy z innego); kierowca aktywny.
+* Kwity wywozowe: numer wymagany, gdy reguła produkcji leśnej tego żąda (F4b-2b-2); suma m³ z kwitów ≤ drewno zużyte.
+* Produkcja na magazynie — bez transportu (błąd przy polu).
+* Transport **nie zmienia stanu** — tworzy dokument **TR** (pomocniczy) z kosztem; koszt wchodzi do wyniku operacji.
+
+### API i interfejs
+* `POST /operations` przyjmuje `transport`; zapis `transport_runs` (pojazd, kierowca, firma, km, stawka, fracht, koszt,
+  ilość, waga, kwit, skład kolejowy), `operations.transport_mode / place / transport_cost`, dokument TR w tej samej transakcji.
+* Rejestr: TR wśród dokumentów pomocniczych, wartością jest koszt transportu.
+* Formularz: sekcja **Transport** (zakup, sprzedaż, MM) — kursy z pojazdem i kierowcą z floty, przewoźnik, kolej;
+  podgląd kosztu na żywo; podsumowanie: „Transport własny · 2 kursy · 420,00 zł” i ostrzeżenia.
+* Szczegóły operacji: tabela kursów (pojazd / przewoźnik, kierowca, km, ilość, waga, kwit, koszt) albo skład kolejowy.
+
+### Testy (2026-10-01)
+| Zestaw | Wynik |
+|---|---|
+| domena | 53 / 53 (transport: 8) |
+| API | 124 / 124 (transport: 7 — własny z kierowcą domyślnym, zewnętrzny z frachtem i „w cenie”, kolej, dostawca, flota innego magazynu, brak zapisu przy braku towaru, dane formularza) |
+| web | 17 / 17 |
+| E2E | 42 / 42 (transport: 3 — sprzedaż z dwoma kursami, TR w rejestrze, telefon) |
+
+## 5. Następny krok — F4b-2b-2
 zakup z produkcją (i sprzedażą wyniku), sprzedaż bezpośrednia (produkcja w lesie → odbiorca). Następnie F4c — Planer zakupów
 (decyzja 2026-10-01; przelicznik 0,33 t/MP).

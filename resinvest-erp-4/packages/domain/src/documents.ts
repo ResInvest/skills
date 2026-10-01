@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { convert, tonnage, UnitError, DEFAULT_COMPANY_RATES, QTY_DP, UNIT_LABEL, type CompanyRates, type MaterialUnits, type Unit, type ValueSource } from "./units.js";
 import { parseNumber } from "./number.js";
 import { formatQty } from "./stock.js";
+import { planTransport, TR_MODES, type PlannedTransport, type TransportFleet, type TransportInput } from "./transport.js";
 
 /**
  * Planowanie operacji magazynowych (port reguł `planOperation` z ResInvest ERP 3.x) — czysta funkcja:
@@ -11,7 +12,7 @@ import { formatQty } from "./stock.js";
  */
 
 export type OperationKind = "PURCHASE" | "SALE" | "PRODUCTION" | "TRANSFER";
-export type DocType = "PZ" | "WZ" | "RW" | "PW" | "MM";
+export type DocType = "PZ" | "WZ" | "RW" | "PW" | "MM" | "TR";
 export type NumberingMode = "AUTO" | "MANUAL";
 
 export interface PlanMaterial extends MaterialUnits { id: string; name: string; active: boolean; category: string }
@@ -24,6 +25,10 @@ export interface PlanContext {
   today: string;
   /** Tryb MM z konfiguracji: dwuetapowy (wysłanie → „W drodze” → przyjęcie) albo jednoetapowy. Domyślnie dwuetapowy. */
   transferTwoStage?: boolean;
+  /** Flota i firmy przewozowe — sprawdzanie kursów transportu (API zawsze podaje). */
+  fleet?: TransportFleet;
+  /** Domyślna stawka transportu za km (zł). */
+  kmRateDefault?: string;
 }
 
 export interface ExtraInput { typeId: string; vehicleId?: string | null; qty?: unknown; rate?: unknown; cost?: unknown; description?: string | null }
@@ -31,6 +36,8 @@ interface Base {
   warehouseId: string; date: string; documentDate?: string | null; externalNumber?: string | null; notes?: string | null;
   numbering?: { mode: NumberingMode; number?: string | null };
   extras?: ExtraInput[];
+  /** Transport (zakup, sprzedaż, MM) — nie zmienia stanu, tworzy dokument TR z kosztem. */
+  transport?: TransportInput | null;
 }
 export interface PurchaseInput extends Base { type: "PURCHASE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; priceUnit?: Unit | null; weightManual?: unknown }
 export interface SaleInput extends Base { type: "SALE"; partnerId: string; materialId: string; qty: unknown; unit: Unit; price: unknown; weightManual?: unknown }
@@ -51,7 +58,10 @@ export interface OperationPlan {
   production: { rawMaterialId: string; outMaterialId: string; consumeQty: string; outQty: string; factor: string; chipRate: string | null; chippingCost: string } | null;
   /** MM: magazyn docelowy i tryb; przy dwuetapowym przychód w celu powstaje dopiero przy przyjęciu. */
   transfer: { targetWarehouseId: string; twoStage: boolean } | null;
-  totals: { purchaseCost: string; revenue: string; chippingCost: string; additionalCost: string; result: string };
+  transport: PlannedTransport | null;
+  /** Ostrzeżenia do podsumowania (nie blokują zapisu). */
+  warnings: string[];
+  totals: { purchaseCost: string; revenue: string; chippingCost: string; additionalCost: string; transportCost: string; result: string };
   numbering: { mode: NumberingMode; number: string | null };
   /** Opis do podsumowania przed zatwierdzeniem (np. „60 MP | 19,8 t | AUTO”). */
   summary: string[];
@@ -192,6 +202,18 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
     err("form", e instanceof Error ? e.message : "Nie można zaplanować operacji");
   }
 
+  // --- transport (zakup, sprzedaż, MM; produkcja na magazynie — bez transportu) ---
+  let transport: PlannedTransport | null = null;
+  if (input.type === "PRODUCTION") {
+    if (input.transport && input.transport.mode !== "NONE") err("transport.mode", "Produkcja na magazynie nie ma transportu");
+  } else {
+    const main = documents.find(d => d.main)?.lines[0];
+    transport = planTransport(input.transport, { materialId: main?.materialId ?? null, qty: main?.qtyStock ?? "0", unit: main?.unitStock ?? null, weightT: main?.weightT ?? null },
+      { warehouseId: wh, rates, purchase: input.type === "PURCHASE", ...(ctx.fleet ? { fleet: ctx.fleet } : {}), ...(ctx.kmRateDefault ? { kmRateDefault: ctx.kmRateDefault } : {}) }, err);
+    if (transport && TR_MODES.includes(transport.mode)) documents.push({ type: "TR", partnerId: null, main: false, lines: [] });
+  }
+  const transportCost = D(transport?.cost ?? 0);
+
   // --- operacje dodatkowe (każda operacja) ---
   const extras: PlannedExtra[] = [];
   const items = input.extras ?? [];
@@ -212,10 +234,10 @@ export function planOperation(input: OperationInput, ctx: PlanContext): PlanResu
   });
   const additionalCost = extras.reduce((a, x) => a.plus(x.cost), D(0));
   if (errors.length) return { ok: false, errors };
-  const result = revenue.minus(purchaseCost).minus(chippingCost).minus(additionalCost);
+  const result = revenue.minus(purchaseCost).minus(chippingCost).minus(additionalCost).minus(transportCost);
   return { ok: true, plan: {
-    type: input.type, warehouseId: wh, date: input.date, documentDate, documents, movements, extras, production, transfer,
-    totals: { purchaseCost: money(purchaseCost), revenue: money(revenue), chippingCost: money(chippingCost), additionalCost: money(additionalCost), result: money(result) },
+    type: input.type, warehouseId: wh, date: input.date, documentDate, documents, movements, extras, production, transfer, transport, warnings: transport?.warnings ?? [],
+    totals: { purchaseCost: money(purchaseCost), revenue: money(revenue), chippingCost: money(chippingCost), additionalCost: money(additionalCost), transportCost: money(transportCost), result: money(result) },
     numbering: { mode: input.type === "PRODUCTION" ? "AUTO" : mode, number: manualNumber }, summary,
   } };
 }
