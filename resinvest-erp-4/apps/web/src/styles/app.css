@@ -144,6 +144,11 @@ code { font-size: .85em; }
 ul.plain { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
 .mt { margin-top: 12px; }
 .dialog:has(.table-wrap) { width: min(1040px, 100%); }
+.dialog:has(.grid2) { width: min(760px, 100%); }
+.tabs.scroll { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: thin; }
+.tabs.scroll button { white-space: nowrap; }
+fieldset.field { border: 0; padding: 0; margin: 0; }
+fieldset.field legend { font-weight: 600; margin-bottom: 4px; }
 
 @media (max-width: 860px) {
   .btn.menu-btn { display: inline-flex; margin-left: auto; }

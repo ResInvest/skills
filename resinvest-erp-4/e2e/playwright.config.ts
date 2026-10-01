@@ -23,6 +23,7 @@ export default defineConfig({
   projects: [
     { name: "desktop", testMatch: /identity\.spec\.ts/, use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
     { name: "magazyn", testMatch: /stock\.spec\.ts/, dependencies: ["desktop"], use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
+    { name: "kartoteki", testMatch: /catalog\.spec\.ts/, dependencies: ["desktop"], use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
     { name: "telefon", testMatch: /mobile\.spec\.ts/, dependencies: ["desktop"], use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } } },
   ],
   webServer: [

@@ -15,6 +15,7 @@ import { UserDetailPage } from "../pages/users/UserDetailPage";
 import { UsersPage } from "../pages/users/UsersPage";
 import { StockPage } from "../pages/stock/StockPage";
 import { OpeningPage } from "../pages/stock/OpeningPage";
+import { CatalogPage } from "../pages/catalog/CatalogPage";
 
 /** Wymaga zalogowania; przy wymuszonej zmianie hasła pokazuje wyłącznie ekran zmiany hasła. */
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -51,6 +52,8 @@ export function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="konto" element={<AccountPage />} />
         <Route path="stany" element={<RequirePerm perm="report.view"><StockPage /></RequirePerm>} />
+        <Route path="kartoteki" element={<Navigate to="/kartoteki/materials" replace />} />
+        <Route path="kartoteki/:kind" element={<RequirePerm perm="report.view"><CatalogPage /></RequirePerm>} />
         <Route path="bilans-otwarcia" element={<RequirePerm perm="report.view"><OpeningPage /></RequirePerm>} />
         <Route path="uzytkownicy" element={<RequirePerm perm="users.read"><UsersPage /></RequirePerm>} />
         <Route path="uzytkownicy/:id" element={<RequirePerm perm="users.read"><UserDetailPage /></RequirePerm>} />

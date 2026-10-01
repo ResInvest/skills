@@ -7,10 +7,11 @@ wielu użytkowników jednocześnie, centralna baza **PostgreSQL**, dostęp przez
 Windows (Tauri) — w sieci firmy lub przez FortiClient VPN.
 
 > **Status: 4.0.0-alpha.1 — fazy F1 (fundament), F2 (tożsamość: logowanie, sesje, konta, role, magazyny, audyt)
-> i F3 (silnik stanów: księga ruchów z blokadą, salda, karta materiału, bilans otwarcia z zatwierdzaniem) ukończone.**
+> F3 (silnik stanów: księga ruchów z blokadą, salda, karta materiału, bilans otwarcia z zatwierdzaniem)
+> i F4a (kartoteki: materiały, kontrahenci, flota, rębaki własne i zewnętrzne, operacje dodatkowe) ukończone.**
 > Wersja produkcyjna do dnia przełączenia to **ResInvest ERP 3.4** (`../resinvest-erp`).
 > Plan i decyzje: [`../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md`](../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md),
-> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md).
+> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md), [`docs/RAPORT_F4a.md`](docs/RAPORT_F4a.md).
 
 ## Architektura
 
@@ -95,6 +96,7 @@ E2E wymaga zbudowanego projektu (`pnpm build`) i przeglądarki Chromium (`pnpm -
 | `apps/api` (F2) | logowanie, blokada, limity prób, sesje, CSRF, zaproszenia i reset (kolejka poczty), wymuszona zmiana hasła, role, ostatni administrator (także równoczesne operacje), izolacja magazynów, audyt, CLI |
 | `packages/domain` (F3) | silnik stanów: symulacja sald krok po kroku (brak stanu ujemnego), stała kolejność blokad, komunikaty braków jak w 3.x, walidacja i przeliczenie bilansu otwarcia |
 | `apps/api` (F3) | `LedgerService` (jedyne miejsce zmiany stanu: `SELECT … FOR UPDATE`, ruchy tylko do dopisywania), stany i karta materiału, bilans otwarcia: szkic → zatwierdzenie (dokument BO, ruchy, audyt) |
+| `apps/api` + `apps/web` (F4a) | kartoteki `/catalog/:kind` — walidacja serwera (NIP z sumą kontrolną, rejestracja, kody), wersje, audyt było/jest, „użyte → tylko dezaktywacja”, izolacja floty; ekran Kartoteki |
 | `apps/web` (F3) | Stany magazynowe (karta materiału z historią ruchów), Bilans otwarcia (szkic z podglądem przeliczenia, zatwierdzenie) |
 | `apps/web` | stan systemu; routing i strażnicy, logowanie, menu wg uprawnień, wylogowanie, wygaśnięcie sesji, wymuszona zmiana hasła, linki z e-maila |
 | `e2e` | 7 scenariuszy silnika stanów (bilans otwarcia, stany, karta materiału, telefon) + 11 scenariuszy tożsamości na komputerze (1280 px) + telefon (390 px): aktywacja, zaproszenia z e-maila, izolacja magazynów, blokada, reset, audyt, równoczesna edycja |
@@ -111,7 +113,7 @@ resinvest-erp-4/
 ├── packages/domain/     reguły domenowe (przeliczniki, tonaż, liczby)
 ├── prisma/              schema.prisma + migrations/
 ├── deploy/nginx/        konfiguracja Nginx (TLS, nagłówki, limity, proxy)
-├── docs/                RAPORT_F1.md, RAPORT_F2.md, RAPORT_F3.md, WDROZENIE.md
+├── docs/                RAPORT_F1.md, RAPORT_F2.md, RAPORT_F3.md, RAPORT_F4a.md, WDROZENIE.md
 ├── docker-compose.yml   środowisko testowe / serwer Linux
 ├── .env.example         wzór konfiguracji
 └── LICENSE
