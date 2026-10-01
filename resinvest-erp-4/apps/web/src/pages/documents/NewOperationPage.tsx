@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatQty, qtySum, MAX_EXTRAS, planOperation, TRANSPORT_MODE_LABEL, type TransportFleet, type CompanyRates, type ExtraInput, type OperationInput, type OperationPlan, type PlanExtraType, type PlanMaterial } from "@resinvest/domain";
+import { checkReason, formatQty, qtySum, MAX_EXTRAS, planOperation, TRANSPORT_MODE_LABEL, type TransportFleet, type CompanyRates, type ExtraInput, type OperationInput, type OperationPlan, type PlanExtraType, type PlanMaterial } from "@resinvest/domain";
 import { ApiRequestError, api, errorText } from "../../api/client";
 import { UNIT_LABEL, type Unit } from "../../api/types";
 import { useSession } from "../../auth/session";
@@ -11,9 +11,9 @@ import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
 import { elFor, goToField, guideSteps, OperationGuide } from "./guide";
 import { opHelp } from "./help";
-import { ChainProductionFields, EMPTY_CHAIN, EMPTY_SALE, OutputSaleFields, toChainInput, toSaleInput, type ChainState, type SaleState } from "./ChainFields";
-import { EMPTY_TRANSPORT, TransportFields, toTransportInput, type FleetData, type TransportState } from "./TransportFields";
-import { DocBadge, OperationDetail, type OperationView, pln } from "./OperationDetail";
+import { ChainProductionFields, EMPTY_CHAIN, EMPTY_SALE, fromChainInput, fromSaleInput, OutputSaleFields, toChainInput, toSaleInput, type ChainState, type SaleState } from "./ChainFields";
+import { EMPTY_TRANSPORT, fromTransportInput, TransportFields, toTransportInput, type FleetData, type TransportState } from "./TransportFields";
+import { canCorrectKind, ChangesTable, DocBadge, OperationDetail, type OperationView, pln } from "./OperationDetail";
 
 type Kind = OperationInput["type"];
 interface FormData {
@@ -34,6 +34,8 @@ interface FormData {
 }
 interface Preview {
   plan: OperationPlan; numbers: string[];
+  /** Korekta: pola BYŁO / JEST. */
+  changes?: Array<{ field: string; before: string | null; after: string | null }>;
   steps: Array<{ key: string; before: string; qty: string; after: string }>;
   shortages: Array<{ materialId: string; message: string }>;
 }
@@ -59,25 +61,51 @@ let extraSeq = 0;
 export function NewOperationPage() {
   const W = useWorkWarehouse();
   const { can } = useSession();
-  const allowed = KINDS.filter(k => can(k.perm) && (!k.also || can(k.also)));
+  const navigate = useNavigate();
+  // korekta: /nowa-operacja?korekta=<id> — formularz z danymi zapisanego dokumentu, ten sam rodzaj i magazyn
+  const [params] = useSearchParams();
+  const corrId = params.get("korekta");
+  const corrQ = useQuery({ queryKey: ["operation", corrId], enabled: !!corrId, staleTime: 0,
+    queryFn: async ({ signal }) => (await api.get<{ operation: OperationView }>(`/operations/${corrId}`, signal)).operation });
+  const corr = corrId && corrQ.data?.input && corrQ.data.status !== "DELETED" ? corrQ.data : null;
+  const corrKind = corr?.input?.type;
+  const allowed = corr ? KINDS.filter(k => k.kind === corrKind && canCorrectKind(can, corrKind)) : KINDS.filter(k => can(k.perm) && (!k.also || can(k.also)));
   const [kind, setKind] = useState<Kind | null>(null);
   const type: Kind | undefined = kind && allowed.some(k => k.kind === kind) ? kind : allowed[0]?.kind;
+  const whId = corr ? corr.warehouse.id : W.id;
   const [f, setF] = useState(EMPTY);
   const [date, setDate] = useState("");
   const [extras, setExtras] = useState<ExtraRow[]>([]);
   const [transport, setTransport] = useState<TransportState>(EMPTY_TRANSPORT);
   const [chain, setChain] = useState<ChainState>(EMPTY_CHAIN);
   const [outSale, setOutSale] = useState<SaleState>(EMPTY_SALE);
+  const [reason, setReason] = useState("");
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  if (corr?.input && loadedFor !== `${corr.id}:${corr.version}`) {
+    // jednorazowe wypełnienie formularza migawką dokumentu (wzorzec „stan pochodny” — bez efektu)
+    const i = corr.input as unknown as Record<string, unknown>, t = (k: string) => (i[k] === null || i[k] === undefined ? "" : String(i[k]));
+    const num = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+    setLoadedFor(`${corr.id}:${corr.version}`);
+    setF({ ...EMPTY, partnerId: t("partnerId"), materialId: t("materialId"), qty: t("qty"), unit: t("unit") as Unit | "", price: t("price"), priceUnit: t("priceUnit") as Unit | "",
+      weightManual: t("weightManual"), targetWarehouseId: t("targetWarehouseId"), rawCost: t("rawCost"), rawMaterialId: t("rawMaterialId"), outMaterialId: t("outMaterialId"),
+      outQty: t("outQty"), chipperId: t("chipperId"), operatorId: t("operatorId"), chipRate: t("chipRate"), documentDate: t("documentDate"), externalNumber: t("externalNumber"), notes: t("notes") });
+    setDate(t("date"));
+    setExtras((corr.input.extras ?? []).map(x => ({ key: ++extraSeq, typeId: x.typeId, vehicleId: x.vehicleId ?? "", qty: num(x.qty), rate: num(x.rate), cost: num(x.cost), description: x.description ?? "" })));
+    setTransport(fromTransportInput(corr.input.transport));
+    const ci = corr.input;
+    setChain(ci.type === "PURCHASE" || ci.type === "DIRECT_SALE" ? fromChainInput(ci.production) : EMPTY_CHAIN);
+    setOutSale(ci.type === "PURCHASE" || ci.type === "DIRECT_SALE" ? fromSaleInput(ci.sale) : EMPTY_SALE);
+  }
   const [tried, setTried] = useState(false);
   // pola, które użytkownik już odwiedził — ich braki świecą na czerwono od razu, reszta dopiero po „Dalej”
   const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
   const touch = (id: string) => { if (id && !touched.has(id)) setTouched(s => new Set(s).add(id)); };
   const [preview, setPreview] = useState<Preview | null>(null);
   const [serverErr, setServerErr] = useState<unknown>(null);
-  const [created, setCreated] = useState<{ id: string; numbers: string[] } | null>(null);
+  const [created, setCreated] = useState<{ id: string; numbers: string[]; corrected?: boolean } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
-  const form = useQuery({ queryKey: ["operations", "form-data", W.id], enabled: !!W.id, staleTime: 0, refetchOnMount: "always",
-    queryFn: ({ signal }) => api.get<FormData>(`/operations/form-data?warehouseId=${W.id}`, signal) });
+  const form = useQuery({ queryKey: ["operations", "form-data", whId], enabled: !!whId, staleTime: 0, refetchOnMount: "always",
+    queryFn: ({ signal }) => api.get<FormData>(`/operations/form-data?warehouseId=${whId}`, signal) });
   const fd = form.data;
   const day = date || fd?.today || "";
   const set = (k: keyof typeof EMPTY, v: string) => { setPreview(null); setF(s => ({ ...s, [k]: v })); };
@@ -86,7 +114,7 @@ export function NewOperationPage() {
   const input = ((): OperationInput | null => {
     if (!type) return null;
     const base = {
-      warehouseId: W.id, date: day, documentDate: f.documentDate || null, externalNumber: f.externalNumber.trim() || null, notes: f.notes.trim() || null,
+      warehouseId: whId, date: day, documentDate: f.documentDate || null, externalNumber: f.externalNumber.trim() || null, notes: f.notes.trim() || null,
       numbering: { mode: f.numberMode, number: f.numberMode === "MANUAL" ? f.number : null },
       extras: extras.map<ExtraInput>(x => ({ typeId: x.typeId, vehicleId: x.vehicleId || null, qty: x.qty, rate: x.rate, cost: x.cost, description: x.description || null })),
       ...(type !== "PRODUCTION" ? { transport: toTransportInput(transport) } : {}),
@@ -102,28 +130,33 @@ export function NewOperationPage() {
 
   const local = !fd || !input ? null
     : planOperation(input, { materials: new Map(fd.materials.map(m => [m.id, m])), extraTypes: new Map(fd.extraTypes.map(t => [t.id, t])), rates: fd.rates, today: fd.today, transferTwoStage: fd.mmTwoStage,
-      kmRateDefault: fd.kmRateDefault, fleet: fleetOf(fd, W.id) });
+      kmRateDefault: fd.kmRateDefault, fleet: fleetOf(fd, whId) });
   const localErr = (field: string) => ((tried || touched.has(elFor(field))) && local && !local.ok ? local.errors.find(e => e.field === field)?.message : undefined);
   const fe = (field: string) => (serverErr instanceof ApiRequestError ? serverErr.field(field) : undefined) ?? localErr(field);
 
+  const reasonErr = corr ? checkReason(reason) : null;
   const check = useMutation({
-    mutationFn: (op: OperationInput) => api.post<Preview>("/operations/preview", op),
+    mutationFn: (op: OperationInput) => corr ? api.post<Preview>(`/operations/${corr.id}/correction/preview`, { version: corr.version, operation: op }) : api.post<Preview>("/operations/preview", op),
     onSuccess: p => setPreview(p),
     onError: e => setServerErr(e),
   });
   const next = () => {
     setTried(true); setServerErr(null);
-    if (!input || !local?.ok) return;
+    if (!input || !local?.ok || reasonErr) return;
     check.mutate(input);
   };
   const reset = () => { setF(EMPTY); setExtras([]); setTransport(EMPTY_TRANSPORT); setChain(EMPTY_CHAIN); setOutSale(EMPTY_SALE); setTried(false); setTouched(new Set()); setPreview(null); setServerErr(null); };
   const go = (el: string) => { touch(el); goToField(el); };
 
-  if (!allowed.length) return <section className="card"><h1>Nowa operacja</h1><p className="muted">Twoja rola nie pozwala wprowadzać operacji magazynowych.</p></section>;
+  if (corrId && corrQ.isError) return <section className="card"><h1>Korekta</h1><Alert kind="err">{errorText(corrQ.error)}</Alert></section>;
+  if (corrId && !corrQ.data) return <p className="muted">Wczytywanie dokumentu do korekty…</p>;
+  if (corrId && !corr) return <section className="card"><h1>Korekta</h1><Alert kind="err">Tego dokumentu nie można korygować (usunięty albo bez danych formularza).</Alert></section>;
+  if (!allowed.length) return <section className="card"><h1>{corr ? "Korekta" : "Nowa operacja"}</h1><p className="muted">{corr ? "Twoja rola nie pozwala korygować tego rodzaju dokumentów." : "Twoja rola nie pozwala wprowadzać operacji magazynowych."}</p></section>;
   const mats = fd?.materials.filter(m => m.active) ?? [];
   const mat = fd?.materials.find(m => m.id === f.materialId);
   const raw = fd?.materials.find(m => m.id === f.rawMaterialId);
   const whName = (id: string) => fd?.warehouses.find(w => w.id === id)?.name ?? W.warehouses.find(w => w.id === id)?.name ?? "magazyn";
+  const corrNumbers = corr ? corr.documents.map(d => d.number).join(", ") : "";
   const partners = (fd?.partners ?? []).filter(p => p.role === "BOTH" || p.role === (type === "PURCHASE" ? "SUPPLIER" : "BUYER"));
   const bal = (id: string) => fd?.balances[id] ?? "0";
   const docLabel = KINDS.find(k => k.kind === type)?.doc ?? "";
@@ -131,28 +164,34 @@ export function NewOperationPage() {
   const steps = !type ? [] : guideSteps({
     type, f, day, extras: extras.length, transportMode: type === "PRODUCTION" ? "NONE" : transport.mode,
     chain: type === "DIRECT_SALE" ? { ...chain, enabled: true } : chain, sale: type === "DIRECT_SALE" ? { ...outSale, enabled: true } : outSale,
-    errors: [...(serverErr instanceof ApiRequestError ? serverErr.body?.details ?? [] : []), ...(local && !local.ok ? local.errors : [])],
+    errors: [...(serverErr instanceof ApiRequestError ? serverErr.body?.details ?? [] : []), ...(local && !local.ok ? local.errors : []), ...(reasonErr ? [{ field: "reason", message: reasonErr }] : [])],
+    reason: corr ? reason : undefined,
   });
   const H = (id: string, variant?: string) => <Hint id={id} text={opHelp(id, variant)} />;
 
   return (
     <>
       <div className="page-h">
-        <div><h1>Nowa operacja</h1><p className="muted small">Każda operacja tworzy dokumenty (PZ / WZ / RW + PW) i ruchy w księdze magazynu. Stan zmienia się dopiero po zatwierdzeniu.</p></div>
+        {corr ? <div><h1>Korekta — <span className="doc">{corrNumbers}</span></h1><p className="muted small">Zmień pola i podaj powód. Numery dokumentów zostają; serwer odwróci ruchy poprzedniej wersji i zaksięguje nowe. Przed zatwierdzeniem zobaczysz zmiany BYŁO / JEST.</p></div>
+          : <div><h1>Nowa operacja</h1><p className="muted small">Każda operacja tworzy dokumenty (PZ / WZ / RW + PW) i ruchy w księdze magazynu. Stan zmienia się dopiero po zatwierdzeniu.</p></div>}
         <div className="actions"><TutorialToggle /><Link className="btn" to="/dokumenty">Rejestr dokumentów</Link></div>
       </div>
       <div className="tabs scroll" role="tablist" aria-label="Rodzaj operacji">
         {allowed.map(k => <button key={k.kind} type="button" role="tab" aria-selected={type === k.kind} className={type === k.kind ? "on" : ""} id={`op-tab-${k.kind}`}
           onClick={() => { setKind(k.kind); setTried(false); setPreview(null); setServerErr(null); }}>{k.label} <DocBadge type={k.doc} /></button>)}
       </div>
-      {created && <Alert kind="ok"><span>Zapisano operację — dokumenty: <strong className="doc">{created.numbers.join(", ")}</strong>. <button type="button" className="linkish" id="op-created-open" onClick={() => setDetail(created.id)}>Pokaż szczegóły</button></span></Alert>}
+      {created && <Alert kind="ok"><span>{created.corrected ? "Zapisano korektę — dokumenty: " : "Zapisano operację — dokumenty: "}<strong className="doc">{created.numbers.join(", ")}</strong>. <button type="button" className="linkish" id="op-created-open" onClick={() => setDetail(created.id)}>Pokaż szczegóły</button></span></Alert>}
       {form.isError ? <Alert kind="err">{errorText(form.error)}</Alert> : !fd ? <p className="muted">Wczytywanie…</p> : (
         <div className="op-layout">
           <form className="card form" id="op-form" noValidate onSubmit={e => { e.preventDefault(); next(); }}
             onBlur={e => touch(e.target.id)} onChange={e => { if (e.target instanceof HTMLSelectElement) touch(e.target.id); }}>
+            {corr && <div className="field corr-reason"><label htmlFor="op-reason">Powód korekty <span className="req">*</span></label>
+              <textarea id="op-reason" className="ctrl" rows={2} maxLength={500} placeholder="np. błędna ilość z kwitu wagowego, zły dostawca" value={reason} onChange={e => { setPreview(null); setReason(e.target.value); }} />
+              <Hint id="op-reason" text="Powód trafi do historii zmian (BYŁO / JEST), zakładki „Korekty” i dziennika audytu. Co najmniej 5 znaków." />
+              {(tried || touched.has("op-reason")) && reasonErr && <small className="error">{reasonErr}</small>}</div>}
             <div className="grid2">
               <div className="field"><label htmlFor="op-wh">Magazyn <span className="req">*</span></label>
-                <select id="op-wh" className="ctrl" value={W.id} onChange={e => { reset(); W.setId(e.target.value); }}>{W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select>{H("op-wh")}</div>
+                <select id="op-wh" className="ctrl" value={whId} disabled={!!corr} onChange={e => { reset(); W.setId(e.target.value); }}>{W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select>{H("op-wh")}</div>
               <div className="field"><label htmlFor="op-date">Data operacji (ruchu) <span className="req">*</span></label>
                 <input id="op-date" className="ctrl" type="date" value={day} max={fd.today} onChange={e => { setPreview(null); setDate(e.target.value); }} />
                 {H("op-date")}{fe("date") && <small className="error">{fe("date")}</small>}</div>
@@ -177,7 +216,7 @@ export function NewOperationPage() {
                   <OutputSaleFields value={outSale} onChange={x => { setPreview(null); setOutSale(x); }} data={fd} fe={fe} /></fieldset>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-numbering">Numer WZ</label>
-                    <select id="op-numbering" className="ctrl" value={f.numberMode} onChange={e => set("numberMode", e.target.value)}>
+                    <select id="op-numbering" className="ctrl" value={f.numberMode} disabled={!!corr} onChange={e => set("numberMode", e.target.value)}>
                       <option value="AUTO">Automatycznie (WZ/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
                     </select>
                     {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label="Numer ręczny WZ" maxLength={40} value={f.number} onChange={e => set("number", e.target.value)} />}
@@ -194,7 +233,7 @@ export function NewOperationPage() {
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-target">Magazyn docelowy <span className="req">*</span></label>
                     <select id="op-target" className="ctrl" value={f.targetWarehouseId} onChange={e => set("targetWarehouseId", e.target.value)}>
-                      <option value="">— wybierz —</option>{fd.warehouses.filter(w => w.id !== W.id).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      <option value="">— wybierz —</option>{fd.warehouses.filter(w => w.id !== whId).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>{H("op-target")}{fe("targetWarehouseId") && <small className="error">{fe("targetWarehouseId")}</small>}</div>
                   <div className="field"><label htmlFor="op-mat">Materiał <span className="req">*</span></label>
                     <select id="op-mat" className="ctrl" value={f.materialId} onChange={e => { const m = fd.materials.find(x => x.id === e.target.value); setPreview(null); setF(s => ({ ...s, materialId: e.target.value, unit: m?.stockUnit ?? "" })); }}>
@@ -214,7 +253,7 @@ export function NewOperationPage() {
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-numbering">Numer MM</label>
-                    <select id="op-numbering" className="ctrl" value={f.numberMode} onChange={e => set("numberMode", e.target.value)}>
+                    <select id="op-numbering" className="ctrl" value={f.numberMode} disabled={!!corr} onChange={e => set("numberMode", e.target.value)}>
                       <option value="AUTO">Automatycznie (MM/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
                     </select>
                     {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label="Numer ręczny MM" maxLength={40} placeholder="np. MM 3/2026" value={f.number} onChange={e => set("number", e.target.value)} />}
@@ -256,7 +295,7 @@ export function NewOperationPage() {
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="op-numbering">Numer {docLabel}</label>
-                    <select id="op-numbering" className="ctrl" value={f.numberMode} onChange={e => set("numberMode", e.target.value)}>
+                    <select id="op-numbering" className="ctrl" value={f.numberMode} disabled={!!corr} onChange={e => set("numberMode", e.target.value)}>
                       <option value="AUTO">Automatycznie ({docLabel}/NNN/MM/RRRR)</option><option value="MANUAL">Ręcznie</option>
                     </select>
                     {f.numberMode === "MANUAL" && <input id="op-number" className="ctrl mt" aria-label={`Numer ręczny ${docLabel}`} maxLength={40} placeholder={`np. ${docLabel} 12/2026`} value={f.number} onChange={e => set("number", e.target.value)} />}
@@ -370,7 +409,7 @@ export function NewOperationPage() {
                   const running = new Map<string, string>();
                   return plan.movements.map((m, i) => {
                     const mm = fd.materials.find(x => x.id === m.materialId);
-                    if (m.warehouseId !== W.id) return <li key={i}>{mm?.name}: +{formatQty(m.qty)} {mm ? UNIT_LABEL[mm.stockUnit] : ""} w magazynie {whName(m.warehouseId)}</li>;
+                    if (m.warehouseId !== whId) return <li key={i}>{mm?.name}: +{formatQty(m.qty)} {mm ? UNIT_LABEL[mm.stockUnit] : ""} w magazynie {whName(m.warehouseId)}</li>;
                     const before = running.get(m.materialId) ?? bal(m.materialId);
                     const after = qtySum(before, m.qty);
                     running.set(m.materialId, after);
@@ -393,22 +432,32 @@ export function NewOperationPage() {
         </div>
       )}
       {preview && input && fd && <ConfirmDialog preview={preview} input={input} fd={fd} onClose={() => setPreview(null)}
-        onDone={op => { setPreview(null); reset(); setCreated({ id: op.id, numbers: op.documents.map(d => d.number) }); setDetail(op.id); }} />}
+        correction={corr ? { id: corr.id, version: corr.version, reason } : null}
+        onDone={op => {
+          setPreview(null); reset(); setReason("");
+          setCreated({ id: op.id, numbers: op.documents.map(d => d.number), corrected: !!corr }); setDetail(op.id);
+          if (corr) void navigate("/nowa-operacja", { replace: true });
+        }} />}
       {detail && <OperationDetail id={detail} onClose={() => setDetail(null)} />}
     </>
   );
 }
 
 /** Podsumowanie przed zatwierdzeniem: numery, pozycje, stan przed / po; przy braku towaru zapis jest zablokowany. */
-function ConfirmDialog({ preview, input, fd, onClose, onDone }: { preview: Preview; input: OperationInput; fd: FormData; onClose: () => void; onDone: (op: OperationView) => void }) {
+function ConfirmDialog({ preview, input, fd, correction, onClose, onDone }: {
+  preview: Preview; input: OperationInput; fd: FormData; correction: { id: string; version: number; reason: string } | null; onClose: () => void; onDone: (op: OperationView) => void;
+}) {
   const qc = useQueryClient();
   const key = useRef(newKey()); // jeden klucz na to podsumowanie — ponowienie po błędzie sieci nie zdubluje operacji
   const save = useMutation({
-    mutationFn: () => api.post<{ operation: OperationView }>("/operations", { idempotencyKey: key.current, operation: input }),
+    mutationFn: () => correction
+      ? api.post<{ operation: OperationView }>(`/operations/${correction.id}/correction`, { idempotencyKey: key.current, version: correction.version, reason: correction.reason, operation: input })
+      : api.post<{ operation: OperationView }>("/operations", { idempotencyKey: key.current, operation: input }),
     onSuccess: r => {
       void qc.invalidateQueries({ queryKey: ["documents"] });
       void qc.invalidateQueries({ queryKey: ["stock"] });
       void qc.invalidateQueries({ queryKey: ["operations"] });
+      void qc.invalidateQueries({ queryKey: ["operation"] });
       onDone(r.operation);
     },
   });
@@ -421,17 +470,22 @@ function ConfirmDialog({ preview, input, fd, onClose, onDone }: { preview: Previ
   const p = preview.plan;
   const blocked = preview.shortages.length > 0;
   return (
-    <Dialog title="Podsumowanie operacji" onClose={onClose}
+    <Dialog title={correction ? "Podsumowanie korekty" : "Podsumowanie operacji"} onClose={onClose}
       footer={<>
         <button type="button" className="btn" onClick={onClose}>Wróć do edycji</button>
-        <button type="button" className="btn primary" id="op-confirm" disabled={blocked || save.isPending} onClick={() => save.mutate()}>{save.isPending ? "Zapisywanie…" : "Zatwierdź operację"}</button>
+        <button type="button" className="btn primary" id="op-confirm" disabled={blocked || save.isPending} onClick={() => save.mutate()}>{save.isPending ? "Zapisywanie…" : correction ? "Zatwierdź korektę" : "Zatwierdź operację"}</button>
       </>}>
       <div id="op-summary">
         {save.isError && <Alert kind="err">{errorText(save.error)}</Alert>}
         {preview.shortages.map((s, i) => <Alert key={i} kind="err">{s.message}</Alert>)}
+        {correction && <>
+          <p className="small"><span className="muted">Powód korekty:</span> {correction.reason}</p>
+          {preview.changes?.length ? <ChangesTable changes={preview.changes} id="op-changes" /> : <Alert kind="warn">Nic się nie zmieniło — korekta nie jest potrzebna.</Alert>}
+        </>}
         <ul className="plain">{p.documents.map((d, i) => <li key={i}><DocBadge type={d.type} /> <strong className="doc" data-number>{preview.numbers[i]}</strong>
           {d.lines.map((l, j) => <span key={j}> — {formatQty(l.qtySource)} {UNIT_LABEL[l.unitSource]}{l.unitSource !== l.unitStock ? ` = ${formatQty(l.qtyStock)} ${UNIT_LABEL[l.unitStock]}` : ""}{l.value ? ` · ${pln(l.value)}` : ""}</span>)}</li>)}</ul>
         {p.summary.map((s, i) => <p key={i} className="summary">{s}</p>)}
+        {correction && preview.steps.length > 0 && <p className="small muted mt">Zmiana stanów (netto — odwrócenie poprzedniej wersji i nowe ruchy):</p>}
         <div className="table-wrap"><table className="table">
           <thead><tr><th>Materiał</th><th className="r">Przed</th><th className="r">Zmiana</th><th className="r">Po</th></tr></thead>
           <tbody>{preview.steps.map((s, i) => { const n = name(s.key); return (

@@ -10,11 +10,12 @@ import { ColumnHelp, Hint, TutorialToggle } from "../../ui/tutorial";
 import { OP_HELP } from "./help";
 import { useWorkWarehouse } from "../stock/StockPage";
 import { newKey } from "./idempotency";
-import { DocBadge, OP_LABEL, OperationDetail, TransferState, day, pln, tonLine } from "./OperationDetail";
+import { DocBadge, OP_LABEL, OperationDetail, StatusBadge, TransferState, day, pln, tonLine } from "./OperationDetail";
+import { ChangesList, type ChangesKind } from "./ChangesList";
 
 interface DocRow {
   id: string; type: string; number: string; documentDate: string; movementDate: string; partner: string | null; operationId: string; operationType: string; status: string;
-  externalNumber: string | null; value: string;
+  externalNumber: string | null; value: string; corrections: number;
   transfer: { from: string; to: string; state: "IN_TRANSIT" | "RECEIVED" | null; direction: "IN" | "OUT" } | null;
   lines: Array<{ material: string; qtySource: string; unitSource: Unit; qtyStock: string; unitStock: Unit; weightT: string | null; weightSource: string | null; value: string | null }>;
 }
@@ -31,6 +32,7 @@ export function DocumentsPage() {
   const [f, setF] = useState({ type: "", from: "", to: "", q: "", aux: false });
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<"register" | ChangesKind>("register");
   const qs = new URLSearchParams({ warehouseId: W.id, page: String(page), pageSize: String(PAGE), aux: f.aux ? "1" : "0", ...(f.type ? { type: f.type } : {}), ...(f.from ? { from: f.from } : {}), ...(f.to ? { to: f.to } : {}), ...(f.q ? { q: f.q } : {}) });
   const q = useQuery({ queryKey: ["documents", qs.toString()], enabled: !!W.id, staleTime: 0, refetchOnMount: "always", placeholderData: keepPreviousData,
     queryFn: ({ signal }) => api.get<{ total: number; rows: DocRow[] }>(`/documents?${qs.toString()}`, signal) });
@@ -62,6 +64,14 @@ export function DocumentsPage() {
             </li>))}</ul>
         </section>)}
       {outbound.length > 0 && <p className="muted small" id="mm-outbound">Wysłane, czekają na przyjęcie: {outbound.map(t => `${t.number} → ${t.to.name}`).join(" · ")}</p>}
+      <div className="tabs scroll" role="tablist" aria-label="Widok rejestru">
+        {([["register", "Rejestr"], ["corrections", "Korekty"], ["edited", "Edytowane"], ["deleted", "Usunięte"]] as const).map(([k, l]) =>
+          <button key={k} type="button" role="tab" id={`docs-tab-${k}`} aria-selected={view === k} className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}
+      </div>
+      {view !== "register" ? <>
+        <div className="filters"><select className="ctrl" aria-label="Magazyn" value={W.id} onChange={e => W.setId(e.target.value)}>{W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></div>
+        <ChangesList key={`${view}-${W.id}`} kind={view} warehouseId={W.id} onOpen={setOpen} />
+      </> : <>
       <div className="filters" role="search">
         <select className="ctrl" aria-label="Magazyn" value={W.id} onChange={e => { setPage(1); W.setId(e.target.value); }}>{W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select>
         <select className="ctrl" aria-label="Typ dokumentu" value={f.type} onChange={e => set("type", e.target.value)}><option value="">Wszystkie typy</option>{types.map(t => <option key={t} value={t}>{t}</option>)}</select>
@@ -77,7 +87,7 @@ export function DocumentsPage() {
               <thead><tr><th>Nr dokumentu</th><th>Typ</th><th>Data</th><th>Treść</th><th>Kontrahent</th><th className="r">Wartość</th></tr></thead>
               <tbody>{q.data.rows.map(d => (
                 <tr key={d.id} className={`doc-row doc-row-${["PZ", "WZ", "MM"].includes(d.type) ? d.type : "aux"}`}>
-                  <td data-label="Nr dokumentu"><button type="button" className="linkish doc" onClick={() => setOpen(d.operationId)}>{d.number}</button></td>
+                  <td data-label="Nr dokumentu"><button type="button" className="linkish doc" onClick={() => setOpen(d.operationId)}>{d.number}</button>{d.corrections > 0 && <> <StatusBadge status={d.status} corrections={d.corrections} /></>}</td>
                   <td data-label="Typ"><DocBadge type={d.type} /></td>
                   <td data-label="Data">{day(d.movementDate)}{d.documentDate !== d.movementDate && <><br /><small className="muted">dok. {day(d.documentDate)}</small></>}</td>
                   <td data-label="Treść">{d.lines.map((l, i) => <div key={i}>{l.material}: <span className="num">{tonLine(l)}</span></div>)}<small className="muted">{OP_LABEL[d.operationType] ?? d.operationType}</small></td>
@@ -96,6 +106,7 @@ export function DocumentsPage() {
           </nav>
         </>
       )}
+      </>}
       {open && <OperationDetail id={open} onClose={() => setOpen(null)} />}
       {receiving && <ReceiveDialog t={receiving} onClose={() => setReceiving(null)} onDone={msg => { setReceiving(null); setDone(msg); }} />}
     </>
@@ -103,7 +114,7 @@ export function DocumentsPage() {
 }
 
 const DOC_COLUMNS = [
-  ["Nr dokumentu", "Numer nadany przy zapisie (automatyczny albo ręczny). Kliknij, aby zobaczyć całą operację z pozycjami i historią."],
+  ["Nr dokumentu", "Numer nadany przy zapisie (automatyczny albo ręczny); „korygowany” — dokument po korekcie. Kliknij, aby zobaczyć operację, historię zmian, „Koryguj” i „Usuń”."],
   ["Typ", "PZ — przyjęcie, WZ — wydanie, MM — przesunięcie, TR — transport; pomocnicze: RW — zużycie, PW — produkcja, BO — bilans otwarcia."],
   ["Data", "Data ruchu w księdze; pod nią data dokumentu, jeśli jest inna."],
   ["Treść", "Materiały z ilością w jednostce dokumentu i magazynowej oraz rodzaj operacji."],

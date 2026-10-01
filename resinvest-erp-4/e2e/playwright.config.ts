@@ -29,6 +29,7 @@ export default defineConfig({
     { name: "transport", testMatch: /transport\.spec\.ts/, dependencies: ["mm"], use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
     { name: "produkcja", testMatch: /chain\.spec\.ts/, dependencies: ["transport"], use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
     { name: "planer", testMatch: /planner\.spec\.ts/, dependencies: ["produkcja"], use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
+    { name: "korekty", testMatch: /changes\.spec\.ts/, dependencies: ["planer"], use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
     { name: "telefon", testMatch: /mobile\.spec\.ts/, dependencies: ["desktop"], use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } } },
   ],
   webServer: [

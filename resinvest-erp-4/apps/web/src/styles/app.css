@@ -239,6 +239,15 @@ div.field:has(> small.error) .ctrl, .extra-row:has(> small.error) .ctrl { border
 .g-next em { font-style: normal; font-size: .8rem; color: var(--err); }
 .guide-ok { margin: 8px 0 0; padding: 6px 8px; border-radius: 8px; background: var(--ok-bg); color: var(--ok); font-weight: 600; }
 .guide-float { display: none; }
+/* F5: korekty i usunięcia */
+.table.changes td.was { color: var(--err); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--err) 50%, transparent); }
+.table.changes td.is { color: var(--ok); font-weight: 600; }
+.table.changes { font-size: .9rem; }
+.hist + .hist { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.corr-reason { padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); }
+.corr-reason label { color: var(--warn); }
+.deleted-row td { color: var(--muted); }
+.nowrap { white-space: nowrap; }
 .join { display: flex; gap: 6px; }
 .join .ctrl:first-child { flex: 1; min-width: 0; }
 .join select.ctrl { width: auto; flex: none; }

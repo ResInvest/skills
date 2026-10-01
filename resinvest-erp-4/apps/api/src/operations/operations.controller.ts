@@ -34,7 +34,7 @@ const Common = {
   extras: z.array(Extra).max(50).optional(),
   transport: Transport,
 };
-const Input = z.discriminatedUnion("type", [
+export const Input = z.discriminatedUnion("type", [
   z.object({ type: z.literal("PURCHASE"), partnerId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, price: val, priceUnit: unit.nullable().optional(), weightManual: val,
     production: Chain.nullable().optional(), sale: OutSale.nullable().optional(), ...Common }),
   z.object({ type: z.literal("DIRECT_SALE"), rawMaterialId: z.string().max(40), rawCost: val, production: Chain, sale: OutSale, ...Common }),
@@ -42,7 +42,7 @@ const Input = z.discriminatedUnion("type", [
   z.object({ type: z.literal("TRANSFER"), targetWarehouseId: z.string().max(40), materialId: z.string().max(40), qty: val, unit, weightManual: val, ...Common }),
   z.object({ type: z.literal("PRODUCTION"), rawMaterialId: z.string().max(40), outMaterialId: z.string().max(40), outQty: val, chipperId: z.string().max(40).nullable().optional(), operatorId: z.string().max(40).nullable().optional(), chipRate: val, ...Common }),
 ], { message: "Wybierz rodzaj operacji" });
-const Key = z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/);
+export const Key = z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/);
 const Create = z.object({ idempotencyKey: Key, operation: Input });
 const Receive = z.object({ idempotencyKey: Key, receipt: z.object({
   date: z.string().max(10).nullable().optional(), qty: val, unit: unit.nullable().optional(), weightManual: val,

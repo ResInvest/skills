@@ -13,7 +13,7 @@ const DIRECT: Record<string, string> = {
   date: "op-date", partnerId: "op-partner", materialId: "op-mat", qty: "op-qty", unit: "op-qty", price: "op-price", priceUnit: "op-price",
   weightManual: "op-weight", "numbering.number": "op-number", externalNumber: "op-ext", documentDate: "op-docdate", note: "op-notes",
   targetWarehouseId: "op-target", rawMaterialId: "op-raw", rawCost: "op-rawcost", outMaterialId: "op-out", outQty: "op-outqty",
-  chipRate: "op-chiprate", chipperId: "op-chipper", operatorId: "op-operator", extras: "op-extra-add", form: "op-next",
+  chipRate: "op-chiprate", chipperId: "op-chipper", operatorId: "op-operator", extras: "op-extra-add", form: "op-next", reason: "op-reason",
   "production.enabled": "ch-out", "production.outMaterialId": "ch-out", "production.consumeQty": "ch-consume", "production.outQty": "ch-outqty",
   "production.diffReason": "ch-diff", "production.chipperId": "ch-chipper", "production.operatorId": "ch-operator", "production.chipRate": "ch-rate",
   "production.forestDistrict": "ch-ndl", "production.forestry": "ch-lesn", "production.waybill": "ch-kwit", "production.investSite": "ch-site",
@@ -45,13 +45,16 @@ interface Ctx {
   transportMode: string;
   extras: number;
   errors: FieldError[];
+  /** Korekta: powód (undefined = nowa operacja, bez kroku powodu). */
+  reason?: string;
 }
 interface Def { key: string; label: string; help: string; el: string; fields: string[]; required: boolean; filled: boolean }
 
 /** Kroki listy kontrolnej dla rodzaju operacji; stan kroku = błąd domeny w jego polach albo brak wymaganej wartości. */
 export function guideSteps(c: Ctx): GuideStep[] {
   const { type, f, chain, sale } = c;
-  const defs: Def[] = [{ key: "date", label: "Magazyn i data", help: "Data ruchu w księdze", el: "op-date", fields: ["date"], required: true, filled: !!c.day }];
+  const defs: Def[] = c.reason === undefined ? [] : [{ key: "reason", label: "Powód korekty", help: "Do historii zmian", el: "op-reason", fields: ["reason"], required: true, filled: c.reason.trim().length >= 5 }];
+  defs.push({ key: "date", label: "Magazyn i data", help: "Data ruchu w księdze", el: "op-date", fields: ["date"], required: true, filled: !!c.day });
   const partner = (label: string, help: string) => defs.push({ key: "partner", label, help, el: "op-partner", fields: ["partnerId"], required: true, filled: !!f.partnerId });
   const material = (label: string) => defs.push({ key: "material", label, help: "Pozycja z kartoteki materiałów", el: "op-mat", fields: ["materialId"], required: true, filled: !!f.materialId });
   const qty = () => defs.push({ key: "qty", label: "Ilość", help: "Ilość i jednostka", el: "op-qty", fields: ["qty", "unit"], required: true, filled: !!f.qty.trim() });
@@ -89,7 +92,7 @@ export function guideSteps(c: Ctx): GuideStep[] {
     chainStep(true); origin(); saleStep();
   }
   if (type !== "PRODUCTION") {
-    defs.push({ key: "number", label: "Numer dokumentu", help: f.numberMode === "MANUAL" ? "Numer ręczny" : "Automatyczny", el: f.numberMode === "MANUAL" ? "op-number" : "op-numbering",
+    defs.push({ key: "number", label: "Numer dokumentu", help: c.reason !== undefined ? "Bez zmian przy korekcie" : f.numberMode === "MANUAL" ? "Numer ręczny" : "Automatyczny", el: f.numberMode === "MANUAL" ? "op-number" : "op-numbering",
       fields: ["numbering.number", "externalNumber", "documentDate"], required: f.numberMode === "MANUAL", filled: f.numberMode !== "MANUAL" || !!f.number.trim() });
     defs.push({ key: "transport", label: "Transport", help: c.transportMode === "NONE" ? "Opcjonalnie — brak transportu" : "Kursy, miejsce, koszt", el: "tr-mode",
       fields: ["transport."], required: c.transportMode !== "NONE", filled: c.transportMode !== "NONE" });

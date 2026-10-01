@@ -16,6 +16,7 @@ export const ACTION_LABEL: Record<string, string> = {
   OPENING_BALANCE_CREATED: "Bilans otwarcia — szkic", OPENING_BALANCE_UPDATED: "Bilans otwarcia — zmiana szkicu", OPENING_BALANCE_DRAFT_DELETED: "Bilans otwarcia — usunięcie szkicu", OPENING_BALANCE_APPROVED: "Bilans otwarcia — zatwierdzenie",
   OPERATION_CREATED: "Operacja magazynowa — zapis",
   MM_RECEIVED: "Przyjęcie MM", PLAN_UPDATED: "Planer zakupów — zmiana planu",
+  OPERATION_CORRECTED: "Korekta dokumentu (było / jest)", OPERATION_DELETED: "Usunięcie dokumentu (odwrócenie ruchów)",
   CATALOG_CREATED: "Kartoteka — dodanie", CATALOG_UPDATED: "Kartoteka — zmiana", CATALOG_DELETED: "Kartoteka — usunięcie",
 };
 const LOGIN_REASON: Record<string, string> = { BAD_PASSWORD: "złe hasło", NO_USER: "brak konta", LOCKED: "konto zablokowane", DOMAIN: "domena spoza firmy", NOT_ACTIVATED: "nieaktywowane", INACTIVE: "konto nieaktywne", RATE: "limit prób" };

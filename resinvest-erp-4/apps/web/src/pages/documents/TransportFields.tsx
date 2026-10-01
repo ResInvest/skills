@@ -32,6 +32,19 @@ export function toTransportInput(t: TransportState): TransportInput {
       km: r.km, rate: r.rate, freight: r.freight, qty: r.qty, weightT: r.weightT, waybillNo: r.waybillNo || null, waybillM3: r.waybillM3 })) };
 }
 
+const txt = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+/** Migawka zapisanej operacji → stan formularza (korekta otwiera formularz z danymi dokumentu). */
+export function fromTransportInput(t: TransportInput | null | undefined): TransportState {
+  if (!t || t.mode === "NONE") return EMPTY_TRANSPORT;
+  const train = t.train ?? null;
+  return {
+    mode: t.mode, place: txt(t.place), externalCompanyId: txt(t.externalCompanyId), includedInPrice: !!t.includedInPrice,
+    runs: (t.runs ?? []).map(r => ({ key: ++runSeq, ownership: r.ownership, vehicleId: txt(r.vehicleId), driverId: txt(r.driverId), registration: txt(r.registration),
+      driverName: txt(r.driverName), km: txt(r.km), rate: txt(r.rate), freight: txt(r.freight), qty: txt(r.qty), weightT: txt(r.weightT), waybillNo: txt(r.waybillNo), waybillM3: txt(r.waybillM3) })),
+    train: train ? { trainNo: txt(train.trainNo), carrier: txt(train.carrier), wagonTons: (train.wagonTons ?? []).map(txt).join("; "), priceUnit: train.priceUnit ?? "T", price: txt(train.price) } : EMPTY_TRANSPORT.train,
+  };
+}
+
 /**
  * Sekcja „Transport” formularza operacji: tryb, miejsce, firma przewozowa, kursy (pojazd i kierowca z floty albo nr rej.
  * przewoźnika, km, stawka, fracht, ilość, waga, kwit) lub skład kolejowy. Transport nie zmienia stanu — tworzy dokument TR.

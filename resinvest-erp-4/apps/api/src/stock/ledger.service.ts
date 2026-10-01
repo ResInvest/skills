@@ -11,6 +11,8 @@ export interface LedgerMovement {
   qty: string;
   kind: MovementKind;
   documentId?: string | null; documentLineId?: string | null; reversalOfId?: string | null;
+  /** Data ruchu, gdy inna niż data księgowania (odwrócenie ruchu przy korekcie / usunięciu — z datą ruchu odwracanego). */
+  movementDate?: Date;
 }
 export interface LedgerPost { operationId: string; movementDate: Date; createdById: string; movements: LedgerMovement[] }
 
@@ -42,7 +44,7 @@ export class LedgerService {
     await tx.stockMovement.createMany({
       data: p.movements.map(m => ({
         warehouseId: m.warehouseId, materialId: m.materialId, operationId: p.operationId, documentId: m.documentId ?? null, documentLineId: m.documentLineId ?? null,
-        reversalOfId: m.reversalOfId ?? null, kind: m.kind, qty: m.qty, movementDate: p.movementDate, createdById: p.createdById,
+        reversalOfId: m.reversalOfId ?? null, kind: m.kind, qty: m.qty, movementDate: m.movementDate ?? p.movementDate, createdById: p.createdById,
       })),
     });
     for (const k of keys) {

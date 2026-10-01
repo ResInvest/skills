@@ -871,10 +871,13 @@ model Correction {
   createdById String   @map("created_by_id") @db.Uuid
   /// Odwraca wcześniejszą korektę (numer).
   reverses    String?  @db.VarChar(40)
+  /// Klucz idempotencji żądania — podwójne kliknięcie „Zatwierdź korektę” nie tworzy drugiej korekty.
+  idempotencyKey String? @unique @map("idempotency_key") @db.VarChar(80)
   operation   Operation          @relation(fields: [operationId], references: [id], onDelete: Restrict)
   revisions   DocumentRevision[]
 
   @@index([operationId])
+  @@index([createdAt])
   @@map("corrections")
 }
 

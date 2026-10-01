@@ -152,9 +152,9 @@ export class OperationsService {
   async get(actor: AuthUser, id: string) {
     const op = await this.db.operation.findUnique({ where: { id }, include: {
       warehouse: true, documents: { include: { lines: { include: { material: true } }, partner: true }, orderBy: { createdAt: "asc" } },
-      movements: { orderBy: { seq: "asc" } }, productionRun: { include: { chipper: true, operator: true } }, additionalOperations: { include: { type: true, vehicle: true } },
+      movements: { orderBy: { seq: "asc" } }, productionRun: { include: { chipper: true, operator: true } }, additionalOperations: { where: { deletedAt: null }, include: { type: true, vehicle: true } },
       transportRuns: { include: { vehicle: true, driver: true, externalCompany: true }, orderBy: { runNo: "asc" } },
-      targetWarehouse: true, transferReceipt: true,
+      targetWarehouse: true, transferReceipt: true, _count: { select: { corrections: true } },
     } });
     // MM widzi także magazyn docelowy (przyjęcie); pozostałe operacje — tylko magazyn operacji
     if (!op || !(canAccessWarehouse(actor, op.warehouseId) || (op.targetWarehouseId && canAccessWarehouse(actor, op.targetWarehouseId)))) throw notFound("Nie znaleziono operacji.");
@@ -165,6 +165,9 @@ export class OperationsService {
     return {
       id: op.id, type: op.type, status: op.status, warehouse: { id: op.warehouse.id, code: op.warehouse.code, name: op.warehouse.name }, operationDate: isoDay(op.operationDate),
       notes: op.notes, createdAt: op.createdAt, createdBy: users.get(op.createdById) ?? null, version: op.version,
+      // migawka formularza — korekta otwiera formularz z tymi danymi; liczba korekt i usunięcie — do oznaczeń w widoku
+      input: op.input, corrections: op._count.corrections,
+      deleted: op.status === "DELETED" ? { at: op.deletedAt, reason: op.deleteReason } : null,
       totals: { purchaseCost: S(op.purchaseCost), revenue: S(op.revenue), chippingCost: S(op.chippingCost), additionalCost: S(op.additionalCost), transportCost: S(op.transportCost) },
       documents: op.documents.map(d => ({ id: d.id, type: d.type, number: d.number, documentDate: isoDay(d.documentDate), movementDate: isoDay(d.movementDate), externalNumber: d.externalNumber,
         partner: d.partner ? { id: d.partner.id, name: d.partner.name } : null,
@@ -200,6 +203,8 @@ export class OperationsService {
     const MAIN = ["PZ", "WZ", "MM"] as const;
     const types = q.type ? [q.type] : q.aux ? undefined : [...MAIN];
     const where: Prisma.DocumentWhereInput = {
+      // usunięte są w zakładce „Usunięte”, nie w rejestrze
+      operation: { status: { not: "DELETED" } },
       // MM jest w rejestrze magazynu źródłowego i docelowego
       OR: [{ warehouseId: q.warehouseId }, { type: "MM", operation: { targetWarehouseId: q.warehouseId } }],
       ...(types ? { type: { in: types as DocumentType[] } } : {}),
@@ -208,7 +213,7 @@ export class OperationsService {
     };
     const [total, rows] = await Promise.all([
       this.db.document.count({ where }),
-      this.db.document.findMany({ where, include: { partner: true, lines: { include: { material: true } }, operation: { select: { id: true, type: true, status: true, transferState: true, transportCost: true, transportMode: true, place: true, warehouse: { select: { id: true, name: true } }, targetWarehouse: { select: { id: true, name: true } } } } },
+      this.db.document.findMany({ where, include: { partner: true, lines: { include: { material: true } }, operation: { select: { id: true, type: true, status: true, transferState: true, _count: { select: { corrections: true } }, transportCost: true, transportMode: true, place: true, warehouse: { select: { id: true, name: true } }, targetWarehouse: { select: { id: true, name: true } } } } },
         orderBy: [{ movementDate: "desc" }, { createdAt: "desc" }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
     ]);
     return { total, rows: rows.map(d => ({
@@ -220,7 +225,7 @@ export class OperationsService {
         weightT: l.weightT?.toString() ?? null, weightSource: l.weightSource, value: l.value?.toString() ?? null })),
       // TR nie ma pozycji towarowych — wartością dokumentu jest koszt transportu operacji
       value: d.type === "TR" ? d.operation.transportCost.toString() : d.lines.reduce((a, l) => a.plus(l.value ?? 0), new Prisma.Decimal(0)).toString(),
-      place: d.operation.place,
+      place: d.operation.place, corrections: d.operation._count.corrections,
     })) };
   }
 
@@ -348,15 +353,21 @@ export class OperationsService {
 
   private mainIndex(plan: OperationPlan) { return Math.max(0, plan.documents.findIndex(d => d.main)); }
 
-  /** Uprawnienia, magazyn, okres, kartoteki — i plan z reguł domeny. */
-  private async prepare(db: Db, actor: AuthUser, input: OperationInput): Promise<{ plan: OperationPlan }> {
+  /**
+   * Uprawnienia, magazyn, okres, kartoteki — i plan z reguł domeny.
+   * Korekta (`correction`): prawa do wprowadzania zastępuje prawo do korekty (sprawdza ChangesService), a tryb MM
+   * jest ten, w którym dokument powstał (zmiana ustawienia nie zmienia starych dokumentów).
+   */
+  async prepare(db: Db, actor: AuthUser, input: OperationInput, opts: { correction?: boolean; twoStage?: boolean } = {}): Promise<{ plan: OperationPlan }> {
     if (!PERM[input.type]) throw badRequest("VALIDATION", "Nieznany rodzaj operacji");
-    if (!can(actor, PERM[input.type]!)) throw forbidden("Nie masz uprawnień do tego rodzaju operacji.");
     // zakup z produkcją / sprzedaż bezpośrednia: także prawo do produkcji; sprzedaż wyniku zakupu — prawo do wydań
     const withProduction = input.type === "DIRECT_SALE" || (input.type === "PURCHASE" && !!input.production?.enabled);
-    if (withProduction && !can(actor, "production.create")) throw forbidden("Nie masz uprawnień do produkcji.");
-    if (input.type === "PURCHASE" && input.sale && !can(actor, "issues.create")) throw forbidden("Nie masz uprawnień do sprzedaży.");
-    if ((input.extras ?? []).length && !can(actor, "additional.create")) throw forbidden("Nie masz uprawnień do operacji dodatkowych.");
+    if (!opts.correction) {
+      if (!can(actor, PERM[input.type]!)) throw forbidden("Nie masz uprawnień do tego rodzaju operacji.");
+      if (withProduction && !can(actor, "production.create")) throw forbidden("Nie masz uprawnień do produkcji.");
+      if (input.type === "PURCHASE" && input.sale && !can(actor, "issues.create")) throw forbidden("Nie masz uprawnień do sprzedaży.");
+      if ((input.extras ?? []).length && !can(actor, "additional.create")) throw forbidden("Nie masz uprawnień do operacji dodatkowych.");
+    }
     const wh = await db.warehouse.findUnique({ where: { id: input.warehouseId } });
     if (!wh || !canAccessWarehouse(actor, wh.id)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
     if (!wh.active) throw badRequest("WAREHOUSE_INACTIVE", `Magazyn ${wh.name} jest nieaktywny.`);
@@ -369,7 +380,7 @@ export class OperationsService {
       db.material.findMany(), db.additionalOperationType.findMany(), companyRates(db, asDate(day)), this.settings.get("mm.mode"),
     ]);
     const fleet = input.transport && input.transport.mode !== "NONE" ? await loadFleet(db) : undefined;
-    const twoStage = mmMode !== "one";
+    const twoStage = opts.twoStage ?? mmMode !== "one";
     const targetErrors: Array<{ field: string; message: string }> = [];
     if (input.type === "TRANSFER" && input.targetWarehouseId && input.targetWarehouseId !== wh.id) {
       const tw = isUuid(input.targetWarehouseId) ? await db.warehouse.findUnique({ where: { id: input.targetWarehouseId } }) : null;
@@ -421,7 +432,7 @@ export class OperationsService {
 }
 
 /** Rębak i operator produkcji — z pól produkcji na magazynie albo z sekcji produkcji zakupu / sprzedaży bezpośredniej. */
-function chipperOf(input: OperationInput): { chipperId: string | null; operatorId: string | null } {
+export function chipperOf(input: OperationInput): { chipperId: string | null; operatorId: string | null } {
   if (input.type === "PRODUCTION") return { chipperId: input.chipperId || null, operatorId: input.operatorId || null };
   if (input.type === "PURCHASE" || input.type === "DIRECT_SALE") return { chipperId: input.production?.chipperId || null, operatorId: input.production?.operatorId || null };
   return { chipperId: null, operatorId: null };

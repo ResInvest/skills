@@ -16,6 +16,15 @@ export const toChainInput = (c: ChainState): ChainProductionInput => ({
   chipperId: c.chipperId || null, operatorId: c.operatorId || null, chipRate: c.chipRate, source: c.source,
   forestDistrict: c.forestDistrict || null, forestry: c.forestry || null, waybill: c.waybill || null, investSite: c.investSite || null, sourceDoc: c.sourceDoc || null,
 });
+const txt = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+/** Migawka zapisanej operacji → stan sekcji produkcji / sprzedaży (korekta). */
+export const fromChainInput = (c: ChainProductionInput | null | undefined): ChainState => !c ? EMPTY_CHAIN : ({
+  enabled: c.enabled !== false, outMaterialId: txt(c.outMaterialId), consumeQty: txt(c.consumeQty), outQty: txt(c.outQty), diffReason: txt(c.diffReason),
+  chipperId: txt(c.chipperId), operatorId: txt(c.operatorId), chipRate: txt(c.chipRate), source: c.source ?? "OTHER", forestDistrict: txt(c.forestDistrict),
+  forestry: txt(c.forestry), waybill: txt(c.waybill), investSite: txt(c.investSite), sourceDoc: txt(c.sourceDoc),
+});
+export const fromSaleInput = (s: OutputSaleInput | null | undefined): SaleState => !s ? EMPTY_SALE
+  : { enabled: true, buyerId: txt(s.buyerId), qty: txt(s.qty), price: txt(s.price), priceUnit: s.priceUnit ?? "MP", weightManual: txt(s.weightManual) };
 export const toSaleInput = (s: SaleState): OutputSaleInput => ({ buyerId: s.buyerId, qty: s.qty, price: s.price, priceUnit: s.priceUnit, weightManual: s.weightManual });
 
 interface Lookups {
