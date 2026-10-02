@@ -10,10 +10,15 @@ test.describe.configure({ mode: "serial" });
 
 const cssVar = (page: Page, name: string) => page.evaluate(n => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
 const bodyBg = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+/** Logowanie zakończone (widoczne menu) — dopiero wtedy przejście pod inny adres ma sesję. */
+async function signIn(page: Page) {
+  await login(page, ADMIN.email, ADMIN.password);
+  await expect(page.locator("#nav")).toBeAttached();
+}
 const prefs = (page: Page) => page.evaluate(async () => (await (await fetch("/api/v1/auth/me", { credentials: "include" })).json()).user.prefs);
 
 test("1. język: angielski i czeski z „Moje konto” — cały interfejs, zapis na koncie, po odświeżeniu bez zmian", async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await signIn(page);
   await page.getByRole("link", { name: "Moje konto" }).click();
   await page.locator('[data-lang-card="en"]').click();
   await expect(page.getByRole("heading", { name: "My account", level: 1 })).toBeVisible();
@@ -36,7 +41,7 @@ test("1. język: angielski i czeski z „Moje konto” — cały interfejs, zapi
 });
 
 test("2. motywy gotowe: Ultra Dark (czerń OLED) i Light Premium — zmiana od razu, zapis na koncie", async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await signIn(page);
   await page.goto("/konto");
   await page.locator('[data-theme-card="ultra"]').click();
   await expect.poll(() => cssVar(page, "--bg")).toBe("#000000");
@@ -50,7 +55,7 @@ test("2. motywy gotowe: Ultra Dark (czerń OLED) i Light Premium — zmiana od r
 });
 
 test("3. motyw własny: kolor przewodni i kolor tła ustawiają program; tło o średniej jasności jest korygowane dla czytelności", async ({ page }) => {
-  await login(page, ADMIN.email, ADMIN.password);
+  await signIn(page);
   await page.goto("/konto");
   await page.locator('[data-theme-card="custom"]').click();
   await expect(page.locator("#custom-theme")).toBeVisible();
@@ -88,7 +93,7 @@ test("4. ekran logowania: przełącznik języka przed zalogowaniem, zapamiętany
 
 test("5. telefon: sekcja wyglądu bez poziomego przewijania; przywrócenie ustawień konta", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await login(page, ADMIN.email, ADMIN.password);
+  await signIn(page);
   await page.goto("/konto");
   await expect(page.locator("#appearance")).toBeVisible();
   await expectNoHorizontalScroll(page);

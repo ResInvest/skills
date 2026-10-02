@@ -19,7 +19,7 @@ if (!existsSync(resolve(root, "apps/api/dist/main.js"))) throw new Error("Brak z
 const db = new URL(process.env.DEMO_DATABASE_URL ?? process.env.DATABASE_URL ?? "");
 if (!process.env.DEMO_DATABASE_URL) db.pathname = `${db.pathname}_e2e`;
 const PORT = process.env.DEMO_API_PORT ?? "3101";
-const env = { ...process.env, NODE_ENV: "production", DATABASE_URL: db.toString(), API_HOST: "127.0.0.1", API_PORT: PORT, APP_URL: "http://127.0.0.1:4180",
+const env = { ...process.env, NODE_ENV: "test", DATABASE_URL: db.toString(), API_HOST: "127.0.0.1", API_PORT: PORT, APP_URL: "http://127.0.0.1:4180",
   CORS_ORIGINS: "", ALLOWED_NETWORKS: "", TRUSTED_PROXIES: "127.0.0.1", COMPANY_DOMAINS: "resinvest.group", EMAIL_TRANSPORT: "file", MAIL_WORKER: "off",
   MAIL_FILE_DIR: resolve(web, "demo/.mail"), LOGIN_RATE_PER_IP: "200", LOGIN_RATE_PER_EMAIL: "50" };
 const api = spawn(process.execPath, ["apps/api/dist/main.js"], { cwd: root, env, stdio: ["ignore", "ignore", "inherit"] });
@@ -32,5 +32,5 @@ try {
   }
   execFileSync(process.execPath, ["demo/record.mjs", "demo/snapshot.json"], { cwd: web, env: { ...process.env, DEMO_API: `http://127.0.0.1:${PORT}` }, stdio: "inherit" });
 } finally { api.kill("SIGTERM"); }
-execFileSync(resolve(root, "node_modules/.bin/vite"), ["build", "--config", "vite.demo.config.ts"], { cwd: web, stdio: "inherit" });
+execFileSync(resolve(web, "node_modules/.bin/vite"), ["build", "--config", "vite.demo.config.ts"], { cwd: web, stdio: "inherit" });
 console.warn(`Gotowe: ${resolve(web, "dist-demo/index.html")}`);

@@ -50,9 +50,10 @@ użyte kolory przed pierwszym malowaniem (bez mignięcia jasnego tła w motywie 
 | Zestaw | Wynik |
 |---|---|
 | domena | 85 / 85 — m.in. czytelność 5 motywów gotowych i **406 par kolorów** motywu własnego (także skrajnych) |
-| API | preferencje (4 nowe testy, przechodzą):  zapis, normalizacja kolorów, audyt, walidacja i odrzucenie obcych pól, CHECK w bazie, 401 bez sesji |
+| API | 165 / 165 — w tym 4 nowe testy preferencji: zapis, normalizacja kolorów, audyt, walidacja i odrzucenie obcych pól, CHECK w bazie, 401 bez sesji |
 | web | 23 / 23 — kompletność słowników (każdy tekst interfejsu ma tłumaczenie cs i en), zgodność wstawek, przełączanie języka, wzorce komunikatów serwera, formaty liczb |
-| E2E | w toku — wynik zostanie dopisany (scenariusz „wygląd”: języki z konta i paska, motywy gotowe, motyw własny z korektą tła, przełącznik na ekranie logowania, telefon) |
+| E2E | 79 / 79 — w tym 5 scenariuszy „wygląd”: języki z konta i paska, motywy gotowe, motyw własny z korektą tła, przełącznik na ekranie logowania, telefon (390 px bez poziomego przewijania) |
+| lint, typy | bez błędów |
 
 ## 5. Wersja demonstracyjna (jeden plik HTML)
 
