@@ -1,5 +1,23 @@
 # TASKS — ResInvest ERP
 
+## 3.5.0 — planer zakupów, powiadomienia, poczta (na bazie 3.4.1 — ten sam wygląd i mechanizmy)
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| planer: plan dnia [MP] wpisywany ręcznie (magazyn × dzień), zapis Enter / wyjście z pola | DONE | `features35.test` „zapis planu…”, E2E „3.5 Planer: plan dnia zapisany…” |
+| planer: wykonanie, tony (waga + przelicznik), cena, km, transport, kursy z zatwierdzonych operacji | DONE | `features35.test` „wykonanie z operacji…”, „tony = waga…”, E2E „wykonanie 15.09 = 600 MP” |
+| planer: realizacja do dziś, miesiące i rok, kierowcy i kursy, źródła danych, eksport CSV/XLSX/PDF | DONE | `features35.test`, E2E „miesiące i rok”, „eksport XLSX” |
+| planer: uprawnienie `planner.edit`, dostęp do magazynu, wersja (konflikt), audyt PLAN_UPDATED | DONE | `features35.test` „uprawnienia…”, `mail35.test` „planer przez API…” |
+| powiadomienia: zdarzenia z operacji, odbiorcy (dostęp, zgoda, włączone), bez autora | DONE | `features35.test` (6 testów), E2E „PZ magazyniera → kierownik” |
+| powiadomienia: zgody administratora, ustawienia użytkownika, audyt | DONE | `features35.test` „zgody administratora…”, E2E „Zgody…” |
+| powiadomienia: skrzynka, dzwonek, przeczytane, otwarcie operacji | DONE | E2E „kliknięcie otwiera operację…” |
+| poczta: kolejka w bazie, wysyłka w tle, ponowienia 1 min…6 h, porzucenie, ponowienie ręczne | DONE | `mail35.test` „awaria poczty nie cofa operacji…” |
+| poczta: ekran administratora, test, kanał bez sekretów, uprawnienie `notifications.manage` | DONE | `mail35.test` „Poczta: tylko administrator…” |
+| migracja danych 8 → 9 | DONE | `features35.test` „migracja 8 → 9…” |
+| tłumaczenia CS / EN | DONE | `npm run i18n`: 0 braków, 0 nieużywanych |
+| telefon 390 px bez poziomego przewijania (planer, powiadomienia, poczta) | DONE | E2E „3.5 Telefon…” |
+| instalator 3.5.0 | DONE (Inno Setup 6.4.1 w Wine) | `ResInvestERP_Setup_3.5.0.exe` (SHA-256 99face1a…af17): instalacja cicha w Wine 9 (win64), pliki 3.5 na miejscu, `--check` serwera na dołączonym Node.js — OK; prawdziwy Windows — NIEPOTWIERDZONE |
+
 ## 3.4.1 — zgłoszenie po 3.4.0
 
 | Kryterium | Status | Dowód |

@@ -14,6 +14,8 @@
    Tokeny e-mail (zaproszenie, reset hasła, potwierdzenie adresu): losowe 256 bit,
    w bazie tylko skrót SHA-256, jednorazowe, z terminem ważności; kolejka `outbox`
    zapisuje każdą wysyłkę (bez treści linków).
+   Powiadomienia (3.5): kolejka `outbox` ze statusem QUEUED → SENT / FAILED (ponowienia po 1 min,
+   5 min, 15 min, 1 h, 6 h) → DEAD; treść usuwana po wysłaniu.
    ========================================================================= */
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -135,6 +137,13 @@ export class Store {
       CREATE TABLE IF NOT EXISTS tokens(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, email TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, created_by TEXT);
       CREATE INDEX IF NOT EXISTS tokens_user ON tokens(user_id, kind);
       CREATE TABLE IF NOT EXISTS outbox(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, template TEXT NOT NULL, to_addr TEXT NOT NULL, user_id TEXT, status TEXT NOT NULL, error TEXT, provider_id TEXT, transport TEXT);`);
+    // kolejka wysyłki (3.5): kolumny dodawane do istniejącej tabeli — dane bez zmian
+    const cols = new Set(this.db.prepare("PRAGMA table_info(outbox)").all().map(c => c.name));
+    for (const [c, def] of [["kind", "TEXT NOT NULL DEFAULT 'auth'"], ["subject", "TEXT"], ["body", "TEXT"], ["attempts", "INTEGER NOT NULL DEFAULT 0"], ["next_at", "TEXT"], ["notice_id", "TEXT"], ["sent_at", "TEXT"], ["updated_at", "TEXT"]])
+      if (!cols.has(c)) this.db.exec(`ALTER TABLE outbox ADD COLUMN ${c} ${def}`);
+    this.db.exec("CREATE INDEX IF NOT EXISTS outbox_due ON outbox(status, next_at)");
+    // wysyłka przerwana zatrzymaniem serwera wraca do kolejki
+    this.db.prepare("UPDATE outbox SET status = 'QUEUED' WHERE status = 'SENDING'").run();
     this.db.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES ('created_at', ?)").run(nowIso());
     this.state = null; this.integrity = { ok: true, notes: [] };
     this.load();
@@ -351,11 +360,55 @@ export class Store {
   tokenInfo(userId) {
     return this.db.prepare("SELECT kind, created_at AS createdAt, expires_at AS expiresAt, used_at AS usedAt FROM tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 5").all(userId);
   }
+  /** Wysyłka natychmiastowa (wiadomości z jednorazowym linkiem) — tylko wpis w dzienniku, bez treści; nie ponawiana. */
   logMail(template, to, userId, r, transport) {
-    this.db.prepare("INSERT INTO outbox(ts, template, to_addr, user_id, status, error, provider_id, transport) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(nowIso(), template, to, userId || null, r.ok ? "SENT" : "FAILED", r.ok ? null : String(r.error || "").slice(0, 500), r.providerId || r.file || null, transport || "");
+    const ts = nowIso();
+    this.db.prepare("INSERT INTO outbox(ts, template, to_addr, user_id, status, error, provider_id, transport, kind, subject, attempts, sent_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'auth', ?, 1, ?, ?)")
+      .run(ts, template, to, userId || null, r.ok ? "SENT" : "DEAD", r.ok ? null : String(r.error || "").slice(0, 500), r.providerId || r.file || null, transport || "", r.subject || null, r.ok ? ts : null, ts);
   }
   mailLog(limit = 200) { return this.db.prepare("SELECT id, ts, template, to_addr AS \"to\", user_id AS userId, status, error, transport FROM outbox ORDER BY id DESC LIMIT ?").all(limit); }
+
+  /* ---------------- kolejka wysyłki (powiadomienia, wiadomości testowe) ---------------- */
+  /** Ponowienia po błędzie: 1 min, 5 min, 15 min, 1 h, 6 h — potem DEAD (ręczne ponowienie przez administratora). */
+  static RETRY_MINUTES = [1, 5, 15, 60, 360];
+  enqueueMail(template, to, userId, subject, body, noticeId) {
+    const ts = nowIso();
+    return Number(this.db.prepare("INSERT INTO outbox(ts, template, to_addr, user_id, status, kind, subject, body, attempts, next_at, notice_id, updated_at) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?, ?, 0, ?, ?, ?)")
+      .run(ts, template, to, userId || null, template === "notice" ? "notice" : "test", String(subject || "").slice(0, 300), JSON.stringify(body), ts, noticeId || null, ts).lastInsertRowid);
+  }
+  /** Wiadomości do wysłania teraz — pobranie oznacza je jako SENDING (jeden proces serwera). */
+  claimDue(limit = 10) {
+    const now = nowIso();
+    return this.tx(() => {
+      const rows = this.db.prepare("SELECT * FROM outbox WHERE status IN ('QUEUED','FAILED') AND body IS NOT NULL AND (next_at IS NULL OR next_at <= ?) ORDER BY id LIMIT ?").all(now, limit);
+      for (const r of rows) this.db.prepare("UPDATE outbox SET status = 'SENDING', updated_at = ? WHERE id = ?").run(now, r.id);
+      return rows;
+    });
+  }
+  markSent(id, r, transport) {
+    const now = nowIso();
+    this.db.prepare("UPDATE outbox SET status = 'SENT', attempts = attempts + 1, error = NULL, body = NULL, provider_id = ?, transport = ?, sent_at = ?, next_at = NULL, updated_at = ? WHERE id = ?")
+      .run(r.providerId || r.file || null, transport || "", now, now, id);
+  }
+  markFailed(id, error, transport) {
+    const row = this.db.prepare("SELECT attempts FROM outbox WHERE id = ?").get(id);
+    const n = (row ? row.attempts : 0) + 1, wait = Store.RETRY_MINUTES[n - 1];
+    const dead = wait === undefined;
+    this.db.prepare("UPDATE outbox SET status = ?, attempts = ?, error = ?, transport = ?, next_at = ?, updated_at = ? WHERE id = ?")
+      .run(dead ? "DEAD" : "FAILED", n, String(error || "").slice(0, 500), transport || "", dead ? null : new Date(Date.now() + wait * 60000).toISOString(), nowIso(), id);
+    return { dead, attempts: n };
+  }
+  /** Ponowienie ręczne: wiadomość nieudana / porzucona z zachowaną treścią — licznik prób od zera, wysyłka od razu. */
+  retryMail(id) {
+    const r = this.db.prepare("UPDATE outbox SET status = 'QUEUED', attempts = 0, next_at = ?, updated_at = ? WHERE id = ? AND status IN ('FAILED','DEAD') AND body IS NOT NULL").run(nowIso(), nowIso(), Number(id));
+    return r.changes === 1;
+  }
+  outbox(status, limit = 300) {
+    const rows = this.db.prepare(`SELECT id, ts, template, kind, to_addr AS "to", user_id AS userId, status, error, transport, subject, attempts, next_at AS nextAt, sent_at AS sentAt, notice_id AS noticeId, body IS NOT NULL AS retryable FROM outbox ${status ? "WHERE status = ?" : ""} ORDER BY id DESC LIMIT ?`)
+      .all(...(status ? [status, limit] : [limit])).map(r => Object.assign(r, { retryable: !!r.retryable }));
+    const stats = Object.fromEntries(this.db.prepare("SELECT status, COUNT(*) AS n FROM outbox GROUP BY status").all().map(r => [r.status, r.n]));
+    return { rows, stats };
+  }
   dropAccount(userId) { this.tx(() => { this.db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId); this.db.prepare("DELETE FROM accounts WHERE user_id = ?").run(userId); }); }
 
   /* ---------------- kopie zapasowe ---------------- */

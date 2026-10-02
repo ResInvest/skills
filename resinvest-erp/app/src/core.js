@@ -60,6 +60,7 @@
     settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
     eye: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", eyeOff: "M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.9 5.1A10.4 10.4 0 0 1 12 5c7 0 11 7 11 7a18 18 0 0 1-3.2 4.2M6.6 6.6A17.6 17.6 0 0 0 1 12s4 7 11 7a10 10 0 0 0 5.4-1.6",
     server: "M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01", refresh: "M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6",
+    calendar: "M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M8 13h3v3H8z",
     bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0", trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
     coins: "M8 8a6 3 0 1 0 12 0A6 3 0 1 0 8 8zM8 8v4c0 1.7 2.7 3 6 3s6-1.3 6-3V8M4 12a6 3 0 0 0 6 3M4 12v4c0 1.7 2.7 3 6 3"
   };
@@ -410,6 +411,7 @@
     { id: "kwit", label: N_("Kwit produkcji dnia"), icon: "receipt" },
     { id: "mm", label: N_("MM"), icon: "swap" },
     { id: "transport", label: N_("Transport"), icon: "truck" },
+    { id: "planer", label: N_("Planer zakupów"), icon: "calendar", perm: "report.view" },
     { group: N_("Ewidencja") },
     { id: "stany", label: N_("Stany magazynowe"), icon: "layers" },
     { id: "dokumenty", label: N_("Dokumenty"), icon: "file" },
@@ -426,6 +428,8 @@
     { id: "uzytkownicy", label: N_("Użytkownicy"), icon: "key", perm: "users.read" },
     { id: "role", label: N_("Role i uprawnienia"), icon: "shield", perm: "users.read" },
     { id: "audyt", label: N_("Dziennik audytu"), icon: "clock", perm: "audit.read" },
+    { id: "powiadomienia", label: N_("Powiadomienia"), icon: "bell" },
+    { id: "poczta", label: N_("Poczta"), icon: "mail", perm: "notifications.manage" },
     { id: "administracja", label: N_("Administracja"), icon: "building" },
     { id: "profil", label: N_("Mój profil"), icon: "user" }
   ];
@@ -568,6 +572,7 @@
               <button class="icon-btn" id="lang-btn" type="button" aria-label="${esc(t("Język"))}"></button>
               <button class="icon-btn" id="theme-btn" type="button" aria-label="${esc(t("Motyw"))}"></button>
               <button class="icon-btn" id="intro-btn" type="button" title="${esc(t("Odtwórz intro"))}" aria-label="${esc(t("Odtwórz intro"))}">${ic("play", 17)}</button>
+              <button class="icon-btn bell-btn" id="bell-btn" type="button" aria-haspopup="menu" aria-label="${esc(t("Powiadomienia"))}"></button>
               <button class="user-btn" id="user-btn" type="button" aria-haspopup="menu"></button>
             </header>
             <main class="page" id="page" tabindex="-1"></main>
@@ -580,6 +585,7 @@
       $("#scrim-nav").onclick = () => document.body.classList.remove("nav-open");
       $("#intro-btn").onclick = () => root.Intro && root.Intro.play({ force: true });
       $("#user-btn").onclick = e => this.userMenu(e.currentTarget);
+      $("#bell-btn").onclick = e => root.RIWUI.Bell && root.RIWUI.Bell.open(e.currentTarget);
       $("#lang-btn").onclick = e => this.langMenu(e.currentTarget);
       $("#theme-btn").onclick = e => this.themeMenu(e.currentTarget);
       $("#wh-chip").onclick = e => this.whMenu(e.currentTarget);
@@ -597,6 +603,7 @@
       if (!u) return;
       $("#user-btn").innerHTML = `<span class="avatar">${esc(initials(u.name))}</span><span class="who"><b>${esc(u.name)}</b><small>${esc(this.roleLabel(u.role))}</small></span>`;
       $("#user-btn").setAttribute("aria-label", t("Konto: {n}", { n: u.name }));
+      if (root.RIWUI.Bell) { const nb = root.RIWUI.unreadNotices(); $("#bell-btn").innerHTML = root.RIWUI.Bell.html(); $("#bell-btn").title = nb ? tp("{n} nowe powiadomienie|{n} nowe powiadomienia|{n} nowych powiadomień", nb) : t("Powiadomienia"); }
       const canSwitch = this.myWarehouses().length > 1;
       $("#wh-chip").innerHTML = `<span class="dot"></span><small>${esc(t("Magazyn:"))}</small><b>${esc(wh ? wh.name : "—")}</b>${canSwitch ? ic("chevDown", 14) : ""}`;
       $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn przydzielony przez administratora");
@@ -695,6 +702,7 @@
         if (pend) return `<span class="cnt warn" title="${esc(t("Do zatwierdzenia"))}">${pend}</span>`;
         const n = S.drafts.filter(d => d.userId === u.id).length; return n ? `<span class="cnt" title="${esc(t("Wersje robocze"))}">${n}</span>` : "";
       }
+      if (id === "powiadomienia" && root.RIWUI.unreadNotices) { const n = root.RIWUI.unreadNotices(); return n ? `<span class="cnt warn" title="${esc(t("Nieprzeczytane"))}">${n}</span>` : ""; }
       if (id === "uzytkownicy" && this.can("users.manage")) { const n = S.users.filter(x => x.selfRegistered && R.statusOf(x) === "INVITED").length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
       return "";
     },

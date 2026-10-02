@@ -1,7 +1,12 @@
-# ResInvest ERP 3.4 (3.4.1)
+# ResInvest ERP 3.5 (3.5.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
+> Wersja 3.5.0 dodaje **Planer zakupów** (plan dnia [MP] wpisywany ręcznie, wykonanie, tony, ceny, transport i kursy
+> liczone z zatwierdzonych dokumentów), **Powiadomienia** (skrzynka w programie i dzwonek w pasku górnym, zgody
+> administratora, ustawienia użytkownika) oraz **Pocztę** — e-maile z powiadomieniami wysyłane przez serwer z kolejki
+> z automatycznym ponawianiem i dziennikiem wysyłki. Wygląd, menu i mechanizmy operacji pozostają takie jak w 3.4.
+>
 > Wersja 3.4.0 dodaje **operacje dodatkowe** w produkcji (holowanie, pryzmy, ładowarka… — z kartoteką
 > „Kartoteki → Dodatkowe operacje” i kafelkiem na pulpicie z wyborem miesiąca), **rębaki firm zewnętrznych**,
 > **tonaż sprzedaży AUTO / RĘCZNY** ze źródłem na dokumencie, **ręczne numery PZ / WZ** z osobną datą dokumentu,
@@ -29,6 +34,52 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.5.0
+
+### Planer zakupów (menu **Praca → Planer zakupów**)
+* **Ręcznie wpisuje się tylko plan dnia [MP]** (magazyn × dzień): pole w tabeli tygodnia, zapis po wyjściu z pola
+  lub Enter (Enter przechodzi do następnego dnia). Plan wpisuje Kierownik lub Administrator (uprawnienie
+  `planner.edit`); każda zmiana trafia do dziennika audytu jako **PLAN_UPDATED** z wartością było / jest.
+  Ochrona przed nadpisaniem: jeśli w międzyczasie plan zmienił ktoś inny, zapis jest odrzucany z komunikatem.
+* **Wszystko inne liczy się automatycznie** z zatwierdzonych operacji (wartości tylko do odczytu — błąd poprawia się
+  korektą dokumentu, więc planer zawsze zgadza się ze stanami i raportami):
+
+  | Pole | Źródło | Reguła |
+  |---|---|---|
+  | Wykonanie [MP] | zakup z produkcją (PW), produkcja w lesie (sprzedaż bezpośrednia), zakup zrębki (PZ) | bez anulowanych i usuniętych |
+  | Tony [t] | kursy transportu | waga zważonych kursów + niezważona reszta × przelicznik MP → t (`mp_t`, domyślnie 0,33) |
+  | Cena [zł/MP] | operacja | (wartość zakupu + koszt surowca) ÷ wykonanie |
+  | Miejsce | produkcja / transport | nadleśnictwo i leśnictwo, miejsce wycinki albo miejsce dostawy |
+  | Km, transport, kursy | karta transportu (TR) | sumy kursów własnych i zewnętrznych |
+  | Realizacja | wyliczana | wykonanie ÷ plan **do dziś** (przyszłe dni nie zaniżają wyniku) |
+
+* Widoki: **Tydzień** (wskaźniki, tabela dni, dokumenty źródłowe dnia), **Miesiące i rok** (wykres plan / wykonanie,
+  tabela 12 miesięcy), **Kierowcy i kursy** (kierowca × dzień, lista kursów), **Skąd są dane**. Zakres: jeden magazyn
+  albo „Wszystkie magazyny” (suma, bez edycji). Eksport **CSV, XLSX, PDF**.
+
+### Powiadomienia (menu **System → Powiadomienia** i dzwonek w pasku górnym)
+* Zdarzenia: przyjęcie / zakup (PZ), wydanie / sprzedaż (WZ), produkcja (PW), przesunięcie MM (wysłanie i przyjęcie),
+  operacje dodatkowe, do zatwierdzenia, decyzja o mojej operacji, korekta (BYŁO → JEST), anulowanie, usunięcie.
+* Odbiorca: konto aktywne, dostęp do magazynu operacji (przy MM — źródło lub cel), zdarzenie **dozwolone przez
+  administratora** (zakładka „Zgody użytkowników”) i **włączone przez użytkownika** („Moje ustawienia”). Autor nie
+  dostaje powiadomienia o własnej zmianie. Zmiany zgód i ustawień — w dzienniku audytu.
+* Powiadomienie powstaje **w tej samej zmianie danych co operacja** (zapis „wszystko albo nic”) i trafia do skrzynki
+  w programie w obu trybach pracy. Kliknięcie otwiera operację i oznacza powiadomienie jako przeczytane.
+
+### Poczta (menu **System → Poczta**, administrator — uprawnienie `notifications.manage`)
+* Tryb FIRMOWY: e-mail z powiadomieniem (temat, magazyn, dokumenty, pozycja, kwoty, autor, przycisk
+  „Otwórz w ResInvest ERP”) trafia do **kolejki w bazie** i jest wysyłany w tle (Resend / SMTP / pliki `.eml`).
+  Błąd poczty **nie cofa operacji**: wiadomość dostaje status „nieudana” i kolejne próby po 1 min, 5 min, 15 min, 1 h,
+  6 h, potem „porzucona”. Ekran pokazuje kanał wysyłki, liczniki, dziennik z błędami i terminem następnej próby,
+  przyciski **Ponów**, **Wyślij test do mnie**, **Wyślij kolejkę teraz**. Treść wysłanej wiadomości jest usuwana z bazy.
+* Tryb OFFLINE: e-maile nie są wysyłane — ekran pokazuje powiadomienia przygotowane w programie.
+
+### Dane i zgodność
+* Schemat danych **9** (migracja automatyczna z 8: plany, skrzynka powiadomień, ustawienia kont; rola z edycją kartotek
+  dostaje `planner.edit`). Tabela `outbox` serwera rozszerzona o kolumny kolejki — istniejące dane bez zmian.
+* Tłumaczenia CS / EN: 2344 teksty, 0 braków. Testy: `features35.test.mjs` (13), `mail35.test.mjs` (4, serwer z atrapą
+  awarii poczty), E2E 255/255 (w tym 21 scenariuszy 3.5, telefon 390 px bez poziomego przewijania).
 
 ## Nowe w 3.4.1
 
@@ -187,7 +238,7 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
 
 ## Instalacja (Windows)
 
-Uruchom **`ResInvestERP_Setup_3.4.1.exe`** (budowanie — niżej) i wybierz:
+Uruchom **`ResInvestERP_Setup_3.5.0.exe`** (budowanie — niżej) i wybierz:
 
 * **Pełna instalacja** — program + serwer. Instalator dołącza środowisko Node.js (`runtime\node.exe`),
   tworzy folder danych `C:\ProgramData\ResInvestERP` i skróty w menu Start:
@@ -358,7 +409,7 @@ Plik `.iss` jest zapisany w UTF-8 z BOM (polskie i czeskie znaki w Inno Setup 7)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
-# → installer\Output\ResInvestERP_Setup_3.4.1.exe   (skrypt uruchamia też testy; -SkipTests pomija)
+# → installer\Output\ResInvestERP_Setup_3.5.0.exe   (skrypt uruchamia też testy; -SkipTests pomija)
 ```
 
 Bez Windows (serwer budowania Linux): `bash installer/build-installer-wine.sh` — ten sam plik `.iss`,

@@ -804,6 +804,73 @@ async function fillForestDirect(page) {
     await ctx.close();
   }
 
+  /* ------------- 3.5: planer zakupów, powiadomienia, poczta ------------- */
+  {
+    const ctx = await newCtx(browser); const page = await ctx.newPage(); watch(page, "3.5");
+    await boot(page);                                     // Anna Górska (kierownik Zabrze + Brąszewice)
+    check("3.5 Menu: Planer zakupów i Powiadomienia; Poczta tylko dla administratora", !!(await page.$('#nav [data-nav="planer"]')) && !!(await page.$('#nav [data-nav="powiadomienia"]')) && !(await page.$('#nav [data-nav="poczta"]')));
+    const badge = await page.textContent("#bell-btn");
+    check("3.5 Dzwonek: liczba nieprzeczytanych powiadomień", /\d/.test(badge), badge);
+    await go(page, "planer"); await page.waitForSelector("#pl-week-table");
+    await page.fill("#pl-date", "2026-09-14"); await page.dispatchEvent("#pl-date", "change"); await page.waitForSelector("#pl-week-table");
+    const wk = await page.evaluate(() => [...document.querySelectorAll("#pl-week-table tbody tr")].map(r => r.dataset.day));
+    check("3.5 Planer: tydzień pon–niedz (14–20.09.2026)", wk.length === 7 && wk[0] === "2026-09-14" && wk[6] === "2026-09-20", wk);
+    const act15 = nb(await page.textContent('#pl-week-table tr[data-day="2026-09-15"] td:nth-child(3)'));
+    check("3.5 Planer: wykonanie 15.09 = 600 MP z produkcji w lesie (AUTO z dokumentu)", act15 === "600", act15);
+    // wpis planu dnia: zapis po Enter, wersja, audyt
+    await page.fill("#plan-2026-09-17", "75,5"); await page.press("#plan-2026-09-17", "Enter"); await page.waitForTimeout(300);
+    const pl = await page.evaluate(() => RIW_DEBUG.store.state.plans.find(p => p.whId === "wh_zab" && p.date === "2026-09-17"));
+    check("3.5 Planer: plan dnia zapisany w danych (75,5 MP, wersja 2, autor)", pl && pl.planMP === 75.5 && pl.version === 2 && pl.updatedBy === "Anna Górska", pl);
+    check("3.5 Planer: zmiana planu w dzienniku audytu (PLAN_UPDATED)", await page.evaluate(() => RIW_DEBUG.store.state.audit.at(-1).code === "PLAN_UPDATED"));
+    check("3.5 Planer: po Enter fokus na następnym dniu", await page.evaluate(() => document.activeElement && document.activeElement.id === "plan-2026-09-18"));
+    await page.fill("#plan-2026-09-18", "-3"); await page.press("#plan-2026-09-18", "Enter"); await page.waitForTimeout(300);
+    check("3.5 Planer: plan ujemny odrzucony z komunikatem", (await page.textContent("#toasts")).includes("Plan nie może być ujemny"));
+    // dokumenty źródłowe dnia
+    await page.click('#pl-week-table tr[data-day="2026-09-15"] .drill'); await page.waitForSelector("#drill");
+    check("3.5 Planer: dokumenty źródłowe dnia w oknie", (await page.$$("#drill [data-opid]")).length === 1);
+    await closeModals(page);
+    await page.click('[data-plview="year"]'); await page.waitForSelector("#pl-year-table");
+    const sepAct = nb(await page.textContent('#pl-year-table tr[data-goto-month="2026-09"] td:nth-child(3)'));
+    check("3.5 Planer: miesiące i rok — wrzesień 680 MP, wykres 12 miesięcy", sepAct === "680" && (await page.$$("#pl-chart rect[data-month]")).length === 12, sepAct);
+    await page.click('[data-plview="drivers"]'); await page.waitForSelector("#pl-drivers");
+    await page.click('[data-plview="week"]');
+    await page.selectOption("#pl-wh", "ALL"); await page.waitForSelector("#pl-week-table");
+    check("3.5 Planer: „Wszystkie magazyny” — suma bez pól edycji", !(await page.$(".plan-in")));
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#pl-xlsx")]);
+    check("3.5 Planer: eksport XLSX", dl.suggestedFilename().startsWith("planer_week") && dl.suggestedFilename().endsWith(".xlsx"), dl.suggestedFilename());
+    // powiadomienia: skrzynka, otwarcie operacji, przeczytane
+    await go(page, "powiadomienia"); await page.waitForSelector("#nt-list");
+    const unread0 = await page.evaluate(() => RIWUI.unreadNotices());
+    await page.click("#nt-list .nt-item.unread >> nth=0"); await page.waitForSelector("#op-detail, .modal", { timeout: 4000 });
+    check("3.5 Powiadomienia: kliknięcie otwiera operację i oznacza jako przeczytane", (await page.evaluate(() => RIWUI.unreadNotices())) === unread0 - 1);
+    await closeModals(page);
+    // ustawienia własne: zdarzenie bez zgody zablokowane
+    await page.click('[data-nttab="settings"]'); await page.waitForSelector("#nt-events");
+    check("3.5 Powiadomienia: zdarzenie bez zgody administratora zablokowane (Decyzja)", await page.$eval('[data-ev="DECISION"]', x => x.disabled));
+    await page.click('label.nt-ev:has([data-ev="PW"])'); await page.waitForTimeout(250);
+    check("3.5 Powiadomienia: włączenie zdarzenia zapisuje się na koncie", await page.evaluate(() => RIW_DEBUG.app.user().notify.events.includes("PW")));
+    // magazynier wprowadza PZ w Zabrzu → kierownik dostaje powiadomienie
+    await setUser(page, "u_mag");
+    const before = await page.evaluate(() => RIW_DEBUG.store.state.notices.length);
+    const r = await page.evaluate(async () => { const d = RIW_DEBUG.R.Seed.draftOf("2026-09-23", { purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "12", unit: "MP", price: "50" }, transport: { mode: "none", place: "RiC Zabrze" } }); d.idemKey = "e2e-35"; return RIW_DEBUG.store.exec("op.commit", { draft: d }, "E2E"); });
+    const added = await page.evaluate(n => RIW_DEBUG.store.state.notices.slice(n).map(x => x.userId), before);
+    check("3.5 Powiadomienia: PZ magazyniera → kierownik (bez autora)", r.ok && added.includes("u_kier") && !added.includes("u_mag"), added);
+    // administrator: zgody i poczta (OFFLINE — bez wysyłki)
+    await setUser(page, "u_admin");
+    await go(page, "powiadomienia"); await page.click('[data-nttab="allow"]'); await page.waitForSelector("#nt-allow-table");
+    await page.click('tr[data-allow-user="u_view"] [data-allow="PZ"]'); await page.waitForTimeout(250);
+    check("3.5 Zgody: administrator nadaje zgodę (audyt NOTIFICATIONS_ALLOWED)", await page.evaluate(() => RIW_DEBUG.R.byId(RIW_DEBUG.store.state.users, "u_view").notifyAllowed.includes("PZ") && RIW_DEBUG.store.state.audit.at(-1).code === "NOTIFICATIONS_ALLOWED"));
+    await go(page, "poczta"); await page.waitForSelector("#mail-offline");
+    check("3.5 Poczta (OFFLINE): informacja o braku wysyłki i dziennik powiadomień", (await page.$$("#mail-table tbody tr")).length > 5);
+    // telefon: planer i powiadomienia bez poziomego przewijania
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const r2 of ["planer", "powiadomienia", "poczta"]) {
+      await go(page, r2); await page.waitForTimeout(200);
+      check(`3.5 Telefon: ${r2} bez poziomego przewijania`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+    }
+    await ctx.close();
+  }
+
   /* ------------- 3.1: ramka z zablokowanym magazynem przeglądarki (podgląd pliku) ------------- */
   {
     const wrap = path.join(TMP, "podglad.html");

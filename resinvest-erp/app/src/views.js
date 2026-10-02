@@ -615,8 +615,11 @@
           ${opsTable(rows, { showWh: f.scope === "all" })}
           <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} operacja|{n} operacje|{n} operacji", rows.length))} · ${esc(t("{n} anulowanych", { n: rows.filter(o => o.status === "CANCELLED" && !o.deleted).length }))} · ${esc(t("{n} usuniętych (ukryte: {h})", { n: S.operations.filter(o => o.deleted).length, h: f.showDeleted ? t("nie") : t("tak") }))} · ${esc(t("{n} skorygowanych", { n: rows.filter(o => o.status === "CORRECTED").length }))}</span></div></div>`;
     },
-    bind(page) {
+    bind(page, params) {
       const f = App.tabs.ops;
+      // link z powiadomienia / e-maila: #/operacje?op=<id> — szczegóły operacji
+      if (params && params.op && R.byId(Store.state.operations, params.op) && this._opened !== params.op) { this._opened = params.op; setTimeout(() => OpDetail.open(params.op), 0); }
+      else if (!params || !params.op) this._opened = null;
       const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
       on("#o-type", "type"); on("#o-status", "status"); on("#o-ym", "ym"); on("#o-scope", "scope");
       const od = $("#o-deleted", page); if (od) od.onchange = e => { f.showDeleted = e.target.checked; App.render(); };
@@ -944,7 +947,7 @@
         rows: rows.map(r => [Dates.pl(r.date), r.time, r.user, r.typeLabel, r.docNo, r.whName, r.productName, r.before === null ? "" : fmtQ(r.before), r.change === null ? "" : (r.change > 0 ? "+" : "") + fmtQ(r.change, 6), r.after === null ? "" : fmtQ(r.after), Units.label(r.unit), r.partner, r.related, t(R.STATUS[r.status] || r.status)]) }]
     };
   }
-  const AUDIT_AREAS = [["", N_("Wszystkie")], ["operation", N_("Operacje")], ["draft", N_("Wersje robocze")], ["inventory", N_("Inwentaryzacja")], ["fleet", N_("Flota")], ["master", N_("Kartoteki")], ["partner", N_("Kontrahenci")], ["user", N_("Użytkownicy")], ["ledger", N_("Księga / bilans")], ["report", N_("Wydruki i PDF")], ["system", N_("System")]];
+  const AUDIT_AREAS = [["", N_("Wszystkie")], ["operation", N_("Operacje")], ["draft", N_("Wersje robocze")], ["inventory", N_("Inwentaryzacja")], ["fleet", N_("Flota")], ["master", N_("Kartoteki")], ["partner", N_("Kontrahenci")], ["user", N_("Użytkownicy")], ["ledger", N_("Księga / bilans")], ["report", N_("Wydruki i PDF")], ["plan", N_("Planer zakupów")], ["system", N_("System")]];
   Views.historia = {
     f() { return App.tabs.hist || (App.tabs.hist = { tab: "moves", mode: "month", ym: Dates.ym(App.today()), wh: App.user().whId, productId: "", type: "", userId: "", partnerId: "", status: "", q: "", aUser: "", aEntity: "", aq: "" }); },
     rows() {
@@ -1317,6 +1320,6 @@
 
   root.OpDetail = OpDetail;
   root.ReceiveDialog = ReceiveDialog;
-  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
+  Object.assign(UI, { xlsxTable, pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
   root.RIWViews = { allDocuments, docModel, kwitModel, historyModel, Reports, Printer, CancelDialog, DocPreview, OpDetail };
 })(typeof globalThis !== "undefined" ? globalThis : this);

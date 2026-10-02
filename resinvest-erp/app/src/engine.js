@@ -25,8 +25,8 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.4.1";
-  const SCHEMA = 8;
+  const VERSION = "3.5.0";
+  const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -233,12 +233,13 @@
     "history.read": N_("Historia operacji — odczyt"), "audit.read": N_("Dziennik audytu — odczyt"),
     "users.read": N_("Użytkownicy — podgląd"), "users.manage": N_("Użytkownicy — zapraszanie, edycja, blokowanie, hasła"),
     "roles.assign": N_("Role i uprawnienia — zmiana"), "warehouses.edit": N_("Magazyny — dodawanie i edycja"),
-    "settings.edit": N_("Konfiguracja systemu"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii")
+    "settings.edit": N_("Konfiguracja systemu"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii"),
+    "planner.edit": N_("Planer zakupów — wpisywanie planu dnia"), "notifications.manage": N_("Powiadomienia i poczta — zgody, dziennik wysyłki")
   };
   const CREATE_PERMS = ["receipts.create", "issues.create", "production.create", "mm.create"];
   const ROLE_DEFAULTS = {
     admin: ["*"],
-    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.delete", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
+    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.delete", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "planner.edit", "report.view", "reports.export", "history.read", "users.read"],
     magazynier: [...CREATE_PERMS, "mm.receive", "inv.count", "report.view", "history.read"],
     obserwator: ["report.view", "history.read"],
     audytor: ["report.view", "reports.export", "history.read", "audit.read", "users.read"]
@@ -379,7 +380,7 @@
       config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [], extraTypes: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
-      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {},
+      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {}, plans: [], notices: [],
       meta: { lastMonthCheck: null, createdAt: null }
     };
   }
@@ -387,7 +388,7 @@
     const e = [];
     if (!s || typeof s !== "object") return [t("Brak danych")];
     if (s.schema !== SCHEMA) e.push(t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: s.schema, b: SCHEMA }));
-    for (const k of ["warehouses", "users", "products", "partners", "extraTypes", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
+    for (const k of ["warehouses", "users", "products", "partners", "extraTypes", "operations", "drafts", "ledger", "inventory", "audit", "plans", "notices"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
     if (!s.fleet || !["vehicles", "drivers", "chippers", "operators"].every(k => Array.isArray(s.fleet[k]))) e.push(t("Brak kartotek floty"));
     if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push(t("Brak przeliczników"));
     if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push(t("Produkt bez jednostki magazynowej"));
@@ -468,6 +469,19 @@
       for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("documents.cancel") && !list.includes("documents.delete")) s.rolePerms[role] = list.concat("documents.delete");
       s.schema = 8; s.version = VERSION;
       notes.push(t("Schemat 7 → 8: operacje dodatkowe i ich kartoteka, rębaki firm zewnętrznych, ręczne numery PZ/WZ, tonaż ręczny w sprzedaży, usuwanie dokumentów"));
+    }
+    if (s.schema === 8) {
+      // planer zakupów (plan dnia magazynu) i powiadomienia (skrzynka w programie, zgody administratora, ustawienia użytkownika)
+      if (!Array.isArray(s.plans)) s.plans = [];
+      if (!Array.isArray(s.notices)) s.notices = [];
+      for (const u of s.users || []) {
+        if (!Array.isArray(u.notifyAllowed)) u.notifyAllowed = [];
+        if (!u.notify || typeof u.notify !== "object") u.notify = { events: [], email: true };
+      }
+      // rola z prawem edycji kartotek (kierownik) dostaje wpisywanie planu zakupów — także przy zmienionym zestawie uprawnień
+      for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("master.edit") && !list.includes("planner.edit")) s.rolePerms[role] = list.concat("planner.edit");
+      s.schema = 9; s.version = VERSION;
+      notes.push(t("Schemat 8 → 9: planer zakupów (plan dnia) i powiadomienia — skrzynka w programie, zgody, e-mail"));
     }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
@@ -2084,8 +2098,9 @@
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0], code: escal ? "FORBIDDEN" : undefined };
       const clean = { id: prev ? prev.id : uid("u"), firstName: str(r.firstName), lastName: str(r.lastName), name: this.fullName(r), login: r.email, email: r.email,
         role: r.role, whId: r.whId, warehouseIds: r.warehouseIds, status: r.status, active: r.status === "ACTIVE", phone: str(r.phone), lang: r.lang || "", theme: r.theme || "",
-        createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
-      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy"]) if (prev && prev[k] !== undefined) clean[k] = prev[k];
+        createdAt: prev ? (prev.createdAt || null) : nowIso(ctx), notifyAllowed: [], notify: { events: [], email: true } };
+      // ustawienia powiadomień zmienia się osobnymi komendami (zgody administratora, ustawienia własne) — zapis profilu ich nie rusza
+      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy", "notifyAllowed", "notify"]) if (prev && prev[k] !== undefined) clean[k] = clone(prev[k]);
       if (prev && statusOf(prev) === "INVITED" && clean.status === "ACTIVE" && prev.selfRegistered) { clean.approvedAt = nowIso(ctx); clean.approvedBy = actor.name; delete clean.selfRegistered; }
       if (!prev && clean.status === "INVITED") clean.invitedAt = nowIso(ctx);
       const idx = state.users.findIndex(u => u.id === clean.id);
@@ -2132,7 +2147,7 @@
       const e = this.validate(state, r);
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
       const clean = { id: uid("u"), firstName: r.firstName, lastName: r.lastName, name: this.fullName(r), login: r.email, email: r.email, role: "obserwator", whId: r.whId, warehouseIds: [r.whId],
-        status: "INVITED", active: false, selfRegistered: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx) };
+        status: "INVITED", active: false, selfRegistered: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx), notifyAllowed: [], notify: { events: [], email: true } };
       state.users.push(clean); state.rev += 1;
       audit(state, Object.assign({}, ctx, { user: null }), { entity: "user", entityId: clean.id, opNo: clean.login, event: "register", code: "USER_REGISTERED", act: Lx("Rejestracja konta {l} — oczekuje na zatwierdzenie", { l: clean.login }), before: null, after: { nazwa: clean.name, email: clean.login }, source: N_("Rejestracja") });
       return { ok: true, rec: clean };

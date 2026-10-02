@@ -60,7 +60,15 @@ export const TEMPLATES = {
     note: "Jeśli to nie Ty zmieniłeś hasło, niezwłocznie skontaktuj się z administratorem." })),
   deactivated: d => Object.assign({ subject: "Konto dezaktywowane — ResInvest ERP" }, layout({
     title: "Konto dezaktywowane", lead: `Dzień dobry ${d.name}, Twoje konto ${d.email} w ResInvest ERP zostało dezaktywowane.`,
-    lines: ["Historia Twoich operacji pozostaje w systemie."], note: "W razie pytań skontaktuj się z administratorem." }))
+    lines: ["Historia Twoich operacji pozostaje w systemie."], note: "W razie pytań skontaktuj się z administratorem." })),
+  /** Powiadomienie o zmianie w magazynie (3.5): temat i linie z silnika (R.Notify.mailContent). */
+  notice: d => Object.assign({ subject: `${d.subject} — ResInvest ERP` }, layout({
+    title: d.subject, lead: `Dzień dobry ${d.name}, w ResInvest ERP pojawiła się zmiana, o której chcesz być powiadamiany.`,
+    lines: d.lines || [], button: "Otwórz w ResInvest ERP", link: d.link,
+    note: "Ustawienia powiadomień zmienisz w programie: Powiadomienia → Moje ustawienia." })),
+  test: d => Object.assign({ subject: "Wiadomość testowa — ResInvest ERP" }, layout({
+    title: "Wiadomość testowa", lead: `Dzień dobry ${d.name}, to jest wiadomość testowa z ResInvest ERP Serwer.`,
+    lines: [`Kanał wysyłki: ${d.transport}`, `Wysłano na prośbę: ${d.by}`], note: "Jeśli ją widzisz, poczta jest skonfigurowana poprawnie." }))
 };
 
 /* ---------------- konfiguracja ---------------- */
@@ -139,6 +147,24 @@ function viaFile(c, msg) {
   const name = `${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}-${msg.template}-${randomBytes(4).toString("hex")}.eml`;
   writeFileSync(join(c.outDir, name), data);
   return { providerId: id, file: name };
+}
+
+/** Wiadomość z szablonu: { to, template, subject, html, text } (bez wysyłki). */
+export function compose(template, to, data) {
+  const tpl = TEMPLATES[template];
+  return tpl ? Object.assign({ to, template }, tpl(data || {})) : null;
+}
+/** Wysyłka gotowej wiadomości (kolejka). Nigdy nie rzuca — zwraca { ok, error?, providerId?, file? }. */
+export async function sendRaw(c, msg, log) {
+  try {
+    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error("brak klucza RESEND_API_KEY / SMTP_PASS");
+    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
+    if (log) log("INFO", `E-mail „${msg.template}” → ${msg.to} (${c.transport}${r.file ? ": " + r.file : ""})`);
+    return Object.assign({ ok: true, subject: msg.subject }, r);
+  } catch (e) {
+    if (log) log("ERROR", `E-mail „${msg.template}” → ${msg.to} nieudany (${c.transport}): ${e.message}`);
+    return { ok: false, error: e.message, subject: msg.subject };
+  }
 }
 
 /**

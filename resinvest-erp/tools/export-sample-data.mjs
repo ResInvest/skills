@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 globalThis.RIW_CONFIG = JSON.parse(readFileSync(join(ROOT, "config", "app.config.json"), "utf8"));
 require(join(ROOT, "app", "src", "i18n.js"));
 const R = require(join(ROOT, "app", "src", "engine.js"));
+require(join(ROOT, "app", "src", "service.js"));   // planer i powiadomienia (dane przykładowe 3.5)
 require(join(ROOT, "app", "src", "seed.js"));
 const s = R.Seed.build("2026-09-23");
 const errs = R.validateStateShape(s);

@@ -17,7 +17,7 @@ node tools/i18n-extract.mjs
 
 if [ "${1:-}" != "--skip-tests" ]; then
   echo "== 2/4 Testy jednostkowe i integracyjne"
-  node --test tests/engine.test.mjs tests/features34.test.mjs tests/pdf.test.mjs tests/platform.test.mjs tests/server.test.mjs tests/auth.test.mjs
+  node --test tests/engine.test.mjs tests/features34.test.mjs tests/features35.test.mjs tests/pdf.test.mjs tests/platform.test.mjs tests/server.test.mjs tests/auth.test.mjs tests/mail35.test.mjs
 fi
 
 echo "== 3/4 Środowisko Node.js $NODE_VERSION (win-x64) — weryfikacja SHA-256"

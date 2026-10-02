@@ -1,6 +1,6 @@
 {
- "schema": 8,
- "version": "3.4.1",
+ "schema": 9,
+ "version": "3.5.0",
  "rev": 16,
  "config": {
   "m3_mp": 4,
@@ -59,7 +59,17 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [],
+   "notify": {
+    "events": [
+     "MM",
+     "CORRECTION",
+     "CANCEL",
+     "DELETE"
+    ],
+    "email": true
+   }
   },
   {
    "id": "u_kier",
@@ -77,7 +87,30 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [
+    "PZ",
+    "WZ",
+    "PW",
+    "MM",
+    "EXTRA",
+    "APPROVAL",
+    "CORRECTION",
+    "CANCEL",
+    "DELETE"
+   ],
+   "notify": {
+    "events": [
+     "PZ",
+     "WZ",
+     "MM",
+     "APPROVAL",
+     "CORRECTION",
+     "CANCEL",
+     "DELETE"
+    ],
+    "email": true
+   }
   },
   {
    "id": "u_mag",
@@ -94,7 +127,19 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [
+    "MM",
+    "DECISION",
+    "CORRECTION"
+   ],
+   "notify": {
+    "events": [
+     "MM",
+     "DECISION"
+    ],
+    "email": true
+   }
   },
   {
    "id": "u_kbra",
@@ -111,7 +156,32 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [
+    "PZ",
+    "WZ",
+    "PW",
+    "MM",
+    "EXTRA",
+    "APPROVAL",
+    "CORRECTION",
+    "CANCEL",
+    "DELETE"
+   ],
+   "notify": {
+    "events": [
+     "PZ",
+     "WZ",
+     "PW",
+     "MM",
+     "EXTRA",
+     "APPROVAL",
+     "CORRECTION",
+     "CANCEL",
+     "DELETE"
+    ],
+    "email": true
+   }
   },
   {
    "id": "u_bra",
@@ -128,7 +198,18 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [
+    "MM",
+    "DECISION"
+   ],
+   "notify": {
+    "events": [
+     "MM",
+     "DECISION"
+    ],
+    "email": true
+   }
   },
   {
    "id": "u_krok",
@@ -145,7 +226,12 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [],
+   "notify": {
+    "events": [],
+    "email": true
+   }
   },
   {
    "id": "u_rok",
@@ -162,7 +248,12 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [],
+   "notify": {
+    "events": [],
+    "email": true
+   }
   },
   {
    "id": "u_view",
@@ -179,7 +270,12 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [],
+   "notify": {
+    "events": [],
+    "email": true
+   }
   },
   {
    "id": "u_aud",
@@ -196,7 +292,12 @@
    "status": "ACTIVE",
    "active": true,
    "lang": "",
-   "theme": ""
+   "theme": "",
+   "notifyAllowed": [],
+   "notify": {
+    "events": [],
+    "email": true
+   }
   },
   {
    "id": "u_inv",
@@ -214,6 +315,11 @@
    "active": false,
    "lang": "",
    "theme": "",
+   "notifyAllowed": [],
+   "notify": {
+    "events": [],
+    "email": true
+   },
    "invitedAt": "2026-09-20T08:00:00.000Z"
   }
  ],
@@ -559,8 +665,8 @@
  },
  "operations": [
   {
-   "id": "op_mup3lyk5czxowzy",
-   "idemKey": "idem_mup3lyk1b9cqv6d",
+   "id": "op_muqs3rgfc2tvb1o",
+   "idemKey": "idem_muqs3rg7bojsgyz",
    "type": "ZAKUP",
    "no": "PZ/001/08/2026",
    "date": "2026-08-05",
@@ -788,8 +894,8 @@
    "mm": null,
    "extras": [
     {
-     "id": "xo_mup3lyk6gis22hp",
-     "opId": "op_mup3lyk5czxowzy",
+     "id": "xo_muqs3rggg8qgp62",
+     "opId": "op_muqs3rgfc2tvb1o",
      "no": 1,
      "typeId": "xt_holowanie",
      "typeName": "Holowanie",
@@ -1241,8 +1347,8 @@
    ]
   },
   {
-   "id": "op_mup3lyk6jiz1lda",
-   "idemKey": "idem_mup3lyk6i0ppfq0",
+   "id": "op_muqs3rgjkhmciyr",
+   "idemKey": "idem_muqs3rghj2wt8op",
    "type": "ZAKUP",
    "no": "PZ/002/08/2026",
    "date": "2026-08-12",
@@ -1695,8 +1801,8 @@
    ]
   },
   {
-   "id": "op_mup3lyk8nki98e7",
-   "idemKey": "idem_mup3lyk7m04kcl5",
+   "id": "op_muqs3rgkpu30wv1",
+   "idemKey": "idem_muqs3rgjogua45a",
    "type": "ZAKUP",
    "no": "PZ/003/08/2026",
    "date": "2026-08-20",
@@ -2194,8 +2300,8 @@
    ]
   },
   {
-   "id": "op_mup3lyk9u1he2wa",
-   "idemKey": "idem_mup3lyk8tfervsl",
+   "id": "op_muqs3rgnw8v6o6f",
+   "idemKey": "idem_muqs3rglv418pcb",
    "type": "ZAKUP",
    "no": "PZ/11",
    "date": "2026-09-03",
@@ -3364,8 +3470,8 @@
    ]
   },
   {
-   "id": "op_mup3lyka11y6ye56",
-   "idemKey": "idem_mup3lyka10wsxt08",
+   "id": "op_muqs3rgr14uakep5",
+   "idemKey": "idem_muqs3rgo139bne9c",
    "type": "ZAKUP",
    "no": "PZ/001/09/2026",
    "date": "2026-09-08",
@@ -3765,8 +3871,8 @@
    ]
   },
   {
-   "id": "op_mup3lykb15q49pli",
-   "idemKey": "idem_mup3lyka144sagx3",
+   "id": "op_muqs3rgs1achvyft",
+   "idemKey": "idem_muqs3rgs19khgxng",
    "type": "PRODUKCJA",
    "no": "PW/002/09/2026",
    "date": "2026-09-10",
@@ -3962,8 +4068,8 @@
    "mm": null,
    "extras": [
     {
-     "id": "xo_mup3lykb187r7ks9",
-     "opId": "op_mup3lykb15q49pli",
+     "id": "xo_muqs3rgs1di38yr0",
+     "opId": "op_muqs3rgs1achvyft",
      "no": 1,
      "typeId": "xt_pryzmy",
      "typeName": "Podgarnianie pryzm ładowarką",
@@ -3978,8 +4084,8 @@
      "desc": "Podgarnianie pryzmy P2 po rębaniu"
     },
     {
-     "id": "xo_mup3lykb1985whg7",
-     "opId": "op_mup3lykb15q49pli",
+     "id": "xo_muqs3rgs1ezdu8yo",
+     "opId": "op_muqs3rgs1achvyft",
      "no": 2,
      "typeId": "xt_plac",
      "typeName": "Czyszczenie placu",
@@ -4148,8 +4254,8 @@
    ]
   },
   {
-   "id": "op_mup3lykc1csx05ql",
-   "idemKey": "idem_mup3lykb1b5bqk79",
+   "id": "op_muqs3rgv1icayscb",
+   "idemKey": "idem_muqs3rgt1htq9zx0",
    "type": "SPRZEDAZ",
    "no": "WZ/002/09/2026",
    "date": "2026-09-12",
@@ -4765,8 +4871,8 @@
    ]
   },
   {
-   "id": "op_mup3lykc1gfyo8wf",
-   "idemKey": "idem_mup3lykc1f59r81p",
+   "id": "op_muqs3rgx1okyfvt1",
+   "idemKey": "idem_muqs3rgw1no0b1r0",
    "type": "SPRZEDAZ",
    "no": "PW/003/09/2026",
    "date": "2026-09-15",
@@ -4977,8 +5083,8 @@
    "mm": null,
    "extras": [
     {
-     "id": "xo_mup3lykc1jiy0v42",
-     "opId": "op_mup3lykc1gfyo8wf",
+     "id": "xo_muqs3rgx1r9z6r5f",
+     "opId": "op_muqs3rgx1okyfvt1",
      "no": 1,
      "typeId": "xt_holowanie",
      "typeName": "Holowanie",
@@ -5251,8 +5357,8 @@
    ]
   },
   {
-   "id": "op_mup3lykd1mdtns8j",
-   "idemKey": "idem_mup3lykd1l15xtpu",
+   "id": "op_muqs3rgy1u6xp3qv",
+   "idemKey": "idem_muqs3rgx1t9rrixz",
    "type": "MM",
    "no": "MM/001/09/2026",
    "date": "2026-09-16",
@@ -5674,8 +5780,8 @@
    ]
   },
   {
-   "id": "op_mup3lykd1q1nh9tv",
-   "idemKey": "idem_mup3lykd1pt8yqbk",
+   "id": "op_muqs3rh02219rx52",
+   "idemKey": "idem_muqs3rh021m7eqrs",
    "type": "ZAKUP",
    "no": "PZ/002/09/2026",
    "date": "2026-09-17",
@@ -5986,8 +6092,8 @@
    ]
   },
   {
-   "id": "op_mup3lykd1u2vzwu6",
-   "idemKey": "idem_mup3lykd1tx7o6wf",
+   "id": "op_muqs3rh128auv8lu",
+   "idemKey": "idem_muqs3rh127hpx4zv",
    "type": "PRODUKCJA",
    "no": "PW/004/09/2026",
    "date": "2026-09-22",
@@ -6175,8 +6281,8 @@
    "mm": null,
    "extras": [
     {
-     "id": "xo_mup3lyke1xkfa7o1",
-     "opId": "op_mup3lykd1u2vzwu6",
+     "id": "xo_muqs3rh12ben7532",
+     "opId": "op_muqs3rh128auv8lu",
      "no": 1,
      "typeId": "xt_ladowarka",
      "typeName": "Praca ładowarką",
@@ -6334,7 +6440,7 @@
  "drafts": [],
  "ledger": [
   {
-   "id": "l_mup3lyk01ganfiw",
+   "id": "l_muqs3rg51gd8vfu",
    "seq": 1,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6352,7 +6458,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mup3lyk02i6djov",
+   "id": "l_muqs3rg628h7vwd",
    "seq": 2,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6370,7 +6476,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mup3lyk13y020u9",
+   "id": "l_muqs3rg63blztez",
    "seq": 3,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6388,7 +6494,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mup3lyk142b92kf",
+   "id": "l_muqs3rg64u38z5u",
    "seq": 4,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6406,7 +6512,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mup3lyk15wlxqky",
+   "id": "l_muqs3rg65dtbkq7",
    "seq": 5,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6424,7 +6530,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mup3lyk16yb65or",
+   "id": "l_muqs3rg66j690ep",
    "seq": 6,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6442,7 +6548,7 @@
    "docNo": "BO/001/08/2026"
   },
   {
-   "id": "l_mup3lyk18fatn41",
+   "id": "l_muqs3rg68qdo2cz",
    "seq": 7,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6460,7 +6566,7 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_mup3lyk19llqpdi",
+   "id": "l_muqs3rg696bbcsy",
    "seq": 8,
    "ts": "2026-08-01T08:00:00.000Z",
    "userName": "Mateusz Roesner",
@@ -6478,14 +6584,14 @@
    "docNo": "BO/002/08/2026"
   },
   {
-   "id": "l_mup3lyk5d09j6ok",
+   "id": "l_muqs3rgfdpn96ra",
    "seq": 9,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 28.56,
    "direct": false,
-   "opId": "op_mup3lyk5czxowzy",
+   "opId": "op_muqs3rgfc2tvb1o",
    "step": 1,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -6496,14 +6602,14 @@
    "docNo": "PZ/001/08/2026"
   },
   {
-   "id": "l_mup3lyk5esibt95",
+   "id": "l_muqs3rgfehhhai3",
    "seq": 10,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -28.56,
    "direct": false,
-   "opId": "op_mup3lyk5czxowzy",
+   "opId": "op_muqs3rgfc2tvb1o",
    "step": 2,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -6514,14 +6620,14 @@
    "docNo": "RW/001/08/2026"
   },
   {
-   "id": "l_mup3lyk5f5yf577",
+   "id": "l_muqs3rgffs654lp",
    "seq": 11,
    "ts": "2026-08-05T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 39.6,
    "direct": false,
-   "opId": "op_mup3lyk5czxowzy",
+   "opId": "op_muqs3rgfc2tvb1o",
    "step": 3,
    "date": "2026-08-05",
    "whId": "wh_zab",
@@ -6532,14 +6638,14 @@
    "docNo": "PW/001/08/2026"
   },
   {
-   "id": "l_mup3lyk7kbfo5pr",
+   "id": "l_muqs3rgjla9gphc",
    "seq": 12,
    "ts": "2026-08-12T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_mup3lyk6jiz1lda",
+   "opId": "op_muqs3rgjkhmciyr",
    "step": 1,
    "date": "2026-08-12",
    "whId": "wh_zab",
@@ -6550,14 +6656,14 @@
    "docNo": "PZ/002/08/2026"
   },
   {
-   "id": "l_mup3lyk8o7vdn5i",
+   "id": "l_muqs3rgkqygg32b",
    "seq": 13,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": 23.8,
    "direct": false,
-   "opId": "op_mup3lyk8nki98e7",
+   "opId": "op_muqs3rgkpu30wv1",
    "step": 1,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -6568,14 +6674,14 @@
    "docNo": "PZ/003/08/2026"
   },
   {
-   "id": "l_mup3lyk8piprga9",
+   "id": "l_muqs3rglrwl4dc9",
    "seq": 14,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "m3",
    "t": -23.8,
    "direct": false,
-   "opId": "op_mup3lyk8nki98e7",
+   "opId": "op_muqs3rgkpu30wv1",
    "step": 2,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -6586,14 +6692,14 @@
    "docNo": "RW/002/08/2026"
   },
   {
-   "id": "l_mup3lyk8qh379m7",
+   "id": "l_muqs3rglsl1mhy3",
    "seq": 15,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 33,
    "direct": false,
-   "opId": "op_mup3lyk8nki98e7",
+   "opId": "op_muqs3rgkpu30wv1",
    "step": 3,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -6604,14 +6710,14 @@
    "docNo": "PW/002/08/2026"
   },
   {
-   "id": "l_mup3lyk8r42x44s",
+   "id": "l_muqs3rglt3rp91g",
    "seq": 16,
    "ts": "2026-08-20T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_mup3lyk8nki98e7",
+   "opId": "op_muqs3rgkpu30wv1",
    "step": 4,
    "date": "2026-08-20",
    "whId": "wh_zab",
@@ -6622,14 +6728,14 @@
    "docNo": "WZ/001/08/2026"
   },
   {
-   "id": "l_mup3lyk9vdkccfh",
+   "id": "l_muqs3rgnxrdqhgb",
    "seq": 17,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": 19.04,
    "direct": false,
-   "opId": "op_mup3lyk9u1he2wa",
+   "opId": "op_muqs3rgnw8v6o6f",
    "step": 1,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -6640,14 +6746,14 @@
    "docNo": "PZ/11"
   },
   {
-   "id": "l_mup3lyk9w29ozws",
+   "id": "l_muqs3rgnymwyqy6",
    "seq": 18,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "m3",
    "t": -19.04,
    "direct": false,
-   "opId": "op_mup3lyk9u1he2wa",
+   "opId": "op_muqs3rgnw8v6o6f",
    "step": 2,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -6658,14 +6764,14 @@
    "docNo": "RW/001/09/2026"
   },
   {
-   "id": "l_mup3lyk9x6v57wq",
+   "id": "l_muqs3rgnzmq0l2h",
    "seq": 19,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": 26.4,
    "direct": false,
-   "opId": "op_mup3lyk9u1he2wa",
+   "opId": "op_muqs3rgnw8v6o6f",
    "step": 3,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -6676,14 +6782,14 @@
    "docNo": "PW/001/09/2026"
   },
   {
-   "id": "l_mup3lyk9y2fwoqi",
+   "id": "l_muqs3rgn10m68sc8",
    "seq": 20,
    "ts": "2026-09-03T08:00:00.000Z",
    "userName": "Adrian Wojciechowski",
    "unit": "MP",
    "t": -26.4,
    "direct": false,
-   "opId": "op_mup3lyk9u1he2wa",
+   "opId": "op_muqs3rgnw8v6o6f",
    "step": 4,
    "date": "2026-09-03",
    "whId": "wh_zab",
@@ -6694,14 +6800,14 @@
    "docNo": "WZ/001/09/2026"
   },
   {
-   "id": "l_mup3lyka128yrq8c",
+   "id": "l_muqs3rgr15j1sso1",
    "seq": 21,
    "ts": "2026-09-08T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": 14.28,
    "direct": false,
-   "opId": "op_mup3lyka11y6ye56",
+   "opId": "op_muqs3rgr14uakep5",
    "step": 1,
    "date": "2026-09-08",
    "whId": "wh_bra",
@@ -6712,14 +6818,14 @@
    "docNo": "PZ/001/09/2026"
   },
   {
-   "id": "l_mup3lykb169nfctf",
+   "id": "l_muqs3rgs1b8h0e8g",
    "seq": 22,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -9.52,
    "direct": false,
-   "opId": "op_mup3lykb15q49pli",
+   "opId": "op_muqs3rgs1achvyft",
    "step": 1,
    "date": "2026-09-10",
    "whId": "wh_bra",
@@ -6730,14 +6836,14 @@
    "docNo": "RW/002/09/2026"
   },
   {
-   "id": "l_mup3lykb177knqid",
+   "id": "l_muqs3rgs1cqmbbd5",
    "seq": 23,
    "ts": "2026-09-10T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 13.2,
    "direct": false,
-   "opId": "op_mup3lykb15q49pli",
+   "opId": "op_muqs3rgs1achvyft",
    "step": 2,
    "date": "2026-09-10",
    "whId": "wh_bra",
@@ -6748,14 +6854,14 @@
    "docNo": "PW/002/09/2026"
   },
   {
-   "id": "l_mup3lykc1dh88yjt",
+   "id": "l_muqs3rgv1ja62luw",
    "seq": 24,
    "ts": "2026-09-12T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": -33,
    "direct": false,
-   "opId": "op_mup3lykc1csx05ql",
+   "opId": "op_muqs3rgv1icayscb",
    "step": 1,
    "date": "2026-09-12",
    "whId": "wh_bra",
@@ -6766,14 +6872,14 @@
    "docNo": "WZ/002/09/2026"
   },
   {
-   "id": "l_mup3lykc1hbfsn4y",
+   "id": "l_muqs3rgx1pkdld1u",
    "seq": 25,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": 198,
    "direct": true,
-   "opId": "op_mup3lykc1gfyo8wf",
+   "opId": "op_muqs3rgx1okyfvt1",
    "step": 1,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -6784,14 +6890,14 @@
    "docNo": "PW/003/09/2026"
   },
   {
-   "id": "l_mup3lykc1i73jtyk",
+   "id": "l_muqs3rgx1q9exwp2",
    "seq": 26,
    "ts": "2026-09-15T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -198,
    "direct": true,
-   "opId": "op_mup3lykc1gfyo8wf",
+   "opId": "op_muqs3rgx1okyfvt1",
    "step": 2,
    "date": "2026-09-15",
    "whId": "wh_zab",
@@ -6802,14 +6908,14 @@
    "docNo": "WZ/003/09/2026"
   },
   {
-   "id": "l_mup3lykd1nq0wvh6",
+   "id": "l_muqs3rgy1vz18m3k",
    "seq": 27,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Anna Górska",
    "unit": "MP",
    "t": -16.5,
    "direct": false,
-   "opId": "op_mup3lykd1mdtns8j",
+   "opId": "op_muqs3rgy1u6xp3qv",
    "step": 1,
    "date": "2026-09-16",
    "whId": "wh_zab",
@@ -6820,14 +6926,14 @@
    "docNo": "MM/001/09/2026"
   },
   {
-   "id": "l_mup3lykd1rt5pge8",
+   "id": "l_muqs3rh023zen9vg",
    "seq": 28,
    "ts": "2026-09-17T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "t",
    "t": 5,
    "direct": false,
-   "opId": "op_mup3lykd1q1nh9tv",
+   "opId": "op_muqs3rh02219rx52",
    "step": 1,
    "date": "2026-09-17",
    "whId": "wh_bra",
@@ -6838,14 +6944,14 @@
    "docNo": "PZ/002/09/2026"
   },
   {
-   "id": "l_mup3lykd1v6rbf0q",
+   "id": "l_muqs3rh12922bbvj",
    "seq": 29,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "m3",
    "t": -4.76,
    "direct": false,
-   "opId": "op_mup3lykd1u2vzwu6",
+   "opId": "op_muqs3rh128auv8lu",
    "step": 1,
    "date": "2026-09-22",
    "whId": "wh_bra",
@@ -6856,14 +6962,14 @@
    "docNo": "RW/003/09/2026"
   },
   {
-   "id": "l_mup3lyke1wskyb1b",
+   "id": "l_muqs3rh12a7f2h2p",
    "seq": 30,
    "ts": "2026-09-22T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 6.6,
    "direct": false,
-   "opId": "op_mup3lykd1u2vzwu6",
+   "opId": "op_muqs3rh128auv8lu",
    "step": 2,
    "date": "2026-09-22",
    "whId": "wh_bra",
@@ -6874,14 +6980,14 @@
    "docNo": "PW/004/09/2026"
   },
   {
-   "id": "l_mup3lykf1z3i9x35",
+   "id": "l_muqs3rh32edty7bw",
    "seq": 31,
    "ts": "2026-09-16T08:00:00.000Z",
    "userName": "Paweł Kaczmarek",
    "unit": "MP",
    "t": 16.5,
    "direct": false,
-   "opId": "op_mup3lykd1mdtns8j",
+   "opId": "op_muqs3rgy1u6xp3qv",
    "step": 50,
    "date": "2026-09-16",
    "whId": "wh_bra",
@@ -6893,14 +6999,14 @@
    "receipt": true
   },
   {
-   "id": "l_mup3lykh21qqvdvr",
+   "id": "l_muqs3rh72kg42huo",
    "seq": 32,
    "ts": "2026-09-14T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "MP",
    "t": 3.3,
    "direct": false,
-   "opId": "op_mup3lykc1csx05ql",
+   "opId": "op_muqs3rgv1icayscb",
    "step": 100,
    "date": "2026-09-14",
    "whId": "wh_bra",
@@ -6912,14 +7018,14 @@
    "refDoc": "WZ/002/09/2026"
   },
   {
-   "id": "l_mup3lyki23zugcjw",
+   "id": "l_muqs3rh92oqv7lfp",
    "seq": 33,
    "ts": "2026-09-18T08:00:00.000Z",
    "userName": "Mateusz Roesner",
    "unit": "t",
    "t": -5,
    "direct": false,
-   "opId": "op_mup3lykd1q1nh9tv",
+   "opId": "op_muqs3rh02219rx52",
    "step": 200,
    "date": "2026-09-18",
    "whId": "wh_bra",
@@ -6934,7 +7040,7 @@
  "inventory": [],
  "audit": [
   {
-   "id": "a_mup3lyk17c84bl6",
+   "id": "a_muqs3rg676s77xb",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -6952,7 +7058,7 @@
    }
   },
   {
-   "id": "a_mup3lyk1adpmmv8",
+   "id": "a_muqs3rg6a22g150",
    "ts": "2026-08-01T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
@@ -6970,14 +7076,14 @@
    }
   },
   {
-   "id": "a_mup3lyk6h8bo3r2",
+   "id": "a_muqs3rgghifm648",
    "ts": "2026-08-05T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lyk5czxowzy",
+   "entityId": "op_muqs3rgfc2tvb1o",
    "opNo": "PZ/001/08/2026",
    "event": "create",
    "act": {
@@ -7018,14 +7124,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mup3lyk7lrfkedb",
+   "id": "a_muqs3rgjmobuq6g",
    "ts": "2026-08-12T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lyk6jiz1lda",
+   "entityId": "op_muqs3rgjkhmciyr",
    "opNo": "PZ/002/08/2026",
    "event": "create",
    "act": {
@@ -7062,14 +7168,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mup3lyk8s4zvbz6",
+   "id": "a_muqs3rglu7sxq73",
    "ts": "2026-08-20T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lyk8nki98e7",
+   "entityId": "op_muqs3rgkpu30wv1",
    "opNo": "PZ/003/08/2026",
    "event": "create",
    "act": {
@@ -7111,14 +7217,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mup3lykaz05bhlm",
+   "id": "a_muqs3rgo1146qprq",
    "ts": "2026-09-03T08:00:00.000Z",
    "userId": "u_mag",
    "userName": "Adrian Wojciechowski",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lyk9u1he2wa",
+   "entityId": "op_muqs3rgnw8v6o6f",
    "opNo": "PZ/11",
    "event": "create",
    "act": {
@@ -7160,14 +7266,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mup3lyka13hw6zks",
+   "id": "a_muqs3rgr16tig03u",
    "ts": "2026-09-08T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lyka11y6ye56",
+   "entityId": "op_muqs3rgr14uakep5",
    "opNo": "PZ/001/09/2026",
    "event": "create",
    "act": {
@@ -7204,14 +7310,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mup3lykb1apijx7w",
+   "id": "a_muqs3rgs1f4v1pqp",
    "ts": "2026-09-10T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykb15q49pli",
+   "entityId": "op_muqs3rgs1achvyft",
    "opNo": "PW/002/09/2026",
    "event": "create",
    "act": {
@@ -7250,14 +7356,14 @@
    "action": "Utworzenie i zatwierdzenie: Produkcja na magazynie"
   },
   {
-   "id": "a_mup3lykc1e8xhg8a",
+   "id": "a_muqs3rgv1k5fah3v",
    "ts": "2026-09-12T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykc1csx05ql",
+   "entityId": "op_muqs3rgv1icayscb",
    "opNo": "WZ/002/09/2026",
    "event": "create",
    "act": {
@@ -7294,14 +7400,14 @@
    "action": "Utworzenie i zatwierdzenie: Sprzedaż"
   },
   {
-   "id": "a_mup3lykc1kmhxfj2",
+   "id": "a_muqs3rgx1sop8350",
    "ts": "2026-09-15T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykc1gfyo8wf",
+   "entityId": "op_muqs3rgx1okyfvt1",
    "opNo": "PW/003/09/2026",
    "event": "create",
    "act": {
@@ -7339,14 +7445,14 @@
    "action": "Utworzenie i zatwierdzenie: Sprzedaż (bezpośrednia)"
   },
   {
-   "id": "a_mup3lykd1onwyu6t",
+   "id": "a_muqs3rgz1wwdsap5",
    "ts": "2026-09-16T08:00:00.000Z",
    "userId": "u_kier",
    "userName": "Anna Górska",
    "whId": "wh_zab",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykd1mdtns8j",
+   "entityId": "op_muqs3rgy1u6xp3qv",
    "opNo": "MM/001/09/2026",
    "event": "create",
    "act": {
@@ -7383,14 +7489,14 @@
    "action": "Wysłanie MM do magazynu RiC Brąszewice — w drodze, oczekuje na przyjęcie"
   },
   {
-   "id": "a_mup3lykd1s1ram2q",
+   "id": "a_muqs3rh02403f2zj",
    "ts": "2026-09-17T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykd1q1nh9tv",
+   "entityId": "op_muqs3rh02219rx52",
    "opNo": "PZ/002/09/2026",
    "event": "create",
    "act": {
@@ -7426,14 +7532,14 @@
    "action": "Utworzenie i zatwierdzenie: Zakup"
   },
   {
-   "id": "a_mup3lykf1y05rowj",
+   "id": "a_muqs3rh12c482249",
    "ts": "2026-09-22T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykd1u2vzwu6",
+   "entityId": "op_muqs3rh128auv8lu",
    "opNo": "PW/004/09/2026",
    "event": "create",
    "act": {
@@ -7472,14 +7578,14 @@
    "action": "Utworzenie i zatwierdzenie: Produkcja na magazynie"
   },
   {
-   "id": "a_mup3lykf20iukoez",
+   "id": "a_muqs3rh32fiv2o6f",
    "ts": "2026-09-16T08:00:00.000Z",
    "userId": "u_bra",
    "userName": "Paweł Kaczmarek",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykd1mdtns8j",
+   "entityId": "op_muqs3rgy1u6xp3qv",
    "opNo": "MM/001/09/2026",
    "event": "mm-receive",
    "code": "MM_RECEIVED",
@@ -7509,14 +7615,14 @@
    "action": "Przyjęcie MM na magazyn RiC Brąszewice"
   },
   {
-   "id": "a_mup3lykh221kzhqk",
+   "id": "a_muqs3rh72lto0o8a",
    "ts": "2026-09-14T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykc1csx05ql",
+   "entityId": "op_muqs3rgv1icayscb",
    "opNo": "WZ/002/09/2026",
    "relatedNo": "KOR/001/09/2026",
    "event": "correction",
@@ -7549,14 +7655,14 @@
    "action": "Korekta dokumentu"
   },
   {
-   "id": "a_mup3lyki24667edl",
+   "id": "a_muqs3rh92puw2its",
    "ts": "2026-09-18T08:00:00.000Z",
    "userId": "u_admin",
    "userName": "Mateusz Roesner",
    "whId": "wh_bra",
    "source": "Dane przykładowe",
    "entity": "operation",
-   "entityId": "op_mup3lykd1q1nh9tv",
+   "entityId": "op_muqs3rh02219rx52",
    "opNo": "PZ/002/09/2026",
    "relatedNo": "AN/001/09/2026",
    "event": "cancel",
@@ -7594,9 +7700,1852 @@
   "AN-2026-09": 1
  },
  "rolePerms": {},
+ "plans": [
+  {
+   "id": "pl_wh_zab_2026-08-05",
+   "whId": "wh_zab",
+   "date": "2026-08-05",
+   "planMP": 120,
+   "note": "Nadl. Rudy Raciborskie — Stanica",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-08-12",
+   "whId": "wh_zab",
+   "date": "2026-08-12",
+   "planMP": 100,
+   "note": "Zrębka towar — Usługi Leśne Drwal",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-08-20",
+   "whId": "wh_zab",
+   "date": "2026-08-20",
+   "planMP": 120,
+   "note": "Wycinka — obwodnica Gliwic",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-01",
+   "whId": "wh_zab",
+   "date": "2026-09-01",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-02",
+   "whId": "wh_zab",
+   "date": "2026-09-02",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-03",
+   "whId": "wh_zab",
+   "date": "2026-09-03",
+   "planMP": 80,
+   "note": "Nadl. Rybnik — Wielopole",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-04",
+   "whId": "wh_zab",
+   "date": "2026-09-04",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-07",
+   "whId": "wh_zab",
+   "date": "2026-09-07",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-08",
+   "whId": "wh_zab",
+   "date": "2026-09-08",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-09",
+   "whId": "wh_zab",
+   "date": "2026-09-09",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-10",
+   "whId": "wh_zab",
+   "date": "2026-09-10",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-11",
+   "whId": "wh_zab",
+   "date": "2026-09-11",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-14",
+   "whId": "wh_zab",
+   "date": "2026-09-14",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-15",
+   "whId": "wh_zab",
+   "date": "2026-09-15",
+   "planMP": 600,
+   "note": "Nadl. Rudy Raciborskie — Kuźnia (pociąg do Łazisk)",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-16",
+   "whId": "wh_zab",
+   "date": "2026-09-16",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-17",
+   "whId": "wh_zab",
+   "date": "2026-09-17",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-18",
+   "whId": "wh_zab",
+   "date": "2026-09-18",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-21",
+   "whId": "wh_zab",
+   "date": "2026-09-21",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-22",
+   "whId": "wh_zab",
+   "date": "2026-09-22",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-23",
+   "whId": "wh_zab",
+   "date": "2026-09-23",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-24",
+   "whId": "wh_zab",
+   "date": "2026-09-24",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-25",
+   "whId": "wh_zab",
+   "date": "2026-09-25",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-28",
+   "whId": "wh_zab",
+   "date": "2026-09-28",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-29",
+   "whId": "wh_zab",
+   "date": "2026-09-29",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_zab_2026-09-30",
+   "whId": "wh_zab",
+   "date": "2026-09-30",
+   "planMP": 50,
+   "note": "",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_bra_2026-09-10",
+   "whId": "wh_bra",
+   "date": "2026-09-10",
+   "planMP": 40,
+   "note": "Rębanie na placu — pryzma P2",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  },
+  {
+   "id": "pl_wh_bra_2026-09-22",
+   "whId": "wh_bra",
+   "date": "2026-09-22",
+   "planMP": 20,
+   "note": "Pryzma P3",
+   "version": 1,
+   "createdAt": "2026-08-01T07:30:00.000Z",
+   "createdBy": "Anna Górska",
+   "updatedAt": "2026-08-01T07:30:00.000Z",
+   "updatedBy": "Anna Górska",
+   "updatedById": "u_kier"
+  }
+ ],
+ "notices": [
+  {
+   "id": "nt_muqs3rghiy4hg68",
+   "ts": "2026-08-05T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": true,
+   "by": "Adrian Wojciechowski",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ"
+   ],
+   "opId": "op_muqs3rgfc2tvb1o",
+   "opNo": "PZ/001/08/2026",
+   "whId": "wh_zab",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/001/08/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "05.08.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/001/08/2026, RW/001/08/2026, PW/001/08/2026, TR/001/08/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Drewno opałowe · 30 m³ · Lander Agro"
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "6 900,00 zł"
+     }
+    },
+    {
+     "k": "Operacje dodatkowe: {x}",
+     "p": {
+      "x": "Holowanie 500,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Adrian Wojciechowski"
+     }
+    }
+   ],
+   "readAt": "2026-08-05T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgjnhxl0se",
+   "ts": "2026-08-12T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": true,
+   "by": "Adrian Wojciechowski",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ"
+   ],
+   "opId": "op_muqs3rgjkhmciyr",
+   "opNo": "PZ/002/08/2026",
+   "whId": "wh_zab",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/002/08/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "12.08.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/002/08/2026, TR/002/08/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 100 MP · Usługi Leśne Drwal sp. z o.o."
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "5 500,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Adrian Wojciechowski"
+     }
+    }
+   ],
+   "readAt": "2026-08-12T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgo12gzs7ut",
+   "ts": "2026-09-03T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": true,
+   "by": "Adrian Wojciechowski",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ",
+    "WZ"
+   ],
+   "opId": "op_muqs3rgnw8v6o6f",
+   "opNo": "PZ/11",
+   "whId": "wh_zab",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/11"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "03.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/11, RW/001/09/2026, PW/001/09/2026, WZ/001/09/2026, TR/001/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Drewno opałowe · 20 m³ · Lander Agro"
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "4 600,00 zł"
+     }
+    },
+    {
+     "k": "Przychód: {m}",
+     "p": {
+      "m": "7 200,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Adrian Wojciechowski"
+     }
+    }
+   ],
+   "readAt": "2026-09-03T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgs174rp0nx",
+   "ts": "2026-09-08T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": true,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ"
+   ],
+   "opId": "op_muqs3rgr14uakep5",
+   "opNo": "PZ/001/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/001/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "08.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/001/09/2026, TR/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Drewno opałowe · 15 m³ · Nadleśnictwo Rybnik"
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "3 150,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ],
+   "readAt": "2026-09-08T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgs18wv9j14",
+   "ts": "2026-09-08T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": true,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ"
+   ],
+   "opId": "op_muqs3rgr14uakep5",
+   "opNo": "PZ/001/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/001/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "08.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/001/09/2026, TR/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Drewno opałowe · 15 m³ · Nadleśnictwo Rybnik"
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "3 150,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ],
+   "readAt": "2026-09-08T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgt1gquj6af",
+   "ts": "2026-09-10T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": true,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PW",
+    "EXTRA"
+   ],
+   "opId": "op_muqs3rgs1achvyft",
+   "opNo": "PW/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Produkcja na magazynie"
+     },
+     "no": "PW/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "10.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "RW/002/09/2026, PW/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka produkcyjna leśna · 40 MP"
+     }
+    },
+    {
+     "k": "Operacje dodatkowe: {x}",
+     "p": {
+      "x": "Podgarnianie pryzm ładowarką 360,00 zł, Czyszczenie placu 250,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ],
+   "readAt": "2026-09-10T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgv1lbyikcd",
+   "ts": "2026-09-12T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": true,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "WZ"
+   ],
+   "opId": "op_muqs3rgv1icayscb",
+   "opNo": "WZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Sprzedaż"
+     },
+     "no": "WZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "12.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "WZ/002/09/2026, TR/003/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka produkcyjna leśna · 100 MP · Ciepłownia Rybnik"
+     }
+    },
+    {
+     "k": "Przychód: {m}",
+     "p": {
+      "m": "8 500,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ],
+   "readAt": "2026-09-12T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgv1m5n9cky",
+   "ts": "2026-09-12T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": true,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "WZ"
+   ],
+   "opId": "op_muqs3rgv1icayscb",
+   "opNo": "WZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Sprzedaż"
+     },
+     "no": "WZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "12.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "WZ/002/09/2026, TR/003/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka produkcyjna leśna · 100 MP · Ciepłownia Rybnik"
+     }
+    },
+    {
+     "k": "Przychód: {m}",
+     "p": {
+      "m": "8 500,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ],
+   "readAt": "2026-09-12T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rgz1xlow3r7",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_admin",
+   "read": false,
+   "by": "Anna Górska",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Wysłano MM {no} do magazynu {w} — czeka na przyjęcie",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Anna Górska"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rgz1yvcev5r",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_mag",
+   "read": false,
+   "by": "Anna Górska",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Wysłano MM {no} do magazynu {w} — czeka na przyjęcie",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Anna Górska"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rgz1zflig0f",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": false,
+   "by": "Anna Górska",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Wysłano MM {no} do magazynu {w} — czeka na przyjęcie",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Anna Górska"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rgz20oyrqyk",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_bra",
+   "read": false,
+   "by": "Anna Górska",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Wysłano MM {no} do magazynu {w} — czeka na przyjęcie",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Anna Górska"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh125q2vifk",
+   "ts": "2026-09-17T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ"
+   ],
+   "opId": "op_muqs3rh02219rx52",
+   "opNo": "PZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "17.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Łupina nerkowca · 5 t · Biomass Trading B.V."
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "3 050,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh126drb5z7",
+   "ts": "2026-09-17T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PZ"
+   ],
+   "opId": "op_muqs3rh02219rx52",
+   "opNo": "PZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Zakup"
+     },
+     "no": "PZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "17.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Łupina nerkowca · 5 t · Biomass Trading B.V."
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "3 050,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh12d68vcyy",
+   "ts": "2026-09-22T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "create",
+   "events": [
+    "PW",
+    "EXTRA"
+   ],
+   "opId": "op_muqs3rh128auv8lu",
+   "opNo": "PW/004/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Nowa operacja: {type} {no}",
+    "p": {
+     "type": {
+      "t": "Produkcja na magazynie"
+     },
+     "no": "PW/004/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "22.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "RW/003/09/2026, PW/004/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka produkcyjna leśna · 20 MP"
+     }
+    },
+    {
+     "k": "Operacje dodatkowe: {x}",
+     "p": {
+      "x": "Praca ładowarką 240,00 zł"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh32gkh74vi",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_admin",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "mm-received",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Przyjęto MM {no} w magazynie {w}",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Przyjęto: {q}",
+     "p": {
+      "q": "50 MP"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh32htyrley",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "mm-received",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Przyjęto MM {no} w magazynie {w}",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Przyjęto: {q}",
+     "p": {
+      "q": "50 MP"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh32i1wuf38",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_mag",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "mm-received",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Przyjęto MM {no} w magazynie {w}",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Przyjęto: {q}",
+     "p": {
+      "q": "50 MP"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh32jreyfvs",
+   "ts": "2026-09-16T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": false,
+   "by": "Paweł Kaczmarek",
+   "email": true,
+   "kind": "mm-received",
+   "events": [
+    "MM"
+   ],
+   "opId": "op_muqs3rgy1u6xp3qv",
+   "opNo": "MM/001/09/2026",
+   "whId": "wh_zab",
+   "toWhId": "wh_bra",
+   "title": {
+    "k": "Przyjęto MM {no} w magazynie {w}",
+    "p": {
+     "no": "MM/001/09/2026",
+     "w": "RiC Brąszewice"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "16.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "MM/001/09/2026, TR/005/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka towar · 50 MP · RiC Zabrze → RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Przyjęto: {q}",
+     "p": {
+      "q": "50 MP"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Paweł Kaczmarek"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh82mmfgebv",
+   "ts": "2026-09-14T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": true,
+   "by": "Mateusz Roesner",
+   "email": true,
+   "kind": "correction",
+   "events": [
+    "CORRECTION"
+   ],
+   "opId": "op_muqs3rgv1icayscb",
+   "opNo": "WZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Korekta {k} dokumentu {no}",
+    "p": {
+     "k": "KOR/001/09/2026",
+     "no": "WZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "12.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "WZ/002/09/2026, TR/003/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka produkcyjna leśna · 90 MP · Ciepłownia Rybnik"
+     }
+    },
+    {
+     "k": "Przychód: {m}",
+     "p": {
+      "m": "7 650,00 zł"
+     }
+    },
+    {
+     "k": "Powód: {r}",
+     "p": {
+      "r": "błędnie wpisana ilość — kwit wagowy 90 MP"
+     }
+    },
+    {
+     "k": "{f}: {a} → {b}",
+     "p": {
+      "f": {
+       "t": "Ilość sprzedaży"
+      },
+      "a": "100 MP",
+      "b": "90 MP"
+     }
+    },
+    {
+     "k": "{f}: {a} → {b}",
+     "p": {
+      "f": {
+       "t": "Tonaż sprzedaży"
+      },
+      "a": "34,6 t",
+      "b": "31,1 t"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Mateusz Roesner"
+     }
+    }
+   ],
+   "readAt": "2026-09-14T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rh82n231hqq",
+   "ts": "2026-09-14T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": true,
+   "by": "Mateusz Roesner",
+   "email": true,
+   "kind": "correction",
+   "events": [
+    "CORRECTION"
+   ],
+   "opId": "op_muqs3rgv1icayscb",
+   "opNo": "WZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Korekta {k} dokumentu {no}",
+    "p": {
+     "k": "KOR/001/09/2026",
+     "no": "WZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "12.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "WZ/002/09/2026, TR/003/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Zrębka produkcyjna leśna · 90 MP · Ciepłownia Rybnik"
+     }
+    },
+    {
+     "k": "Przychód: {m}",
+     "p": {
+      "m": "7 650,00 zł"
+     }
+    },
+    {
+     "k": "Powód: {r}",
+     "p": {
+      "r": "błędnie wpisana ilość — kwit wagowy 90 MP"
+     }
+    },
+    {
+     "k": "{f}: {a} → {b}",
+     "p": {
+      "f": {
+       "t": "Ilość sprzedaży"
+      },
+      "a": "100 MP",
+      "b": "90 MP"
+     }
+    },
+    {
+     "k": "{f}: {a} → {b}",
+     "p": {
+      "f": {
+       "t": "Tonaż sprzedaży"
+      },
+      "a": "34,6 t",
+      "b": "31,1 t"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Mateusz Roesner"
+     }
+    }
+   ],
+   "readAt": "2026-09-14T08:00:00.000Z"
+  },
+  {
+   "id": "nt_muqs3rh92q0yt4k3",
+   "ts": "2026-09-18T08:00:00.000Z",
+   "userId": "u_kier",
+   "read": false,
+   "by": "Mateusz Roesner",
+   "email": true,
+   "kind": "cancel",
+   "events": [
+    "CANCEL"
+   ],
+   "opId": "op_muqs3rh02219rx52",
+   "opNo": "PZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Anulowano operację {no}",
+    "p": {
+     "no": "PZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "17.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Łupina nerkowca · 5 t · Biomass Trading B.V."
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "3 050,00 zł"
+     }
+    },
+    {
+     "k": "Powód: {r}",
+     "p": {
+      "r": "pomyłka operatora — dostawa nie dotarła"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Mateusz Roesner"
+     }
+    }
+   ]
+  },
+  {
+   "id": "nt_muqs3rh92rypl0dw",
+   "ts": "2026-09-18T08:00:00.000Z",
+   "userId": "u_kbra",
+   "read": false,
+   "by": "Mateusz Roesner",
+   "email": true,
+   "kind": "cancel",
+   "events": [
+    "CANCEL"
+   ],
+   "opId": "op_muqs3rh02219rx52",
+   "opNo": "PZ/002/09/2026",
+   "whId": "wh_bra",
+   "toWhId": null,
+   "title": {
+    "k": "Anulowano operację {no}",
+    "p": {
+     "no": "PZ/002/09/2026"
+    }
+   },
+   "lines": [
+    {
+     "k": "Magazyn: {w}",
+     "p": {
+      "w": "RiC Brąszewice"
+     }
+    },
+    {
+     "k": "Data operacji: {d}",
+     "p": {
+      "d": "17.09.2026"
+     }
+    },
+    {
+     "k": "Dokumenty: {d}",
+     "p": {
+      "d": "PZ/002/09/2026"
+     }
+    },
+    {
+     "k": "Pozycja: {s}",
+     "p": {
+      "s": "Łupina nerkowca · 5 t · Biomass Trading B.V."
+     }
+    },
+    {
+     "k": "Wartość zakupu: {m}",
+     "p": {
+      "m": "3 050,00 zł"
+     }
+    },
+    {
+     "k": "Powód: {r}",
+     "p": {
+      "r": "pomyłka operatora — dostawa nie dotarła"
+     }
+    },
+    {
+     "k": "Wprowadził: {u}",
+     "p": {
+      "u": "Mateusz Roesner"
+     }
+    }
+   ]
+  }
+ ],
  "meta": {
   "lastMonthCheck": "2026-09",
-  "createdAt": "2026-10-01T05:33:18.018Z",
+  "createdAt": "2026-10-02T09:46:45.599Z",
   "sample": true
  }
 }

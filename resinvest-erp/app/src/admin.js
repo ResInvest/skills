@@ -506,7 +506,7 @@
         rows = this.extra.mail || [];
         box.innerHTML = `<div class="card-b"><dl class="money-list"><dt>${th("Transport")}</dt><dd>${esc(mc.transport || "—")}${mc.configured ? "" : " · " + esc(t("brak klucza — wysyłka nie działa"))}</dd><dt>${th("Nadawca")}</dt><dd>${esc(mc.from || "—")}</dd>${mc.outDir ? `<dt>${th("Folder wiadomości")}</dt><dd class="mono small">${esc(mc.outDir)}</dd>` : ""}</dl></div>
           ${rows.length ? `<div class="tbl-wrap"><table class="tbl dense" id="mail-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("Szablon")}</th><th>${th("Adresat")}</th><th>${th("Wynik")}</th><th>${th("Błąd")}</th></tr></thead><tbody>
-          ${rows.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.template)}</td><td class="mono">${esc(x.to)}</td><td>${x.status === "SENT" ? `<span class="badge ok">${th("wysłano")}</span>` : `<span class="badge err">${th("błąd")}</span>`}</td><td class="small">${esc(x.error || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wysłanych wiadomości.")}</div>`}`;
+          ${rows.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.template)}</td><td class="mono">${esc(x.to)}</td><td>${x.status === "SENT" ? `<span class="badge ok">${th("wysłano")}</span>` : x.status === "QUEUED" || x.status === "SENDING" ? `<span class="badge info">${th("w kolejce")}</span>` : x.status === "FAILED" ? `<span class="badge warn">${th("nieudana — ponowienie")}</span>` : `<span class="badge err">${th("błąd")}</span>`}</td><td class="small">${esc(x.error || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wysłanych wiadomości.")}</div>`}`;
       }
     }
   };

@@ -1,6 +1,6 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-09-25 · etap: **ResInvest ERP 3.1.0 — prototyp końcowy przed kompilacją instalatora Windows**
+Ostatnia aktualizacja: 2026-10-02 · etap: **ResInvest ERP 3.5.0 — planer zakupów, powiadomienia, poczta**
 
 ## Wykonane — 3.1.0 (prototyp końcowy)
 
@@ -106,6 +106,20 @@ Kolejna faza: pełna wycena magazynowa (FIFO / średnia ruchoma), archiwum PDF z
 | server + auth | 34/34 |
 | E2E OFFLINE | 187/187 |
 | E2E FIRMOWY | 24/24 |
+
+## 3.5.0 — planer zakupów, powiadomienia, poczta (2026-10-02)
+
+Na życzenie użytkownika rozwój wraca do 3.4.1 jako bazy (architektura, wygląd i mechanizmy operacji bez zmian);
+z 4.0 przeniesiono funkcje planera zakupów i powiadomień e-mail w konwencji 3.x (silnik wspólny dla przeglądarki i serwera).
+
+| Zestaw | Wynik |
+|---|---|
+| `npm run check`, `npm run i18n`, `npm run themes` | OK · CS/EN: 2344 teksty, 0 braków · kontrast motywów OK |
+| `npm run test:unit` (silnik, 3.4, 3.5, PDF, platforma) | 140/140 |
+| `npm run test:server` (HTTP + SQLite, konta, poczta 3.5) | 39/39 |
+| `node tests/e2e.cjs` (Chromium, desktop + telefon) | 255/255, konsola bez błędów |
+| `node tests/e2e-server.cjs` | 24/24 |
+| Instalator 3.5.0 | Inno Setup 6.4.1 (Wine): instalacja cicha i `--check` serwera — OK. Prawdziwy Windows — NIEPOTWIERDZONE |
 
 ## 3.4.1 — operacje dodatkowe w każdej operacji, numeracja z listy (PZ/WZ/MM), rejestry PZ/WZ/MM (2026-10-01)
 

@@ -32,14 +32,17 @@
     // konto: e-mail firmowy = login; magazyn domyślny (whId) + przydzielone (warehouseIds); status konta
     const U = (id, email, name, role, whId, more) => {
       const [firstName, ...rest] = name.split(" ");
-      return Object.assign({ id, login: email, email, name, firstName, lastName: rest.join(" "), role, whId, warehouseIds: [whId], status: "ACTIVE", active: true, lang: "", theme: "" }, more || {});
+      return Object.assign({ id, login: email, email, name, firstName, lastName: rest.join(" "), role, whId, warehouseIds: [whId], status: "ACTIVE", active: true, lang: "", theme: "", notifyAllowed: [], notify: { events: [], email: true } }, more || {});
     };
+    // powiadomienia: zgody administratora (notifyAllowed) i zdarzenia włączone przez użytkownika (notify.events)
+    const NT = (allowed, enabled) => ({ notifyAllowed: allowed, notify: { events: enabled, email: true } });
+    const MGR = ["PZ", "WZ", "PW", "MM", "EXTRA", "APPROVAL", "CORRECTION", "CANCEL", "DELETE"];
     s.users = [
-      U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab"),
-      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab", { warehouseIds: ["wh_zab", "wh_bra"] }),
-      U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab"),
-      U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra"),
-      U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra"),
+      U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab", NT([], ["MM", "CORRECTION", "CANCEL", "DELETE"])),
+      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab", Object.assign({ warehouseIds: ["wh_zab", "wh_bra"] }, NT(MGR, ["PZ", "WZ", "MM", "APPROVAL", "CORRECTION", "CANCEL", "DELETE"]))),
+      U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab", NT(["MM", "DECISION", "CORRECTION"], ["MM", "DECISION"])),
+      U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra", NT(MGR, MGR)),
+      U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra", NT(["MM", "DECISION"], ["MM", "DECISION"])),
       U("u_krok", "michal.lewandowski@resinvest.group", "Michał Lewandowski", "kierownik", "wh_rok"),
       U("u_rok", "karolina.wisniewska@resinvest.group", "Karolina Wiśniewska", "magazynier", "wh_rok"),
       U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab"),
@@ -238,29 +241,62 @@
       }]
     );
     const byNo = {};
+    // powiadomienia z operacji wzorcowych — ten sam mechanizm co przy zatwierdzaniu w programie
+    const N = RIW.Notify;
+    const notify = (op, kind, c, extra) => { if (N) N.forOperation(s, op, kind, c, extra); };
     // obieg zatwierdzania jest domyślnie wyłączony — magazynier zatwierdza operację sam
     for (const [uid, date, over] of ops) {
-      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
+      const c = ctx(uid, date);
+      const r = RIW.commitOperation(s, draftOf(date, over), c);
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
+      notify(r.op, "create", c);
     }
     // przyjęcie MM przez magazyn docelowy (Brąszewice): pełna ilość, tonaż z wagi
     const mm = byNo["MM@2026-09-16"];
     if (RIW.mmState(mm) === "W_DRODZE") {
       const rr = RIW.receiveTransfer(s, mm.id, { qty: "50", unit: "MP", date: "2026-09-16", weightMode: "manual", weightManual: "16,2", note: "Kwit wagowy BR 0916/1" }, ctx("u_bra", "2026-09-16"));
       if (!rr.ok) throw new Error("Dane przykładowe (przyjęcie MM): " + rr.error);
+      notify(rr.op, "mm-received", ctx("u_bra", "2026-09-16"));
     }
     // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
     const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);
     cd.sale.qty = "90"; cd.sale.weightManual = "31,1";
-    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }));
+    const cKor = Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) });
+    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", cKor);
     if (!r.ok) throw new Error("Dane przykładowe (korekta): " + r.error);
-    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }), "pomyłka operatora — dostawa nie dotarła");
+    notify(r.op, "correction", cKor, { no: r.no, correction: r.correction });
+    const cAn = Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) });
+    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, cAn, "pomyłka operatora — dostawa nie dotarła");
     if (!r.ok) throw new Error("Dane przykładowe (anulowanie): " + r.error);
+    notify(r.op, "cancel", cAn, { reason: "pomyłka operatora — dostawa nie dotarła" });
+    // powiadomienia starsze niż tydzień przed „dziś” danych przykładowych — przeczytane
+    const readBefore = RIW.Dates.addDays(today, -7);
+    for (const n of s.notices) if (n.ts.slice(0, 10) < readBefore) { n.read = true; n.readAt = n.ts; }
+    s.plans = samplePlans(s);
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(today);
     s.meta.sample = true;
     return s;
+  }
+
+  /**
+   * Plany zakupów [MP] (planer): RiC Zabrze — sierpień i wrzesień 2026 (dni robocze), RiC Brąszewice — kilka dni.
+   * Wykonanie planer liczy z operacji wzorcowych (zakup z produkcją, produkcja w lesie, zakup zrębki).
+   */
+  function samplePlans(s) {
+    const out = [], by = "Anna Górska", ts = "2026-08-01T07:30:00.000Z";
+    const add = (whId, date, planMP, note) => out.push({ id: `pl_${whId}_${date}`, whId, date, planMP, note: note || "", version: 1, createdAt: ts, createdBy: by, updatedAt: ts, updatedBy: by, updatedById: "u_kier" });
+    const special = { "2026-08-05": [120, "Nadl. Rudy Raciborskie — Stanica"], "2026-08-12": [100, "Zrębka towar — Usługi Leśne Drwal"], "2026-08-20": [120, "Wycinka — obwodnica Gliwic"],
+      "2026-09-03": [80, "Nadl. Rybnik — Wielopole"], "2026-09-15": [600, "Nadl. Rudy Raciborskie — Kuźnia (pociąg do Łazisk)"] };
+    for (let d = "2026-08-03"; d <= "2026-09-30"; d = RIW.Dates.addDays(d, 1)) {
+      const wd = (new Date(d + "T00:00:00Z").getUTCDay() + 6) % 7;
+      if (special[d]) add("wh_zab", d, special[d][0], special[d][1]);
+      else if (wd < 5 && d >= "2026-09-01") add("wh_zab", d, 50);
+    }
+    add("wh_bra", "2026-09-10", 40, "Rębanie na placu — pryzma P2");
+    add("wh_bra", "2026-09-22", 20, "Pryzma P3");
+    return out;
   }
 
   /**
@@ -275,7 +311,7 @@
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
     const email = String(opts.email || opts.login || ADMIN_EMAIL).trim().toLowerCase();
     const name = String(opts.name || "Administrator").trim(), [firstName, ...rest] = name.split(/\s+/);
-    s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "" }];
+    s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "", notifyAllowed: [], notify: { events: [], email: true } }];
     s.carriers = [];
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());

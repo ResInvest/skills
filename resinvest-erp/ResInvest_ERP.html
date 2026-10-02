@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="description" content="ResInvest ERP 3.3 — obrót i magazynowanie biomasy drzewnej: zakupy, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, audyt. PL · CS · EN.">
-<meta name="generator" content="ResInvest ERP build 3.4.1 · 2026-10-01">
+<meta name="description" content="ResInvest ERP 3.5 — obrót i magazynowanie biomasy drzewnej: zakupy, planer zakupów, produkcja zrębki, sprzedaż, transport, inwentaryzacja, raporty, powiadomienia, audyt. PL · CS · EN.">
+<meta name="generator" content="ResInvest ERP build 3.5.0 · 2026-10-02">
 <title>ResInvest ERP</title>
 <script>
 /* Przed pierwszym malowaniem: motyw (bez „mignięcia” jasnego tła) i decyzja o intro (ekran z pierwszą klatką filmu). */
@@ -263,6 +263,8 @@ table{border-collapse:collapse;width:100%}
 /* -------------------------------- Tabele -------------------------------- */
 .tbl-wrap{overflow:auto;border-radius:0 0 var(--r-lg) var(--r-lg)}
 .tbl{font-size:var(--t-md);border-collapse:separate;border-spacing:0;width:100%}
+/* tabela „stack” (karty na telefonie) — na komputerze zwykła tabela, nie kolumna flex z klasy .stack */
+.tbl.stack{display:table;gap:0}
 .tbl th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:var(--t-xs);font-weight:700;color:var(--text-2);padding:9px var(--s3);white-space:nowrap;border-bottom:1px solid var(--border);letter-spacing:.02em}
 .tbl td{padding:9px var(--s3);border-bottom:1px solid var(--border);vertical-align:middle}
 .tbl tbody tr:nth-child(even) td{background:var(--row-alt)}
@@ -696,6 +698,57 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
 .tbl.sticky-act tr:nth-child(even) td:last-child{background:var(--row-alt,var(--surface))}
 .tbl.sticky-act td{vertical-align:middle}
 .tbl.sticky-act td:nth-child(4){min-width:200px}
+
+/* ============================ 3.5 · Planer zakupów ============================ */
+.row-gap{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
+.lbl-like{font-size:var(--t-sm);font-weight:650;color:var(--text-2)}
+.pl-table .plan-in{min-width:0;width:96px;text-align:right;font-variant-numeric:tabular-nums}
+.pl-table tr.pl-today td{background:var(--brand-soft)}
+.pl-table tr.pl-future td{color:var(--text-3)}
+.pl-bar{display:block;height:4px;margin-top:4px;border-radius:var(--r-full);background:var(--surface-3);overflow:hidden;min-width:48px}
+.pl-bar i{display:block;height:100%;border-radius:inherit;background:var(--warn)}
+.pl-bar i.ok{background:var(--ok)} .pl-bar i.low{background:var(--err)}
+.kpi .k-s .pl-bar{margin-top:6px}
+.tbl td.c,.tbl th.c{text-align:center}
+.row-gap>.ctrl{width:auto;flex:0 1 180px;min-width:0}
+@media (max-width:640px){ .pl-table .plan-in{width:100%} #pl-views{width:100%}
+  .tbl.stack tfoot,.tbl.stack tfoot tr,.tbl.stack tfoot td{display:block;width:100%}
+  .tbl.stack tfoot tr{padding:10px 12px;background:var(--surface-2)}
+  .tbl.stack tfoot td{display:grid;grid-template-columns:42% minmax(0,1fr);gap:8px;padding:3px 0;border:0;text-align:left}
+  .tbl.stack tfoot td:empty{display:none}
+  .tbl.stack tfoot td:first-child{display:block;font-weight:700}
+  .tbl.stack tfoot td::before{content:attr(data-l);color:var(--text-3);font-size:var(--t-xs);font-weight:650;text-transform:uppercase;letter-spacing:.03em} }
+
+/* ============================ 3.5 · Powiadomienia i poczta ============================ */
+.bell-btn .bell-cnt{position:absolute;top:2px;right:1px;min-width:17px;height:17px;padding:0 4px;border-radius:var(--r-full);background:var(--err);color:#fff;font-size:10px;font-weight:760;line-height:17px;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+.dropdown:has(.nt-dd){width:min(400px,calc(100vw - 16px));max-width:calc(100vw - 16px)}
+.nt-dd{max-height:min(420px,60vh);overflow:auto;display:flex;flex-direction:column;gap:2px;width:100%;min-width:0}
+.nt-dd .nt-item{min-width:0}
+.dd-empty{padding:10px}
+.nt-list{display:flex;flex-direction:column}
+.nt-item{display:flex;align-items:flex-start;gap:10px;width:100%;padding:10px 12px;border-radius:var(--r-sm);text-align:left;color:var(--text);position:relative}
+.nt-list .nt-item{border-radius:0;border-bottom:1px solid var(--border);padding:12px var(--s5)}
+.nt-item:hover{background:var(--surface-2)}
+.nt-item.unread{background:var(--brand-soft)}
+.nt-item.unread:hover{background:var(--surface-3)}
+.nt-item .fi{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex-shrink:0;background:var(--surface-3);color:var(--text-2)}
+.nt-item .fi.ok{background:var(--ok-soft);color:var(--ok)} .nt-item .fi.warn{background:var(--warn-soft);color:var(--warn)} .nt-item .fi.err{background:var(--err-soft);color:var(--err)} .nt-item .fi.info{background:var(--info-soft);color:var(--info)}
+.nt-body{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.nt-body b{font-weight:680;overflow-wrap:anywhere}
+.nt-lines{display:flex;flex-direction:column;gap:1px;font-size:var(--t-sm);color:var(--text-2);overflow-wrap:anywhere}
+.nt-body .when{font-size:var(--t-xs);color:var(--text-3)}
+.nt-dot{width:9px;height:9px;border-radius:50%;background:var(--brand);flex-shrink:0;margin-top:6px}
+.nt-events{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s2)}
+.nt-ev{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface);cursor:pointer}
+.nt-ev input{margin-top:3px;flex-shrink:0}
+.nt-ev span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.nt-ev small{color:var(--text-3);font-size:var(--t-xs)}
+.nt-ev.off{opacity:.62;cursor:not-allowed;background:var(--surface-2)}
+.nt-ev .badge{align-self:flex-start}
+.nt-matrix th.c{font-size:var(--t-xs);white-space:normal;min-width:76px;vertical-align:bottom}
+.nt-matrix td.c small{margin-left:4px}
+@media (max-width:720px){ .nt-events{grid-template-columns:1fr} .nt-list .nt-item{padding:12px var(--s4)} }
+@media (max-width:640px){ .nt-matrix td.c{grid-template-columns:70% minmax(0,1fr)} }
 
 </style>
 </head>
@@ -3369,6 +3422,263 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
 </script>
 <script>
+/* i18n.d16.js */
+/* Słownik CS/EN — część 16 (3.5: planer zakupów, powiadomienia w programie i e-mail, poczta) */
+(function (root) { "use strict"; (root.RIW_I18N || require("./i18n.js")).addPairs({
+  /* --- menu, uprawnienia, migracja --- */
+  "Planer zakupów": ["Plánovač nákupů", "Purchase planner"],
+  "Powiadomienia": ["Oznámení", "Notifications"],
+  "Poczta": ["Pošta", "Mail"],
+  "{n} nowe powiadomienie|{n} nowe powiadomienia|{n} nowych powiadomień": ["{n} nové oznámení|{n} nová oznámení|{n} nových oznámení", "{n} new notification|{n} new notifications"],
+  "Nieprzeczytane": ["Nepřečtené", "Unread"],
+  "nieprzeczytane": ["nepřečtené", "unread"],
+  "Planer zakupów — wpisywanie planu dnia": ["Plánovač nákupů — zadávání denního plánu", "Purchase planner — entering the daily plan"],
+  "Powiadomienia i poczta — zgody, dziennik wysyłki": ["Oznámení a pošta — souhlasy, deník odesílání", "Notifications and mail — permissions, sending log"],
+  "Schemat 8 → 9: planer zakupów (plan dnia) i powiadomienia — skrzynka w programie, zgody, e-mail": ["Schéma 8 → 9: plánovač nákupů (denní plán) a oznámení — schránka v programu, souhlasy, e-mail", "Schema 8 → 9: purchase planner (daily plan) and notifications — in-app inbox, permissions, e-mail"],
+
+  /* --- powiadomienia: skrzynka --- */
+  "Operacja niedostępna": ["Operace není dostupná", "Operation unavailable"],
+  "Dokument nie jest już widoczny w Twoich magazynach.": ["Doklad již není viditelný ve vašich skladech.", "The document is no longer visible in your warehouses."],
+  "{n} nowe|{n} nowe|{n} nowych": ["{n} nové|{n} nová|{n} nových", "{n} new|{n} new"],
+  "Brak powiadomień.": ["Žádná oznámení.", "No notifications."],
+  "Oznacz wszystkie jako przeczytane": ["Označit vše jako přečtené", "Mark all as read"],
+  "Wszystkie powiadomienia i ustawienia": ["Všechna oznámení a nastavení", "All notifications and settings"],
+  "Skrzynka": ["Schránka", "Inbox"],
+  "Moje ustawienia": ["Moje nastavení", "My settings"],
+  "Zgody użytkowników": ["Souhlasy uživatelů", "User permissions"],
+  "Pokaż": ["Zobrazit", "Show"],
+  "Brak powiadomień dla wybranych filtrów.": ["Žádná oznámení pro zvolené filtry.", "No notifications for the selected filters."],
+  "Nie masz włączonych powiadomień — wybierz zdarzenia w „Moje ustawienia”.": ["Nemáte zapnutá oznámení — vyberte události v „Moje nastavení“.", "You have no notifications turned on — choose events in “My settings”."],
+  "{n} powiadomienie|{n} powiadomienia|{n} powiadomień": ["{n} oznámení|{n} oznámení|{n} oznámení", "{n} notification|{n} notifications"],
+  "nieprzeczytane: {n}": ["nepřečtené: {n}", "unread: {n}"],
+  "Oznaczono jako przeczytane": ["Označeno jako přečtené", "Marked as read"],
+  "Zmiany w Twoich magazynach: nowe dokumenty, przesunięcia MM, korekty, anulowania i usunięcia, operacje do zatwierdzenia. Kliknij powiadomienie — otworzy się operacja.": ["Změny ve vašich skladech: nové doklady, převodky MM, opravy, stornování a odstranění, operace ke schválení. Klikněte na oznámení — otevře se operace.", "Changes in your warehouses: new documents, MM transfers, corrections, cancellations and deletions, operations awaiting approval. Click a notification to open the operation."],
+
+  /* --- powiadomienia: ustawienia --- */
+  "Co chcę otrzymywać": ["Co chci dostávat", "What I want to receive"],
+  "zmiana zapisuje się od razu": ["změna se ukládá ihned", "changes are saved immediately"],
+  "Powiadomienie przychodzi o zmianach w magazynach, do których masz dostęp — nie o Twoich własnych zmianach. Zdarzenie niedostępne wymaga zgody administratora.": ["Oznámení přichází o změnách ve skladech, ke kterým máte přístup — ne o vašich vlastních změnách. Nedostupná událost vyžaduje souhlas administrátora.", "Notifications cover changes in warehouses you can access — not your own changes. An unavailable event requires the administrator's permission."],
+  "wymaga zgody administratora": ["vyžaduje souhlas administrátora", "requires administrator permission"],
+  "Włącz wszystkie dozwolone": ["Zapnout všechny povolené", "Turn on all permitted"],
+  "Wyłącz wszystkie": ["Vypnout všechny", "Turn all off"],
+  "Kanał": ["Kanál", "Channel"],
+  "Wysyłaj także e-mailem na adres {e}": ["Posílat také e-mailem na adresu {e}", "Also send by e-mail to {e}"],
+  "Powiadomienia zawsze trafiają do skrzynki w programie; e-mail wysyła serwer (kolejka z ponawianiem — błąd poczty nie cofa operacji).": ["Oznámení vždy přicházejí do schránky v programu; e-mail odesílá server (fronta s opakováním — chyba pošty operaci nevrací).", "Notifications always go to the in-app inbox; the server sends the e-mail (queue with retries — a mail error does not undo the operation)."],
+  "Tryb OFFLINE: powiadomienia trafiają do skrzynki w programie; e-mail wysyła dopiero ResInvest ERP Serwer (tryb FIRMOWY).": ["Režim OFFLINE: oznámení přicházejí do schránky v programu; e-mail odesílá až ResInvest ERP Server (režim FIREMNÍ).", "OFFLINE mode: notifications go to the in-app inbox; e-mail is sent only by ResInvest ERP Server (COMPANY mode)."],
+  "Nie zapisano ustawień": ["Nastavení nebylo uloženo", "Settings not saved"],
+  "Zapisano ustawienia powiadomień": ["Nastavení oznámení uloženo", "Notification settings saved"],
+
+  /* --- powiadomienia: zgody administratora --- */
+  "Zgody na powiadomienia": ["Souhlasy s oznámeními", "Notification permissions"],
+  "zaznaczenie = użytkownik może włączyć zdarzenie u siebie; odebranie zgody wyłącza wysyłkę": ["zaškrtnutí = uživatel si může událost zapnout; odebrání souhlasu vypne odesílání", "ticked = the user may turn the event on; withdrawing permission stops sending"],
+  "{u}: {e}": ["{u}: {e}", "{u}: {e}"],
+  "włączone przez użytkownika": ["zapnuto uživatelem", "turned on by the user"],
+  "● — zdarzenie włączone przez użytkownika. Administrator ma dostęp do wszystkich zdarzeń. Każda zmiana zgód jest zapisywana w dzienniku audytu.": ["● — událost zapnutá uživatelem. Administrátor má přístup ke všem událostem. Každá změna souhlasů se zapisuje do auditního deníku.", "● — event turned on by the user. The administrator has access to all events. Every permission change is recorded in the audit log."],
+  "Powiadomienia — zgody": ["Oznámení — souhlasy", "Notifications — permissions"],
+  "Nie zapisano zgód": ["Souhlasy nebyly uloženy", "Permissions not saved"],
+  "Zapisano zgody: {u}": ["Souhlasy uloženy: {u}", "Permissions saved: {u}"],
+  "Zgody na powiadomienia nadaje administrator": ["Souhlasy s oznámeními uděluje administrátor", "Notification permissions are granted by the administrator"],
+  "Administrator ma dostęp do wszystkich powiadomień": ["Administrátor má přístup ke všem oznámením", "The administrator has access to all notifications"],
+  "Zdarzenie „{e}” wymaga zgody administratora": ["Událost „{e}“ vyžaduje souhlas administrátora", "Event “{e}” requires administrator permission"],
+  "Zmiana własnych ustawień powiadomień: {l}": ["Změna vlastního nastavení oznámení: {l}", "Change of own notification settings: {l}"],
+  "Zgody na powiadomienia: {l}": ["Souhlasy s oznámeními: {l}", "Notification permissions: {l}"],
+
+  /* --- zdarzenia --- */
+  "Przyjęcie / zakup (PZ)": ["Příjem / nákup (PZ)", "Receipt / purchase (PZ)"],
+  "nowa operacja z dokumentem PZ — także zakup z produkcją": ["nová operace s dokladem PZ — také nákup s výrobou", "new operation with a PZ document — including purchase with production"],
+  "Wydanie / sprzedaż (WZ)": ["Výdej / prodej (WZ)", "Issue / sale (WZ)"],
+  "sprzedaż z magazynu, sprzedaż wyniku produkcji, sprzedaż bezpośrednia": ["prodej ze skladu, prodej výsledku výroby, přímý prodej", "sale from stock, sale of production output, direct sale"],
+  "produkcja na magazynie, z zakupu i w lesie": ["výroba na skladě, z nákupu a v lese", "production at the warehouse, from purchase and in the forest"],
+  "wysłanie i przyjęcie MM — magazyn źródłowy i docelowy": ["odeslání a příjem MM — zdrojový a cílový sklad", "MM dispatch and receipt — source and destination warehouse"],
+  "operacja z kosztami dodatkowymi (holowanie, praca ładowarką…)": ["operace s doplňkovými náklady (odtah, práce nakladače…)", "operation with additional costs (towing, loader work…)"],
+  "operacja przekazana do zatwierdzenia — dla zatwierdzających magazyn": ["operace předaná ke schválení — pro schvalovatele skladu", "operation submitted for approval — for the warehouse approvers"],
+  "Decyzja o mojej operacji": ["Rozhodnutí o mé operaci", "Decision on my operation"],
+  "zatwierdzenie albo odrzucenie operacji, którą przekazałem": ["schválení nebo zamítnutí operace, kterou jsem předal", "approval or rejection of an operation I submitted"],
+  "korekta — numer KOR, powód, pola BYŁO → JEST": ["oprava — číslo KOR, důvod, pole BYLO → JE", "correction — KOR number, reason, fields WAS → IS"],
+  "anulowanie operacji — powód, odwrócone ruchy": ["stornování operace — důvod, obrácené pohyby", "operation cancellation — reason, reversed movements"],
+  "usunięcie z odwróceniem ruchów — powód": ["odstranění s obrácením pohybů — důvod", "deletion with reversed movements — reason"],
+
+  /* --- treść powiadomień --- */
+  "Data operacji: {d}": ["Datum operace: {d}", "Operation date: {d}"],
+  "Dokumenty: {d}": ["Doklady: {d}", "Documents: {d}"],
+  "Pozycja: {s}": ["Položka: {s}", "Item: {s}"],
+  "Wartość zakupu: {m}": ["Hodnota nákupu: {m}", "Purchase value: {m}"],
+  "Przychód: {m}": ["Výnos: {m}", "Revenue: {m}"],
+  "Operacje dodatkowe: {x}": ["Doplňkové operace: {x}", "Additional operations: {x}"],
+  "Wysłano MM {no} do magazynu {w} — czeka na przyjęcie": ["Odeslána MM {no} do skladu {w} — čeká na příjem", "MM {no} sent to warehouse {w} — awaiting receipt"],
+  "Nowa operacja: {type} {no}": ["Nová operace: {type} {no}", "New operation: {type} {no}"],
+  "Przyjęto MM {no} w magazynie {w}": ["Přijata MM {no} ve skladu {w}", "MM {no} received at warehouse {w}"],
+  "Korekta {k} dokumentu {no}": ["Oprava {k} dokladu {no}", "Correction {k} of document {no}"],
+  "Anulowano operację {no}": ["Operace {no} stornována", "Operation {no} cancelled"],
+  "Usunięto dokument {no}": ["Doklad {no} odstraněn", "Document {no} deleted"],
+  "Przyjęto: {q}": ["Přijato: {q}", "Received: {q}"],
+  "Różnica: {q}": ["Rozdíl: {q}", "Difference: {q}"],
+  "Powód: {r}": ["Důvod: {r}", "Reason: {r}"],
+  "{f}: {a} → {b}": ["{f}: {a} → {b}", "{f}: {a} → {b}"],
+  "Wprowadził: {u}": ["Zadal: {u}", "Entered by: {u}"],
+  "Do zatwierdzenia: {type}": ["Ke schválení: {type}", "Awaiting approval: {type}"],
+  "Zatwierdzono Twoją operację {no}": ["Vaše operace {no} byla schválena", "Your operation {no} was approved"],
+  "Odrzucono Twoją operację: {type}": ["Vaše operace byla zamítnuta: {type}", "Your operation was rejected: {type}"],
+
+  /* --- poczta --- */
+  "w kolejce": ["ve frontě", "queued"],
+  "wysyłanie": ["odesílání", "sending"],
+  "wysłana": ["odeslána", "sent"],
+  "nieudana — ponowienie": ["neúspěšná — opakování", "failed — retrying"],
+  "porzucona": ["opuštěna", "abandoned"],
+  "OFFLINE — bez wysyłki": ["OFFLINE — bez odesílání", "OFFLINE — not sent"],
+  "Powiadomienie": ["Oznámení", "Notification"],
+  "Wiadomość testowa": ["Testovací zpráva", "Test message"],
+  "Zaproszenie": ["Pozvánka", "Invitation"],
+  "Potwierdzenie adresu": ["Potvrzení adresy", "Address confirmation"],
+  "Zmiana adresu e-mail": ["Změna e-mailové adresy", "E-mail address change"],
+  "Dezaktywacja konta": ["Deaktivace účtu", "Account deactivation"],
+  "Resend (API HTTPS)": ["Resend (API HTTPS)", "Resend (HTTPS API)"],
+  "SMTP (TLS)": ["SMTP (TLS)", "SMTP (TLS)"],
+  "pliki .eml w katalogu danych": ["soubory .eml v adresáři dat", ".eml files in the data folder"],
+  "Dziennik wysyłki wiadomości e-mail: powiadomienia, zaproszenia, reset hasła. Nieudane wiadomości są ponawiane automatycznie (1 min, 5 min, 15 min, 1 h, 6 h), potem porzucane — można je ponowić ręcznie.": ["Deník odesílání e-mailů: oznámení, pozvánky, obnova hesla. Neúspěšné zprávy se automaticky opakují (1 min, 5 min, 15 min, 1 h, 6 h), poté se opouštějí — lze je zopakovat ručně.", "E-mail sending log: notifications, invitations, password resets. Failed messages are retried automatically (1 min, 5 min, 15 min, 1 h, 6 h), then abandoned — they can be retried manually."],
+  "Odśwież": ["Obnovit", "Refresh"],
+  "Wyślij kolejkę teraz": ["Odeslat frontu nyní", "Send queue now"],
+  "Wyślij test do mnie": ["Poslat test mně", "Send test to me"],
+  "Wczytywanie…": ["Načítání…", "Loading…"],
+  "Kanał wysyłki": ["Kanál odesílání", "Sending channel"],
+  "Skonfigurowano": ["Nastaveno", "Configured"],
+  "nie — brak klucza API / hasła SMTP": ["ne — chybí klíč API / heslo SMTP", "no — missing API key / SMTP password"],
+  "Wiadomości NIE są wysyłane — zapisywane jako pliki .eml w {d}. Ustaw EMAIL_TRANSPORT i klucz w server.env.": ["Zprávy se NEODESÍLAJÍ — ukládají se jako soubory .eml v {d}. Nastavte EMAIL_TRANSPORT a klíč v server.env.", "Messages are NOT sent — they are saved as .eml files in {d}. Set EMAIL_TRANSPORT and the key in server.env."],
+  "Temat": ["Předmět", "Subject"],
+  "Próby": ["Pokusy", "Attempts"],
+  "Ostatni błąd": ["Poslední chyba", "Last error"],
+  "Następna próba": ["Další pokus", "Next attempt"],
+  "Ponów": ["Opakovat", "Retry"],
+  "Brak wiadomości.": ["Žádné zprávy.", "No messages."],
+  "Treść wysłanej wiadomości jest usuwana z bazy. Wiadomości z jednorazowym linkiem (zaproszenie, reset hasła) nie są przechowywane i nie można ich ponowić — wyślij nowe z modułu Użytkownicy.": ["Obsah odeslané zprávy se z databáze maže. Zprávy s jednorázovým odkazem (pozvánka, obnova hesla) se neuchovávají a nelze je zopakovat — pošlete novou z modulu Uživatelé.", "The content of a sent message is deleted from the database. Messages with a one-time link (invitation, password reset) are not stored and cannot be retried — send a new one from the Users module."],
+  "Tryb OFFLINE (dane w tej przeglądarce): wiadomości e-mail nie są wysyłane. Powiadomienia trafiają do skrzynek użytkowników w programie. Wysyłkę e-mail (Resend / SMTP) wykonuje ResInvest ERP Serwer — tryb FIRMOWY.": ["Režim OFFLINE (data v tomto prohlížeči): e-maily se neodesílají. Oznámení přicházejí do schránek uživatelů v programu. Odesílání e-mailů (Resend / SMTP) provádí ResInvest ERP Server — režim FIREMNÍ.", "OFFLINE mode (data in this browser): e-mails are not sent. Notifications go to users' in-app inboxes. E-mail sending (Resend / SMTP) is done by ResInvest ERP Server — COMPANY mode."],
+  "Powiadomienia w programie": ["Oznámení v programu", "In-app notifications"],
+  "Z prośbą o e-mail": ["S požadavkem na e-mail", "With e-mail requested"],
+  "Przeczytane": ["Přečtené", "Read"],
+  "Kolejka przetworzona": ["Fronta zpracována", "Queue processed"],
+  "Wysłano wiadomość testową": ["Testovací zpráva odeslána", "Test message sent"],
+  "Wiadomość ponowiona": ["Zpráva zopakována", "Message retried"],
+  "Tej wiadomości nie można ponowić (wysłana albo bez zapisanej treści).": ["Tuto zprávu nelze zopakovat (odeslána nebo bez uloženého obsahu).", "This message cannot be retried (already sent or no stored content)."],
+  "Ponowienie wiadomości e-mail #{n}": ["Opakování e-mailu #{n}", "Retry of e-mail #{n}"],
+  "Wysłano: {a}, nieudane: {b}": ["Odesláno: {a}, neúspěšné: {b}", "Sent: {a}, failed: {b}"],
+  "Wiadomość testowa na adres {e}": ["Testovací zpráva na adresu {e}", "Test message to {e}"],
+  "Wysyłka nieudana — szczegóły w dzienniku poczty.": ["Odeslání se nezdařilo — podrobnosti v deníku pošty.", "Sending failed — details in the mail log."],
+  "Wiadomość wysłana na adres {e}.": ["Zpráva odeslána na adresu {e}.", "Message sent to {e}."],
+
+  /* --- planer: dni tygodnia, widoki, wskaźniki --- */
+  "Pon": ["Po", "Mon"],
+  "Wt": ["Út", "Tue"],
+  "Śr": ["St", "Wed"],
+  "Czw": ["Čt", "Thu"],
+  "Pt": ["Pá", "Fri"],
+  "Sob": ["So", "Sat"],
+  "Ndz": ["Ne", "Sun"],
+  "Miesiące i rok": ["Měsíce a rok", "Months and year"],
+  "Kierowcy i kursy": ["Řidiči a jízdy", "Drivers and trips"],
+  "Skąd są dane": ["Odkud jsou data", "Where the data comes from"],
+  "zł/MP": ["zł/MP", "PLN/MP"],
+  "Realizacja planu do dziś": ["Plnění plánu k dnešku", "Plan completion to date"],
+  "wykonanie {a} z planu {b}": ["plnění {a} z plánu {b}", "actual {a} of plan {b}"],
+  "Wykonanie": ["Plnění", "Actual"],
+  "{t} t · z wagi {w}": ["{t} t · z vážení {w}", "{t} t · weighed {w}"],
+  "Wartość zakupu": ["Hodnota nákupu", "Purchase value"],
+  "średnia cena {p}": ["průměrná cena {p}", "average price {p}"],
+  "Plan": ["Plán", "Plan"],
+  "Realizacja": ["Plnění", "Completion"],
+  "Realizacja %": ["Plnění %", "Completion %"],
+  "przyszły dzień": ["budoucí den", "future day"],
+
+  /* --- planer: tydzień --- */
+  "Plan [MP] — {d}": ["Plán [MP] — {d}", "Plan [MP] — {d}"],
+  "{d} — dokumenty źródłowe": ["{d} — zdrojové doklady", "{d} — source documents"],
+  "Plan [MP]": ["Plán [MP]", "Plan [MP]"],
+  "Wykonanie [MP]": ["Plnění [MP]", "Actual [MP]"],
+  "Tony [t]": ["Tuny [t]", "Tonnes [t]"],
+  "z wagi {t}": ["z vážení {t}", "weighed {t}"],
+  "Zakup [zł]": ["Nákup [zł]", "Purchase [PLN]"],
+  "Cena [zł/MP]": ["Cena [zł/MP]", "Price [PLN/MP]"],
+  "Km": ["Km", "Km"],
+  "Transport [zł]": ["Doprava [zł]", "Transport [PLN]"],
+  "Razem tydzień": ["Celkem týden", "Week total"],
+  "Tydzień {n}: {a} – {b}": ["Týden {n}: {a} – {b}", "Week {n}: {a} – {b}"],
+  "{h} · {w} · realizacja liczona do dziś — przyszłe dni nie zaniżają wyniku": ["{h} · {w} · plnění počítané k dnešku — budoucí dny výsledek nesnižují", "{h} · {w} · completion counted to date — future days do not lower the result"],
+  "plan [MP] — wpisz i naciśnij Enter": ["plán [MP] — zadejte a stiskněte Enter", "plan [MP] — type and press Enter"],
+  "suma magazynów — plan wpisuje się w magazynie": ["součet skladů — plán se zadává ve skladu", "sum of warehouses — the plan is entered per warehouse"],
+  "tylko podgląd — plan wpisuje kierownik lub administrator": ["pouze náhled — plán zadává vedoucí nebo administrátor", "view only — the plan is entered by a manager or administrator"],
+  "Wykonanie, tony, ceny, km i kursy liczą się automatycznie z zatwierdzonych zakupów MP: zakup z produkcją, produkcja w lesie (sprzedaż bezpośrednia), zakup zrębki. Błąd poprawia się korektą dokumentu.": ["Plnění, tuny, ceny, km a jízdy se počítají automaticky ze schválených nákupů MP: nákup s výrobou, výroba v lese (přímý prodej), nákup štěpky. Chyba se opravuje opravou dokladu.", "Actual, tonnes, prices, km and trips are calculated automatically from approved MP purchases: purchase with production, forest production (direct sale), wood chip purchase. Errors are fixed by correcting the document."],
+  "Tydzień z dniem": ["Týden se dnem", "Week containing"],
+  "Poprzedni tydzień": ["Předchozí týden", "Previous week"],
+  "Następny tydzień": ["Další týden", "Next week"],
+  "Dziś": ["Dnes", "Today"],
+  "Plan dzienny zakupów [MP] i wykonanie liczone z zatwierdzonych dokumentów: produkcja z zakupu, produkcja w lesie, zakup zrębki. Ręcznie wpisuje się tylko plan.": ["Denní plán nákupů [MP] a plnění počítané ze schválených dokladů: výroba z nákupu, výroba v lese, nákup štěpky. Ručně se zadává pouze plán.", "Daily purchase plan [MP] and actuals calculated from approved documents: production from purchase, forest production, wood chip purchase. Only the plan is entered manually."],
+  "Nie zapisano planu": ["Plán nebyl uložen", "Plan not saved"],
+  "Zapisano plan {d}": ["Plán {d} uložen", "Plan {d} saved"],
+  "plan usunięty": ["plán odstraněn", "plan removed"],
+
+  /* --- planer: rok --- */
+  "Plan i wykonanie [MP] w miesiącach": ["Plán a plnění [MP] po měsících", "Plan and actual [MP] by month"],
+  "Wartość zakupu [zł]": ["Hodnota nákupu [zł]", "Purchase value [PLN]"],
+  "Śr. cena [zł/MP]": ["Prům. cena [zł/MP]", "Avg. price [PLN/MP]"],
+  "Transport [zł/MP]": ["Doprava [zł/MP]", "Transport [PLN/MP]"],
+  "Dni z zakupem": ["Dny s nákupem", "Days with purchases"],
+  "Udział w roku": ["Podíl v roce", "Share of year"],
+  "Rok {y} · {w}": ["Rok {y} · {w}", "Year {y} · {w}"],
+  "Plan i wykonanie {y} [MP]": ["Plán a plnění {y} [MP]", "Plan and actual {y} [MP]"],
+  "Miesiące i rok {y}": ["Měsíce a rok {y}", "Months and year {y}"],
+  "kliknij miesiąc — tydzień z jego początku": ["klikněte na měsíc — týden z jeho začátku", "click a month — the week at its start"],
+  "Razem {y}": ["Celkem {y}", "Total {y}"],
+  "Planer zakupów — rok {y}": ["Plánovač nákupů — rok {y}", "Purchase planner — year {y}"],
+  "Planer zakupów — tydzień {n}": ["Plánovač nákupů — týden {n}", "Purchase planner — week {n}"],
+
+  /* --- planer: kierowcy --- */
+  "Kierowca i pojazd": ["Řidič a vozidlo", "Driver and vehicle"],
+  "Tony z wagi [t]": ["Tuny z vážení [t]", "Weighed tonnes [t]"],
+  "Koszt [zł]": ["Náklad [zł]", "Cost [PLN]"],
+  "Brak kursów w tym tygodniu.": ["V tomto týdnu žádné jízdy.", "No trips this week."],
+  "Waga [t]": ["Váha [t]", "Weight [t]"],
+  "Kursy w tygodniu według kierowców": ["Jízdy v týdnu podle řidičů", "Weekly trips by driver"],
+  "{a} – {b} · {w}": ["{a} – {b} · {w}", "{a} – {b} · {w}"],
+  "Kursy tygodnia": ["Jízdy týdne", "Trips of the week"],
+
+  /* --- planer: skąd są dane --- */
+  "wpisywany ręcznie": ["zadáván ručně", "entered manually"],
+  "magazyn × dzień; widok „Wszystkie magazyny” sumuje plany. Zmiana zapisuje się w dzienniku audytu (było / jest).": ["sklad × den; pohled „Všechny sklady“ sčítá plány. Změna se zapisuje do auditního deníku (bylo / je).", "warehouse × day; the “All warehouses” view sums the plans. Changes are recorded in the audit log (was / is)."],
+  "zakup z produkcją (PW), produkcja w lesie, zakup zrębki (PZ)": ["nákup s výrobou (PW), výroba v lese, nákup štěpky (PZ)", "purchase with production (PW), forest production, wood chip purchase (PZ)"],
+  "wynik produkcji w MP albo ilość przyjętej zrębki; bez anulowanych i usuniętych operacji.": ["výsledek výroby v MP nebo množství přijaté štěpky; bez stornovaných a odstraněných operací.", "production output in MP or the received wood chip quantity; excluding cancelled and deleted operations."],
+  "kursy transportu (waga) + przelicznik firmowy": ["jízdy dopravy (váha) + firemní přepočet", "transport trips (weight) + company conversion factor"],
+  "waga zważonych kursów + niezważona reszta ilości × przelicznik MP → t z konfiguracji.": ["váha vážených jízd + nevážený zbytek množství × přepočet MP → t z konfigurace.", "weight of weighed trips + unweighed remaining quantity × MP → t factor from the configuration."],
+  "wartość zakupu i surowca z operacji": ["hodnota nákupu a suroviny z operace", "purchase and raw material value from the operation"],
+  "(wartość zakupu + koszt surowca) ÷ wykonanie.": ["(hodnota nákupu + náklad suroviny) ÷ plnění.", "(purchase value + raw material cost) ÷ actual."],
+  "produkcja i transport": ["výroba a doprava", "production and transport"],
+  "nadleśnictwo i leśnictwo, miejsce wycinki albo miejsce dostawy.": ["lesní správa a polesí, místo kácení nebo místo dodání.", "forest district and forestry, felling site or delivery place."],
+  "Km, transport, kursy": ["Km, doprava, jízdy", "Km, transport, trips"],
+  "karta transportu (TR)": ["přepravní karta (TR)", "transport card (TR)"],
+  "sumy kursów własnych i zewnętrznych operacji zakupu.": ["součty vlastních a externích jízd nákupních operací.", "totals of own and external trips of purchase operations."],
+  "Kierowcy i pojazdy": ["Řidiči a vozidla", "Drivers and vehicles"],
+  "kursy transportu": ["jízdy dopravy", "transport trips"],
+  "kursy pogrupowane po kierowcy i pojeździe; liczba kursów na dzień.": ["jízdy seskupené podle řidiče a vozidla; počet jízd za den.", "trips grouped by driver and vehicle; number of trips per day."],
+  "wyliczana": ["vypočítávána", "calculated"],
+  "wykonanie ÷ plan do dziś — przyszłe dni nie zaniżają wyniku.": ["plnění ÷ plán k dnešku — budoucí dny výsledek nesnižují.", "actual ÷ plan to date — future days do not lower the result."],
+  "Pola planera i ich źródło w ERP": ["Pole plánovače a jejich zdroj v ERP", "Planner fields and their source in the ERP"],
+  "Pole planera": ["Pole plánovače", "Planner field"],
+  "Reguła": ["Pravidlo", "Rule"],
+  "Sprzedaż z magazynu, produkcja ze stanu, przesunięcia MM i zakup drewna bez produkcji nie wchodzą do planera — to nie są zakupy MP. Wartości AUTO są tylko do odczytu; błąd poprawia się korektą dokumentu, więc planer zawsze zgadza się ze stanami i raportami.": ["Prodej ze skladu, výroba ze zásoby, převodky MM a nákup dřeva bez výroby do plánovače nevstupují — nejde o nákupy MP. Hodnoty AUTO jsou jen pro čtení; chyba se opravuje opravou dokladu, takže plánovač vždy souhlasí se stavy a reporty.", "Sales from stock, production from stock, MM transfers and wood purchases without production are not part of the planner — they are not MP purchases. AUTO values are read-only; errors are fixed by correcting the document, so the planner always matches stock levels and reports."],
+
+  /* --- planer: silnik --- */
+  "Nadleśnictwo {n}": ["Lesní správa {n}", "Forest district {n}"],
+  "Plan zakupów zmienia kierownik albo administrator": ["Plán nákupů mění vedoucí nebo administrátor", "The purchase plan is changed by a manager or administrator"],
+  "Nieprawidłowa data": ["Neplatné datum", "Invalid date"],
+  "Plan: {e}": ["Plán: {e}", "Plan: {e}"],
+  "Plan nie może być ujemny": ["Plán nemůže být záporný", "The plan cannot be negative"],
+  "Plan dnia nie może przekraczać {n} MP": ["Denní plán nemůže překročit {n} MP", "The daily plan cannot exceed {n} MP"],
+  "Plan podaje się z dokładnością do 0,01 MP": ["Plán se zadává s přesností na 0,01 MP", "The plan is entered with 0.01 MP precision"],
+  "Plan tego dnia zmienił w międzyczasie inny użytkownik ({u}) — odśwież i wprowadź zmianę ponownie.": ["Plán tohoto dne mezitím změnil jiný uživatel ({u}) — obnovte a zadejte změnu znovu.", "The plan for this day was changed in the meantime by another user ({u}) — refresh and enter your change again."],
+  "Plan zakupów {d} ({w}): {a} → {b} MP": ["Plán nákupů {d} ({w}): {a} → {b} MP", "Purchase plan {d} ({w}): {a} → {b} MP"]
+}); })(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
 /* engine.js */
 /* =========================================================================
    ResInvest ERP 3.0 (FAZA 2)
@@ -3397,8 +3707,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.4.1";
-  const SCHEMA = 8;
+  const VERSION = "3.5.0";
+  const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
 
@@ -3605,12 +3915,13 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     "history.read": N_("Historia operacji — odczyt"), "audit.read": N_("Dziennik audytu — odczyt"),
     "users.read": N_("Użytkownicy — podgląd"), "users.manage": N_("Użytkownicy — zapraszanie, edycja, blokowanie, hasła"),
     "roles.assign": N_("Role i uprawnienia — zmiana"), "warehouses.edit": N_("Magazyny — dodawanie i edycja"),
-    "settings.edit": N_("Konfiguracja systemu"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii")
+    "settings.edit": N_("Konfiguracja systemu"), "data.backup": N_("Kopia zapasowa"), "data.import": N_("Import kopii"),
+    "planner.edit": N_("Planer zakupów — wpisywanie planu dnia"), "notifications.manage": N_("Powiadomienia i poczta — zgody, dziennik wysyłki")
   };
   const CREATE_PERMS = ["receipts.create", "issues.create", "production.create", "mm.create"];
   const ROLE_DEFAULTS = {
     admin: ["*"],
-    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.delete", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "report.view", "reports.export", "history.read", "users.read"],
+    kierownik: [...CREATE_PERMS, "mm.receive", "op.approve", "documents.cancel", "documents.delete", "documents.correct", "inventory.correct", "production.correct", "sales.correct", "purchases.correct", "inv.open", "inv.count", "inv.close", "fleet.edit", "master.edit", "planner.edit", "report.view", "reports.export", "history.read", "users.read"],
     magazynier: [...CREATE_PERMS, "mm.receive", "inv.count", "report.view", "history.read"],
     obserwator: ["report.view", "history.read"],
     audytor: ["report.view", "reports.export", "history.read", "audit.read", "users.read"]
@@ -3751,7 +4062,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [], extraTypes: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
-      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {},
+      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {}, plans: [], notices: [],
       meta: { lastMonthCheck: null, createdAt: null }
     };
   }
@@ -3759,7 +4070,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const e = [];
     if (!s || typeof s !== "object") return [t("Brak danych")];
     if (s.schema !== SCHEMA) e.push(t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: s.schema, b: SCHEMA }));
-    for (const k of ["warehouses", "users", "products", "partners", "extraTypes", "operations", "drafts", "ledger", "inventory", "audit"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
+    for (const k of ["warehouses", "users", "products", "partners", "extraTypes", "operations", "drafts", "ledger", "inventory", "audit", "plans", "notices"]) if (!Array.isArray(s[k])) e.push(t("Brak kolekcji „{k}”", { k }));
     if (!s.fleet || !["vehicles", "drivers", "chippers", "operators"].every(k => Array.isArray(s.fleet[k]))) e.push(t("Brak kartotek floty"));
     if (!s.config || !(s.config.m3_mp > 0) || !(s.config.mp_t > 0) || !(s.config.t_gj > 0)) e.push(t("Brak przeliczników"));
     if (Array.isArray(s.products) && s.products.some(p => !Units.LIST.includes(p.unit))) e.push(t("Produkt bez jednostki magazynowej"));
@@ -3840,6 +4151,19 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("documents.cancel") && !list.includes("documents.delete")) s.rolePerms[role] = list.concat("documents.delete");
       s.schema = 8; s.version = VERSION;
       notes.push(t("Schemat 7 → 8: operacje dodatkowe i ich kartoteka, rębaki firm zewnętrznych, ręczne numery PZ/WZ, tonaż ręczny w sprzedaży, usuwanie dokumentów"));
+    }
+    if (s.schema === 8) {
+      // planer zakupów (plan dnia magazynu) i powiadomienia (skrzynka w programie, zgody administratora, ustawienia użytkownika)
+      if (!Array.isArray(s.plans)) s.plans = [];
+      if (!Array.isArray(s.notices)) s.notices = [];
+      for (const u of s.users || []) {
+        if (!Array.isArray(u.notifyAllowed)) u.notifyAllowed = [];
+        if (!u.notify || typeof u.notify !== "object") u.notify = { events: [], email: true };
+      }
+      // rola z prawem edycji kartotek (kierownik) dostaje wpisywanie planu zakupów — także przy zmienionym zestawie uprawnień
+      for (const [role, list] of Object.entries(s.rolePerms || {})) if (Array.isArray(list) && list.includes("master.edit") && !list.includes("planner.edit")) s.rolePerms[role] = list.concat("planner.edit");
+      s.schema = 9; s.version = VERSION;
+      notes.push(t("Schemat 8 → 9: planer zakupów (plan dnia) i powiadomienia — skrzynka w programie, zgody, e-mail"));
     }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
     return { state: s, from, to: SCHEMA, notes };
@@ -5456,8 +5780,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0], code: escal ? "FORBIDDEN" : undefined };
       const clean = { id: prev ? prev.id : uid("u"), firstName: str(r.firstName), lastName: str(r.lastName), name: this.fullName(r), login: r.email, email: r.email,
         role: r.role, whId: r.whId, warehouseIds: r.warehouseIds, status: r.status, active: r.status === "ACTIVE", phone: str(r.phone), lang: r.lang || "", theme: r.theme || "",
-        createdAt: prev ? (prev.createdAt || null) : nowIso(ctx) };
-      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy"]) if (prev && prev[k] !== undefined) clean[k] = prev[k];
+        createdAt: prev ? (prev.createdAt || null) : nowIso(ctx), notifyAllowed: [], notify: { events: [], email: true } };
+      // ustawienia powiadomień zmienia się osobnymi komendami (zgody administratora, ustawienia własne) — zapis profilu ich nie rusza
+      for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy", "notifyAllowed", "notify"]) if (prev && prev[k] !== undefined) clean[k] = clone(prev[k]);
       if (prev && statusOf(prev) === "INVITED" && clean.status === "ACTIVE" && prev.selfRegistered) { clean.approvedAt = nowIso(ctx); clean.approvedBy = actor.name; delete clean.selfRegistered; }
       if (!prev && clean.status === "INVITED") clean.invitedAt = nowIso(ctx);
       const idx = state.users.findIndex(u => u.id === clean.id);
@@ -5504,7 +5829,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const e = this.validate(state, r);
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
       const clean = { id: uid("u"), firstName: r.firstName, lastName: r.lastName, name: this.fullName(r), login: r.email, email: r.email, role: "obserwator", whId: r.whId, warehouseIds: [r.whId],
-        status: "INVITED", active: false, selfRegistered: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx) };
+        status: "INVITED", active: false, selfRegistered: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx), notifyAllowed: [], notify: { events: [], email: true } };
       state.users.push(clean); state.rev += 1;
       audit(state, Object.assign({}, ctx, { user: null }), { entity: "user", entityId: clean.id, opNo: clean.login, event: "register", code: "USER_REGISTERED", act: Lx("Rejestracja konta {l} — oczekuje na zatwierdzenie", { l: clean.login }), before: null, after: { nazwa: clean.name, email: clean.login }, source: N_("Rejestracja") });
       return { ok: true, rec: clean };
@@ -5848,6 +6173,492 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
 </script>
 <script>
+/* planner.js */
+/* =========================================================================
+   ResInvest ERP 3.5 — warstwa S: planer zakupów (silnik)
+
+   Ręcznie wpisuje się tylko PLAN DNIA [MP] (magazyn × dzień). Wszystko inne planer
+   czyta z zatwierdzonych operacji — wartości AUTO są tylko do odczytu, a błąd poprawia
+   się korektą dokumentu. Dzięki temu planer zawsze zgadza się ze stanami i raportami.
+
+   Wykonanie [MP] — operacje zakupu MP (bez anulowanych i usuniętych):
+     * zakup z produkcją (PZ → RW → PW) — wynik produkcji w MP,
+     * produkcja w lesie przy sprzedaży bezpośredniej — wynik produkcji w MP,
+     * zakup materiału prowadzonego w MP (np. zrębka towar) — ilość przyjęta.
+   Sprzedaż z magazynu, produkcja ze stanu, MM i zakup drewna bez produkcji NIE są zakupem MP.
+   Tony   = waga zważonych kursów + niezważona reszta ilości × przelicznik firmowy (MP → t).
+   Cena   = (wartość zakupu + koszt surowca) ÷ wykonanie [zł/MP].
+   Km, transport, kursy — z kursów (karta TR) tych operacji; kierowcy i pojazdy — z kursów.
+   Realizacja = wykonanie ÷ plan DO DZIŚ (przyszłe dni nie zaniżają wyniku).
+   Moduł działa w przeglądarce i w Node (serwer, testy).
+   ========================================================================= */
+(function (root) {
+  "use strict";
+  const R = root.RIW || (typeof require === "function" ? require("./engine.js") : null);
+  const { round, rq, Dates, NumParse, byId, uid, clone, audit, Lx, can, canAccessWh, whAccess, EPS } = R;
+  const t = (s, p) => R.I18N.t(s, p);
+  const N_ = s => s;
+  const str = v => String(v == null ? "" : v).trim();
+  const nowIso = ctx => (ctx && ctx.now) || new Date().toISOString();
+
+  /** Liczba w zapisie polskim (wpis audytu w postaci kanonicznej). */
+  const plNum = n => { const [i, f] = Math.abs(round(n, 2)).toFixed(2).split("."); return R.I18N.num(i, f.replace(/0+$/, ""), "pl"); };
+  /** Najdłuższy zakres jednego zapytania (rok przestępny + zapas). */
+  const MAX_DAYS = 400;
+  const MAX_PLAN = 100000;
+
+  /** Kolejne dni RRRR-MM-DD od `from` do `to` włącznie (nie więcej niż MAX_DAYS). */
+  function dayRange(from, to) {
+    const out = [];
+    if (!Dates.isISO(from) || !Dates.isISO(to) || from > to) return out;
+    for (let d = from, i = 0; d <= to && i < MAX_DAYS; d = Dates.addDays(d, 1), i++) out.push(d);
+    return out;
+  }
+
+  /** Magazyny widoczne w planerze: wskazany (z dostępem) albo „ALL” = wszystkie aktywne dostępne użytkownikowi. */
+  function scopeWarehouses(state, user, whId) {
+    const acc = whAccess(user);
+    const mine = state.warehouses.filter(w => w.active !== false && (acc === null || acc.includes(w.id)));
+    if (whId === "ALL") return mine.map(w => w.id);
+    return mine.some(w => w.id === whId) ? [whId] : [];
+  }
+
+  /** Miejsce zakupu: miejsce transportu albo nadleśnictwo i leśnictwo / wycinka inwestycyjna. */
+  function placeOf(op) {
+    const P = op.production || {};
+    const origin = P.ndl ? [t("Nadleśnictwo {n}", { n: P.ndl }), P.lesnictwo].filter(Boolean).join(" · ") : P.investSite || "";
+    return origin || op.place || (op.transport && op.transport.place) || "";
+  }
+
+  /**
+   * Operacja jako źródło planera: { mp, cost, runs, … } albo null, gdy operacja nie jest zakupem MP.
+   * Wykonanie liczone w MP — jednostce planu.
+   */
+  function plannerOp(state, op) {
+    if (!op || op.deleted || op.status === "CANCELLED") return null;
+    const P = op.production;
+    let mp = 0, kind = "";
+    if (op.type === "ZAKUP" && P && P.outUnit === "MP" && P.outQty > 0) { mp = P.outQty; kind = "chain"; }
+    else if (op.type === "SPRZEDAZ" && op.direct && P && P.outUnit === "MP" && P.outQty > 0) { mp = P.outQty; kind = "direct"; }
+    else if (op.type === "ZAKUP" && !P && op.purchase && op.purchase.stockUnit === "MP" && op.purchase.stockQty > 0) { mp = op.purchase.stockQty; kind = "buy"; }
+    if (!(mp > 0)) return null;
+    const T = op.transport || {};
+    const runs = (Array.isArray(T.runs) ? T.runs : []).map(r => ({
+      qty: Number(r.qty) || 0, weightT: r.weightT === null || r.weightT === undefined ? null : Number(r.weightT), km: Number(r.km) || 0, cost: Number(r.cost) || 0,
+      driver: str(r.driverName || r.driver) || "—", reg: str(r.reg) || "—", company: r.kind === "external" ? str(r.company || T.company) : "", kind: r.kind || ""
+    }));
+    const totals = op.totals || {};
+    return {
+      id: op.id, no: op.no, whId: op.whId, date: op.date, kind, mp: rq(mp),
+      cost: round((totals.purchaseCost || 0) + (totals.rawCost || 0), 2),
+      place: placeOf(op), runs,
+      documents: (op.documents || []).map(d => ({ type: d.type, no: d.no }))
+    };
+  }
+
+  /** Tony operacji: waga zważonych kursów + niezważona reszta ilości × przelicznik MP → t. */
+  function opTonnage(pop, cfg) {
+    const weighedRuns = pop.runs.filter(r => r.weightT !== null && Number.isFinite(r.weightT));
+    const weighed = rq(weighedRuns.reduce((a, r) => a + r.weightT, 0));
+    const weighedQty = weighedRuns.reduce((a, r) => a + r.qty, 0);
+    const rest = Math.max(0, pop.mp - weighedQty);
+    return { weighed, auto: rq(rest * cfg.mp_t) };
+  }
+
+  /** Operacje źródłowe planera w zakresie dla listy magazynów. */
+  function operations(state, whIds, from, to) {
+    const W = new Set(whIds);
+    return state.operations.filter(o => W.has(o.whId) && o.date >= from && o.date <= to).map(o => plannerOp(state, o)).filter(Boolean)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.no).localeCompare(String(b.no)));
+  }
+  /** Plany dnia w zakresie dla listy magazynów. */
+  function plans(state, whIds, from, to) {
+    const W = new Set(whIds);
+    return (state.plans || []).filter(p => W.has(p.whId) && p.date >= from && p.date <= to);
+  }
+
+  /** Dni planera: plan (suma magazynów), wykonanie, tony, koszty, transport, miejsca, operacje źródłowe. */
+  function days(state, whIds, from, to, today) {
+    const cfg = state.config, ops = operations(state, whIds, from, to), pl = plans(state, whIds, from, to);
+    const opsBy = new Map(), plBy = new Map();
+    for (const o of ops) { if (!opsBy.has(o.date)) opsBy.set(o.date, []); opsBy.get(o.date).push(o); }
+    for (const p of pl) { if (!plBy.has(p.date)) plBy.set(p.date, []); plBy.get(p.date).push(p); }
+    return dayRange(from, to).map(date => {
+      const dOps = opsBy.get(date) || [], dPl = plBy.get(date) || [];
+      let act = 0, tw = 0, ta = 0, cost = 0, km = 0, tr = 0, trips = 0;
+      for (const o of dOps) {
+        act += o.mp; cost += o.cost;
+        const tn = opTonnage(o, cfg); tw += tn.weighed; ta += tn.auto;
+        for (const r of o.runs) { km += r.km; tr += r.cost; trips++; }
+      }
+      return {
+        date, future: date > today, weekday: (new Date(date + "T00:00:00Z").getUTCDay() + 6) % 7,
+        plan: rq(dPl.reduce((a, p) => a + p.planMP, 0)), note: dPl.map(p => p.note).filter(Boolean).join(" · "),
+        act: rq(act), t: rq(tw + ta), tWeighed: rq(tw), tAuto: rq(ta), cost: round(cost, 2), km: rq(km), transportCost: round(tr, 2), trips,
+        places: [...new Set(dOps.map(o => o.place).filter(Boolean))], opIds: dOps.map(o => o.id), docs: dOps.flatMap(o => o.documents)
+      };
+    });
+  }
+
+  const pct = (a, b) => b > EPS ? round(a / b * 100, 1) : null;
+  /** Sumy okresu: realizacja wobec planu DO DZIŚ, średnia cena [zł/MP], transport [zł/MP], udział wagi rzeczywistej. */
+  function totals(list) {
+    let plan = 0, planToDate = 0, act = 0, tt = 0, tw = 0, cost = 0, km = 0, tr = 0, trips = 0, productionDays = 0;
+    for (const d of list) {
+      plan += d.plan; if (!d.future) planToDate += d.plan;
+      act += d.act; tt += d.t; tw += d.tWeighed; cost += d.cost; km += d.km; tr += d.transportCost; trips += d.trips;
+      if (d.act > EPS) productionDays++;
+    }
+    return {
+      plan: rq(plan), planToDate: rq(planToDate), act: rq(act), t: rq(tt), tWeighed: rq(tw), cost: round(cost, 2), km: rq(km), transportCost: round(tr, 2),
+      trips, productionDays, realization: pct(act, planToDate),
+      avgPrice: act > EPS ? round(cost / act, 2) : null, transportPerMp: act > EPS ? round(tr / act, 2) : null, weighedShare: pct(tw, tt),
+      opIds: list.flatMap(d => d.opIds)
+    };
+  }
+  /** Sumy 12 miesięcy roku (indeks 0 = styczeń). */
+  function months(list, year) {
+    return Array.from({ length: 12 }, (_, m) => {
+      const ym = `${year}-${String(m + 1).padStart(2, "0")}`;
+      return Object.assign({ ym }, totals(list.filter(d => d.date.startsWith(ym))));
+    });
+  }
+  /** Kursy pogrupowane po kierowcy i pojeździe (widok „Kierowcy i kursy”). */
+  function drivers(state, whIds, from, to) {
+    const map = new Map();
+    for (const o of operations(state, whIds, from, to)) for (const r of o.runs) {
+      const k = `${r.driver}|${r.reg}`;
+      const a = map.get(k) || { driver: r.driver, reg: r.reg, company: r.company, kind: r.kind, trips: 0, qty: 0, weightT: 0, km: 0, cost: 0, perDay: {}, opIds: [] };
+      a.trips++; a.qty += r.qty; a.weightT += r.weightT || 0; a.km += r.km; a.cost += r.cost; a.perDay[o.date] = (a.perDay[o.date] || 0) + 1;
+      if (!a.opIds.includes(o.id)) a.opIds.push(o.id);
+      map.set(k, a);
+    }
+    return [...map.values()].sort((a, b) => b.trips - a.trips || a.driver.localeCompare(b.driver, "pl"))
+      .map(a => Object.assign(a, { qty: rq(a.qty), weightT: rq(a.weightT), km: rq(a.km), cost: round(a.cost, 2) }));
+  }
+  /** Kursy jednego dnia (lista szczegółowa). */
+  function dayRuns(state, whIds, date) {
+    const out = [];
+    for (const o of operations(state, whIds, date, date)) o.runs.forEach((r, i) => out.push(Object.assign({ opId: o.id, opNo: o.no, place: o.place, no: i + 1 }, r)));
+    return out;
+  }
+
+  /**
+   * Zapis planu dnia (magazyn × dzień). Liczba ≥ 0, przecinek albo kropka, do 2 miejsc po przecinku.
+   * `version` — wersja widziana przez użytkownika: inna niż zapisana → odmowa (ochrona przed nadpisaniem cudzej zmiany).
+   * Plan 0 bez uwag usuwa wpis. Audyt: PLAN_UPDATED z wartościami było / jest.
+   */
+  function setPlan(state, a, ctx) {
+    const user = ctx && ctx.user;
+    if (!can(user, "planner.edit")) return { ok: false, error: t("Plan zakupów zmienia kierownik albo administrator"), code: "FORBIDDEN" };
+    const whId = str(a.whId), date = str(a.date);
+    const wh = byId(state.warehouses, whId);
+    if (!wh) return { ok: false, field: "whId", error: t("Wybierz magazyn") };
+    if (!canAccessWh(user, whId)) return { ok: false, error: t("Brak dostępu do magazynu {w}", { w: wh.name }), code: "FORBIDDEN" };
+    if (!Dates.isISO(date)) return { ok: false, field: "date", error: t("Nieprawidłowa data") };
+    let planMP = 0;
+    if (str(a.planMP) !== "") {
+      const p = NumParse.parse(a.planMP);
+      if (!p.ok) return { ok: false, field: "planMP", error: t("Plan: {e}", { e: p.error }) };
+      if (p.value < 0) return { ok: false, field: "planMP", error: t("Plan nie może być ujemny") };
+      if (p.value > MAX_PLAN) return { ok: false, field: "planMP", error: t("Plan dnia nie może przekraczać {n} MP", { n: MAX_PLAN }) };
+      if (Math.abs(round(p.value, 2) - p.value) > EPS) return { ok: false, field: "planMP", error: t("Plan podaje się z dokładnością do 0,01 MP") };
+      planMP = round(p.value, 2);
+    }
+    const note = str(a.note).slice(0, 300);
+    if (!Array.isArray(state.plans)) state.plans = [];
+    const prev = state.plans.find(p => p.whId === whId && p.date === date) || null;
+    const seen = a.version === undefined || a.version === null || a.version === "" ? null : Number(a.version);
+    if (seen !== null && (prev ? prev.version : 0) !== seen) return { ok: false, code: "CONFLICT", error: t("Plan tego dnia zmienił w międzyczasie inny użytkownik ({u}) — odśwież i wprowadź zmianę ponownie.", { u: prev ? prev.updatedBy : "—" }) };
+    if (prev && prev.planMP === planMP && prev.note === note) return { ok: true, unchanged: true, plan: prev };
+    if (!prev && planMP === 0 && !note) return { ok: true, unchanged: true, plan: null };
+    const before = prev ? { plan: prev.planMP, uwagi: prev.note } : null;
+    let rec = null;
+    if (planMP === 0 && !note) state.plans = state.plans.filter(p => p !== prev);
+    else {
+      rec = Object.assign(prev ? clone(prev) : { id: uid("pl"), whId, date, createdAt: nowIso(ctx), createdBy: user.name, version: 0 },
+        { planMP, note, updatedAt: nowIso(ctx), updatedBy: user.name, updatedById: user.id });
+      rec.version = (prev ? prev.version : 0) + 1;
+      if (prev) state.plans[state.plans.indexOf(prev)] = rec; else state.plans.push(rec);
+    }
+    state.rev += 1;
+    audit(state, Object.assign({}, ctx, { user: Object.assign({}, user, { whId }) }), {
+      entity: "plan", entityId: `${whId}|${date}`, opNo: date, event: "plan", code: "PLAN_UPDATED",
+      act: Lx("Plan zakupów {d} ({w}): {a} → {b} MP", { d: date, w: wh.name, a: plNum(prev ? prev.planMP : 0), b: plNum(planMP) }),
+      before, after: rec ? { plan: rec.planMP, uwagi: rec.note } : null, source: (ctx && ctx.source) || N_("Planer zakupów")
+    });
+    return { ok: true, plan: rec };
+  }
+
+  R.Planner = { MAX_DAYS, MAX_PLAN, dayRange, scopeWarehouses, plannerOp, opTonnage, operations, plans, days, totals, months, drivers, dayRuns, setPlan, placeOf };
+  if (typeof module !== "undefined" && module.exports) module.exports = R.Planner;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
+/* notify.js */
+/* =========================================================================
+   ResInvest ERP 3.5 — warstwa S: powiadomienia (silnik)
+
+   * Zdarzenia (EVENTS) wynikają z zatwierdzonych zmian: nowa operacja (PZ, WZ, PW, MM,
+     operacje dodatkowe), przyjęcie MM, przekazanie do zatwierdzenia i decyzja, korekta,
+     anulowanie, usunięcie dokumentu.
+   * Odbiorca: konto aktywne, dostęp do magazynu operacji (przy MM — źródło lub cel),
+     zdarzenie DOZWOLONE przez administratora i WŁĄCZONE przez użytkownika; autor zmiany
+     nie dostaje powiadomienia o własnej zmianie. Jedno powiadomienie na odbiorcę i zmianę.
+   * Powiadomienie powstaje w tej samej zmianie danych co operacja (zapis „wszystko albo nic”)
+     i trafia do skrzynki w programie (oba tryby pracy). W trybie FIRMOWYM serwer wysyła
+     dodatkowo e-mail (kolejka z ponawianiem — server/core.mjs); błąd poczty niczego nie cofa.
+   * Treść przechowywana kanonicznie (PL) jako {k, p} — wyświetlana w języku odbiorcy.
+   ========================================================================= */
+(function (root) {
+  "use strict";
+  const R = root.RIW || (typeof require === "function" ? require("./engine.js") : null);
+  const { byId, uid, clone, audit, Lx, can, canAccessWh, statusOf, Units, OP_TYPES, mmState, ROLES, EPS } = R;
+  const I18N = R.I18N;
+  const t = (s, p) => I18N.t(s, p);
+  const N_ = s => s;
+  const str = v => String(v == null ? "" : v).trim();
+  const nowIso = ctx => (ctx && ctx.now) || new Date().toISOString();
+
+  /** Zdarzenia, o których można powiadamiać (kolejność = kolejność na ekranie ustawień). */
+  const EVENTS = {
+    PZ: { label: N_("Przyjęcie / zakup (PZ)"), desc: N_("nowa operacja z dokumentem PZ — także zakup z produkcją") },
+    WZ: { label: N_("Wydanie / sprzedaż (WZ)"), desc: N_("sprzedaż z magazynu, sprzedaż wyniku produkcji, sprzedaż bezpośrednia") },
+    PW: { label: N_("Produkcja (PW)"), desc: N_("produkcja na magazynie, z zakupu i w lesie") },
+    MM: { label: N_("Przesunięcie MM"), desc: N_("wysłanie i przyjęcie MM — magazyn źródłowy i docelowy") },
+    EXTRA: { label: N_("Operacje dodatkowe"), desc: N_("operacja z kosztami dodatkowymi (holowanie, praca ładowarką…)") },
+    APPROVAL: { label: N_("Do zatwierdzenia"), desc: N_("operacja przekazana do zatwierdzenia — dla zatwierdzających magazyn") },
+    DECISION: { label: N_("Decyzja o mojej operacji"), desc: N_("zatwierdzenie albo odrzucenie operacji, którą przekazałem") },
+    CORRECTION: { label: N_("Korekta dokumentu"), desc: N_("korekta — numer KOR, powód, pola BYŁO → JEST") },
+    CANCEL: { label: N_("Anulowanie dokumentu"), desc: N_("anulowanie operacji — powód, odwrócone ruchy") },
+    DELETE: { label: N_("Usunięcie dokumentu"), desc: N_("usunięcie z odwróceniem ruchów — powód") }
+  };
+  const EVENT_IDS = Object.keys(EVENTS);
+  /** Najwięcej powiadomień w danych (najstarsze przeczytane usuwane jako pierwsze). */
+  const MAX_NOTICES = 4000;
+
+  /* ---------------- ustawienia ---------------- */
+  const valid = list => [...new Set((Array.isArray(list) ? list : []).filter(e => EVENTS[e]))];
+  /** Zdarzenia dozwolone przez administratora (administrator — wszystkie). */
+  function allowedFor(u) { return !u ? [] : u.role === "admin" ? EVENT_IDS.slice() : valid(u.notifyAllowed); }
+  /** Zdarzenia włączone przez użytkownika (tylko dozwolone). */
+  function enabledFor(u) { const a = allowedFor(u); return valid(u && u.notify && u.notify.events).filter(e => a.includes(e)); }
+  /** Czy użytkownik chce dostawać powiadomienia także e-mailem (domyślnie tak). */
+  const wantsEmail = u => !!(u && (!u.notify || u.notify.email !== false) && (u.email || u.login));
+
+  /** Własne ustawienia (każdy zalogowany): włączyć można tylko zdarzenie dozwolone przez administratora. */
+  function setMine(state, a, ctx) {
+    const u = ctx && ctx.user && byId(state.users, ctx.user.id);
+    if (!u) return { ok: false, error: t("Brak zalogowanego użytkownika") };
+    const allowed = allowedFor(u);
+    const want = valid(a.events);
+    const denied = want.filter(e => !allowed.includes(e));
+    if (denied.length) return { ok: false, error: t("Zdarzenie „{e}” wymaga zgody administratora", { e: t(EVENTS[denied[0]].label) }), code: "FORBIDDEN" };
+    const before = { zdarzenia: enabledFor(u), email: wantsEmail(u) };
+    const next = { events: want.filter(e => allowed.includes(e)), email: a.email === undefined ? (u.notify ? u.notify.email !== false : true) : !!a.email && a.email !== "false" };
+    if (JSON.stringify(before.zdarzenia.slice().sort()) === JSON.stringify(next.events.slice().sort()) && (!u.notify || u.notify.email !== false) === next.email) return { ok: true, unchanged: true };
+    u.notify = next;
+    state.rev += 1;
+    audit(state, ctx, { entity: "user", entityId: u.id, opNo: u.login, event: "user", code: "NOTIFICATIONS_CHANGED", act: Lx("Zmiana własnych ustawień powiadomień: {l}", { l: u.login }), before, after: { zdarzenia: next.events, email: next.email }, source: (ctx && ctx.source) || N_("Powiadomienia") });
+    return { ok: true };
+  }
+  /** Zgody administratora dla użytkownika. Odebranie zgody wyłącza zdarzenie także w ustawieniach użytkownika. */
+  function allow(state, userId, events, ctx) {
+    const actor = ctx && ctx.user;
+    if (!can(actor, "notifications.manage")) return { ok: false, error: t("Zgody na powiadomienia nadaje administrator"), code: "FORBIDDEN" };
+    const u = byId(state.users, str(userId));
+    if (!u) return { ok: false, error: t("Nie znaleziono użytkownika") };
+    if (u.role === "admin") return { ok: false, error: t("Administrator ma dostęp do wszystkich powiadomień") };
+    const next = valid(events), before = valid(u.notifyAllowed);
+    if (JSON.stringify(before.slice().sort()) === JSON.stringify(next.slice().sort())) return { ok: true, unchanged: true };
+    u.notifyAllowed = next;
+    if (u.notify && Array.isArray(u.notify.events)) u.notify.events = u.notify.events.filter(e => next.includes(e));
+    state.rev += 1;
+    audit(state, ctx, { entity: "user", entityId: u.id, opNo: u.login, event: "user", code: "NOTIFICATIONS_ALLOWED", act: Lx("Zgody na powiadomienia: {l}", { l: u.login }), before: { dozwolone: before }, after: { dozwolone: next }, source: (ctx && ctx.source) || N_("Powiadomienia — zgody") });
+    return { ok: true };
+  }
+  /** Oznaczenie własnych powiadomień jako przeczytanych (`ids` — lista albo "all"). */
+  function markRead(state, ids, ctx) {
+    const me = ctx && ctx.user && ctx.user.id;
+    if (!me) return { ok: false, error: t("Brak zalogowanego użytkownika") };
+    const want = ids === "all" ? null : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
+    let n = 0;
+    for (const x of state.notices || []) if (x.userId === me && !x.read && (!want || want.has(x.id))) { x.read = true; x.readAt = nowIso(ctx); n++; }
+    if (!n) return { ok: true, unchanged: true, count: 0 };
+    state.rev += 1;
+    return { ok: true, count: n };
+  }
+
+  /* ---------------- treść ---------------- */
+  /** Liczba w zapisie polskim (treść kanoniczna) — bez zależności od języka bieżącego żądania. */
+  function plNum(n, dec = 3) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "—";
+    const r = R.round(x, dec), [i, f] = Math.abs(r).toFixed(dec).split(".");
+    return (r < 0 ? "-" : "") + I18N.num(i, (f || "").replace(/0+$/, ""), "pl");
+  }
+  const plMoney = n => { const x = R.round(Number(n) || 0, 2), [i, f] = Math.abs(x).toFixed(2).split("."); return (x < 0 ? "-" : "") + I18N.num(i, f, "pl") + " zł"; };
+  const plDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d)) ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : String(d || "");
+  const qtyText = (q, u) => q === null || q === undefined ? "" : `${plNum(q)} ${Units.label(u)}`;
+  const whName = (state, id) => (byId(state.warehouses, id) || {}).name || "";
+  const pName = (state, id) => (byId(state.products, id) || {}).name || "";
+  const party = (state, id) => (byId(state.partners, id) || {}).name || "";
+
+  /** Zdarzenia nowej operacji wynikające z jej dokumentów. */
+  function opEvents(op) {
+    const types = new Set((op.documents || []).map(d => d.type));
+    const ev = [];
+    if (types.has("PZ")) ev.push("PZ");
+    if (types.has("WZ")) ev.push("WZ");
+    if (types.has("PW")) ev.push("PW");
+    if (op.type === "MM") ev.push("MM");
+    if ((op.extras || []).length) ev.push("EXTRA");
+    return ev;
+  }
+  /** Krótki opis: produkt, ilość, kontrahent / magazyn docelowy. */
+  function opSummary(state, op) {
+    if (op.type === "ZAKUP" && op.purchase) return [pName(state, op.purchase.productId), qtyText(op.purchase.qty, op.purchase.unit), party(state, op.purchase.supplierId) || op.purchase.supplierName].filter(Boolean).join(" · ");
+    if (op.type === "PRODUKCJA" && op.production) return [pName(state, op.production.outProductId), qtyText(op.production.outQty, op.production.outUnit)].filter(Boolean).join(" · ");
+    if (op.type === "MM" && op.mm) return [pName(state, op.mm.productId), qtyText(op.mm.qty, op.mm.unit), `${whName(state, op.whId)} → ${whName(state, op.toWhId)}`].filter(Boolean).join(" · ");
+    if (op.sale) return [pName(state, op.sale.productId), qtyText(op.sale.qty, op.sale.unit), party(state, op.sale.buyerId)].filter(Boolean).join(" · ");
+    return "";
+  }
+  /** Linie treści wspólne dla operacji: magazyn, data, dokumenty, podsumowanie, kwoty, operacje dodatkowe. */
+  function opLines(state, op) {
+    const L = [];
+    L.push(Lx("Magazyn: {w}", { w: whName(state, op.whId) + (op.toWhId ? " → " + whName(state, op.toWhId) : "") }));
+    L.push(Lx("Data operacji: {d}", { d: plDate(op.date) }));
+    const docs = (op.documents || []).map(d => d.no).filter(Boolean);
+    if (docs.length) L.push(Lx("Dokumenty: {d}", { d: docs.join(", ") }));
+    const s = opSummary(state, op); if (s) L.push(Lx("Pozycja: {s}", { s }));
+    const T = op.totals || {};
+    if (T.purchaseCost > EPS) L.push(Lx("Wartość zakupu: {m}", { m: plMoney(T.purchaseCost) }));
+    if (T.revenue > EPS) L.push(Lx("Przychód: {m}", { m: plMoney(T.revenue) }));
+    if ((op.extras || []).length) L.push(Lx("Operacje dodatkowe: {x}", { x: op.extras.map(x => `${x.typeName} ${plMoney(x.cost)}`).join(", ") }));
+    return L;
+  }
+
+  /* ---------------- odbiorcy i zapis ---------------- */
+  function recipients(state, whIds, events, exceptId) {
+    return state.users.filter(u => statusOf(u) === "ACTIVE" && u.id !== exceptId && whIds.some(w => w && canAccessWh(u, w)) && enabledFor(u).some(e => events.includes(e)));
+  }
+  function push(state, users, base, ctx) {
+    if (!users.length) return [];
+    if (!Array.isArray(state.notices)) state.notices = [];
+    const out = users.map(u => Object.assign({ id: uid("nt"), ts: nowIso(ctx), userId: u.id, read: false, by: ctx && ctx.user ? ctx.user.name : "System", email: wantsEmail(u) }, clone(base), { events: base.events.filter(e => enabledFor(u).includes(e) || e === "DECISION") }));
+    state.notices.push(...out);
+    prune(state);
+    return out;
+  }
+  /** Limit danych: usuwa najstarsze przeczytane, potem najstarsze. */
+  function prune(state) {
+    const over = state.notices.length - MAX_NOTICES;
+    if (over <= 0) return;
+    const readIdx = [];
+    state.notices.forEach((n, i) => { if (n.read) readIdx.push(i); });
+    const drop = new Set(readIdx.slice(0, over));
+    let rest = over - drop.size;
+    for (let i = 0; rest > 0 && i < state.notices.length; i++) if (!drop.has(i)) { drop.add(i); rest--; }
+    state.notices = state.notices.filter((_, i) => !drop.has(i));
+  }
+
+  /** Powiadomienia o operacji (nowa, przyjęcie MM, korekta, anulowanie, usunięcie). */
+  function forOperation(state, op, kind, ctx, extra = {}) {
+    if (!op) return [];
+    const events = kind === "create" ? opEvents(op) : kind === "mm-received" ? ["MM"] : kind === "correction" ? ["CORRECTION"] : kind === "cancel" ? ["CANCEL"] : kind === "delete" ? ["DELETE"] : [];
+    if (!events.length) return [];
+    const typeLbl = { t: OP_TYPES[op.type] ? OP_TYPES[op.type].label : op.type };
+    const title = kind === "create" ? (op.type === "MM" && mmState(op) === "W_DRODZE" ? Lx("Wysłano MM {no} do magazynu {w} — czeka na przyjęcie", { no: op.no, w: whName(state, op.toWhId) }) : Lx("Nowa operacja: {type} {no}", { type: typeLbl, no: op.no }))
+      : kind === "mm-received" ? Lx("Przyjęto MM {no} w magazynie {w}", { no: op.no, w: whName(state, op.toWhId) })
+        : kind === "correction" ? Lx("Korekta {k} dokumentu {no}", { k: extra.no || "", no: op.no })
+          : kind === "cancel" ? Lx("Anulowano operację {no}", { no: op.no }) : Lx("Usunięto dokument {no}", { no: op.no });
+    const lines = opLines(state, op);
+    if (kind === "mm-received" && op.mm && op.mm.receipt) {
+      const rc = op.mm.receipt;
+      lines.push(Lx("Przyjęto: {q}", { q: qtyText(rc.qty, rc.unit || op.mm.unit) }));
+      if (rc.diff && Math.abs(rc.diff) > EPS) lines.push(Lx("Różnica: {q}", { q: qtyText(rc.diff, op.mm.stockUnit || op.mm.unit) }));
+    }
+    if (kind === "correction" && extra.correction) {
+      const c = extra.correction;
+      lines.push(Lx("Powód: {r}", { r: c.reason }));
+      for (const ch of (c.changes || []).slice(0, 8)) lines.push(Lx("{f}: {a} → {b}", { f: { t: ch.label }, a: ch.beforeText, b: ch.afterText }));
+    }
+    if ((kind === "cancel" || kind === "delete") && extra.reason) lines.push(Lx("Powód: {r}", { r: extra.reason }));
+    const author = ctx && ctx.user;
+    lines.push(Lx("Wprowadził: {u}", { u: author ? author.name : "System" }));
+    const whIds = [op.whId, op.toWhId].filter(Boolean);
+    return push(state, recipients(state, whIds, events, author && author.id), { kind, events, opId: op.id, opNo: op.no, whId: op.whId, toWhId: op.toWhId || null, title, lines }, ctx);
+  }
+  /** Operacja przekazana do zatwierdzenia → zatwierdzający magazyn. */
+  function forSubmit(state, draft, ctx) {
+    if (!draft) return [];
+    const approvers = state.users.filter(u => statusOf(u) === "ACTIVE" && u.id !== draft.userId && R.canApprove(u, draft.whId) && enabledFor(u).includes("APPROVAL"));
+    return push(state, approvers, {
+      kind: "approval", events: ["APPROVAL"], draftId: draft.id, opId: null, opNo: null, whId: draft.whId, toWhId: null,
+      title: Lx("Do zatwierdzenia: {type}", { type: { t: OP_TYPES[draft.type] ? OP_TYPES[draft.type].label : draft.type } }),
+      lines: [Lx("Magazyn: {w}", { w: whName(state, draft.whId) }), Lx("Pozycja: {s}", { s: draft.summary || "—" }), Lx("Wprowadził: {u}", { u: draft.userName })]
+    }, ctx);
+  }
+  /** Decyzja o przekazanej operacji → autor (zatwierdzenie z numerem albo odrzucenie z powodem). */
+  function forDecision(state, authorId, approved, info, ctx) {
+    const u = byId(state.users, authorId);
+    if (!u || statusOf(u) !== "ACTIVE" || (ctx && ctx.user && ctx.user.id === u.id) || !enabledFor(u).includes("DECISION")) return [];
+    const lines = [Lx("Magazyn: {w}", { w: whName(state, info.whId) })];
+    if (info.summary) lines.push(Lx("Pozycja: {s}", { s: info.summary }));
+    if (!approved && info.reason) lines.push(Lx("Powód: {r}", { r: info.reason }));
+    lines.push(Lx(approved ? "Zatwierdził: {u}" : "Odrzucił: {u}", { u: ctx && ctx.user ? ctx.user.name : "System" }));
+    return push(state, [u], {
+      kind: approved ? "approved" : "rejected", events: ["DECISION"], opId: info.opId || null, opNo: info.opNo || null, draftId: info.draftId || null, whId: info.whId, toWhId: null,
+      title: approved ? Lx("Zatwierdzono Twoją operację {no}", { no: info.opNo || "" }) : Lx("Odrzucono Twoją operację: {type}", { type: { t: OP_TYPES[info.type] ? OP_TYPES[info.type].label : info.type || "" } }),
+      lines
+    }, ctx);
+  }
+
+  /**
+   * Wywoływane przez usługę po udanej komendzie (na tej samej kopii stanu, przed zapisem).
+   * `before` — stan rekordów potrzebny do decyzji (np. autor przekazanej operacji).
+   */
+  function afterCommand(state, cmd, args, res, ctx, before) {
+    if (!res || !res.ok || res.duplicate || res.unchanged) return [];
+    try {
+      switch (cmd) {
+        case "op.commit": return forOperation(state, res.op, "create", ctx);
+        case "op.approve": {
+          const out = forOperation(state, res.op, "create", ctx);
+          const d = before && before.draft;
+          if (d && res.op) out.push(...forDecision(state, d.userId, true, { opId: res.op.id, opNo: res.op.no, whId: d.whId, summary: d.summary, type: d.type }, ctx));
+          return out;
+        }
+        case "op.submit": return forSubmit(state, byId(state.drafts, res.id), ctx);
+        case "op.reject": { const d = byId(state.drafts, str(args.id)); return d ? forDecision(state, d.userId, false, { draftId: d.id, whId: d.whId, summary: d.summary, type: d.type, reason: d.rejectReason }, ctx) : []; }
+        case "mm.receive": return forOperation(state, res.op, "mm-received", ctx);
+        case "op.correct": case "op.reverseCorrection": return forOperation(state, res.op || byId(state.operations, str(args.opId)), "correction", ctx, { no: res.no, correction: res.correction || (res.op && res.op.corrections[res.op.corrections.length - 1]) });
+        case "op.cancel": return forOperation(state, res.op || byId(state.operations, str(args.opId)), "cancel", ctx, { reason: str(args.reason) });
+        case "op.delete": return forOperation(state, res.op || byId(state.operations, str(args.opId)), "delete", ctx, { reason: str(args.reason) });
+        default: return [];
+      }
+    } catch (e) {
+      // powiadomienie nigdy nie blokuje operacji — błąd treści zapisuje się w dzienniku konsoli
+      if (typeof console !== "undefined") console.error("Powiadomienia:", e);
+      return [];
+    }
+  }
+  /** Komendy, po których powstają powiadomienia (usługa zapamiętuje dla nich stan „przed”). */
+  const COMMANDS = ["op.commit", "op.approve", "op.submit", "op.reject", "mm.receive", "op.correct", "op.reverseCorrection", "op.cancel", "op.delete"];
+  const beforeOf = (state, cmd, args) => cmd === "op.approve" ? { draft: clone(byId(state.drafts, str(args.id)) || null) } : null;
+
+  /** Treść e-maila (PL — dokumenty firmy): temat i linie. */
+  function mailContent(n) {
+    return { subject: I18N.canon(n.title), lines: (n.lines || []).map(l => I18N.canon(l)) };
+  }
+
+  R.Notify = { EVENTS, EVENT_IDS, MAX_NOTICES, allowedFor, enabledFor, wantsEmail, setMine, allow, markRead, opEvents, opSummary, forOperation, forSubmit, forDecision, afterCommand, COMMANDS, beforeOf, mailContent, recipients };
+  if (typeof module !== "undefined" && module.exports) module.exports = R.Notify;
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
 /* service.js */
 /* =========================================================================
    ResInvest ERP 3.2 — warstwa S: usługa aplikacyjna (komendy)
@@ -5865,6 +6676,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 (function (root) {
   "use strict";
   const R = root.RIW || (typeof require === "function" ? require("./engine.js") : null);
+  if (!R.Planner && typeof require === "function") require("./planner.js");
+  if (!R.Notify && typeof require === "function") require("./notify.js");
   const t = (s, p) => R.I18N.t(s, p);
   const N_ = s => s;
   const str = v => String(v == null ? "" : v).trim();
@@ -5913,6 +6726,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     /** Usunięcie dokumentu (soft delete z odwróceniem ruchów) — Administrator / Kierownik, powód wymagany. */
     "op.delete": { perm: "documents.delete", run: (s, a, c) => R.deleteOperation(s, str(a.opId), c, a.reason) },
     "print.register": { perm: "report.view", run: (s, a, c) => R.registerPrint(s, c, { kind: a.kind, title: a.title, range: a.range, wh: a.wh, format: a.format }) },
+    /* ---- planer zakupów (plan dnia magazynu; wykonanie liczy się z operacji) ---- */
+    "plan.set": { perm: "planner.edit", run: (s, a, c) => R.Planner.setPlan(s, a, c) },
+    /* ---- powiadomienia ---- */
+    "notify.prefs": { run: (s, a, c) => R.Notify.setMine(s, { events: a.events, email: a.email }, c) },
+    "notify.allow": { perm: "notifications.manage", run: (s, a, c) => R.Notify.allow(s, a.userId, a.events, c) },
+    "notice.read": { run: (s, a, c) => R.Notify.markRead(s, a.ids === "all" ? "all" : a.ids, c) },
     /* ---- inwentaryzacja ---- */
     "inv.open": { perm: "inv.open", run: (s, a, c) => R.Inventory.open(s, a.ym, c) },
     "inv.generate": { perm: "inv.count", run: (s, a, c) => R.Inventory.generate(s, a.ym, c) },
@@ -5959,7 +6778,9 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     const u = user && R.byId(state.users, user.id);
     if (!u) return null;
     const acc = R.whAccess(u);
-    if (acc === null) return state;
+    // skrzynka powiadomień — tylko własne (także dla ról globalnych)
+    const mine = (state.notices || []).filter(n => n.userId === u.id);
+    if (acc === null) return Object.assign({}, state, { notices: R.can(u, "notifications.manage") ? state.notices || [] : mine });
     const A = new Set(acc), inA = w => A.has(w);
     const out = Object.assign({}, state);
     out.operations = state.operations.filter(o => inA(o.whId) || (o.toWhId && inA(o.toWhId)));
@@ -5967,11 +6788,13 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     out.ledger = state.ledger.filter(l => inA(l.whId) || (l.opId && opIds.has(l.opId)));
     out.drafts = state.drafts.filter(d => d.userId === u.id || (d.status === "PENDING" && inA(d.whId)));
     out.inventory = state.inventory.filter(p => inA(p.whId));
+    out.plans = (state.plans || []).filter(p => inA(p.whId));
     out.audit = state.audit.filter(a => a.userId === u.id || (a.whId && inA(a.whId) && a.entity !== "user" && a.entity !== "role" && a.entity !== "system"));
     const fl = state.fleet || {};
     out.fleet = Object.fromEntries(Object.entries(fl).map(([k, v]) => [k, Array.isArray(v) ? v.filter(x => !x.whId || inA(x.whId)) : v]));
     out.users = state.users.filter(x => x.id === u.id || R.whAccess(x) === null && x.role === "admin" || (x.warehouseIds || [x.whId]).concat(x.whId).some(inA))
       .map(x => x.id === u.id ? x : { id: x.id, name: x.name, firstName: x.firstName, lastName: x.lastName, login: x.login, email: x.email, role: x.role, whId: x.whId, warehouseIds: x.warehouseIds, status: x.status, active: x.active });
+    out.notices = mine;
     out.projected = true;
     return out;
   }
@@ -5991,7 +6814,12 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       const a = Object.assign({}, args || {});
       const full = Object.assign({}, ctx, { user, source: str(a.source).slice(0, 120) || ctx.source || N_("Aplikacja") });
       try {
-        return c.run(state, a, full) || { ok: false, error: t("Operacja odrzucona") };
+        const notify = R.Notify && R.Notify.COMMANDS.includes(cmd);
+        const before = notify ? R.Notify.beforeOf(state, cmd, a) : null;
+        const res = c.run(state, a, full) || { ok: false, error: t("Operacja odrzucona") };
+        // powiadomienia powstają w tej samej zmianie danych (zapis „wszystko albo nic”)
+        if (notify && res.ok) { const list = R.Notify.afterCommand(state, cmd, a, res, full, before); if (list.length) res.notices = list.map(n => n.id); }
+        return res;
       } catch (e) {
         return { ok: false, error: t("Błąd wewnętrzny — nic nie zapisano: {m}", { m: e.message }), code: "INTERNAL" };
       }
@@ -6065,14 +6893,17 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     // konto: e-mail firmowy = login; magazyn domyślny (whId) + przydzielone (warehouseIds); status konta
     const U = (id, email, name, role, whId, more) => {
       const [firstName, ...rest] = name.split(" ");
-      return Object.assign({ id, login: email, email, name, firstName, lastName: rest.join(" "), role, whId, warehouseIds: [whId], status: "ACTIVE", active: true, lang: "", theme: "" }, more || {});
+      return Object.assign({ id, login: email, email, name, firstName, lastName: rest.join(" "), role, whId, warehouseIds: [whId], status: "ACTIVE", active: true, lang: "", theme: "", notifyAllowed: [], notify: { events: [], email: true } }, more || {});
     };
+    // powiadomienia: zgody administratora (notifyAllowed) i zdarzenia włączone przez użytkownika (notify.events)
+    const NT = (allowed, enabled) => ({ notifyAllowed: allowed, notify: { events: enabled, email: true } });
+    const MGR = ["PZ", "WZ", "PW", "MM", "EXTRA", "APPROVAL", "CORRECTION", "CANCEL", "DELETE"];
     s.users = [
-      U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab"),
-      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab", { warehouseIds: ["wh_zab", "wh_bra"] }),
-      U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab"),
-      U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra"),
-      U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra"),
+      U("u_admin", ADMIN_EMAIL, "Mateusz Roesner", "admin", "wh_zab", NT([], ["MM", "CORRECTION", "CANCEL", "DELETE"])),
+      U("u_kier", "anna.gorska@resinvest.group", "Anna Górska", "kierownik", "wh_zab", Object.assign({ warehouseIds: ["wh_zab", "wh_bra"] }, NT(MGR, ["PZ", "WZ", "MM", "APPROVAL", "CORRECTION", "CANCEL", "DELETE"]))),
+      U("u_mag", "adrian.wojciechowski@resinvest.group", "Adrian Wojciechowski", "magazynier", "wh_zab", NT(["MM", "DECISION", "CORRECTION"], ["MM", "DECISION"])),
+      U("u_kbra", "tomasz.zajac@resinvest.group", "Tomasz Zając", "kierownik", "wh_bra", NT(MGR, MGR)),
+      U("u_bra", "pawel.kaczmarek@resinvest.group", "Paweł Kaczmarek", "magazynier", "wh_bra", NT(["MM", "DECISION"], ["MM", "DECISION"])),
       U("u_krok", "michal.lewandowski@resinvest.group", "Michał Lewandowski", "kierownik", "wh_rok"),
       U("u_rok", "karolina.wisniewska@resinvest.group", "Karolina Wiśniewska", "magazynier", "wh_rok"),
       U("u_view", "beata.nowak@resinvest.group", "Beata Nowak", "obserwator", "wh_zab"),
@@ -6271,29 +7102,62 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }]
     );
     const byNo = {};
+    // powiadomienia z operacji wzorcowych — ten sam mechanizm co przy zatwierdzaniu w programie
+    const N = RIW.Notify;
+    const notify = (op, kind, c, extra) => { if (N) N.forOperation(s, op, kind, c, extra); };
     // obieg zatwierdzania jest domyślnie wyłączony — magazynier zatwierdza operację sam
     for (const [uid, date, over] of ops) {
-      const r = RIW.commitOperation(s, draftOf(date, over), ctx(uid, date));
+      const c = ctx(uid, date);
+      const r = RIW.commitOperation(s, draftOf(date, over), c);
       if (!r.ok) throw new Error("Dane przykładowe: " + r.error);
       byNo[`${over.type || "ZAKUP"}@${date}`] = r.op;
+      notify(r.op, "create", c);
     }
     // przyjęcie MM przez magazyn docelowy (Brąszewice): pełna ilość, tonaż z wagi
     const mm = byNo["MM@2026-09-16"];
     if (RIW.mmState(mm) === "W_DRODZE") {
       const rr = RIW.receiveTransfer(s, mm.id, { qty: "50", unit: "MP", date: "2026-09-16", weightMode: "manual", weightManual: "16,2", note: "Kwit wagowy BR 0916/1" }, ctx("u_bra", "2026-09-16"));
       if (!rr.ok) throw new Error("Dane przykładowe (przyjęcie MM): " + rr.error);
+      notify(rr.op, "mm-received", ctx("u_bra", "2026-09-16"));
     }
     // korekta ilościowa WZ (100 → 90 MP) i anulowanie błędnego zakupu — przez ten sam silnik
     const wz = byNo["SPRZEDAZ@2026-09-12"], cd = RIW.clone(wz.input);
     cd.sale.qty = "90"; cd.sale.weightManual = "31,1";
-    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }));
+    const cKor = Object.assign(ctx("u_admin", "2026-09-14"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) });
+    let r = RIW.correctOperation(s, wz.id, cd, "błędnie wpisana ilość — kwit wagowy 90 MP", cKor);
     if (!r.ok) throw new Error("Dane przykładowe (korekta): " + r.error);
-    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) }), "pomyłka operatora — dostawa nie dotarła");
+    notify(r.op, "correction", cKor, { no: r.no, correction: r.correction });
+    const cAn = Object.assign(ctx("u_admin", "2026-09-18"), { user: Object.assign({}, user("u_admin"), { whId: "wh_bra" }) });
+    r = RIW.cancelOperation(s, byNo["ZAKUP@2026-09-17"].id, cAn, "pomyłka operatora — dostawa nie dotarła");
     if (!r.ok) throw new Error("Dane przykładowe (anulowanie): " + r.error);
+    notify(r.op, "cancel", cAn, { reason: "pomyłka operatora — dostawa nie dotarła" });
+    // powiadomienia starsze niż tydzień przed „dziś” danych przykładowych — przeczytane
+    const readBefore = RIW.Dates.addDays(today, -7);
+    for (const n of s.notices) if (n.ts.slice(0, 10) < readBefore) { n.read = true; n.readAt = n.ts; }
+    s.plans = samplePlans(s);
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(today);
     s.meta.sample = true;
     return s;
+  }
+
+  /**
+   * Plany zakupów [MP] (planer): RiC Zabrze — sierpień i wrzesień 2026 (dni robocze), RiC Brąszewice — kilka dni.
+   * Wykonanie planer liczy z operacji wzorcowych (zakup z produkcją, produkcja w lesie, zakup zrębki).
+   */
+  function samplePlans(s) {
+    const out = [], by = "Anna Górska", ts = "2026-08-01T07:30:00.000Z";
+    const add = (whId, date, planMP, note) => out.push({ id: `pl_${whId}_${date}`, whId, date, planMP, note: note || "", version: 1, createdAt: ts, createdBy: by, updatedAt: ts, updatedBy: by, updatedById: "u_kier" });
+    const special = { "2026-08-05": [120, "Nadl. Rudy Raciborskie — Stanica"], "2026-08-12": [100, "Zrębka towar — Usługi Leśne Drwal"], "2026-08-20": [120, "Wycinka — obwodnica Gliwic"],
+      "2026-09-03": [80, "Nadl. Rybnik — Wielopole"], "2026-09-15": [600, "Nadl. Rudy Raciborskie — Kuźnia (pociąg do Łazisk)"] };
+    for (let d = "2026-08-03"; d <= "2026-09-30"; d = RIW.Dates.addDays(d, 1)) {
+      const wd = (new Date(d + "T00:00:00Z").getUTCDay() + 6) % 7;
+      if (special[d]) add("wh_zab", d, special[d][0], special[d][1]);
+      else if (wd < 5 && d >= "2026-09-01") add("wh_zab", d, 50);
+    }
+    add("wh_bra", "2026-09-10", 40, "Rębanie na placu — pryzma P2");
+    add("wh_bra", "2026-09-22", 20, "Pryzma P3");
+    return out;
   }
 
   /**
@@ -6308,7 +7172,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     s.warehouses = WAREHOUSES.map(w => Object.assign({}, w));
     const email = String(opts.email || opts.login || ADMIN_EMAIL).trim().toLowerCase();
     const name = String(opts.name || "Administrator").trim(), [firstName, ...rest] = name.split(/\s+/);
-    s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "" }];
+    s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "", notifyAllowed: [], notify: { events: [], email: true } }];
     s.carriers = [];
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());
@@ -7177,6 +8041,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
     eye: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", eyeOff: "M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.9 5.1A10.4 10.4 0 0 1 12 5c7 0 11 7 11 7a18 18 0 0 1-3.2 4.2M6.6 6.6A17.6 17.6 0 0 0 1 12s4 7 11 7a10 10 0 0 0 5.4-1.6",
     server: "M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01", refresh: "M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6",
+    calendar: "M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M8 13h3v3H8z",
     bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0", trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
     coins: "M8 8a6 3 0 1 0 12 0A6 3 0 1 0 8 8zM8 8v4c0 1.7 2.7 3 6 3s6-1.3 6-3V8M4 12a6 3 0 0 0 6 3M4 12v4c0 1.7 2.7 3 6 3"
   };
@@ -7527,6 +8392,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     { id: "kwit", label: N_("Kwit produkcji dnia"), icon: "receipt" },
     { id: "mm", label: N_("MM"), icon: "swap" },
     { id: "transport", label: N_("Transport"), icon: "truck" },
+    { id: "planer", label: N_("Planer zakupów"), icon: "calendar", perm: "report.view" },
     { group: N_("Ewidencja") },
     { id: "stany", label: N_("Stany magazynowe"), icon: "layers" },
     { id: "dokumenty", label: N_("Dokumenty"), icon: "file" },
@@ -7543,6 +8409,8 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
     { id: "uzytkownicy", label: N_("Użytkownicy"), icon: "key", perm: "users.read" },
     { id: "role", label: N_("Role i uprawnienia"), icon: "shield", perm: "users.read" },
     { id: "audyt", label: N_("Dziennik audytu"), icon: "clock", perm: "audit.read" },
+    { id: "powiadomienia", label: N_("Powiadomienia"), icon: "bell" },
+    { id: "poczta", label: N_("Poczta"), icon: "mail", perm: "notifications.manage" },
     { id: "administracja", label: N_("Administracja"), icon: "building" },
     { id: "profil", label: N_("Mój profil"), icon: "user" }
   ];
@@ -7685,6 +8553,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
               <button class="icon-btn" id="lang-btn" type="button" aria-label="${esc(t("Język"))}"></button>
               <button class="icon-btn" id="theme-btn" type="button" aria-label="${esc(t("Motyw"))}"></button>
               <button class="icon-btn" id="intro-btn" type="button" title="${esc(t("Odtwórz intro"))}" aria-label="${esc(t("Odtwórz intro"))}">${ic("play", 17)}</button>
+              <button class="icon-btn bell-btn" id="bell-btn" type="button" aria-haspopup="menu" aria-label="${esc(t("Powiadomienia"))}"></button>
               <button class="user-btn" id="user-btn" type="button" aria-haspopup="menu"></button>
             </header>
             <main class="page" id="page" tabindex="-1"></main>
@@ -7697,6 +8566,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       $("#scrim-nav").onclick = () => document.body.classList.remove("nav-open");
       $("#intro-btn").onclick = () => root.Intro && root.Intro.play({ force: true });
       $("#user-btn").onclick = e => this.userMenu(e.currentTarget);
+      $("#bell-btn").onclick = e => root.RIWUI.Bell && root.RIWUI.Bell.open(e.currentTarget);
       $("#lang-btn").onclick = e => this.langMenu(e.currentTarget);
       $("#theme-btn").onclick = e => this.themeMenu(e.currentTarget);
       $("#wh-chip").onclick = e => this.whMenu(e.currentTarget);
@@ -7714,6 +8584,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       if (!u) return;
       $("#user-btn").innerHTML = `<span class="avatar">${esc(initials(u.name))}</span><span class="who"><b>${esc(u.name)}</b><small>${esc(this.roleLabel(u.role))}</small></span>`;
       $("#user-btn").setAttribute("aria-label", t("Konto: {n}", { n: u.name }));
+      if (root.RIWUI.Bell) { const nb = root.RIWUI.unreadNotices(); $("#bell-btn").innerHTML = root.RIWUI.Bell.html(); $("#bell-btn").title = nb ? tp("{n} nowe powiadomienie|{n} nowe powiadomienia|{n} nowych powiadomień", nb) : t("Powiadomienia"); }
       const canSwitch = this.myWarehouses().length > 1;
       $("#wh-chip").innerHTML = `<span class="dot"></span><small>${esc(t("Magazyn:"))}</small><b>${esc(wh ? wh.name : "—")}</b>${canSwitch ? ic("chevDown", 14) : ""}`;
       $("#wh-chip").title = canSwitch ? t("Zmień magazyn roboczy") : t("Magazyn przydzielony przez administratora");
@@ -7812,6 +8683,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         if (pend) return `<span class="cnt warn" title="${esc(t("Do zatwierdzenia"))}">${pend}</span>`;
         const n = S.drafts.filter(d => d.userId === u.id).length; return n ? `<span class="cnt" title="${esc(t("Wersje robocze"))}">${n}</span>` : "";
       }
+      if (id === "powiadomienia" && root.RIWUI.unreadNotices) { const n = root.RIWUI.unreadNotices(); return n ? `<span class="cnt warn" title="${esc(t("Nieprzeczytane"))}">${n}</span>` : ""; }
       if (id === "uzytkownicy" && this.can("users.manage")) { const n = S.users.filter(x => x.selfRegistered && R.statusOf(x) === "INVITED").length; return n ? `<span class="cnt warn" title="${esc(t("Zgłoszenia rejestracji"))}">${n}</span>` : ""; }
       return "";
     },
@@ -10035,8 +10907,11 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           ${opsTable(rows, { showWh: f.scope === "all" })}
           <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} operacja|{n} operacje|{n} operacji", rows.length))} · ${esc(t("{n} anulowanych", { n: rows.filter(o => o.status === "CANCELLED" && !o.deleted).length }))} · ${esc(t("{n} usuniętych (ukryte: {h})", { n: S.operations.filter(o => o.deleted).length, h: f.showDeleted ? t("nie") : t("tak") }))} · ${esc(t("{n} skorygowanych", { n: rows.filter(o => o.status === "CORRECTED").length }))}</span></div></div>`;
     },
-    bind(page) {
+    bind(page, params) {
       const f = App.tabs.ops;
+      // link z powiadomienia / e-maila: #/operacje?op=<id> — szczegóły operacji
+      if (params && params.op && R.byId(Store.state.operations, params.op) && this._opened !== params.op) { this._opened = params.op; setTimeout(() => OpDetail.open(params.op), 0); }
+      else if (!params || !params.op) this._opened = null;
       const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
       on("#o-type", "type"); on("#o-status", "status"); on("#o-ym", "ym"); on("#o-scope", "scope");
       const od = $("#o-deleted", page); if (od) od.onchange = e => { f.showDeleted = e.target.checked; App.render(); };
@@ -10364,7 +11239,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         rows: rows.map(r => [Dates.pl(r.date), r.time, r.user, r.typeLabel, r.docNo, r.whName, r.productName, r.before === null ? "" : fmtQ(r.before), r.change === null ? "" : (r.change > 0 ? "+" : "") + fmtQ(r.change, 6), r.after === null ? "" : fmtQ(r.after), Units.label(r.unit), r.partner, r.related, t(R.STATUS[r.status] || r.status)]) }]
     };
   }
-  const AUDIT_AREAS = [["", N_("Wszystkie")], ["operation", N_("Operacje")], ["draft", N_("Wersje robocze")], ["inventory", N_("Inwentaryzacja")], ["fleet", N_("Flota")], ["master", N_("Kartoteki")], ["partner", N_("Kontrahenci")], ["user", N_("Użytkownicy")], ["ledger", N_("Księga / bilans")], ["report", N_("Wydruki i PDF")], ["system", N_("System")]];
+  const AUDIT_AREAS = [["", N_("Wszystkie")], ["operation", N_("Operacje")], ["draft", N_("Wersje robocze")], ["inventory", N_("Inwentaryzacja")], ["fleet", N_("Flota")], ["master", N_("Kartoteki")], ["partner", N_("Kontrahenci")], ["user", N_("Użytkownicy")], ["ledger", N_("Księga / bilans")], ["report", N_("Wydruki i PDF")], ["plan", N_("Planer zakupów")], ["system", N_("System")]];
   Views.historia = {
     f() { return App.tabs.hist || (App.tabs.hist = { tab: "moves", mode: "month", ym: Dates.ym(App.today()), wh: App.user().whId, productId: "", type: "", userId: "", partnerId: "", status: "", q: "", aUser: "", aEntity: "", aq: "" }); },
     rows() {
@@ -10737,7 +11612,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
 
   root.OpDetail = OpDetail;
   root.ReceiveDialog = ReceiveDialog;
-  Object.assign(UI, { pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
+  Object.assign(UI, { xlsxTable, pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
   root.RIWViews = { allDocuments, docModel, kwitModel, historyModel, Reports, Printer, CancelDialog, DocPreview, OpDetail };
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
@@ -11464,7 +12339,7 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
         rows = this.extra.mail || [];
         box.innerHTML = `<div class="card-b"><dl class="money-list"><dt>${th("Transport")}</dt><dd>${esc(mc.transport || "—")}${mc.configured ? "" : " · " + esc(t("brak klucza — wysyłka nie działa"))}</dd><dt>${th("Nadawca")}</dt><dd>${esc(mc.from || "—")}</dd>${mc.outDir ? `<dt>${th("Folder wiadomości")}</dt><dd class="mono small">${esc(mc.outDir)}</dd>` : ""}</dl></div>
           ${rows.length ? `<div class="tbl-wrap"><table class="tbl dense" id="mail-log-table"><thead><tr><th>${th("Czas")}</th><th>${th("Szablon")}</th><th>${th("Adresat")}</th><th>${th("Wynik")}</th><th>${th("Błąd")}</th></tr></thead><tbody>
-          ${rows.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.template)}</td><td class="mono">${esc(x.to)}</td><td>${x.status === "SENT" ? `<span class="badge ok">${th("wysłano")}</span>` : `<span class="badge err">${th("błąd")}</span>`}</td><td class="small">${esc(x.error || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wysłanych wiadomości.")}</div>`}`;
+          ${rows.map(x => `<tr><td class="nowrap">${esc(Dates.ts(String(x.ts), true))}</td><td class="mono">${esc(x.template)}</td><td class="mono">${esc(x.to)}</td><td>${x.status === "SENT" ? `<span class="badge ok">${th("wysłano")}</span>` : x.status === "QUEUED" || x.status === "SENDING" ? `<span class="badge info">${th("w kolejce")}</span>` : x.status === "FAILED" ? `<span class="badge warn">${th("nieudana — ponowienie")}</span>` : `<span class="badge err">${th("błąd")}</span>`}</td><td class="small">${esc(x.error || "")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak wysłanych wiadomości.")}</div>`}`;
       }
     }
   };
@@ -11618,6 +12493,458 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
       }
     }
   };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
+/* planner-view.js */
+/* =========================================================================
+   ResInvest ERP 3.5 — Planer zakupów (ekran)
+   * Tydzień: wskaźniki, tabela dni z polem planu [MP] (zapis po wyjściu z pola / Enter),
+     realizacja dnia, dokumenty źródłowe dnia (okno z operacjami).
+   * Miesiące i rok: wykres plan / wykonanie (12 miesięcy), tabela roku.
+   * Kierowcy i kursy: kursy tygodnia według kierowcy i pojazdu, lista kursów.
+   * Skąd są dane: pola planera i reguły (wartości AUTO tylko do odczytu — poprawka korektą dokumentu).
+   Liczby z silnika RIW.Planner — te same w eksporcie CSV / XLSX / PDF.
+   ========================================================================= */
+(function (root) {
+  "use strict";
+  const UI = root.RIWUI;
+  const { R, t, tp, N_, esc, $, $$, ic, download, csvNum, toCSV, Toast, Modal, Store, App, Views, drillAttr, bindDrill, bindOps, Tip, Printer, xlsxTable } = UI;
+  const { fmt, fmtQ, money, Dates } = R;
+  const P = R.Planner;
+  const th = s => esc(t(s));
+  const DAYS = [N_("Pon"), N_("Wt"), N_("Śr"), N_("Czw"), N_("Pt"), N_("Sob"), N_("Ndz")];
+  const VIEWS = [["week", N_("Tydzień")], ["year", N_("Miesiące i rok")], ["drivers", N_("Kierowcy i kursy")], ["sources", N_("Skąd są dane")]];
+  const pctText = v => v === null || v === undefined ? "—" : `${fmt(v, 1)}%`;
+  const mp = v => `${fmtQ(v, 2)} MP`;
+  const zlMp = v => v === null || v === undefined ? "—" : `${fmt(v, 2)} ${t("zł/MP")}`;
+
+  function filters() {
+    const today = App.today();
+    const f = App.tabs.planer || (App.tabs.planer = { view: "week", whId: App.user().whId, date: today, year: today.slice(0, 4), focus: "" });
+    const opts = P.scopeWarehouses(Store.state, App.user(), "ALL");
+    if (f.whId !== "ALL" && !opts.includes(f.whId)) f.whId = opts.includes(App.user().whId) ? App.user().whId : (opts[0] || "");
+    if (!Dates.isISO(f.date)) f.date = today;
+    return f;
+  }
+  const whIdsOf = f => P.scopeWarehouses(Store.state, App.user(), f.whId);
+  const whText = f => f.whId === "ALL" ? t("wszystkie magazyny") : App.whName(f.whId);
+  /** Plan można wpisywać dla jednego magazynu (nie w widoku „Wszystkie”) i z uprawnieniem planner.edit. */
+  const editable = f => f.whId !== "ALL" && App.can("planner.edit");
+  function weekOf(f) {
+    const from = Dates.weekStart(f.date), to = Dates.addDays(from, 6);
+    return { from, to, days: P.days(Store.state, whIdsOf(f), from, to, App.today()) };
+  }
+  /** Numer tygodnia ISO. */
+  function isoWeek(d) {
+    const x = new Date(d + "T00:00:00Z"), day = (x.getUTCDay() + 6) % 7;
+    x.setUTCDate(x.getUTCDate() - day + 3);
+    const first = new Date(Date.UTC(x.getUTCFullYear(), 0, 4));
+    return 1 + Math.round(((x - first) / 86400000 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
+  }
+  const realCls = v => v === null ? "" : v >= 100 ? "pos" : v >= 80 ? "" : "neg";
+  const bar = v => v === null ? "" : `<span class="pl-bar" aria-hidden="true"><i class="${v >= 100 ? "ok" : v >= 80 ? "" : "low"}" style="width:${Math.max(2, Math.min(100, v))}%"></i></span>`;
+
+  /* ---------------- wskaźniki ---------------- */
+  function kpis(T, label) {
+    const k = (id, title, value, unit, sub, drill) => `<div class="kpi" id="${id}"><div class="k-t">${esc(title)}</div><div class="k-v"${drill ? drillAttr(drill, title) : ""}>${value}${unit ? `<u>${esc(unit)}</u>` : ""}</div><div class="k-s">${sub}</div></div>`;
+    return `<div class="grid g4 mb4" id="pl-kpis">
+      ${k("pl-k-real", t("Realizacja planu do dziś"), T.realization === null ? "—" : fmt(T.realization, 1), T.realization === null ? "" : "%", `${esc(t("wykonanie {a} z planu {b}", { a: mp(T.act), b: mp(T.planToDate) }))}${bar(T.realization)}`)}
+      ${k("pl-k-act", t("Wykonanie"), fmtQ(T.act, 2), "MP", esc(t("{t} t · z wagi {w}", { t: fmtQ(T.t, 1), w: pctText(T.weighedShare) })), T.opIds)}
+      ${k("pl-k-cost", t("Wartość zakupu"), fmt(T.cost, 0), "zł", esc(t("średnia cena {p}", { p: zlMp(T.avgPrice) })), T.opIds)}
+      ${k("pl-k-tr", t("Transport"), fmt(T.transportCost, 0), "zł", esc(`${zlMp(T.transportPerMp)} · ${tp("{n} kurs|{n} kursy|{n} kursów", T.trips)} · ${fmtQ(T.km, 0)} km`))}
+    </div><p class="help mb3">${esc(label)}</p>`;
+  }
+
+  /* ---------------- tydzień ---------------- */
+  function weekHtml(f) {
+    const w = weekOf(f), T = P.totals(w.days), canEdit = editable(f), today = App.today();
+    const planMap = new Map(P.plans(Store.state, whIdsOf(f), w.from, w.to).map(p => [p.date, p]));
+    const rows = w.days.map(d => {
+      const pr = planMap.get(d.date), real = d.future ? null : (d.plan > R.EPS ? R.round(d.act / d.plan * 100, 1) : null);
+      const planCell = canEdit
+        ? `<input class="ctrl sm plan-in" inputmode="decimal" id="plan-${d.date}" data-plan-date="${d.date}" data-version="${pr ? pr.version : 0}" value="${esc(d.plan > R.EPS ? fmtQ(d.plan, 2) : "")}" placeholder="0" aria-label="${esc(t("Plan [MP] — {d}", { d: Dates.pl(d.date) }))}">`
+        : `<b>${d.plan > R.EPS ? esc(fmtQ(d.plan, 2)) : "—"}</b>`;
+      const docs = d.docs.length ? `<span${drillAttr(d.opIds, t("{d} — dokumenty źródłowe", { d: Dates.pl(d.date) }))}>${esc(d.docs.filter(x => ["PZ", "PW", "WZ", "TR"].includes(x.type)).map(x => x.no).slice(0, 4).join(", ") || tp("{n} operacja|{n} operacje|{n} operacji", d.opIds.length))}</span>` : "—";
+      return `<tr class="${d.date === today ? "pl-today" : ""} ${d.future ? "pl-future" : ""}" data-day="${d.date}">
+        <td data-l="${th("Dzień")}" class="nowrap"><b>${esc(t(DAYS[d.weekday]))}</b> ${esc(Dates.pl(d.date))}${d.note ? `<div class="dim small">${esc(d.note)}</div>` : ""}</td>
+        <td data-l="${th("Plan [MP]")}" class="r">${planCell}</td>
+        <td data-l="${th("Wykonanie [MP]")}" class="r"><b>${d.act > R.EPS ? esc(fmtQ(d.act, 2)) : "—"}</b></td>
+        <td data-l="${th("Realizacja")}" class="r ${realCls(real)}">${real === null ? (d.future ? `<span class="dim">${th("przyszły dzień")}</span>` : "—") : esc(pctText(real)) + bar(real)}</td>
+        <td data-l="${th("Tony [t]")}" class="r">${d.t > R.EPS ? esc(fmtQ(d.t, 2)) + (d.tWeighed > R.EPS ? `<div class="dim small">${esc(t("z wagi {t}", { t: fmtQ(d.tWeighed, 2) }))}</div>` : "") : "—"}</td>
+        <td data-l="${th("Zakup [zł]")}" class="r">${d.cost > R.EPS ? esc(money(d.cost)) : "—"}</td>
+        <td data-l="${th("Cena [zł/MP]")}" class="r">${d.act > R.EPS ? esc(fmt(d.cost / d.act, 2)) : "—"}</td>
+        <td data-l="${th("Km")}" class="r">${d.km > R.EPS ? esc(fmtQ(d.km, 0)) : "—"}</td>
+        <td data-l="${th("Transport [zł]")}" class="r">${d.transportCost > R.EPS ? esc(money(d.transportCost)) : "—"}</td>
+        <td data-l="${th("Kursy")}" class="r">${d.trips || "—"}</td>
+        <td data-l="${th("Miejsce")}">${esc(d.places.join(" · ") || "—")}</td>
+        <td data-l="${th("Dokumenty")}" class="mono">${docs}</td></tr>`;
+    }).join("");
+    const foot = `<tr><td>${th("Razem tydzień")}</td><td data-l="${th("Plan [MP]")}" class="r">${esc(fmtQ(T.plan, 2))}</td><td data-l="${th("Wykonanie [MP]")}" class="r">${esc(fmtQ(T.act, 2))}</td><td data-l="${th("Realizacja")}" class="r ${realCls(T.realization)}">${esc(pctText(T.realization))}</td><td data-l="${th("Tony [t]")}" class="r">${esc(fmtQ(T.t, 2))}</td><td data-l="${th("Zakup [zł]")}" class="r">${esc(money(T.cost))}</td><td data-l="${th("Cena [zł/MP]")}" class="r">${esc(T.avgPrice === null ? "—" : fmt(T.avgPrice, 2))}</td><td data-l="${th("Km")}" class="r">${esc(fmtQ(T.km, 0))}</td><td data-l="${th("Transport [zł]")}" class="r">${esc(money(T.transportCost))}</td><td data-l="${th("Kursy")}" class="r">${T.trips}</td><td colspan="2"></td></tr>`;
+    const head = t("Tydzień {n}: {a} – {b}", { n: isoWeek(w.from), a: Dates.pl(w.from), b: Dates.pl(w.to) });
+    return `${kpis(T, t("{h} · {w} · realizacja liczona do dziś — przyszłe dni nie zaniżają wyniku", { h: head, w: whText(f) }))}
+      <div class="card" id="pl-week"><div class="card-h"><h3>${esc(head)}</h3><span class="sub">${esc(whText(f))}</span><span class="spacer"></span>
+        ${canEdit ? `<span class="badge info">${th("plan [MP] — wpisz i naciśnij Enter")}</span>` : f.whId === "ALL" ? `<span class="badge">${th("suma magazynów — plan wpisuje się w magazynie")}</span>` : `<span class="badge">${th("tylko podgląd — plan wpisuje kierownik lub administrator")}</span>`}</div>
+        <div class="tbl-wrap"><table class="tbl stack pl-table" id="pl-week-table"><thead><tr><th>${th("Dzień")}</th><th class="r">${th("Plan [MP]")}</th><th class="r">${th("Wykonanie [MP]")}</th><th class="r">${th("Realizacja")}</th><th class="r">${th("Tony [t]")}</th><th class="r">${th("Zakup [zł]")}</th><th class="r">${th("Cena [zł/MP]")}</th><th class="r">${th("Km")}</th><th class="r">${th("Transport [zł]")}</th><th class="r">${th("Kursy")}</th><th>${th("Miejsce")}</th><th>${th("Dokumenty")}</th></tr></thead>
+          <tbody>${rows}</tbody><tfoot>${foot}</tfoot></table></div>
+        <p class="help" style="padding:8px 16px">${th("Wykonanie, tony, ceny, km i kursy liczą się automatycznie z zatwierdzonych zakupów MP: zakup z produkcją, produkcja w lesie (sprzedaż bezpośrednia), zakup zrębki. Błąd poprawia się korektą dokumentu.")}</p></div>`;
+  }
+
+  /* ---------------- miesiące i rok ---------------- */
+  function yearData(f) {
+    const y = Number(f.year) || Number(App.today().slice(0, 4));
+    const list = P.days(Store.state, whIdsOf(f), `${y}-01-01`, `${y}-12-31`, App.today());
+    return { y, months: P.months(list, y), total: P.totals(list) };
+  }
+  /** Wykres kolumnowy plan / wykonanie [MP] — jedna oś, podpowiedź nad grupą, tabela obok. */
+  function chart(months) {
+    const W = 640, H = 230, padL = 52, padR = 8, padT = 12, padB = 26;
+    const max = Math.max(1, ...months.flatMap(m => [m.plan, m.act]));
+    const step = (() => { const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; })();
+    const top = step * 4, iw = W - padL - padR, ih = H - padT - padB, y = v => padT + ih - v / top * ih;
+    const gw = iw / 12, bw = Math.min(18, (gw - 10) / 2 - 2);
+    const series = [{ key: "plan", label: t("Plan"), color: "var(--chart-b)" }, { key: "act", label: t("Wykonanie"), color: "var(--chart-a)" }];
+    let g = "";
+    for (let i = 0; i <= 4; i++) { const v = step * i, yy = y(v); g += `<line class="grid-l" x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text x="${padL - 6}" y="${yy + 3.5}" text-anchor="end">${esc(fmtQ(v, 0))}</text>`; }
+    months.forEach((m, i) => {
+      const cx = padL + gw * i + gw / 2, x0 = cx - (2 * (bw + 2) - 2) / 2;
+      series.forEach((s, j) => {
+        const v = m[s.key], x = x0 + j * (bw + 2), yy = y(v), h = padT + ih - yy;
+        if (h > 0.5) { const r = Math.min(4, h, bw / 2); g += `<path class="bar" fill="${s.color}" d="M${x},${padT + ih} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${padT + ih} Z"/>`; }
+      });
+      g += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${esc(Dates.short(m.ym).split(" ")[0])}</text>`;
+      g += `<rect class="col-hit" x="${padL + gw * i}" y="${padT}" width="${gw}" height="${ih}" data-month="${m.ym}" data-tip="${esc(`<b>${esc(Dates.label(m.ym))}</b><br>${esc(t("Plan"))}: ${esc(mp(m.plan))}<br>${esc(t("Wykonanie"))}: ${esc(mp(m.act))}<br>${esc(t("Realizacja"))}: ${esc(pctText(m.realization))}`)}"/>`;
+    });
+    g += `<line class="axis" x1="${padL}" x2="${W - padR}" y1="${padT + ih}" y2="${padT + ih}"/>`;
+    return { svg: `<svg class="cols" id="pl-chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(t("Plan i wykonanie [MP] w miesiącach"))}">${g}</svg>`, series };
+  }
+  function yearHtml(f) {
+    const { y, months, total } = yearData(f);
+    const c = chart(months);
+    const rows = months.map(m => `<tr class="clickable" data-goto-month="${m.ym}"><td data-l="${th("Miesiąc")}"><b>${esc(Dates.label(m.ym))}</b></td><td data-l="${th("Plan [MP]")}" class="r">${esc(fmtQ(m.plan, 2))}</td><td data-l="${th("Wykonanie [MP]")}" class="r"><b>${esc(fmtQ(m.act, 2))}</b></td>
+      <td data-l="${th("Realizacja")}" class="r ${realCls(m.realization)}">${esc(pctText(m.realization))}</td><td data-l="${th("Tony [t]")}" class="r">${esc(fmtQ(m.t, 1))}</td><td data-l="${th("Wartość zakupu [zł]")}" class="r">${esc(money(m.cost))}</td>
+      <td data-l="${th("Śr. cena [zł/MP]")}" class="r">${esc(m.avgPrice === null ? "—" : fmt(m.avgPrice, 2))}</td><td data-l="${th("Transport [zł/MP]")}" class="r">${esc(m.transportPerMp === null ? "—" : fmt(m.transportPerMp, 2))}</td>
+      <td data-l="${th("Kursy")}" class="r">${m.trips}</td><td data-l="${th("Dni z zakupem")}" class="r">${m.productionDays}</td><td data-l="${th("Udział w roku")}" class="r">${total.act > R.EPS ? esc(pctText(R.round(m.act / total.act * 100, 1))) : "—"}</td></tr>`).join("");
+    return `${kpis(total, t("Rok {y} · {w}", { y, w: whText(f) }))}
+      <div class="card" id="pl-year-chart"><div class="card-h"><h3>${esc(t("Plan i wykonanie {y} [MP]", { y }))}</h3><span class="sub">${esc(whText(f))}</span><span class="spacer"></span>
+        <div class="legend">${c.series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.label)}</span>`).join("")}</div></div>
+        <div class="card-b">${c.svg}</div></div>
+      <div class="card mt4" id="pl-year"><div class="card-h"><h3>${esc(t("Miesiące i rok {y}", { y }))}</h3><span class="sub">${th("kliknij miesiąc — tydzień z jego początku")}</span></div>
+        <div class="tbl-wrap"><table class="tbl stack" id="pl-year-table"><thead><tr><th>${th("Miesiąc")}</th><th class="r">${th("Plan [MP]")}</th><th class="r">${th("Wykonanie [MP]")}</th><th class="r">${th("Realizacja")}</th><th class="r">${th("Tony [t]")}</th><th class="r">${th("Wartość zakupu [zł]")}</th><th class="r">${th("Śr. cena [zł/MP]")}</th><th class="r">${th("Transport [zł/MP]")}</th><th class="r">${th("Kursy")}</th><th class="r">${th("Dni z zakupem")}</th><th class="r">${th("Udział w roku")}</th></tr></thead>
+        <tbody>${rows}</tbody><tfoot><tr><td>${esc(t("Razem {y}", { y }))}</td><td data-l="${th("Plan [MP]")}" class="r">${esc(fmtQ(total.plan, 2))}</td><td data-l="${th("Wykonanie [MP]")}" class="r">${esc(fmtQ(total.act, 2))}</td><td data-l="${th("Realizacja")}" class="r">${esc(pctText(total.realization))}</td><td data-l="${th("Tony [t]")}" class="r">${esc(fmtQ(total.t, 1))}</td><td data-l="${th("Wartość zakupu [zł]")}" class="r">${esc(money(total.cost))}</td><td data-l="${th("Śr. cena [zł/MP]")}" class="r">${esc(total.avgPrice === null ? "—" : fmt(total.avgPrice, 2))}</td><td data-l="${th("Transport [zł/MP]")}" class="r">${esc(total.transportPerMp === null ? "—" : fmt(total.transportPerMp, 2))}</td><td data-l="${th("Kursy")}" class="r">${total.trips}</td><td data-l="${th("Dni z zakupem")}" class="r">${total.productionDays}</td><td data-l="${th("Udział w roku")}" class="r">100%</td></tr></tfoot></table></div></div>`;
+  }
+
+  /* ---------------- kierowcy i kursy ---------------- */
+  function driversHtml(f) {
+    const w = weekOf(f), whs = whIdsOf(f);
+    const list = P.drivers(Store.state, whs, w.from, w.to);
+    const dates = P.dayRange(w.from, w.to);
+    const runs = dates.flatMap(d => P.dayRuns(Store.state, whs, d).map(r => Object.assign({ date: d }, r)));
+    const matrix = list.length ? `<div class="tbl-wrap"><table class="tbl stack" id="pl-drivers-table"><thead><tr><th>${th("Kierowca i pojazd")}</th>${dates.map((d, i) => `<th class="r">${esc(t(DAYS[i]))} ${esc(Dates.pl(d).slice(0, 5))}</th>`).join("")}<th class="r">${th("Kursy")}</th><th class="r">MP</th><th class="r">${th("Tony z wagi [t]")}</th><th class="r">${th("Km")}</th><th class="r">${th("Koszt [zł]")}</th></tr></thead><tbody>
+      ${list.map(a => `<tr${drillAttr(a.opIds, `${a.driver} · ${a.reg}`)}><td data-l="${th("Kierowca i pojazd")}"><b>${esc(a.driver)}</b><div class="dim small">${esc(a.reg)}${a.company ? " · " + esc(a.company) : ""}</div></td>${dates.map((d, i) => `<td data-l="${esc(t(DAYS[i]))}" class="r">${a.perDay[d] || ""}</td>`).join("")}
+        <td data-l="${th("Kursy")}" class="r"><b>${a.trips}</b></td><td data-l="MP" class="r">${esc(fmtQ(a.qty, 2))}</td><td data-l="${th("Tony z wagi [t]")}" class="r">${a.weightT > R.EPS ? esc(fmtQ(a.weightT, 2)) : "—"}</td><td data-l="${th("Km")}" class="r">${esc(fmtQ(a.km, 0))}</td><td data-l="${th("Koszt [zł]")}" class="r">${esc(money(a.cost))}</td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="empty">${th("Brak kursów w tym tygodniu.")}</div>`;
+    const runList = runs.length ? `<div class="tbl-wrap"><table class="tbl stack" id="pl-runs-table"><thead><tr><th>${th("Dzień")}</th><th>${th("Kurs")}</th><th>${th("Kierowca")}</th><th>${th("Pojazd")}</th><th>${th("Miejsce")}</th><th class="r">MP</th><th class="r">${th("Waga [t]")}</th><th class="r">${th("Km")}</th><th class="r">${th("Koszt [zł]")}</th><th>${th("Operacja")}</th></tr></thead><tbody>
+      ${runs.map(r => `<tr class="clickable" data-opid="${esc(r.opId)}"><td data-l="${th("Dzień")}" class="nowrap">${esc(Dates.pl(r.date))}</td><td data-l="${th("Kurs")}">${r.no} · ${esc(r.kind === "external" ? t("zewnętrzny") : t("własny"))}</td><td data-l="${th("Kierowca")}">${esc(r.driver)}</td><td data-l="${th("Pojazd")}">${esc(r.reg)}${r.company ? `<div class="dim small">${esc(r.company)}</div>` : ""}</td><td data-l="${th("Miejsce")}">${esc(r.place || "—")}</td>
+        <td data-l="MP" class="r">${esc(fmtQ(r.qty, 2))}</td><td data-l="${th("Waga [t]")}" class="r">${r.weightT === null ? `<span class="dim">${th("brak")}</span>` : esc(fmtQ(r.weightT, 2))}</td><td data-l="${th("Km")}" class="r">${esc(fmtQ(r.km, 0))}</td><td data-l="${th("Koszt [zł]")}" class="r">${esc(money(r.cost))}</td><td data-l="${th("Operacja")}" class="mono">${esc(r.opNo)}</td></tr>`).join("")}</tbody></table></div>` : "";
+    return `<div class="card" id="pl-drivers"><div class="card-h"><h3>${esc(t("Kursy w tygodniu według kierowców"))}</h3><span class="sub">${esc(t("{a} – {b} · {w}", { a: Dates.pl(w.from), b: Dates.pl(w.to), w: whText(f) }))}</span></div>${matrix}</div>
+      ${runList ? `<div class="card mt4" id="pl-runs"><div class="card-h"><h3>${th("Kursy tygodnia")}</h3><span class="sub">${esc(tp("{n} kurs|{n} kursy|{n} kursów", runs.length))}</span></div>${runList}</div>` : ""}`;
+  }
+
+  /* ---------------- skąd są dane ---------------- */
+  const SOURCES = [
+    [N_("Plan [MP]"), N_("wpisywany ręcznie"), N_("magazyn × dzień; widok „Wszystkie magazyny” sumuje plany. Zmiana zapisuje się w dzienniku audytu (było / jest).")],
+    [N_("Wykonanie [MP]"), N_("zakup z produkcją (PW), produkcja w lesie, zakup zrębki (PZ)"), N_("wynik produkcji w MP albo ilość przyjętej zrębki; bez anulowanych i usuniętych operacji.")],
+    [N_("Tony [t]"), N_("kursy transportu (waga) + przelicznik firmowy"), N_("waga zważonych kursów + niezważona reszta ilości × przelicznik MP → t z konfiguracji.")],
+    [N_("Cena [zł/MP]"), N_("wartość zakupu i surowca z operacji"), N_("(wartość zakupu + koszt surowca) ÷ wykonanie.")],
+    [N_("Miejsce"), N_("produkcja i transport"), N_("nadleśnictwo i leśnictwo, miejsce wycinki albo miejsce dostawy.")],
+    [N_("Km, transport, kursy"), N_("karta transportu (TR)"), N_("sumy kursów własnych i zewnętrznych operacji zakupu.")],
+    [N_("Kierowcy i pojazdy"), N_("kursy transportu"), N_("kursy pogrupowane po kierowcy i pojeździe; liczba kursów na dzień.")],
+    [N_("Realizacja"), N_("wyliczana"), N_("wykonanie ÷ plan do dziś — przyszłe dni nie zaniżają wyniku.")]
+  ];
+  function sourcesHtml() {
+    return `<div class="card" id="pl-sources"><div class="card-h"><h3>${th("Pola planera i ich źródło w ERP")}</h3></div>
+      <div class="tbl-wrap"><table class="tbl stack"><thead><tr><th>${th("Pole planera")}</th><th>${th("Źródło")}</th><th>${th("Reguła")}</th></tr></thead><tbody>
+        ${SOURCES.map(([a, b, c]) => `<tr><td data-l="${th("Pole planera")}"><b>${th(a)}</b></td><td data-l="${th("Źródło")}">${th(b)}</td><td data-l="${th("Reguła")}">${th(c)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="card-b"><div class="info-line">${ic("alert", 15)}<span>${th("Sprzedaż z magazynu, produkcja ze stanu, przesunięcia MM i zakup drewna bez produkcji nie wchodzą do planera — to nie są zakupy MP. Wartości AUTO są tylko do odczytu; błąd poprawia się korektą dokumentu, więc planer zawsze zgadza się ze stanami i raportami.")}</span></div></div></div>`;
+  }
+
+  /* ---------------- eksport ---------------- */
+  function exportRows(f) {
+    if (f.view === "year") {
+      const { y, months } = yearData(f);
+      return { title: t("Planer zakupów — rok {y}", { y }), range: String(y), cols: [t("Miesiąc"), t("Plan [MP]"), t("Wykonanie [MP]"), t("Realizacja %"), t("Tony [t]"), t("Wartość zakupu [zł]"), t("Śr. cena [zł/MP]"), t("Transport [zł/MP]"), t("Kursy")],
+        rows: months.map(m => [Dates.label(m.ym), m.plan, m.act, m.realization, m.t, m.cost, m.avgPrice, m.transportPerMp, m.trips]) };
+    }
+    const w = weekOf(f);
+    return { title: t("Planer zakupów — tydzień {n}", { n: isoWeek(w.from) }), range: `${Dates.pl(w.from)} – ${Dates.pl(w.to)}`, cols: [t("Dzień"), t("Plan [MP]"), t("Wykonanie [MP]"), t("Tony [t]"), t("Tony z wagi [t]"), t("Zakup [zł]"), t("Km"), t("Transport [zł]"), t("Kursy"), t("Miejsce"), t("Uwagi")],
+      rows: w.days.map(d => [d.date, d.plan, d.act, d.t, d.tWeighed, d.cost, d.km, d.transportCost, d.trips, d.places.join(" · "), d.note]) };
+  }
+
+  Views.planer = {
+    html() {
+      const f = filters();
+      const whs = P.scopeWarehouses(Store.state, App.user(), "ALL");
+      const nav = f.view === "week" || f.view === "drivers"
+        ? `<div class="field"><label for="pl-date">${th("Tydzień z dniem")}</label><div class="row-gap"><button class="btn sm" type="button" id="pl-prev" aria-label="${th("Poprzedni tydzień")}">‹</button><input class="ctrl" type="date" id="pl-date" value="${esc(f.date)}"><button class="btn sm" type="button" id="pl-next" aria-label="${th("Następny tydzień")}">›</button><button class="btn sm ghost" type="button" id="pl-today">${th("Dziś")}</button></div></div>`
+        : f.view === "year" ? `<div class="field"><label for="pl-year">${th("Rok")}</label><input class="ctrl" type="number" min="2000" max="2100" id="pl-year" value="${esc(f.year)}"></div>` : "";
+      const body = f.view === "year" ? yearHtml(f) : f.view === "drivers" ? driversHtml(f) : f.view === "sources" ? sourcesHtml() : weekHtml(f);
+      return `<div class="page-head"><div class="titles"><h2>${th("Planer zakupów")}</h2><p>${th("Plan dzienny zakupów [MP] i wykonanie liczone z zatwierdzonych dokumentów: produkcja z zakupu, produkcja w lesie, zakup zrębki. Ręcznie wpisuje się tylko plan.")}</p></div>
+          <div class="actions">${f.view !== "sources" ? `<button class="btn" type="button" id="pl-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="pl-xlsx">${ic("dl", 15)} XLSX</button><button class="btn" type="button" id="pl-pdf">${ic("pdf", 15)} ${th("Generuj PDF")}</button>` : ""}</div></div>
+        <div class="card mb4"><div class="toolbar">
+          <div class="field"><label for="pl-wh">${th("Magazyn")}</label><select class="ctrl" id="pl-wh">${whs.map(id => `<option value="${esc(id)}" ${f.whId === id ? "selected" : ""}>${esc(App.whName(id))}</option>`).join("")}${whs.length > 1 ? `<option value="ALL" ${f.whId === "ALL" ? "selected" : ""}>${th("Wszystkie magazyny")}</option>` : ""}</select></div>
+          ${nav}
+          <div class="field"><span class="lbl-like">${th("Widok")}</span><div class="seg" role="group" aria-label="${th("Widok")}" id="pl-views">${VIEWS.map(([k, l]) => `<button type="button" data-plview="${k}" aria-pressed="${f.view === k}">${th(l)}</button>`).join("")}</div></div></div></div>
+        ${body}`;
+    },
+    bind(page) {
+      const f = App.tabs.planer;
+      $("#pl-wh", page).onchange = e => { f.whId = e.target.value; App.render(); };
+      $$("[data-plview]", page).forEach(b => b.onclick = () => { f.view = b.dataset.plview; App.render(); });
+      const shift = n => { f.date = Dates.addDays(f.date, n); App.render(); };
+      const pv = $("#pl-prev", page); if (pv) pv.onclick = () => shift(-7);
+      const nx = $("#pl-next", page); if (nx) nx.onclick = () => shift(7);
+      const td = $("#pl-today", page); if (td) td.onclick = () => { f.date = App.today(); App.render(); };
+      const dt = $("#pl-date", page); if (dt) dt.onchange = e => { if (Dates.isISO(e.target.value)) { f.date = e.target.value; App.render(); } };
+      const yr = $("#pl-year", page); if (yr) yr.onchange = e => { if (/^\d{4}$/.test(e.target.value)) { f.year = e.target.value; App.render(); } };
+      $$("[data-goto-month]", page).forEach(tr => tr.onclick = () => { f.date = tr.dataset.gotoMonth + "-01"; f.view = "week"; App.render(); });
+      $$("rect[data-month]", page).forEach(r => r.onclick = () => { f.date = r.dataset.month + "-01"; f.view = "week"; App.render(); });
+      bindDrill(page); bindOps(page); Tip.bind(page);
+      /* plan dnia: zapis po zmianie (wyjście z pola / Enter); Enter przechodzi do następnego dnia */
+      const inputs = $$(".plan-in", page);
+      inputs.forEach((inp, i) => {
+        inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); f.focus = inputs[i + 1] ? inputs[i + 1].dataset.planDate : ""; inp.blur(); } };
+        inp.onchange = async () => {
+          if (!f.focus) f.focus = inputs[i + 1] ? inputs[i + 1].dataset.planDate : "";
+          const res = await Store.exec("plan.set", { whId: f.whId, date: inp.dataset.planDate, planMP: inp.value, version: Number(inp.dataset.version) }, N_("Planer zakupów"));
+          if (!res.ok) { f.focus = inp.dataset.planDate; Toast.err(t("Nie zapisano planu"), res.error); }
+          else if (!res.unchanged) Toast.ok(t("Zapisano plan {d}", { d: Dates.pl(inp.dataset.planDate) }), res.plan ? mp(res.plan.planMP) : t("plan usunięty"));
+          App.render();
+        };
+      });
+      if (f.focus) { const el = $(`#plan-${f.focus}`, page); f.focus = ""; if (el) { el.focus(); el.select(); } }
+      const exp = () => exportRows(f);
+      const csv = $("#pl-csv", page);
+      if (csv) csv.onclick = () => { const x = exp(); download(`planer_${f.view}_${App.today()}.csv`, toCSV(x.cols, x.rows.map(r => r.map(v => typeof v === "number" ? csvNum(v) : v === null ? "" : v))), "text/csv;charset=utf-8"); };
+      const xl = $("#pl-xlsx", page);
+      if (xl) xl.onclick = () => { const x = exp(); xlsxTable(`planer_${f.view}_${App.today()}`, x.title, x.cols, x.rows.map(r => r.map(v => v === null ? "" : v)), `${whText(f)} · ${x.range}`); };
+      const pd = $("#pl-pdf", page);
+      if (pd) pd.onclick = () => {
+        const x = exp();
+        Printer.pdf({ title: x.title, subtitle: `${whText(f)} · ${x.range}`, orientation: "landscape", rangeText: x.range, whText: whText(f), headerRight: whText(f),
+          meta: [[t("Magazyn"), whText(f)], [t("Okres"), x.range]],
+          blocks: [{ type: "table", size: 7.5, columns: x.cols.map((c, i) => ({ label: c, w: i === 0 ? 1.4 : i >= x.cols.length - 2 ? 1.8 : 1, align: i === 0 || i >= x.cols.length - 2 ? "left" : "right" })),
+            rows: x.rows.map(r => r.map((v, i) => i === 0 ? (Dates.isISO(v) ? Dates.pl(v) : v) : typeof v === "number" ? fmtQ(v, 2) : v === null ? "—" : String(v))) }] }, "RAP", "planer");
+      };
+    }
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+
+</script>
+<script>
+/* notify-view.js */
+/* =========================================================================
+   ResInvest ERP 3.5 — Powiadomienia i Poczta (ekrany)
+   * Powiadomienia (każdy użytkownik): skrzynka w programie (filtry, przeczytane, przejście
+     do operacji), ustawienia „co chcę otrzymywać” (tylko zdarzenia dozwolone przez
+     administratora) i kanał e-mail; dla administratora — zgody użytkowników (macierz).
+   * Poczta (administrator, notifications.manage): kanał wysyłki, liczniki statusów, dziennik
+     wysyłki z błędami i terminem następnej próby, „Ponów”, „Wyślij test do mnie”,
+     „Wyślij kolejkę teraz”. W trybie OFFLINE e-maile nie są wysyłane — dziennik pokazuje
+     powiadomienia przygotowane w programie.
+   * Dzwonek w pasku górnym: liczba nieprzeczytanych i ostatnie powiadomienia.
+   ========================================================================= */
+(function (root) {
+  "use strict";
+  const UI = root.RIWUI;
+  const { R, I18N, t, tp, N_, esc, $, $$, ic, Toast, Modal, Dropdown, Store, ServerBackend, App, Views, OpDetail } = UI;
+  const { Dates } = R;
+  const N = R.Notify;
+  const th = s => esc(t(s));
+  const SRC = N_("Powiadomienia");
+
+  const mine = () => (Store.state.notices || []).filter(n => n.userId === Store.userId).slice().sort((a, b) => a.ts < b.ts ? 1 : -1);
+  const unread = () => mine().filter(n => !n.read).length;
+  const KIND_ICON = { create: "file", "mm-received": "swap", correction: "edit", cancel: "ban", delete: "trash", approval: "clock", approved: "check", rejected: "x" };
+  const KIND_TONE = { correction: "warn", cancel: "err", delete: "err", approval: "warn", approved: "ok", rejected: "err", "mm-received": "info" };
+  const evChips = n => (n.events || []).map(e => N.EVENTS[e] ? `<span class="chip">${th(N.EVENTS[e].label)}</span>` : "").join("");
+
+  /** Otwarcie powiadomienia: oznaczenie jako przeczytane i przejście do operacji / kolejki zatwierdzania. */
+  async function openNotice(id) {
+    const n = (Store.state.notices || []).find(x => x.id === id);
+    if (!n) return;
+    if (!n.read) await Store.exec("notice.read", { ids: [id] }, SRC, { quiet: true });
+    Dropdown.close();
+    if (n.opId && R.byId(Store.state.operations, n.opId)) { App.render(); OpDetail.open(n.opId); }
+    else if (n.kind === "approval" || n.kind === "rejected") App.go("operacje");
+    else { App.render(); Toast.info(t("Operacja niedostępna"), t("Dokument nie jest już widoczny w Twoich magazynach.")); }
+  }
+  const noticeItem = (n, compact) => `<button class="nt-item ${n.read ? "" : "unread"}" type="button" data-notice="${esc(n.id)}">
+      <span class="fi ${KIND_TONE[n.kind] || ""}">${ic(KIND_ICON[n.kind] || "bell", 14)}</span>
+      <span class="nt-body"><b>${esc(I18N.tr(n.title))}</b>${compact ? "" : `<span class="nt-lines">${(n.lines || []).map(l => `<span>${esc(I18N.tr(l))}</span>`).join("")}</span>`}
+        <small class="when">${esc(Dates.ts(n.ts))}${n.by ? " · " + esc(n.by === "System" ? t("System") : n.by) : ""}</small></span>
+      ${n.read ? "" : `<span class="nt-dot" title="${th("nieprzeczytane")}"></span>`}</button>`;
+
+  /** Dzwonek w pasku górnym (rysowany przez core.refreshChrome). */
+  const Bell = {
+    html() { const n = unread(); return `${ic("bell", 17)}${n ? `<span class="bell-cnt" id="bell-cnt">${n > 99 ? "99+" : n}</span>` : ""}`; },
+    open(btn) {
+      const list = mine().slice(0, 8);
+      Dropdown.open(btn, `<div class="dd-label">${th("Powiadomienia")}${unread() ? ` · ${esc(tp("{n} nowe|{n} nowe|{n} nowych", unread()))}` : ""}</div>
+        <div class="nt-dd" id="bell-list">${list.length ? list.map(n => noticeItem(n, true)).join("") : `<div class="dd-empty dim">${th("Brak powiadomień.")}</div>`}</div>
+        <div class="dd-sep"></div>
+        ${unread() ? `<button class="dd-item" type="button" data-readall><span class="ic">${ic("check", 16)}</span>${th("Oznacz wszystkie jako przeczytane")}</button>` : ""}
+        <a class="dd-item" href="#/powiadomienia" data-go><span class="ic">${ic("bell", 16)}</span>${th("Wszystkie powiadomienia i ustawienia")}</a>`, el => {
+        $$("[data-notice]", el).forEach(b => b.onclick = () => openNotice(b.dataset.notice));
+        $$("[data-go]", el).forEach(a => a.onclick = () => Dropdown.close());
+        const ra = $("[data-readall]", el);
+        if (ra) ra.onclick = async () => { Dropdown.close(); await Store.exec("notice.read", { ids: "all" }, SRC, { quiet: true }); App.render(); };
+      });
+    }
+  };
+
+  /* ================================================================== */
+  /* POWIADOMIENIA                                                        */
+  /* ================================================================== */
+  Views.powiadomienia = {
+    html() {
+      const f = App.tabs.notices || (App.tabs.notices = { show: "all", event: "", ym: "", tab: "inbox" });
+      const u = App.user(), allowed = N.allowedFor(u), enabled = N.enabledFor(u);
+      const list = mine().filter(n => (f.show !== "unread" || !n.read) && (!f.event || (n.events || []).includes(f.event)) && (!f.ym || n.ts.startsWith(f.ym)));
+      const admin = App.can("notifications.manage");
+      const tabs = `<div class="seg mb4" role="group" aria-label="${th("Widok")}" id="nt-tabs">${[["inbox", N_("Skrzynka")], ["settings", N_("Moje ustawienia")]].concat(admin ? [["allow", N_("Zgody użytkowników")]] : []).map(([k, l]) => `<button type="button" data-nttab="${k}" aria-pressed="${f.tab === k}">${th(l)}</button>`).join("")}</div>`;
+      const inbox = `<div class="card" id="nt-inbox"><div class="toolbar">
+          <div class="field"><label for="nt-show">${th("Pokaż")}</label><select class="ctrl" id="nt-show"><option value="all" ${f.show === "all" ? "selected" : ""}>${th("Wszystkie")}</option><option value="unread" ${f.show === "unread" ? "selected" : ""}>${th("Nieprzeczytane")}</option></select></div>
+          <div class="field"><label for="nt-event">${th("Zdarzenie")}</label><select class="ctrl" id="nt-event"><option value="">${th("Wszystkie")}</option>${N.EVENT_IDS.map(e => `<option value="${e}" ${f.event === e ? "selected" : ""}>${th(N.EVENTS[e].label)}</option>`).join("")}</select></div>
+          <div class="field"><label for="nt-ym">${th("Miesiąc")}</label><input class="ctrl" type="month" id="nt-ym" value="${esc(f.ym)}"></div>
+          <span class="spacer"></span>${unread() ? `<button class="btn" type="button" id="nt-readall">${ic("check", 15)} ${th("Oznacz wszystkie jako przeczytane")}</button>` : ""}</div>
+        <div class="nt-list" id="nt-list">${list.length ? list.map(n => noticeItem(n, false)).join("") : `<div class="empty">${enabled.length ? th("Brak powiadomień dla wybranych filtrów.") : th("Nie masz włączonych powiadomień — wybierz zdarzenia w „Moje ustawienia”.")}</div>`}</div>
+        <div class="toolbar" style="border:0"><span class="dim">${esc(tp("{n} powiadomienie|{n} powiadomienia|{n} powiadomień", list.length))} · ${esc(t("nieprzeczytane: {n}", { n: unread() }))}</span></div></div>`;
+      const server = Store.mode === "server";
+      const settings = `<div class="card" id="nt-settings"><div class="card-h"><h3>${th("Co chcę otrzymywać")}</h3><span class="sub">${th("zmiana zapisuje się od razu")}</span></div>
+        <div class="card-b"><p class="help mb3">${th("Powiadomienie przychodzi o zmianach w magazynach, do których masz dostęp — nie o Twoich własnych zmianach. Zdarzenie niedostępne wymaga zgody administratora.")}</p>
+          <div class="nt-events" id="nt-events">${N.EVENT_IDS.map(e => { const ok = allowed.includes(e); return `<label class="nt-ev ${ok ? "" : "off"}"><input type="checkbox" data-ev="${e}" ${enabled.includes(e) ? "checked" : ""} ${ok ? "" : "disabled"}>
+            <span><b>${th(N.EVENTS[e].label)}</b><small>${th(N.EVENTS[e].desc)}</small>${ok ? "" : `<span class="badge">${th("wymaga zgody administratora")}</span>`}</span></label>`; }).join("")}</div>
+          <div class="row-gap mt4"><button class="btn" type="button" id="nt-all" ${allowed.length ? "" : "disabled"}>${th("Włącz wszystkie dozwolone")}</button><button class="btn ghost" type="button" id="nt-none">${th("Wyłącz wszystkie")}</button></div>
+          <h4 class="mini-h">${th("Kanał")}</h4>
+          <label class="inline-opt"><input type="checkbox" id="nt-email" ${N.wantsEmail(u) ? "checked" : ""}> ${esc(t("Wysyłaj także e-mailem na adres {e}", { e: u.email || u.login }))}</label>
+          <p class="help">${server ? th("Powiadomienia zawsze trafiają do skrzynki w programie; e-mail wysyła serwer (kolejka z ponawianiem — błąd poczty nie cofa operacji).") : th("Tryb OFFLINE: powiadomienia trafiają do skrzynki w programie; e-mail wysyła dopiero ResInvest ERP Serwer (tryb FIRMOWY).")}</p></div></div>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Powiadomienia")}</h2><p>${th("Zmiany w Twoich magazynach: nowe dokumenty, przesunięcia MM, korekty, anulowania i usunięcia, operacje do zatwierdzenia. Kliknij powiadomienie — otworzy się operacja.")}</p></div></div>
+        ${tabs}${f.tab === "settings" ? settings : f.tab === "allow" && admin ? this.allowHtml() : inbox}`;
+    },
+    /** Zgody administratora: użytkownicy × zdarzenia (administrator ma zawsze wszystkie). */
+    allowHtml() {
+      const users = Store.state.users.filter(u => R.statusOf(u) !== "DISABLED" && u.role !== "admin").sort((a, b) => a.name.localeCompare(b.name, "pl"));
+      return `<div class="card" id="nt-allow"><div class="card-h"><h3>${th("Zgody na powiadomienia")}</h3><span class="sub">${th("zaznaczenie = użytkownik może włączyć zdarzenie u siebie; odebranie zgody wyłącza wysyłkę")}</span></div>
+        <div class="tbl-wrap"><table class="tbl stack nt-matrix" id="nt-allow-table"><thead><tr><th>${th("Użytkownik")}</th>${N.EVENT_IDS.map(e => `<th class="c" title="${esc(t(N.EVENTS[e].desc))}">${th(N.EVENTS[e].label)}</th>`).join("")}<th></th></tr></thead><tbody>
+        ${users.map(u => { const a = N.allowedFor(u), en = N.enabledFor(u); return `<tr data-allow-user="${esc(u.id)}"><td data-l="${th("Użytkownik")}"><b>${esc(u.name)}</b><div class="dim small">${esc(App.roleLabel(u.role))} · ${esc(u.login)}</div></td>
+          ${N.EVENT_IDS.map(e => `<td data-l="${th(N.EVENTS[e].label)}" class="c"><input type="checkbox" data-allow="${e}" ${a.includes(e) ? "checked" : ""} aria-label="${esc(t("{u}: {e}", { u: u.name, e: t(N.EVENTS[e].label) }))}">${en.includes(e) ? `<small class="pos" title="${th("włączone przez użytkownika")}">●</small>` : ""}</td>`).join("")}
+          <td class="r nowrap"><button class="btn sm" type="button" data-allow-all="${esc(u.id)}">${th("Wszystkie")}</button></td></tr>`; }).join("")}</tbody></table></div>
+        <p class="help" style="padding:8px 16px">${th("● — zdarzenie włączone przez użytkownika. Administrator ma dostęp do wszystkich zdarzeń. Każda zmiana zgód jest zapisywana w dzienniku audytu.")}</p></div>`;
+    },
+    bind(page) {
+      const f = App.tabs.notices;
+      $$("[data-nttab]", page).forEach(b => b.onclick = () => { f.tab = b.dataset.nttab; App.render(); });
+      const on = (id, k) => { const el = $(id, page); if (el) el.onchange = e => { f[k] = e.target.value; App.render(); }; };
+      on("#nt-show", "show"); on("#nt-event", "event"); on("#nt-ym", "ym");
+      $$("[data-notice]", page).forEach(b => b.onclick = () => openNotice(b.dataset.notice));
+      const ra = $("#nt-readall", page);
+      if (ra) ra.onclick = async () => { const r = await Store.exec("notice.read", { ids: "all" }, SRC); if (r.ok) Toast.ok(t("Oznaczono jako przeczytane"), tp("{n} powiadomienie|{n} powiadomienia|{n} powiadomień", r.count || 0)); App.render(); };
+      /* ustawienia własne */
+      const save = async (events, email) => {
+        const u = App.user();
+        const r = await Store.exec("notify.prefs", { events, email: email === undefined ? N.wantsEmail(u) : email }, SRC);
+        if (!r.ok) Toast.err(t("Nie zapisano ustawień"), r.error); else if (!r.unchanged) Toast.ok(t("Zapisano ustawienia powiadomień"));
+        App.render();
+      };
+      const chosen = () => $$("[data-ev]", page).filter(x => x.checked).map(x => x.dataset.ev);
+      $$("[data-ev]", page).forEach(x => x.onchange = () => save(chosen()));
+      const all = $("#nt-all", page); if (all) all.onclick = () => save(N.allowedFor(App.user()));
+      const none = $("#nt-none", page); if (none) none.onclick = () => save([]);
+      const em = $("#nt-email", page); if (em) em.onchange = () => save(N.enabledFor(App.user()), em.checked);
+      /* zgody administratora */
+      const allow = async (userId, events) => {
+        const r = await Store.exec("notify.allow", { userId, events }, N_("Powiadomienia — zgody"));
+        if (!r.ok) Toast.err(t("Nie zapisano zgód"), r.error); else if (!r.unchanged) Toast.ok(t("Zapisano zgody: {u}", { u: (R.byId(Store.state.users, userId) || {}).name || "" }));
+        App.render();
+      };
+      $$("[data-allow-user]", page).forEach(tr => {
+        const id = tr.dataset.allowUser;
+        $$("[data-allow]", tr).forEach(x => x.onchange = () => allow(id, $$("[data-allow]", tr).filter(c => c.checked).map(c => c.dataset.allow)));
+      });
+      $$("[data-allow-all]", page).forEach(b => b.onclick = () => allow(b.dataset.allowAll, N.EVENT_IDS.slice()));
+    }
+  };
+
+  /* ================================================================== */
+  /* POCZTA                                                              */
+  /* ================================================================== */
+  const STATUS = { QUEUED: N_("w kolejce"), SENDING: N_("wysyłanie"), SENT: N_("wysłana"), FAILED: N_("nieudana — ponowienie"), DEAD: N_("porzucona"), LOCAL: N_("OFFLINE — bez wysyłki") };
+  const STATUS_TONE = { QUEUED: "info", SENDING: "info", SENT: "ok", FAILED: "warn", DEAD: "err", LOCAL: "" };
+  const TEMPLATE = { notice: N_("Powiadomienie"), test: N_("Wiadomość testowa"), invite: N_("Zaproszenie"), reset: N_("Reset hasła"), confirm: N_("Potwierdzenie adresu"), passwordChanged: N_("Zmiana hasła"), emailChanged: N_("Zmiana adresu e-mail"), deactivated: N_("Dezaktywacja konta") };
+  const TRANSPORT = { resend: N_("Resend (API HTTPS)"), smtp: N_("SMTP (TLS)"), file: N_("pliki .eml w katalogu danych") };
+  const statusBadge = s => `<span class="badge ${STATUS_TONE[s] || ""}" data-mail-status="${esc(s)}">${th(STATUS[s] || s)}</span>`;
+
+  Views.poczta = {
+    data: null, loading: false,
+    async load() {
+      if (Store.mode !== "server") return;
+      this.loading = true;
+      const f = App.tabs.mail || {};
+      const r = await ServerBackend.api("GET", `/api/mail/outbox?status=${encodeURIComponent(f.status || "")}`);
+      this.loading = false;
+      this.data = r && r.ok ? r : { ok: false, error: (r && r.error) || t("Nieprawidłowa odpowiedź serwera") };
+      if (App.route === "poczta") App.render();
+    },
+    html() {
+      const f = App.tabs.mail || (App.tabs.mail = { status: "" });
+      const head = `<div class="page-head"><div class="titles"><h2>${th("Poczta")}</h2><p>${th("Dziennik wysyłki wiadomości e-mail: powiadomienia, zaproszenia, reset hasła. Nieudane wiadomości są ponawiane automatycznie (1 min, 5 min, 15 min, 1 h, 6 h), potem porzucane — można je ponowić ręcznie.")}</p></div>
+        ${Store.mode === "server" ? `<div class="actions"><button class="btn" type="button" id="mail-refresh">${ic("refresh", 15)} ${th("Odśwież")}</button><button class="btn" type="button" id="mail-drain">${ic("mail", 15)} ${th("Wyślij kolejkę teraz")}</button><button class="btn primary" type="button" id="mail-test">${ic("mail", 15)} ${th("Wyślij test do mnie")}</button></div>` : ""}</div>`;
+      if (Store.mode !== "server") return head + this.localHtml();
+      if (!this.data) { if (!this.loading) this.load(); return head + `<div class="empty">${th("Wczytywanie…")}</div>`; }
+      if (!this.data.ok) return head + `<div class="info-line err">${ic("alert", 15)}<span>${esc(this.data.error)}</span></div>`;
+      const d = this.data, mi = d.mail || {}, st = d.stats || {};
+      const cnt = k => st[k] || 0;
+      const channel = `<div class="card mb4" id="mail-channel"><div class="card-h"><h3>${th("Kanał wysyłki")}</h3></div><div class="card-b">
+          <dl class="money-list"><dt>${th("Transport")}</dt><dd><b id="mail-transport">${th(TRANSPORT[mi.transport] || mi.transport || "—")}</b></dd><dt>${th("Nadawca")}</dt><dd>${esc(mi.from || "—")}</dd><dt>${th("Skonfigurowano")}</dt><dd>${mi.configured ? th("tak") : `<span class="neg">${th("nie — brak klucza API / hasła SMTP")}</span>`}</dd></dl>
+          ${mi.transport === "file" ? `<div class="info-line warn mt2">${ic("alert", 15)}<span>${esc(t("Wiadomości NIE są wysyłane — zapisywane jako pliki .eml w {d}. Ustaw EMAIL_TRANSPORT i klucz w server.env.", { d: mi.outDir || "mail-outbox" }))}</span></div>` : ""}</div></div>`;
+      const tiles = `<div class="grid g4 mb4" id="mail-stats">${["QUEUED", "SENT", "FAILED", "DEAD"].map(k => `<div class="kpi"><div class="k-t">${th(STATUS[k])}</div><div class="k-v">${cnt(k)}</div></div>`).join("")}</div>`;
+      const rows = (d.rows || []).map(m => `<tr data-mail-id="${m.id}"><td data-l="${th("Utworzono")}" class="nowrap">${esc(Dates.ts(m.ts))}</td><td data-l="${th("Rodzaj")}">${th(TEMPLATE[m.template] || m.template)}</td><td data-l="${th("Do")}">${esc(m.to)}</td><td data-l="${th("Temat")}">${esc(m.subject || "—")}</td>
+        <td data-l="${th("Status")}">${statusBadge(m.status)}</td><td data-l="${th("Próby")}" class="r">${m.attempts || 0}</td><td data-l="${th("Ostatni błąd")}" class="small">${esc(m.error || "")}</td><td data-l="${th("Następna próba")}" class="nowrap">${m.status === "FAILED" && m.nextAt ? esc(Dates.ts(m.nextAt)) : "—"}</td>
+        <td class="r">${(m.status === "FAILED" || m.status === "DEAD") && m.retryable ? `<button class="btn sm" type="button" data-retry="${m.id}">${ic("refresh", 13)} ${th("Ponów")}</button>` : ""}</td></tr>`).join("");
+      return head + channel + tiles + `<div class="card" id="mail-log"><div class="toolbar">
+          <div class="field"><label for="mail-status">${th("Status")}</label><select class="ctrl" id="mail-status"><option value="">${th("Wszystkie")}</option>${["QUEUED", "SENT", "FAILED", "DEAD"].map(s => `<option value="${s}" ${f.status === s ? "selected" : ""}>${th(STATUS[s])}</option>`).join("")}</select></div></div>
+        ${rows ? `<div class="tbl-wrap"><table class="tbl stack" id="mail-table"><thead><tr><th>${th("Utworzono")}</th><th>${th("Rodzaj")}</th><th>${th("Do")}</th><th>${th("Temat")}</th><th>${th("Status")}</th><th class="r">${th("Próby")}</th><th>${th("Ostatni błąd")}</th><th>${th("Następna próba")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${th("Brak wiadomości.")}</div>`}
+        <p class="help" style="padding:8px 16px">${th("Treść wysłanej wiadomości jest usuwana z bazy. Wiadomości z jednorazowym linkiem (zaproszenie, reset hasła) nie są przechowywane i nie można ich ponowić — wyślij nowe z modułu Użytkownicy.")}</p></div>`;
+    },
+    /** Tryb OFFLINE: powiadomienia przygotowane w programie (bez wysyłki e-mail). */
+    localHtml() {
+      const all = (Store.state.notices || []).slice().sort((a, b) => a.ts < b.ts ? 1 : -1);
+      const shown = all.slice(0, 200);
+      const user = id => (R.byId(Store.state.users, id) || {});
+      return `<div class="info-line mb4" id="mail-offline">${ic("alert", 15)}<span>${th("Tryb OFFLINE (dane w tej przeglądarce): wiadomości e-mail nie są wysyłane. Powiadomienia trafiają do skrzynek użytkowników w programie. Wysyłkę e-mail (Resend / SMTP) wykonuje ResInvest ERP Serwer — tryb FIRMOWY.")}</span></div>
+        <div class="grid g4 mb4" id="mail-stats"><div class="kpi"><div class="k-t">${th("Powiadomienia w programie")}</div><div class="k-v">${all.length}</div></div><div class="kpi"><div class="k-t">${th("Nieprzeczytane")}</div><div class="k-v">${all.filter(n => !n.read).length}</div></div><div class="kpi"><div class="k-t">${th("Z prośbą o e-mail")}</div><div class="k-v">${all.filter(n => n.email).length}</div></div><div class="kpi"><div class="k-t">${th("Odbiorcy")}</div><div class="k-v">${new Set(all.map(n => n.userId)).size}</div></div></div>
+        <div class="card" id="mail-log">${shown.length ? `<div class="tbl-wrap"><table class="tbl stack" id="mail-table"><thead><tr><th>${th("Utworzono")}</th><th>${th("Do")}</th><th>${th("Temat")}</th><th>${th("Zdarzenie")}</th><th>${th("Przeczytane")}</th><th>${th("E-mail")}</th></tr></thead><tbody>
+          ${shown.map(n => `<tr class="${n.opId ? "clickable" : ""}" ${n.opId ? `data-opid="${esc(n.opId)}"` : ""}><td data-l="${th("Utworzono")}" class="nowrap">${esc(Dates.ts(n.ts))}</td><td data-l="${th("Do")}">${esc(user(n.userId).name || n.userId)}<div class="dim small">${esc(user(n.userId).email || "")}</div></td><td data-l="${th("Temat")}">${esc(I18N.tr(n.title))}</td><td data-l="${th("Zdarzenie")}">${evChips(n)}</td><td data-l="${th("Przeczytane")}">${n.read ? th("tak") : `<b>${th("nie")}</b>`}</td><td data-l="${th("E-mail")}">${statusBadge("LOCAL")}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak powiadomień.")}</div>`}</div>`;
+    },
+    bind(page) {
+      const f = App.tabs.mail;
+      UI.bindOps(page);
+      const st = $("#mail-status", page); if (st) st.onchange = e => { f.status = e.target.value; this.data = null; App.render(); };
+      const rf = $("#mail-refresh", page); if (rf) rf.onclick = () => { this.data = null; App.render(); };
+      const act = async (path, body, okTitle) => {
+        const r = await ServerBackend.api("POST", path, body || {});
+        if (r && r.ok) Toast.ok(okTitle, r.message || ""); else Toast.err(t("Poczta"), (r && r.error) || t("Nieprawidłowa odpowiedź serwera"));
+        this.data = null; App.render();
+      };
+      const dr = $("#mail-drain", page); if (dr) dr.onclick = () => act("/api/mail/drain", {}, t("Kolejka przetworzona"));
+      const ts = $("#mail-test", page); if (ts) ts.onclick = () => act("/api/mail/test", {}, t("Wysłano wiadomość testową"));
+      $$("[data-retry]", page).forEach(b => b.onclick = () => act("/api/mail/retry", { id: Number(b.dataset.retry) }, t("Wiadomość ponowiona")));
+    }
+  };
+
+  Object.assign(UI, { Bell, openNotice, unreadNotices: unread });
 })(typeof globalThis !== "undefined" ? globalThis : this);
 
 </script>

@@ -21,7 +21,7 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { ROOT, Store, loadConfig, loadEnv, makeLogger, verifyPassword, I18N, R, AuthLib, Service } from "./core.mjs";
-import { mailConfig, mailInfo, sendMail } from "./mail.mjs";
+import { mailConfig, mailInfo, sendMail, compose, sendRaw } from "./mail.mjs";
 
 const [major, minor] = process.versions.node.split(".").map(Number);
 if (major < 22 || (major === 22 && minor < 13)) { console.error(`ResInvest ERP Serwer wymaga Node.js 22.13 lub nowszego (jest ${process.versions.node}).`); process.exit(1); }
@@ -160,6 +160,46 @@ async function sendReset(u, actor, meta) {
   store.auditEvent({ entityId: u.id, opNo: u.login, code: "PASSWORD_RESET_REQUESTED", act: R.Lx(actor ? N_("Reset hasła wysłany przez administratora: {l}") : N_("Prośba o reset hasła: {l}"), { l: u.login }), before: null, after: { wysylka: m.ok ? mailCfg.transport : "błąd" }, source: actor ? N_("Administracja — użytkownicy") : N_("Ekran logowania") }, meta, actor || u);
   return m;
 }
+/* ---------------- powiadomienia e-mail: kolejka (zapis w bazie), wysyłka w tle, ponowienia ---------------- */
+/** Po zatwierdzonej zmianie: powiadomienia z prośbą o e-mail → kolejka `outbox` (treść PL, link do operacji). */
+function queueNotices(ids) {
+  if (!ids || !ids.length) return 0;
+  const want = new Set(ids);
+  let n = 0;
+  for (const x of store.state.notices || []) {
+    if (!want.has(x.id) || !x.email) continue;
+    const u = R.byId(store.state.users, x.userId);
+    const to = u && (u.email || u.login);
+    if (!to || R.statusOf(u) !== "ACTIVE") continue;
+    const c = R.Notify.mailContent(x);
+    const msg = compose("notice", to, { name: u.name, subject: c.subject, lines: c.lines, link: `${appUrl()}/#/${x.opId ? "operacje?op=" + encodeURIComponent(x.opId) : x.kind === "approval" || x.kind === "rejected" ? "operacje" : "powiadomienia"}` });
+    store.enqueueMail("notice", to, u.id, msg.subject, { html: msg.html, text: msg.text }, x.id);
+    n++;
+  }
+  if (n) setTimeout(() => drainMail().catch(e => log("ERROR", "Kolejka poczty: " + e.message)), 50);
+  return n;
+}
+let draining = null;
+/** Wysyłka wiadomości z kolejki (jedna naraz w procesie serwera). Błąd poczty nie wpływa na dane. */
+function drainMail() {
+  if (draining) return draining;
+  draining = (async () => {
+    let sent = 0, failed = 0;
+    for (let guard = 0; guard < 20; guard++) {
+      const rows = store.claimDue(10);
+      if (!rows.length) break;
+      for (const row of rows) {
+        let body = {}; try { body = JSON.parse(row.body || "{}"); } catch (e) {}
+        const r = await sendRaw(mailCfg, { to: row.to_addr, template: row.template, subject: row.subject, html: body.html || "", text: body.text || "" }, log);
+        if (r.ok) { store.markSent(row.id, r, mailCfg.transport); sent++; }
+        else { const f = store.markFailed(row.id, r.error, mailCfg.transport); failed++; if (f.dead) log("ERROR", `E-mail #${row.id} → ${row.to_addr} porzucony po ${f.attempts} próbach`); }
+      }
+    }
+    return { sent, failed };
+  })().finally(() => { draining = null; });
+  return draining;
+}
+
 const TOKEN_ERR = { BAD: N_("Link jest nieprawidłowy."), USED: N_("Link został już wykorzystany."), EXPIRED: N_("Link wygasł — poproś administratora o nowy.") };
 const tokenError = code => ({ ok: false, code, error: t(TOKEN_ERR[code] || TOKEN_ERR.BAD) });
 /** Czynności po zapisie konta: dezaktywacja (wylogowanie + e-mail), zmiana adresu (potwierdzenie + powiadomienie). */
@@ -331,6 +371,7 @@ async function handleApi(req, res, url) {
     const r = store.execute(user.id, cmd, args, L, metaOf(req));
     const changed = !!r.__changed; delete r.__changed;
     if (changed) {
+      if (r.notices) { queueNotices(r.notices); delete r.notices; }
       if (cmd === "user.save") await afterUserSave(r, user, metaOf(req));
       if (cmd === "user.remove" && r.ok) { store.dropAccount(String(args.id)); store.dropTokens(String(args.id)); }
       broadcast(store.state.rev, user.id);
@@ -423,6 +464,34 @@ async function handleApi(req, res, url) {
     const rows = store.db.prepare("SELECT ts, login, user_id AS userId, ok, reason, ip FROM login_log ORDER BY id DESC LIMIT 1000").all().map(r => Object.assign({}, r, { ok: !!r.ok }));
     return json(req, res, 200, { ok: true, log: rows, mail: store.mailLog(300), mailConfig: mailInfo(mailCfg) });
   }
+  /* ---- poczta: dziennik wysyłki, ponowienie, test, przetworzenie kolejki (administrator) ---- */
+  if (path.startsWith("/api/mail/")) {
+    R.applyRoles(store.state);
+    if (!R.can(user, "notifications.manage")) return json(req, res, 403, { ok: false, code: "FORBIDDEN", error: t("Nie masz uprawnień do wykonania tej operacji.") });
+    if (path === "/api/mail/outbox" && method === "GET") {
+      const st = String(url.searchParams.get("status") || "");
+      const o = store.outbox(["QUEUED", "SENDING", "SENT", "FAILED", "DEAD"].includes(st) ? st : "", 300);
+      return json(req, res, 200, { ok: true, rows: o.rows, stats: o.stats, mail: mailInfo(mailCfg) });
+    }
+    if (method !== "POST") return json(req, res, 404, { ok: false, error: t("Nie znaleziono") });
+    const b = await readBody(req, 64 * 1024), meta = metaOf(req);
+    if (path === "/api/mail/retry") {
+      if (!store.retryMail(b.id)) return json(req, res, 400, { ok: false, error: t("Tej wiadomości nie można ponowić (wysłana albo bez zapisanej treści).") });
+      store.auditEvent({ entityId: String(b.id), opNo: `#${b.id}`, code: "MAIL_RETRIED", act: R.Lx(N_("Ponowienie wiadomości e-mail #{n}"), { n: b.id }), before: null, after: null, entity: "system", event: "settings", source: N_("Poczta") }, meta, user);
+      const r = await drainMail();
+      return json(req, res, 200, { ok: true, message: t("Wysłano: {a}, nieudane: {b}", { a: r.sent, b: r.failed }) });
+    }
+    if (path === "/api/mail/test") {
+      const to = user.email || user.login;
+      const msg = compose("test", to, { name: user.name, transport: mailInfo(mailCfg).transport, by: user.name });
+      store.enqueueMail("test", to, user.id, msg.subject, { html: msg.html, text: msg.text }, null);
+      store.auditEvent({ entityId: user.id, opNo: to, code: "MAIL_TEST", act: R.Lx(N_("Wiadomość testowa na adres {e}"), { e: to }), before: null, after: { transport: mailCfg.transport }, entity: "system", event: "settings", source: N_("Poczta") }, meta, user);
+      const r = await drainMail();
+      return json(req, res, 200, { ok: true, message: r.failed ? t("Wysyłka nieudana — szczegóły w dzienniku poczty.") : t("Wiadomość wysłana na adres {e}.", { e: to }) });
+    }
+    if (path === "/api/mail/drain") { const r = await drainMail(); return json(req, res, 200, { ok: true, message: t("Wysłano: {a}, nieudane: {b}", { a: r.sent, b: r.failed }) }); }
+    return json(req, res, 404, { ok: false, error: t("Nie znaleziono") });
+  }
   /* ---- kopie zapasowe ---- */
   if (path === "/api/backups") {
     if (!R.can(user, "data.backup")) return json(req, res, 403, { ok: false, error: t("Brak uprawnienia „{p}”", { p: "data.backup" }) });
@@ -472,7 +541,9 @@ server.listen(cfg.port, cfg.host, () => {
 });
 const timers = [
   setInterval(() => { try { store.autoBackup(false); store.purgeSessions(); } catch (e) { log("ERROR", "Kopia automatyczna: " + e.message); } }, 10 * 60000),
-  setInterval(() => { for (const c of clients) { try { c.write(": ping\n\n"); } catch (e) { clients.delete(c); } } }, 25000)
+  setInterval(() => { for (const c of clients) { try { c.write(": ping\n\n"); } catch (e) { clients.delete(c); } } }, 25000),
+  // kolejka poczty: ponowienia według terminów (1 min, 5 min, 15 min, 1 h, 6 h)
+  setInterval(() => { drainMail().catch(e => log("ERROR", "Kolejka poczty: " + e.message)); }, 5000)
 ];
 function shutdown(sig) {
   log("INFO", `Zatrzymywanie (${sig})…`);

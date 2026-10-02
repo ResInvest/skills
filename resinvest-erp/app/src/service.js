@@ -14,6 +14,8 @@
 (function (root) {
   "use strict";
   const R = root.RIW || (typeof require === "function" ? require("./engine.js") : null);
+  if (!R.Planner && typeof require === "function") require("./planner.js");
+  if (!R.Notify && typeof require === "function") require("./notify.js");
   const t = (s, p) => R.I18N.t(s, p);
   const N_ = s => s;
   const str = v => String(v == null ? "" : v).trim();
@@ -62,6 +64,12 @@
     /** Usunięcie dokumentu (soft delete z odwróceniem ruchów) — Administrator / Kierownik, powód wymagany. */
     "op.delete": { perm: "documents.delete", run: (s, a, c) => R.deleteOperation(s, str(a.opId), c, a.reason) },
     "print.register": { perm: "report.view", run: (s, a, c) => R.registerPrint(s, c, { kind: a.kind, title: a.title, range: a.range, wh: a.wh, format: a.format }) },
+    /* ---- planer zakupów (plan dnia magazynu; wykonanie liczy się z operacji) ---- */
+    "plan.set": { perm: "planner.edit", run: (s, a, c) => R.Planner.setPlan(s, a, c) },
+    /* ---- powiadomienia ---- */
+    "notify.prefs": { run: (s, a, c) => R.Notify.setMine(s, { events: a.events, email: a.email }, c) },
+    "notify.allow": { perm: "notifications.manage", run: (s, a, c) => R.Notify.allow(s, a.userId, a.events, c) },
+    "notice.read": { run: (s, a, c) => R.Notify.markRead(s, a.ids === "all" ? "all" : a.ids, c) },
     /* ---- inwentaryzacja ---- */
     "inv.open": { perm: "inv.open", run: (s, a, c) => R.Inventory.open(s, a.ym, c) },
     "inv.generate": { perm: "inv.count", run: (s, a, c) => R.Inventory.generate(s, a.ym, c) },
@@ -108,7 +116,9 @@
     const u = user && R.byId(state.users, user.id);
     if (!u) return null;
     const acc = R.whAccess(u);
-    if (acc === null) return state;
+    // skrzynka powiadomień — tylko własne (także dla ról globalnych)
+    const mine = (state.notices || []).filter(n => n.userId === u.id);
+    if (acc === null) return Object.assign({}, state, { notices: R.can(u, "notifications.manage") ? state.notices || [] : mine });
     const A = new Set(acc), inA = w => A.has(w);
     const out = Object.assign({}, state);
     out.operations = state.operations.filter(o => inA(o.whId) || (o.toWhId && inA(o.toWhId)));
@@ -116,11 +126,13 @@
     out.ledger = state.ledger.filter(l => inA(l.whId) || (l.opId && opIds.has(l.opId)));
     out.drafts = state.drafts.filter(d => d.userId === u.id || (d.status === "PENDING" && inA(d.whId)));
     out.inventory = state.inventory.filter(p => inA(p.whId));
+    out.plans = (state.plans || []).filter(p => inA(p.whId));
     out.audit = state.audit.filter(a => a.userId === u.id || (a.whId && inA(a.whId) && a.entity !== "user" && a.entity !== "role" && a.entity !== "system"));
     const fl = state.fleet || {};
     out.fleet = Object.fromEntries(Object.entries(fl).map(([k, v]) => [k, Array.isArray(v) ? v.filter(x => !x.whId || inA(x.whId)) : v]));
     out.users = state.users.filter(x => x.id === u.id || R.whAccess(x) === null && x.role === "admin" || (x.warehouseIds || [x.whId]).concat(x.whId).some(inA))
       .map(x => x.id === u.id ? x : { id: x.id, name: x.name, firstName: x.firstName, lastName: x.lastName, login: x.login, email: x.email, role: x.role, whId: x.whId, warehouseIds: x.warehouseIds, status: x.status, active: x.active });
+    out.notices = mine;
     out.projected = true;
     return out;
   }
@@ -140,7 +152,12 @@
       const a = Object.assign({}, args || {});
       const full = Object.assign({}, ctx, { user, source: str(a.source).slice(0, 120) || ctx.source || N_("Aplikacja") });
       try {
-        return c.run(state, a, full) || { ok: false, error: t("Operacja odrzucona") };
+        const notify = R.Notify && R.Notify.COMMANDS.includes(cmd);
+        const before = notify ? R.Notify.beforeOf(state, cmd, a) : null;
+        const res = c.run(state, a, full) || { ok: false, error: t("Operacja odrzucona") };
+        // powiadomienia powstają w tej samej zmianie danych (zapis „wszystko albo nic”)
+        if (notify && res.ok) { const list = R.Notify.afterCommand(state, cmd, a, res, full, before); if (list.length) res.notices = list.map(n => n.id); }
+        return res;
       } catch (e) {
         return { ok: false, error: t("Błąd wewnętrzny — nic nie zapisano: {m}", { m: e.message }), code: "INTERNAL" };
       }
