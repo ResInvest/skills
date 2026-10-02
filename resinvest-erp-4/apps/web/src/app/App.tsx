@@ -19,6 +19,7 @@ import { CatalogPage } from "../pages/catalog/CatalogPage";
 import { DocumentsPage } from "../pages/documents/DocumentsPage";
 import { NewOperationPage } from "../pages/documents/NewOperationPage";
 import { ReportsPage } from "../pages/reports/ReportsPage";
+import { PwaBanners } from "./pwa";
 import { MailPage } from "../pages/notifications/MailPage";
 import { PlannerPage } from "../pages/planner/PlannerPage";
 
@@ -76,5 +77,5 @@ export function AppRoutes() {
 }
 
 export function App() {
-  return <BrowserRouter><SessionProvider><AppRoutes /></SessionProvider></BrowserRouter>;
+  return <BrowserRouter><PwaBanners /><SessionProvider><AppRoutes /></SessionProvider></BrowserRouter>;
 }

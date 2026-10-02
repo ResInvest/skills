@@ -6,6 +6,7 @@ import { ME_KEY, useSession } from "../../auth/session";
 import { Alert, Field, fmtDateTime, uaLabel } from "../../ui/components";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 import { NotificationSettings } from "../notifications/NotificationSettings";
+import { InstallApp } from "../../app/pwa";
 
 export const useWarehouses = () => useQuery({ queryKey: ["warehouses"], queryFn: async ({ signal }) => (await api.get<{ warehouses: Warehouse[] }>("/warehouses", signal)).warehouses, staleTime: 60_000 });
 
@@ -78,6 +79,10 @@ export function AccountPage() {
         <header className="card-h"><h2 id="nt-h">Powiadomienia e-mail</h2></header>
         <p className="muted small">Na adres {user.email}. Zdarzenie możesz włączyć, gdy administrator wyrazi na nie zgodę.</p>
         <NotificationSettings mode="own" />
+      </section>
+      <section className="card" aria-labelledby="app-h">
+        <header className="card-h"><h2 id="app-h">Aplikacja na telefon i komputer</h2></header>
+        <InstallApp />
       </section>
       <section className="card" aria-labelledby="pw-h">
         <header className="card-h"><h2 id="pw-h">Zmiana hasła</h2></header>

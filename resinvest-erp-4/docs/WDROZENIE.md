@@ -40,6 +40,40 @@ Zmienne środowiskowe usługi API (wzór: `.env.example`): `DATABASE_URL`, `APP_
 `TRUSTED_PROXIES=127.0.0.1`, poczta (`EMAIL_TRANSPORT`, klucz Resend lub SMTP), katalogi kopii.
 Plik konfiguracyjny tylko na serwerze, prawa odczytu: administratorzy i konto usługi API.
 
+### 4.1 Poczta — Resend (główny kanał) i SMTP Resend (zapasowy)
+
+Wpisy w pliku konfiguracyjnym usługi API na serwerze (klucz **tylko** tam — nigdy w repozytorium, w e-mailu ani na dysku współdzielonym):
+
+```
+EMAIL_TRANSPORT=resend
+EMAIL_FALLBACK_TRANSPORT=smtp
+RESEND_API_KEY=<klucz re_… z panelu Resend>
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_USER=resend
+SMTP_PASS=<ten sam klucz re_…>
+EMAIL_FROM="ResInvest ERP <erp@resinvest.group>"
+```
+
+* Gdy Resend API nie odpowiada, ta sama wiadomość od razu idzie przez SMTP; błąd obu kanałów → ponowienie z kolejki
+  (1 min, 5 min, 15 min, 1 h, 6 h). Status: **Poczta** w aplikacji (administrator), przycisk „Wyślij test do mnie”.
+* `EMAIL_FROM` musi używać domeny zweryfikowanej w Resend (rekordy SPF i DKIM w DNS domeny `resinvest.group`).
+* Zapora / FortiGate: wyjście z serwera do `api.resend.com:443` oraz `smtp.resend.com:465`.
+* Własny serwer pocztowy firmy zamiast Resend: `EMAIL_TRANSPORT=smtp` i jego dane `SMTP_*`.
+
+## 4.2 Klienci (F8)
+
+* **Przeglądarka i telefon (PWA)** — adres `APP_URL`; „Zainstaluj aplikację” (Chrome / Edge / Android) albo Safari →
+  Udostępnij → Do ekranu początkowego (iPhone). W urządzeniu zapisywane są tylko pliki programu; dane i sesja — na serwerze.
+  Nginx: `sw.js` i `manifest.webmanifest` bez cache (reguły w `deploy/nginx/resinvest.conf`).
+* **Aplikacja Windows** — instalator `ResInvest ERP_4.0.0_x64-setup.exe` z GitHub Actions (workflow
+  „ResInvest ERP 4 — aplikacja Windows”, artefakt z sumą SHA-256). Przy pierwszym uruchomieniu pyta o adres serwera;
+  wdrożenie przez dział IT bez pytania: instalacja cicha `"ResInvest ERP_4.0.0_x64-setup.exe" /S`, adres serwera
+  ze zmiennej `RESINVEST_SERVER_URL` (np. GPO) albo skrót z parametrem `--server=https://erp.resinvest.group`.
+  Certyfikat serwera musi być zaufany w Windows (firmowe CA w magazynie „Zaufane główne urzędy certyfikacji”).
+  Instalator nie jest jeszcze podpisany certyfikatem wydawcy — Windows SmartScreen pokaże ostrzeżenie do czasu
+  zakupu certyfikatu podpisywania kodu (decyzja firmy).
+
 ## 5. Środowisko testowe (Docker Compose)
 
 `docker-compose.yml` uruchamia PostgreSQL, migracje, API i Nginx w kontenerach (serwer Linux / środowisko testowe).

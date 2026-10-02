@@ -52,7 +52,7 @@ export function MailPage() {
       {msg && <Alert kind={msg.kind}><span id="mail-msg">{msg.text}</span></Alert>}
       {q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">Wczytywanie…</p> : <>
         <ul className="kpis" id="mail-stats">
-          <li><small>Kanał wysyłki</small><strong>{TRANSPORT[q.data.transport] ?? q.data.transport}</strong><span className="muted small">proces wysyłki: {q.data.worker === "on" ? "włączony" : "wyłączony"}</span></li>
+          <li><small>Kanał wysyłki</small><strong>{q.data.transport.split("+").map(t => TRANSPORT[t] ?? t).join(" → zapasowo ")}</strong><span className="muted small">proces wysyłki: {q.data.worker === "on" ? "włączony" : "wyłączony"}</span></li>
           {(["QUEUED", "SENT", "FAILED", "DEAD"] as const).map(s => <li key={s}><small>{STATUS[s].label}</small><strong>{q.data.counts[s] ?? 0}</strong></li>)}
         </ul>
         {q.data.transport === "file" && <Alert kind="warn">Poczta zapisuje wiadomości do plików .eml na serwerze — nic nie jest wysyłane. Ustaw EMAIL_TRANSPORT=smtp albo resend w konfiguracji serwera.</Alert>}

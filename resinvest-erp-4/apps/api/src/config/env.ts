@@ -26,6 +26,8 @@ export const EnvSchema = z.object({
   LOGIN_RATE_PER_IP: z.coerce.number().int().min(1).max(100_000).default(20),
   LOGIN_RATE_PER_EMAIL: z.coerce.number().int().min(1).max(100_000).default(8),
   EMAIL_TRANSPORT: z.enum(["resend", "smtp", "file"]).default("file"),
+  /** Kanał zapasowy: przy błędzie kanału głównego ta sama wiadomość idzie od razu drugim kanałem (np. Resend API → SMTP). */
+  EMAIL_FALLBACK_TRANSPORT: z.enum(["none", "resend", "smtp"]).default("none"),
   EMAIL_FROM: z.string().default("ResInvest ERP <erp@resinvest.group>"),
   RESEND_API_KEY: z.string().default(""),
   SMTP_HOST: z.string().default(""),
@@ -42,6 +44,9 @@ export const EnvSchema = z.object({
   if (e.NODE_ENV === "production" && !e.APP_URL.startsWith("https://")) ctx.addIssue({ code: "custom", path: ["APP_URL"], message: "W produkcji APP_URL musi używać HTTPS" });
   if (e.EMAIL_TRANSPORT === "resend" && !e.RESEND_API_KEY) ctx.addIssue({ code: "custom", path: ["RESEND_API_KEY"], message: "Transport resend wymaga klucza RESEND_API_KEY" });
   if (e.EMAIL_TRANSPORT === "smtp" && !e.SMTP_HOST) ctx.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "Transport smtp wymaga SMTP_HOST" });
+  if (e.EMAIL_FALLBACK_TRANSPORT === "resend" && !e.RESEND_API_KEY) ctx.addIssue({ code: "custom", path: ["RESEND_API_KEY"], message: "Kanał zapasowy resend wymaga klucza RESEND_API_KEY" });
+  if (e.EMAIL_FALLBACK_TRANSPORT === "smtp" && !e.SMTP_HOST) ctx.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "Kanał zapasowy smtp wymaga SMTP_HOST" });
+  if (e.EMAIL_FALLBACK_TRANSPORT !== "none" && e.EMAIL_FALLBACK_TRANSPORT === e.EMAIL_TRANSPORT) ctx.addIssue({ code: "custom", path: ["EMAIL_FALLBACK_TRANSPORT"], message: "Kanał zapasowy musi być inny niż główny" });
   if (e.NODE_ENV === "production" && e.ALLOWED_NETWORKS.length === 0) ctx.addIssue({ code: "custom", path: ["ALLOWED_NETWORKS"], message: "W produkcji podaj sieci LAN i pulę VPN (ALLOWED_NETWORKS)" });
 });
 

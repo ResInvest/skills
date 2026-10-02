@@ -3,9 +3,11 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./app/App";
 import { createQueryClient } from "./app/query";
+import { startPwa } from "./app/pwa";
 import "./styles/app.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Brak elementu #root");
 const queryClient = createQueryClient();
+startPwa();
 createRoot(root).render(<StrictMode><QueryClientProvider client={queryClient}><App /></QueryClientProvider></StrictMode>);

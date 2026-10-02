@@ -19,6 +19,16 @@ export default tseslint.config(
     },
   },
   {
+    // ekran konfiguracji aplikacji Windows (zwykły skrypt przeglądarki w oknie Tauri)
+    files: ["apps/desktop/setup/**/*.js"],
+    languageOptions: { globals: { ...globals.browser } },
+  },
+  {
+    // szablon service workera PWA (zmienne __BUILD__ / __PRECACHE__ podstawia build)
+    files: ["apps/web/sw.template.js"],
+    languageOptions: { globals: { ...globals.serviceworker, __PRECACHE__: "readonly" } },
+  },
+  {
     // skrypty uruchomieniowe (Node, ESM)
     files: ["**/*.mjs"],
     languageOptions: { globals: { ...globals.node } },

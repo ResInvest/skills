@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ResInvest ERP — połączenie z serwerem</title>
+  <link rel="stylesheet" href="setup.css" />
+</head>
+<body>
+  <main class="card">
+    <header><img src="icon.png" alt="" width="48" height="48" /><div><strong>ResInvest ERP</strong><small>ResInvest Commodities</small></div></header>
+    <h1>Połączenie z serwerem firmy</h1>
+    <p class="muted">Podaj adres serwera ResInvest ERP (otrzymasz go od działu IT). Aplikacja zapamięta go na tym komputerze — zmienisz go w menu <strong>Plik → Zmień adres serwera</strong>.</p>
+    <form id="form" novalidate>
+      <label for="url">Adres serwera <span class="req">*</span></label>
+      <input id="url" type="url" inputmode="url" autocomplete="url" placeholder="https://erp.resinvest.group" required />
+      <small class="hint">Połączenie musi być szyfrowane (https). Poza biurem włącz VPN (FortiClient).</small>
+      <p id="msg" class="msg" role="status" hidden></p>
+      <div class="actions">
+        <button id="connect" type="submit" class="primary">Połącz</button>
+        <button id="force" type="button" hidden>Zapisz mimo to</button>
+      </div>
+    </form>
+  </main>
+  <footer>Dane pozostają na serwerze firmy — na tym komputerze zapisywany jest tylko adres serwera.</footer>
+  <script src="setup.js"></script>
+</body>
+</html>

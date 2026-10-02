@@ -10,10 +10,10 @@ Windows (Tauri) — w sieci firmy lub przez FortiClient VPN.
 > F3 (silnik stanów: księga ruchów z blokadą, salda, karta materiału, bilans otwarcia z zatwierdzaniem)
 > F4a (kartoteki: materiały, kontrahenci, flota, rębaki własne i zewnętrzne, operacje dodatkowe)
 > F4b-1 (operacje z dokumentami: zakup PZ, sprzedaż WZ, produkcja RW + PW, operacje dodatkowe, rejestr dokumentów)
-> i F4b-2a (przesunięcia MM jedno- i dwuetapowe z przyjęciem w magazynie docelowym) ukończone. F4b-2b-1 (transport: własny, zewnętrzny, mieszany, kolej, dostawca; dokument TR) ukończone. F4b-2b-2 (zakup z produkcją i sprzedażą wyniku, sprzedaż bezpośrednia z lasu, pochodzenie i kwity) ukończone — faza F4b zamknięta. F4c (Planer zakupów: plan dzienny ręcznie, wykonanie / tony / ceny / transport / kursy kierowców z dokumentów) ukończone. F4d (prowadzenie w „Nowej operacji”: lista „Co jeszcze uzupełnić” z czerwonymi brakami, samouczek pod polami i kolumnami) ukończone. F5 (korekty BYŁO / JEST z odwróceniem i ponownym zaksięgowaniem ruchów, usuwanie z odwróceniem ruchów, historia zmian, zakładki Korekty / Edytowane / Usunięte) ukończone. F6 (raporty: obroty magazynowe z kontrolą spójności, zestawienie miesięczne i roczne, pulpit miesiąca z kaflem „Operacje dodatkowe”, eksport CSV / XLSX / PDF / DOCX) ukończone. F7 (powiadomienia e-mail: zdarzenia z operacji w kolejce poczty w tej samej transakcji, zgody administratora i wybór użytkownika, dziennik wysyłki z ponawianiem, wiadomość testowa) ukończone. Następna: F8 (klienci: PWA, aplikacja Windows, instalator).**
+> i F4b-2a (przesunięcia MM jedno- i dwuetapowe z przyjęciem w magazynie docelowym) ukończone. F4b-2b-1 (transport: własny, zewnętrzny, mieszany, kolej, dostawca; dokument TR) ukończone. F4b-2b-2 (zakup z produkcją i sprzedażą wyniku, sprzedaż bezpośrednia z lasu, pochodzenie i kwity) ukończone — faza F4b zamknięta. F4c (Planer zakupów: plan dzienny ręcznie, wykonanie / tony / ceny / transport / kursy kierowców z dokumentów) ukończone. F4d (prowadzenie w „Nowej operacji”: lista „Co jeszcze uzupełnić” z czerwonymi brakami, samouczek pod polami i kolumnami) ukończone. F5 (korekty BYŁO / JEST z odwróceniem i ponownym zaksięgowaniem ruchów, usuwanie z odwróceniem ruchów, historia zmian, zakładki Korekty / Edytowane / Usunięte) ukończone. F6 (raporty: obroty magazynowe z kontrolą spójności, zestawienie miesięczne i roczne, pulpit miesiąca z kaflem „Operacje dodatkowe”, eksport CSV / XLSX / PDF / DOCX) ukończone. F7 (powiadomienia e-mail: zdarzenia z operacji w kolejce poczty w tej samej transakcji, zgody administratora i wybór użytkownika, dziennik wysyłki z ponawianiem, wiadomość testowa) ukończone. F8 (klienci: PWA z instalacją na telefonie i komputerze, aplikacja Windows Tauri z instalatorem NSIS budowanym w GitHub Actions, poczta Resend z zapasowym SMTP) ukończone. Następna: F9 (eksploatacja: instalator serwera Windows, kopie zapasowe, monitoring).**
 > Wersja produkcyjna do dnia przełączenia to **ResInvest ERP 3.4** (`../resinvest-erp`).
 > Plan i decyzje: [`../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md`](../resinvest-erp/docs/AUDYT_REPOZYTORIUM_4.0.md),
-> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md), [`docs/RAPORT_F4a.md`](docs/RAPORT_F4a.md), [`docs/RAPORT_F4b.md`](docs/RAPORT_F4b.md), [`docs/RAPORT_F4c.md`](docs/RAPORT_F4c.md), [`docs/RAPORT_F4d.md`](docs/RAPORT_F4d.md), [`docs/RAPORT_F5.md`](docs/RAPORT_F5.md), [`docs/RAPORT_F6.md`](docs/RAPORT_F6.md), [`docs/RAPORT_F7.md`](docs/RAPORT_F7.md).
+> raporty faz: [`docs/RAPORT_F1.md`](docs/RAPORT_F1.md), [`docs/RAPORT_F2.md`](docs/RAPORT_F2.md), [`docs/RAPORT_F3.md`](docs/RAPORT_F3.md), [`docs/RAPORT_F4a.md`](docs/RAPORT_F4a.md), [`docs/RAPORT_F4b.md`](docs/RAPORT_F4b.md), [`docs/RAPORT_F4c.md`](docs/RAPORT_F4c.md), [`docs/RAPORT_F4d.md`](docs/RAPORT_F4d.md), [`docs/RAPORT_F5.md`](docs/RAPORT_F5.md), [`docs/RAPORT_F6.md`](docs/RAPORT_F6.md), [`docs/RAPORT_F7.md`](docs/RAPORT_F7.md), [`docs/RAPORT_F8.md`](docs/RAPORT_F8.md).
 
 ## Architektura
 
@@ -31,7 +31,7 @@ Windows / laptop / telefon ─► przeglądarka · ResInvest ERP.exe (Tauri) · 
 | Backend | NestJS 12 + TypeScript | `apps/api` |
 | Baza | PostgreSQL 16 + Prisma 7 (migracje SQL z ograniczeniami CHECK i wyzwalaczami) | `prisma/` |
 | Reguły domenowe | TypeScript, `decimal.js` — wspólne dla API i frontendu | `packages/domain` |
-| Klient Windows | Tauri 2 (faza F8), build w GitHub Actions | `apps/desktop` |
+| Klient Windows | Tauri 2 + instalator NSIS, build w GitHub Actions (`windows-latest`) | `apps/desktop` |
 | Wdrożenie | Windows Server (usługi) — produkcja; Docker Compose — test / Linux | `deploy/`, `docker-compose.yml` |
 
 Zasady: stan magazynu wynika wyłącznie z ruchów (`stock_movements`, tylko dopisywanie), saldo `stock_balances`
@@ -111,12 +111,13 @@ CI: [`.github/workflows/resinvest-erp-4-ci.yml`](../.github/workflows/resinvest-
 ```
 resinvest-erp-4/
 ├── apps/api/            NestJS: src/{config,common,prisma,health,seed,auth,users,roles,warehouses,audit,mail,settings}, cli.ts, test/, Dockerfile
-├── apps/web/            React + Vite: src/{api,app,auth,pages,ui,styles}, public/ (manifest PWA), Dockerfile
+├── apps/web/            React + Vite: src/{api,app,auth,pages,ui,styles}, public/ (manifest PWA, ikony), sw.template.js, Dockerfile
+├── apps/desktop/        aplikacja Windows (Tauri 2): setup/ (ekran adresu serwera), src-tauri/ (Rust, instalator NSIS)
 ├── e2e/                 testy E2E (Playwright): start-api.mjs (baza *_e2e), tests/
 ├── packages/domain/     reguły domenowe (przeliczniki, tonaż, liczby)
 ├── prisma/              schema.prisma + migrations/
 ├── deploy/nginx/        konfiguracja Nginx (TLS, nagłówki, limity, proxy)
-├── docs/                RAPORT_F1.md, RAPORT_F2.md, RAPORT_F3.md, RAPORT_F4a.md, RAPORT_F4b.md, RAPORT_F4c.md, RAPORT_F4d.md, RAPORT_F5.md, RAPORT_F6.md, RAPORT_F7.md, prototypy/, WDROZENIE.md
+├── docs/                RAPORT_F1.md, RAPORT_F2.md, RAPORT_F3.md, RAPORT_F4a.md, RAPORT_F4b.md, RAPORT_F4c.md, RAPORT_F4d.md, RAPORT_F5.md, RAPORT_F6.md, RAPORT_F7.md, RAPORT_F8.md, prototypy/, WDROZENIE.md
 ├── docker-compose.yml   środowisko testowe / serwer Linux
 ├── .env.example         wzór konfiguracji
 └── LICENSE

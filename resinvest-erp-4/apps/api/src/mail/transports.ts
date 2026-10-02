@@ -54,8 +54,30 @@ class SmtpTransport implements MailTransport {
   }
 }
 
-export function createTransport(env: Env): MailTransport {
-  if (env.EMAIL_TRANSPORT === "resend") return new ResendTransport(env.RESEND_API_KEY);
-  if (env.EMAIL_TRANSPORT === "smtp") return new SmtpTransport(env);
+/**
+ * Kanał główny + zapasowy: przy błędzie głównego (np. Resend API niedostępne) ta sama wiadomość idzie od razu
+ * zapasowym (np. SMTP Resend albo serwer pocztowy firmy). Błąd obu → wyjątek z oboma komunikatami (kolejka ponowi).
+ */
+export class FallbackTransport implements MailTransport {
+  readonly name: string;
+  constructor(private readonly primary: MailTransport, private readonly fallback: MailTransport) { this.name = `${primary.name}+${fallback.name}`; }
+  async send(m: MailMessage): Promise<string | null> {
+    try { return await this.primary.send(m); } catch (e1) {
+      try { return await this.fallback.send(m); } catch (e2) {
+        const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+        throw new Error(`${this.primary.name}: ${msg(e1)}; ${this.fallback.name}: ${msg(e2)}`, { cause: e2 });
+      }
+    }
+  }
+}
+
+function single(kind: "resend" | "smtp" | "file", env: Env): MailTransport {
+  if (kind === "resend") return new ResendTransport(env.RESEND_API_KEY);
+  if (kind === "smtp") return new SmtpTransport(env);
   return new FileTransport(resolve(env.MAIL_FILE_DIR));
+}
+
+export function createTransport(env: Env): MailTransport {
+  const main = single(env.EMAIL_TRANSPORT, env);
+  return env.EMAIL_FALLBACK_TRANSPORT === "none" ? main : new FallbackTransport(main, single(env.EMAIL_FALLBACK_TRANSPORT, env));
 }

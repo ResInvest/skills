@@ -12,5 +12,6 @@ RUN pnpm --filter @resinvest/web run build
 FROM nginx:1.28-alpine
 COPY deploy/nginx/resinvest.conf /etc/nginx/conf.d/default.conf
 COPY deploy/nginx/riw-proxy.inc /etc/nginx/conf.d/riw-proxy.inc
+COPY deploy/nginx/riw-security.inc /etc/nginx/conf.d/riw-security.inc
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html
 EXPOSE 80 443

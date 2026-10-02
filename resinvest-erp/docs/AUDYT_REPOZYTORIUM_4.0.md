@@ -195,7 +195,7 @@ zmniejszony stan → odrzucenie z czytelnym błędem (brak stanu ujemnego; wyją
 | **F5 Zmiany** ✅ | korekty (BYŁO/JEST), usuwanie (wg decyzji), historia zmian, zakładki „Korekty” i „Edytowane” (+ „Usunięte”) — wykonane 2026-10-01, raport `resinvest-erp-4/docs/RAPORT_F5.md` | testy integracyjne audytu |
 | **F6 Raporty i eksporty** ✅ | rejestr dokumentów z filtrami, raporty okresowe, CSV/XLSX/PDF/DOCX, pulpit z kaflem „Operacje dodatkowe” — wykonane 2026-10-01, raport `resinvest-erp-4/docs/RAPORT_F6.md` | porównanie liczb raportów z 3.x na tych samych danych |
 | **F7 Powiadomienia** ✅ | ustawienia użytkownika, kolejka, retry, log wysyłki; błąd e-mail nie cofa operacji — wykonane 2026-10-01, raport `resinvest-erp-4/docs/RAPORT_F7.md` | test awarii SMTP |
-| **F8 Klienci** | PWA (telefon), Tauri (Windows), build instalatora na runnerze Windows | E2E desktop + mobile |
+| **F8 Klienci** ✅ | PWA (telefon), Tauri (Windows), build instalatora na runnerze Windows; poczta Resend + zapasowy SMTP — wykonane 2026-10-02, raport `resinvest-erp-4/docs/RAPORT_F8.md` | E2E desktop + mobile + PWA, testy Rust |
 | **F9 Eksploatacja** | backup A/B + weryfikacja + test restore, migracja danych 3.x, monitoring/logi, Nginx/TLS, usługa Windows, runbook | test odtworzenia; raport zgodności migracji |
 | **F10 Jakość** | testy wieloużytkownikowe, obciążeniowe, awarii, security review, UX review, poprawki, dokumentacja administratora i wdrożenia | raport końcowy §34 |
 
