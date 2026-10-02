@@ -16,6 +16,7 @@ const web = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(web, "../..");
 config({ path: resolve(root, ".env"), quiet: true });
 if (!existsSync(resolve(root, "apps/api/dist/main.js"))) throw new Error("Brak zbudowanego API — uruchom: pnpm build");
+if (!process.env.DEMO_EMAIL || !process.env.DEMO_PASSWORD) throw new Error("Podaj konto do nagrania danych: DEMO_EMAIL=… DEMO_PASSWORD=… node demo/build.mjs");
 const db = new URL(process.env.DEMO_DATABASE_URL ?? process.env.DATABASE_URL ?? "");
 if (!process.env.DEMO_DATABASE_URL) db.pathname = `${db.pathname}_e2e`;
 const PORT = process.env.DEMO_API_PORT ?? "3101";

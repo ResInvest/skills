@@ -58,5 +58,10 @@ użyte kolory przed pierwszym malowaniem (bez mignięcia jasnego tła w motywie 
 ## 5. Wersja demonstracyjna (jeden plik HTML)
 
 `apps/web/demo/` — prawdziwy interfejs na nagranych odpowiedziach API (np. z bazy testów E2E), atrapa API w przeglądarce,
-podgląd operacji liczony tą samą funkcją domeny co serwer, zapis danych wyłączony. Budowa: `node demo/build.mjs`
-(opis w README). Pliki wynikowe nie są wersjonowane.
+podgląd operacji liczony tą samą funkcją domeny co serwer, zapis danych wyłączony. Budowa (z katalogu `apps/web`):
+`DEMO_EMAIL=… DEMO_PASSWORD=… node demo/build.mjs` — konto, którym nagrywane są odczyty; bez niego skrypt kończy się
+czytelnym komunikatem (opis w README). Pliki wynikowe nie są wersjonowane.
+
+Ostatnia budowa (2026-10-02, baza testów E2E po pełnym przebiegu 79/79): 252 nagrane odpowiedzi, 10 operacji,
+`dist-demo/index.html` 2,15 MB (396 kB po kompresji). Sprawdzenie w Chromium z `file://`: pulpit z danymi, rejestr
+dokumentów, przełączenie na czeski i motyw Graphite Azure, Nowa operacja — bez błędów w konsoli.
