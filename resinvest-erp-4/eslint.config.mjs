@@ -20,7 +20,7 @@ export default tseslint.config(
   },
   {
     // ekran konfiguracji aplikacji Windows (zwykły skrypt przeglądarki w oknie Tauri)
-    files: ["apps/desktop/setup/**/*.js"],
+    files: ["apps/desktop/setup/**/*.js", "apps/web/public/**/*.js"],
     languageOptions: { globals: { ...globals.browser } },
   },
   {

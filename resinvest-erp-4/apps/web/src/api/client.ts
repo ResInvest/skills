@@ -1,18 +1,20 @@
 /**
  * Klient REST API ResInvest ERP (/api/v1). Sesja w ciasteczku HttpOnly — frontend nie przechowuje tokenów
  * ani danych biznesowych (tylko pamięć podręczna zapytań w RAM). Nagłówek X-Requested-With = ochrona CSRF.
+ * Komunikaty z serwera są po polsku — `message` i `field()` zwracają je w języku interfejsu (tm).
  */
+import { getLang, t, tm } from "../i18n";
 export interface ApiErrorBody { ok: false; code: string; error: string; details?: { field: string; message: string }[]; requestId?: string }
 
 export class ApiRequestError extends Error {
   readonly code: string;
   constructor(readonly status: number, readonly body: ApiErrorBody | null) {
-    super(body?.error ?? (status === 0 ? "Brak połączenia z serwerem." : `Błąd serwera (${status})`));
+    super(body?.error ? tm(body.error) : status === 0 ? t("Brak połączenia z serwerem.") : t("Błąd serwera ({status})", { status }));
     this.name = "ApiRequestError";
     this.code = body?.code ?? (status === 0 ? "OFFLINE" : "ERROR");
   }
   /** Komunikat błędu dla konkretnego pola formularza (walidacja serwera). */
-  field(name: string): string | undefined { return this.body?.details?.find(d => d.field === name)?.message; }
+  field(name: string): string | undefined { const x = this.body?.details?.find(d => d.field === name)?.message; return x === undefined ? undefined : tm(x); }
 }
 
 const BASE = "/api/v1";
@@ -24,12 +26,12 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
   try {
     res = await fetch(`${BASE}${path}`, {
       method, credentials: "include", signal,
-      headers: { "X-Requested-With": "ResInvestERP", ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+      headers: { "X-Requested-With": "ResInvestERP", "Accept-Language": getLang(), ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
-    throw new ApiRequestError(0, { ok: false, code: "OFFLINE", error: "Brak połączenia z serwerem. Sprawdź połączenie VPN (FortiClient) i sieć." });
+    throw new ApiRequestError(0, { ok: false, code: "OFFLINE", error: t("Brak połączenia z serwerem. Sprawdź połączenie VPN (FortiClient) i sieć.") });
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
@@ -51,7 +53,7 @@ export const api = {
 };
 
 
-export const errorText = (e: unknown): string => (e instanceof ApiRequestError ? e.message : e instanceof Error ? e.message : "Nieznany błąd");
+export const errorText = (e: unknown): string => (e instanceof ApiRequestError ? e.message : e instanceof Error ? tm(e.message) : t("Nieznany błąd"));
 
 export interface HealthReport {
   ok: boolean;

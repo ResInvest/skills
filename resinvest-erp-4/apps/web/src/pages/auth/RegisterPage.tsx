@@ -4,6 +4,7 @@ import { api, ApiRequestError } from "../../api/client";
 import { Alert, TextInput } from "../../ui/components";
 import { AuthLayout } from "./AuthLayout";
 import { useAuthConfig } from "./LoginPage";
+import { t, tm } from "../../i18n";
 
 /**
  * Samodzielna rejestracja (jeśli włączona w konfiguracji). Konto powstaje jako nieaktywne z rolą tylko do odczytu;
@@ -15,9 +16,9 @@ export function RegisterPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<ApiRequestError | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const back = <Link to="/logowanie">Wróć do logowania</Link>;
+  const back = <Link to="/logowanie">{t("Wróć do logowania")}</Link>;
 
-  if (cfg.isSuccess && !cfg.data.allowSelfRegistration) return <AuthLayout title="Rejestracja" footer={back}><Alert kind="info">Rejestracja jest wyłączona. Konto zakłada administrator (zaproszenie e-mail).</Alert></AuthLayout>;
+  if (cfg.isSuccess && !cfg.data.allowSelfRegistration) return <AuthLayout title={t("Rejestracja")} footer={back}><Alert kind="info">{t("Rejestracja jest wyłączona. Konto zakłada administrator (zaproszenie e-mail).")}</Alert></AuthLayout>;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setErr(null);
@@ -27,18 +28,18 @@ export function RegisterPage() {
   };
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF(s => ({ ...s, [k]: e.target.value }));
   return (
-    <AuthLayout title="Rejestracja" footer={back}>
-      {done ? <Alert kind="ok">{done}</Alert> : (
+    <AuthLayout title={t("Rejestracja")} footer={back}>
+      {done ? <Alert kind="ok">{tm(done)}</Alert> : (
         <form onSubmit={e => void submit(e)} className="form">
           {err && !err.body?.details && <Alert kind="err">{err.message}</Alert>}
-          <TextInput label="Firmowy adres e-mail" type="email" autoComplete="email" value={f.email} onChange={set("email")} error={err?.field("email")} required autoFocus
-            hint={cfg.data?.companyDomains.length ? `Tylko adresy: ${cfg.data.companyDomains.map(d => "@" + d).join(", ")}` : undefined} />
+          <TextInput label={t("Firmowy adres e-mail")} type="email" autoComplete="email" value={f.email} onChange={set("email")} error={err?.field("email")} required autoFocus
+            hint={cfg.data?.companyDomains.length ? t("Tylko adresy: {list}", { list: cfg.data.companyDomains.map(d => "@" + d).join(", ") }) : undefined} />
           <div className="grid2">
-            <TextInput label="Imię" autoComplete="given-name" value={f.firstName} onChange={set("firstName")} error={err?.field("firstName")} required />
-            <TextInput label="Nazwisko" autoComplete="family-name" value={f.lastName} onChange={set("lastName")} error={err?.field("lastName")} required />
+            <TextInput label={t("Imię")} autoComplete="given-name" value={f.firstName} onChange={set("firstName")} error={err?.field("firstName")} required />
+            <TextInput label={t("Nazwisko")} autoComplete="family-name" value={f.lastName} onChange={set("lastName")} error={err?.field("lastName")} required />
           </div>
-          <p className="muted small">Po akceptacji przez administratora otrzymasz e-mail z linkiem do ustawienia hasła.</p>
-          <button className="btn primary block" disabled={busy}>{busy ? "Wysyłanie…" : "Wyślij zgłoszenie"}</button>
+          <p className="muted small">{t("Po akceptacji przez administratora otrzymasz e-mail z linkiem do ustawienia hasła.")}</p>
+          <button className="btn primary block" disabled={busy}>{busy ? t("Wysyłanie…") : t("Wyślij zgłoszenie")}</button>
         </form>
       )}
     </AuthLayout>

@@ -13,7 +13,7 @@ function pwa(): Plugin {
     name: "resinvest-pwa", apply: "build",
     generateBundle(_opts, bundle) {
       const files = Object.keys(bundle).filter(f => /\.(js|css)$/.test(f) && !f.endsWith(".map")).map(f => `/${f}`);
-      const precache = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/maskable-512.png", "/icons/apple-touch-icon.png", "/icons/favicon-32.png", ...files];
+      const precache = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/maskable-512.png", "/icons/apple-touch-icon.png", "/icons/favicon-32.png", "/theme-boot.js", ...files];
       const build = `${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 8)}`;
       const source = readFileSync(new URL("./sw.template.js", import.meta.url), "utf8").replace("__BUILD__", build).replace("__PRECACHE__", JSON.stringify(precache));
       this.emitFile({ type: "asset", fileName: "sw.js", source });

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Put, Res } from "@nestjs/common";
 import type { Response } from "express";
 import { z } from "zod";
 import { ENV, type Env } from "../config/env.js";
@@ -12,6 +12,7 @@ import { AuthService } from "./auth.service.js";
 import type { AuthUser } from "./auth-user.js";
 import { AllowPendingPassword, CurrentUser, Public } from "./decorators.js";
 import { PASSWORD_RULES } from "./password.js";
+import { HEX_RE, LANGS, THEMES } from "@resinvest/domain";
 import { SessionService } from "./session.service.js";
 
 const LoginDto = z.object({ email: z.string().max(254), password: z.string().max(256) });
@@ -20,12 +21,20 @@ const EmailDto = z.object({ email: z.string().max(254) });
 const TokenDto = z.object({ token: z.string().max(100), kind: z.enum(["INVITE", "PASSWORD_RESET"]) });
 const TokenPasswordDto = z.object({ token: z.string().max(100), password: z.string().max(256) });
 const RegisterDto = z.object({ email: z.string().max(254), firstName: z.string().trim().min(1, "Podaj imię").max(80), lastName: z.string().trim().min(1, "Podaj nazwisko").max(80) });
+const hex = z.string().trim().toLowerCase().regex(HEX_RE, "Kolor w formacie #rrggbb");
+const PrefsDto = z.object({
+  lang: z.enum(LANGS).optional(),
+  theme: z.enum(THEMES).nullable().optional(),   // null = „Automatycznie” (wg ustawienia systemu)
+  themePrimary: hex.optional(),
+  themeSecondary: hex.optional(),
+}).strict();
 const DefaultWhDto = z.object({ warehouseId: z.string().uuid("Wybierz magazyn") });
 
 /** Widok zalogowanego użytkownika dla frontendu (bez danych wrażliwych). */
 export function publicUser(u: AuthUser) {
   return { id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, role: { code: u.roleCode, name: u.roleName, global: u.global },
-    permissions: [...u.permissions].sort(), warehouseIds: u.warehouseIds, defaultWarehouseId: u.defaultWarehouseId, mustChangePassword: u.mustChangePassword };
+    permissions: [...u.permissions].sort(), warehouseIds: u.warehouseIds, defaultWarehouseId: u.defaultWarehouseId, mustChangePassword: u.mustChangePassword,
+    prefs: u.prefs };
 }
 
 @Controller("auth")
@@ -77,6 +86,25 @@ export class AuthController {
       await this.audit.log(tx, user, meta, { action: "DEFAULT_WAREHOUSE_CHANGED", entity: "user", entityId: user.id, before: { magazyn: user.defaultWarehouseId }, after: { magazyn: dto.warehouseId } });
     });
     return { ok: true };
+  }
+
+  /**
+   * Preferencje interfejsu — wyłącznie własnego konta (identyfikator z sesji, nie z żądania). Dozwolone także przy
+   * wymuszonej zmianie hasła (język ekranu zmiany hasła). Zmiana zapisywana w audycie.
+   */
+  @AllowPendingPassword() @Put("me/preferences")
+  async preferences(@CurrentUser() user: AuthUser, @Body(zbody(PrefsDto)) dto: z.infer<typeof PrefsDto>, @Meta() meta: RequestMeta) {
+    const before = user.prefs;
+    const after = { ...before, ...dto };
+    const changed = (Object.keys(dto) as (keyof typeof dto)[]).filter(k => before[k] !== after[k]);
+    if (changed.length) {
+      await this.db.$transaction(async tx => {
+        await tx.user.update({ where: { id: user.id }, data: Object.fromEntries(changed.map(k => [k, after[k]])) });
+        await this.audit.log(tx, user, meta, { action: "PREFERENCES_CHANGED", entity: "user", entityId: user.id,
+          before: Object.fromEntries(changed.map(k => [k, before[k]])), after: Object.fromEntries(changed.map(k => [k, after[k]])) });
+      });
+    }
+    return { ok: true, prefs: after };
   }
 
   @AllowPendingPassword() @Get("sessions")

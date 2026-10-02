@@ -15,3 +15,8 @@ e2e/.state/
 e2e/test-results/
 e2e/playwright-report/
 apps/desktop/src-tauri/gen/
+
+# wersja demonstracyjna (generowana: apps/web/demo/build.mjs)
+apps/web/dist-demo/
+apps/web/demo/snapshot.json
+apps/web/demo/.mail/

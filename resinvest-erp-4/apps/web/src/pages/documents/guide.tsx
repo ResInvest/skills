@@ -1,3 +1,4 @@
+import { m, t, tm } from "../../i18n";
 import type { OperationInput } from "@resinvest/domain";
 
 type Kind = OperationInput["type"];
@@ -53,57 +54,57 @@ interface Def { key: string; label: string; help: string; el: string; fields: st
 /** Kroki listy kontrolnej dla rodzaju operacji; stan kroku = błąd domeny w jego polach albo brak wymaganej wartości. */
 export function guideSteps(c: Ctx): GuideStep[] {
   const { type, f, chain, sale } = c;
-  const defs: Def[] = c.reason === undefined ? [] : [{ key: "reason", label: "Powód korekty", help: "Do historii zmian", el: "op-reason", fields: ["reason"], required: true, filled: c.reason.trim().length >= 5 }];
-  defs.push({ key: "date", label: "Magazyn i data", help: "Data ruchu w księdze", el: "op-date", fields: ["date"], required: true, filled: !!c.day });
+  const defs: Def[] = c.reason === undefined ? [] : [{ key: "reason", label: m("Powód korekty"), help: m("Do historii zmian"), el: "op-reason", fields: ["reason"], required: true, filled: c.reason.trim().length >= 5 }];
+  defs.push({ key: "date", label: m("Magazyn i data"), help: m("Data ruchu w księdze"), el: "op-date", fields: ["date"], required: true, filled: !!c.day });
   const partner = (label: string, help: string) => defs.push({ key: "partner", label, help, el: "op-partner", fields: ["partnerId"], required: true, filled: !!f.partnerId });
-  const material = (label: string) => defs.push({ key: "material", label, help: "Pozycja z kartoteki materiałów", el: "op-mat", fields: ["materialId"], required: true, filled: !!f.materialId });
-  const qty = () => defs.push({ key: "qty", label: "Ilość", help: "Ilość i jednostka", el: "op-qty", fields: ["qty", "unit"], required: true, filled: !!f.qty.trim() });
-  const price = (help: string) => defs.push({ key: "price", label: "Cena netto", help, el: "op-price", fields: ["price", "priceUnit"], required: true, filled: !!f.price.trim() });
-  const weight = () => defs.push({ key: "weight", label: "Tonaż z wagi", help: "Opcjonalnie — puste = AUTO", el: "op-weight", fields: ["weightManual"], required: false, filled: !!f.weightManual.trim() });
+  const material = (label: string) => defs.push({ key: "material", label, help: m("Pozycja z kartoteki materiałów"), el: "op-mat", fields: ["materialId"], required: true, filled: !!f.materialId });
+  const qty = () => defs.push({ key: "qty", label: m("Ilość"), help: m("Ilość i jednostka"), el: "op-qty", fields: ["qty", "unit"], required: true, filled: !!f.qty.trim() });
+  const price = (help: string) => defs.push({ key: "price", label: m("Cena netto"), help, el: "op-price", fields: ["price", "priceUnit"], required: true, filled: !!f.price.trim() });
+  const weight = () => defs.push({ key: "weight", label: m("Tonaż z wagi"), help: m("Opcjonalnie — puste = AUTO"), el: "op-weight", fields: ["weightManual"], required: false, filled: !!f.weightManual.trim() });
   const origin = () => {
-    if (chain.source === "FOREST") defs.push({ key: "origin", label: "Pochodzenie: las", help: "Nadleśnictwo, leśnictwo, kwit", el: "ch-ndl",
+    if (chain.source === "FOREST") defs.push({ key: "origin", label: m("Pochodzenie: las"), help: m("Nadleśnictwo, leśnictwo, kwit"), el: "ch-ndl",
       fields: ["production.forestDistrict", "production.forestry", "production.waybill"], required: true, filled: !!chain.forestDistrict.trim() && !!chain.forestry.trim() });
-    else if (chain.source === "INVESTMENT") defs.push({ key: "origin", label: "Pochodzenie: wycinka", help: "Miejsce wycinki / inwestycja", el: "ch-site",
+    else if (chain.source === "INVESTMENT") defs.push({ key: "origin", label: m("Pochodzenie: wycinka"), help: m("Miejsce wycinki / inwestycja"), el: "ch-site",
       fields: ["production.investSite"], required: true, filled: !!chain.investSite.trim() });
-    else defs.push({ key: "origin", label: "Pochodzenie surowca", help: "Inne — bez dodatkowych danych", el: "ch-source", fields: [], required: false, filled: true });
+    else defs.push({ key: "origin", label: m("Pochodzenie surowca"), help: m("Inne — bez dodatkowych danych"), el: "ch-source", fields: [], required: false, filled: true });
   };
-  const chainStep = (direct: boolean) => defs.push({ key: "production", label: direct ? "Produkcja w lesie" : "Produkcja z zakupu", help: "Produkt (zrębka) i wynik w MP", el: "ch-out",
+  const chainStep = (direct: boolean) => defs.push({ key: "production", label: direct ? m("Produkcja w lesie") : m("Produkcja z zakupu"), help: m("Produkt (zrębka) i wynik w MP"), el: "ch-out",
     fields: ["production.enabled", "production.outMaterialId", "production.consumeQty", "production.outQty", "production.diffReason", "production.chipRate", "production.chipperId", "production.operatorId"],
     required: true, filled: !!chain.outMaterialId && (!direct || !!chain.outQty.trim()) });
-  const saleStep = () => defs.push({ key: "sale", label: "Sprzedaż wyniku", help: "Odbiorca i cena", el: "os-buyer", fields: ["sale."], required: true, filled: !!sale.buyerId && !!sale.price.trim() });
+  const saleStep = () => defs.push({ key: "sale", label: m("Sprzedaż wyniku"), help: m("Odbiorca i cena"), el: "os-buyer", fields: ["sale."], required: true, filled: !!sale.buyerId && !!sale.price.trim() });
 
   if (type === "PURCHASE") {
-    partner("Dostawca", "Kontrahent z kartoteki");
-    material("Materiał"); qty(); price("Cena za jednostkę"); weight();
+    partner("Dostawca", m("Kontrahent z kartoteki"));
+    material(m("Materiał")); qty(); price(m("Cena za jednostkę")); weight();
     if (chain.enabled) { chainStep(false); origin(); if (sale.enabled) saleStep(); }
   } else if (type === "SALE") {
-    partner("Odbiorca", "Kontrahent z kartoteki");
-    material("Towar z magazynu"); qty(); price("Cena za jednostkę"); weight();
+    partner("Odbiorca", m("Kontrahent z kartoteki"));
+    material(m("Towar z magazynu")); qty(); price(m("Cena za jednostkę")); weight();
   } else if (type === "TRANSFER") {
-    defs.push({ key: "target", label: "Magazyn docelowy", help: "Dokąd przesuwasz towar", el: "op-target", fields: ["targetWarehouseId"], required: true, filled: !!f.targetWarehouseId });
-    material("Materiał"); qty(); weight();
+    defs.push({ key: "target", label: m("Magazyn docelowy"), help: m("Dokąd przesuwasz towar"), el: "op-target", fields: ["targetWarehouseId"], required: true, filled: !!f.targetWarehouseId });
+    material(m("Materiał")); qty(); weight();
   } else if (type === "PRODUCTION") {
-    defs.push({ key: "raw", label: "Surowiec (m³)", help: "Drewno ze stanu", el: "op-raw", fields: ["rawMaterialId"], required: true, filled: !!f.rawMaterialId });
-    defs.push({ key: "out", label: "Produkt — zrębka", help: "Materiał w MP", el: "op-out", fields: ["outMaterialId"], required: true, filled: !!f.outMaterialId });
-    defs.push({ key: "outqty", label: "Ilość produkcji", help: "MP zrębki", el: "op-outqty", fields: ["outQty"], required: true, filled: !!f.outQty.trim() });
-    defs.push({ key: "chipper", label: "Rębak i stawka", help: "Opcjonalnie", el: "op-chipper", fields: ["chipperId", "operatorId", "chipRate"], required: false, filled: !!f.chipperId || !!f.chipRate.trim() });
+    defs.push({ key: "raw", label: m("Surowiec (m³)"), help: m("Drewno ze stanu"), el: "op-raw", fields: ["rawMaterialId"], required: true, filled: !!f.rawMaterialId });
+    defs.push({ key: "out", label: m("Produkt — zrębka"), help: m("Materiał w MP"), el: "op-out", fields: ["outMaterialId"], required: true, filled: !!f.outMaterialId });
+    defs.push({ key: "outqty", label: m("Ilość produkcji"), help: m("MP zrębki"), el: "op-outqty", fields: ["outQty"], required: true, filled: !!f.outQty.trim() });
+    defs.push({ key: "chipper", label: m("Rębak i stawka"), help: m("Opcjonalnie"), el: "op-chipper", fields: ["chipperId", "operatorId", "chipRate"], required: false, filled: !!f.chipperId || !!f.chipRate.trim() });
   } else {
-    defs.push({ key: "raw", label: "Surowiec wejściowy", help: "Drewno z lasu (nie ze stanu)", el: "op-raw", fields: ["rawMaterialId", "rawCost"], required: true, filled: !!f.rawMaterialId });
+    defs.push({ key: "raw", label: m("Surowiec wejściowy"), help: m("Drewno z lasu (nie ze stanu)"), el: "op-raw", fields: ["rawMaterialId", "rawCost"], required: true, filled: !!f.rawMaterialId });
     chainStep(true); origin(); saleStep();
   }
   if (type !== "PRODUCTION") {
-    defs.push({ key: "number", label: "Numer dokumentu", help: c.reason !== undefined ? "Bez zmian przy korekcie" : f.numberMode === "MANUAL" ? "Numer ręczny" : "Automatyczny", el: f.numberMode === "MANUAL" ? "op-number" : "op-numbering",
+    defs.push({ key: "number", label: m("Numer dokumentu"), help: c.reason !== undefined ? m("Bez zmian przy korekcie") : f.numberMode === "MANUAL" ? m("Numer ręczny") : m("Automatyczny"), el: f.numberMode === "MANUAL" ? "op-number" : "op-numbering",
       fields: ["numbering.number", "externalNumber", "documentDate"], required: f.numberMode === "MANUAL", filled: f.numberMode !== "MANUAL" || !!f.number.trim() });
-    defs.push({ key: "transport", label: "Transport", help: c.transportMode === "NONE" ? "Opcjonalnie — brak transportu" : "Kursy, miejsce, koszt", el: "tr-mode",
+    defs.push({ key: "transport", label: m("Transport"), help: c.transportMode === "NONE" ? m("Opcjonalnie — brak transportu") : m("Kursy, miejsce, koszt"), el: "tr-mode",
       fields: ["transport."], required: c.transportMode !== "NONE", filled: c.transportMode !== "NONE" });
   }
-  defs.push({ key: "extras", label: "Operacje dodatkowe", help: "Opcjonalnie — koszty dodatkowe", el: "op-extra-add", fields: ["extras"], required: false, filled: c.extras > 0 });
+  defs.push({ key: "extras", label: m("Operacje dodatkowe"), help: m("Opcjonalnie — koszty dodatkowe"), el: "op-extra-add", fields: ["extras"], required: false, filled: c.extras > 0 });
 
   const hit = (d: Def) => c.errors.find(e => d.fields.some(p => (p.endsWith(".") ? e.field.startsWith(p) : e.field === p || e.field.startsWith(`${p}.`))));
   return defs.map(d => {
     const e = hit(d);
     const state: GuideState = e || (d.required && !d.filled) ? "missing" : d.filled ? "done" : "optional";
-    return { key: d.key, label: d.label, help: d.help, el: e ? elFor(e.field) : d.el, state, message: e?.message };
+    return { key: d.key, label: t(d.label), help: t(d.help), el: e ? elFor(e.field) : d.el, state, message: e ? tm(e.message) : undefined };
   });
 }
 
@@ -130,26 +131,26 @@ export function OperationGuide({ steps, onGo }: { steps: GuideStep[]; onGo: (el:
   const pct = required.length ? Math.round((done / required.length) * 100) : 100;
   return (
     <>
-      <section className="card op-guide" id="op-guide" aria-label="Co jeszcze uzupełnić">
-        <header className="card-h"><h2>Co jeszcze uzupełnić</h2><span className={`badge ${missing.length ? "err" : "ok"}`} id="op-guide-count">{missing.length ? `brakuje: ${missing.length}` : "komplet"}</span></header>
-        <div className="guide-bar" role="progressbar" aria-label="Postęp uzupełniania" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%` }} /></div>
-        <p className="muted small">{done} z {required.length} wymaganych kroków gotowe</p>
+      <section className="card op-guide" id="op-guide" aria-label={t("Co jeszcze uzupełnić")}>
+        <header className="card-h"><h2>{t("Co jeszcze uzupełnić")}</h2><span className={`badge ${missing.length ? "err" : "ok"}`} id="op-guide-count">{missing.length ? t("brakuje: {n}", { n: missing.length }) : t("komplet")}</span></header>
+        <div className="guide-bar" role="progressbar" aria-label={t("Postęp uzupełniania")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%` }} /></div>
+        <p className="muted small">{t("{done} z {total} wymaganych kroków gotowe", { done, total: required.length })}</p>
         <ol className="guide">
           {steps.map(s => (
             <li key={s.key} data-step={s.key} data-state={s.state} className={`g-${s.state}${s.key === first?.key ? " g-next" : ""}`}>
               <button type="button" title={s.help} onClick={() => onGo(s.el)}>
                 <span className="g-ico" aria-hidden="true">{s.state === "done" ? "✓" : s.state === "missing" ? "!" : "○"}</span>
-                <span className="g-txt"><strong>{s.label}</strong>{s.key === first?.key && <em> — teraz</em>}
-                  <small>{s.state === "missing" ? (s.message ?? "Do uzupełnienia") : s.help}</small></span>
-                <span className="sr-only">{s.state === "done" ? "gotowe" : s.state === "missing" ? "brak" : "opcjonalne"}</span>
+                <span className="g-txt"><strong>{s.label}</strong>{s.key === first?.key && <em> {t("— teraz")}</em>}
+                  <small>{s.state === "missing" ? (s.message ?? t("Do uzupełnienia")) : s.help}</small></span>
+                <span className="sr-only">{s.state === "done" ? t("gotowe") : s.state === "missing" ? t("brak") : t("opcjonalne")}</span>
               </button>
             </li>
           ))}
         </ol>
-        {!missing.length && <p className="guide-ok small">Wszystko uzupełnione — kliknij „Dalej — podsumowanie”.</p>}
+        {!missing.length && <p className="guide-ok small">{t("Wszystko uzupełnione — kliknij „Dalej — podsumowanie”.")}</p>}
       </section>
       {first && <button type="button" className="guide-float" id="op-guide-next" onClick={() => onGo(first.el)}>
-        <span className="g-ico" aria-hidden="true">!</span> Brakuje {missing.length}: <strong>{first.label}</strong> →</button>}
+        <span className="g-ico" aria-hidden="true">!</span> {t("Brakuje {n}:", { n: missing.length })} <strong>{first.label}</strong> →</button>}
     </>
   );
 }

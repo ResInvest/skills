@@ -8,3 +8,4 @@ export * from "./planner.js";
 export * from "./changes.js";
 export * from "./reports.js";
 export * from "./notifications.js";
+export * from "./preferences.js";

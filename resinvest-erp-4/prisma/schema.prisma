@@ -236,8 +236,13 @@ model User {
   status             UserStatus      @default(INVITED)
   roleId             String          @map("role_id") @db.Uuid
   defaultWarehouseId String?         @map("default_warehouse_id") @db.Uuid
+  /// Język interfejsu: pl / cs / en (CHECK w migracji).
   lang               String          @default("pl") @db.VarChar(5)
+  /// Motyw: pearl / graphite / azure / ultra / premium / custom; puste = motyw domyślny (Perła).
   theme              String?         @db.VarChar(20)
+  /// Motyw własny: kolor przewodni i kolor tła (#rrggbb, małe litery).
+  themePrimary       String?         @map("theme_primary") @db.VarChar(7)
+  themeSecondary     String?         @map("theme_secondary") @db.VarChar(7)
   passwordHash       String?         @map("password_hash")
   passwordChangedAt  DateTime?       @map("password_changed_at") @db.Timestamptz(3)
   mustChangePassword Boolean         @default(false) @map("must_change_password")

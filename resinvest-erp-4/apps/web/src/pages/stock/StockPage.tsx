@@ -1,14 +1,13 @@
+import { fmtDay, fmtQty, t } from "../../i18n";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { formatQty } from "@resinvest/domain";
 import { api, errorText } from "../../api/client";
 import { CATEGORY_LABEL, MOVEMENT_LABEL, UNIT_LABEL, type BalanceRow, type BalancesResponse, type MovementRow, type Material } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, Dialog, fmtDateTime } from "../../ui/components";
 import { useWarehouses } from "../account/AccountPage";
 
-const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("pl-PL", { timeZone: "UTC" });
 
 /** Magazyn roboczy ekranu: wybrany przez użytkownika, a do czasu wyboru — domyślny albo pierwszy dostępny. */
 export function useWorkWarehouse() {
@@ -35,35 +34,35 @@ export function StockPage() {
   for (const b of q.data?.balances ?? []) groups.set(b.category, [...(groups.get(b.category) ?? []), b]);
   return (
     <>
-      <h1>Stany magazynowe</h1>
-      <p className="muted small">Stan = suma ruchów magazynowych (ruchów nie można zmienić ani usunąć). Ilości w jednostce magazynowej materiału.</p>
+      <h1>{t("Stany magazynowe")}</h1>
+      <p className="muted small">{t("Stan = suma ruchów magazynowych (ruchów nie można zmienić ani usunąć). Ilości w jednostce magazynowej materiału.")}</p>
       <div className="filters">
-        <label className="inline">Magazyn{" "}
-          <select className="ctrl" value={W.id} onChange={e => setW(e.target.value)} aria-label="Magazyn">
+        <label className="inline">{t("Magazyn")}{" "}
+          <select className="ctrl" value={W.id} onChange={e => setW(e.target.value)} aria-label={t("Magazyn")}>
             {W.warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
         </label>
-        <label className="inline check"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Pokaż materiały nieaktywne</label>
+        <label className="inline check"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> {t("Pokaż materiały nieaktywne")}</label>
       </div>
-      {W.error ? <Alert kind="err">{errorText(W.error)}</Alert> : q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">Wczytywanie…</p> : (
+      {W.error ? <Alert kind="err">{errorText(W.error)}</Alert> : q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">{t("Wczytywanie…")}</p> : (
         <>
           {q.data.opening
-            ? <Alert kind="ok">Bilans otwarcia zatwierdzony na dzień {fmtDay(q.data.opening.effectiveDate)}.</Alert>
-            : <Alert kind="warn">Magazyn nie ma jeszcze zatwierdzonego bilansu otwarcia. {(can("opening.manage") || can("opening.approve")) && <Link to="/bilans-otwarcia">Przejdź do bilansu otwarcia</Link>}</Alert>}
+            ? <Alert kind="ok">{t("Bilans otwarcia zatwierdzony na dzień {date}.", { date: fmtDay(q.data.opening.effectiveDate) })}</Alert>
+            : <Alert kind="warn">{t("Magazyn nie ma jeszcze zatwierdzonego bilansu otwarcia.")} {(can("opening.manage") || can("opening.approve")) && <Link to="/bilans-otwarcia">{t("Przejdź do bilansu otwarcia")}</Link>}</Alert>}
           <div className="table-wrap">
             <table className="table" id="balances">
-              <thead><tr><th>Materiał</th><th className="r">Stan</th><th>Jedn.</th><th className="r">Ruchy</th><th>Ostatni ruch</th><th><span className="sr-only">Akcje</span></th></tr></thead>
+              <thead><tr><th>{t("Materiał")}</th><th className="r">{t("Stan")}</th><th>{t("Jedn.")}</th><th className="r">{t("Ruchy")}</th><th>{t("Ostatni ruch")}</th><th><span className="sr-only">{t("Akcje")}</span></th></tr></thead>
               {[...groups].map(([cat, rows]) => (
                 <tbody key={cat}>
                   <tr className="group"><th colSpan={6}>{CATEGORY_LABEL[cat as Material["category"]] ?? cat}</th></tr>
                   {rows.map(b => (
                     <tr key={b.materialId} className={b.active ? "" : "dim"}>
-                      <td data-label="Materiał"><strong>{b.name}</strong> <small className="muted">{b.code}{b.active ? "" : " · nieaktywny"}</small></td>
-                      <td data-label="Stan" className="r num"><strong>{formatQty(b.qty)}</strong></td>
-                      <td data-label="Jedn.">{UNIT_LABEL[b.unit]}</td>
-                      <td data-label="Ruchy" className="r">{b.movements}</td>
-                      <td data-label="Ostatni ruch">{fmtDateTime(b.lastMovementAt)}</td>
-                      <td data-label="Akcje"><button type="button" className="btn sm" onClick={() => setCard(b)} disabled={!b.movements} aria-label={`Karta materiału ${b.name}`}>Karta materiału</button></td>
+                      <td data-label={t("Materiał")}><strong>{b.name}</strong> <small className="muted">{b.code}{b.active ? "" : ` · ${t("nieaktywny")}`}</small></td>
+                      <td data-label={t("Stan")} className="r num"><strong>{fmtQty(b.qty)}</strong></td>
+                      <td data-label={t("Jedn.")}>{UNIT_LABEL[b.unit]}</td>
+                      <td data-label={t("Ruchy")} className="r">{b.movements}</td>
+                      <td data-label={t("Ostatni ruch")}>{fmtDateTime(b.lastMovementAt)}</td>
+                      <td data-label={t("Akcje")}><button type="button" className="btn sm" onClick={() => setCard(b)} disabled={!b.movements} aria-label={`${t("Karta materiału")} ${b.name}`}>{t("Karta materiału")}</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -87,29 +86,29 @@ function MaterialCard({ warehouseId, row, onClose }: { warehouseId: string; row:
   });
   const u = UNIT_LABEL[row.unit];
   return (
-    <Dialog title={`Karta materiału — ${row.name}`} onClose={onClose}>
-      <p>Stan bieżący: <strong id="card-balance">{q.data ? `${formatQty(q.data.balance)} ${u}` : "…"}</strong></p>
+    <Dialog title={`${t("Karta materiału")} — ${row.name}`} onClose={onClose}>
+      <p>{t("Stan bieżący:")} <strong id="card-balance">{q.data ? `${fmtQty(q.data.balance)} ${u}` : "…"}</strong></p>
       <div className="filters">
-        <label className="inline">Od <input className="ctrl" type="date" value={f.from} onChange={e => setF(s => ({ ...s, from: e.target.value }))} /></label>
-        <label className="inline">Do <input className="ctrl" type="date" value={f.to} onChange={e => setF(s => ({ ...s, to: e.target.value }))} /></label>
+        <label className="inline">{t("Od")} <input className="ctrl" type="date" value={f.from} onChange={e => setF(s => ({ ...s, from: e.target.value }))} /></label>
+        <label className="inline">{t("Do")} <input className="ctrl" type="date" value={f.to} onChange={e => setF(s => ({ ...s, to: e.target.value }))} /></label>
       </div>
-      {q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">Wczytywanie…</p> : (
+      {q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">{t("Wczytywanie…")}</p> : (
         <div className="table-wrap">
           <table className="table" id="movements">
-            <thead><tr><th>Data</th><th>Rodzaj</th><th>Dokument</th><th className="r">Przed</th><th className="r">Zmiana</th><th className="r">Po</th><th>Użytkownik</th></tr></thead>
+            <thead><tr><th>{t("Data")}</th><th>{t("Rodzaj")}</th><th>{t("Dokument")}</th><th className="r">{t("Przed")}</th><th className="r">{t("Zmiana")}</th><th className="r">{t("Po")}</th><th>{t("Użytkownik")}</th></tr></thead>
             <tbody>
               {q.data.movements.map(m => (
                 <tr key={m.id}>
-                  <td data-label="Data">{fmtDay(m.movementDate)}</td>
-                  <td data-label="Rodzaj">{MOVEMENT_LABEL[m.kind] ?? m.kind}</td>
-                  <td data-label="Dokument">{m.document ? <span className="doc">{m.document.number}</span> : "—"}</td>
-                  <td data-label="Przed" className="r num">{formatQty(m.before)} {u}</td>
-                  <td data-label="Zmiana" className={`r num ${Number(m.qty) < 0 ? "neg" : "pos"}`}>{Number(m.qty) > 0 ? "+" : ""}{formatQty(m.qty)}</td>
-                  <td data-label="Po" className="r num"><strong>{formatQty(m.after)} {u}</strong></td>
-                  <td data-label="Użytkownik">{m.user ?? "—"}</td>
+                  <td data-label={t("Data")}>{fmtDay(m.movementDate)}</td>
+                  <td data-label={t("Rodzaj")}>{MOVEMENT_LABEL[m.kind] ?? m.kind}</td>
+                  <td data-label={t("Dokument")}>{m.document ? <span className="doc">{m.document.number}</span> : "—"}</td>
+                  <td data-label={t("Przed")} className="r num">{fmtQty(m.before)} {u}</td>
+                  <td data-label={t("Zmiana")} className={`r num ${Number(m.qty) < 0 ? "neg" : "pos"}`}>{Number(m.qty) > 0 ? "+" : ""}{fmtQty(m.qty)}</td>
+                  <td data-label={t("Po")} className="r num"><strong>{fmtQty(m.after)} {u}</strong></td>
+                  <td data-label={t("Użytkownik")}>{m.user ?? "—"}</td>
                 </tr>
               ))}
-              {!q.data.movements.length && <tr><td colSpan={7} className="muted">Brak ruchów w wybranym zakresie.</td></tr>}
+              {!q.data.movements.length && <tr><td colSpan={7} className="muted">{t("Brak ruchów w wybranym zakresie.")}</td></tr>}
             </tbody>
           </table>
         </div>

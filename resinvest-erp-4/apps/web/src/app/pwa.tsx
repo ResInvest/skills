@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 
 /**
  * PWA po stronie aplikacji: rejestracja service workera (tylko build produkcyjny), informacja o nowej wersji,
@@ -58,9 +59,9 @@ export function PwaBanners() {
   const s = usePwa();
   return (
     <>
-      {!s.online && <div className="pwa-bar offline" role="status" id="pwa-offline">Brak połączenia z serwerem — sprawdź Wi-Fi / VPN. Dane nie są zapisywane w urządzeniu; zapisz operację po powrocie sieci.</div>}
-      {s.update && <div className="pwa-bar update" role="status" id="pwa-update">Dostępna nowa wersja ResInvest ERP.
-        <button type="button" className="btn sm" id="pwa-reload" onClick={applyUpdate}>Odśwież</button></div>}
+      {!s.online && <div className="pwa-bar offline" role="status" id="pwa-offline">{t("Brak połączenia z serwerem — sprawdź Wi-Fi / VPN. Dane nie są zapisywane w urządzeniu; zapisz operację po powrocie sieci.")}</div>}
+      {s.update && <div className="pwa-bar update" role="status" id="pwa-update">{t("Dostępna nowa wersja ResInvest ERP.")}
+        <button type="button" className="btn sm" id="pwa-reload" onClick={applyUpdate}>{t("Odśwież")}</button></div>}
     </>
   );
 }
@@ -70,13 +71,13 @@ const isIos = () => typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(
 /** Sekcja „Aplikacja” w Moim koncie: instalacja na telefonie / komputerze. */
 export function InstallApp() {
   const s = usePwa();
-  if (s.installed) return <p className="muted" id="pwa-installed">Aplikacja jest zainstalowana na tym urządzeniu.</p>;
+  if (s.installed) return <p className="muted" id="pwa-installed">{t("Aplikacja jest zainstalowana na tym urządzeniu.")}</p>;
   return (
     <div id="pwa-install">
-      {s.install ? <button type="button" className="btn primary" id="pwa-install-btn" onClick={() => void promptInstall()}>Zainstaluj aplikację</button>
-        : isIos() ? <p className="small">iPhone / iPad: w Safari dotknij <strong>Udostępnij</strong> → <strong>Do ekranu początkowego</strong>.</p>
-          : <p className="small muted">Instalacja: w Chrome / Edge menu przeglądarki → <strong>Zainstaluj ResInvest ERP</strong> (na Androidzie: <strong>Dodaj do ekranu głównego</strong>). Na komputerach firmowych można też użyć aplikacji Windows „ResInvest ERP”.</p>}
-      <p className="small muted">Aplikacja otwiera się w osobnym oknie z ikoną ResInvest. Dane pozostają na serwerze firmy — w urządzeniu są tylko pliki programu.</p>
+      {s.install ? <button type="button" className="btn primary" id="pwa-install-btn" onClick={() => void promptInstall()}>{t("Zainstaluj aplikację")}</button>
+        : isIos() ? <p className="small">{t("iPhone / iPad: w Safari dotknij „Udostępnij” → „Do ekranu początkowego”.")}</p>
+          : <p className="small muted">{t("Instalacja: w Chrome / Edge menu przeglądarki → „Zainstaluj ResInvest ERP” (na Androidzie: „Dodaj do ekranu głównego”). Na komputerach firmowych można też użyć aplikacji Windows „ResInvest ERP”.")}</p>}
+      <p className="small muted">{t("Aplikacja otwiera się w osobnym oknie z ikoną ResInvest. Dane pozostają na serwerze firmy — w urządzeniu są tylko pliki programu.")}</p>
     </div>
   );
 }

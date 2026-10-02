@@ -149,7 +149,8 @@ describe("§34.17 / §35.5 ostatni aktywny administrator", () => {
     await F.db.user.updateMany({ where: { id: { in: others.map(o => o.id) } }, data: { status: "SUSPENDED" } });
     // „stary” kontekst drugiego administratora (np. żądanie w toku) — serwis sprawdza stan bazy, nie kontekst
     const ghost = { id: "00000000-0000-7000-8000-000000000001", email: "duch@resinvest.group", firstName: "D", lastName: "A", status: "ACTIVE" as const, roleCode: "ADMINISTRATOR", roleName: "Administrator",
-      global: true, permissions: new Set(["users.manage", "roles.assign"]), warehouseIds: [], defaultWarehouseId: null, mustChangePassword: false, sessionId: "s", version: 1 };
+      global: true, permissions: new Set(["users.manage", "roles.assign"]), warehouseIds: [], defaultWarehouseId: null, mustChangePassword: false,
+      prefs: { lang: "pl", theme: null, themePrimary: null, themeSecondary: null }, sessionId: "s", version: 1 };
     try {
       await expect(svc.update(ghost, F.users.admin.id, { version: await ver(F.users.admin.id), roleCode: "MANAGER", warehouseIds: [F.wh.ZAB!] }, { ip: null, userAgent: null, requestId: null })).rejects.toMatchObject({ code: "LAST_ADMIN" });
       expect((await F.db.user.findUniqueOrThrow({ where: { id: F.users.admin.id }, include: { role: true } })).role.code).toBe("ADMINISTRATOR");

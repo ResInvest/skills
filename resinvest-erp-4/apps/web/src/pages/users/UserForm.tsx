@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import type { Role, Warehouse } from "../../api/types";
 import type { useSession } from "../../auth/session";
+import { t } from "../../i18n";
 
 export const useRoles = () => useQuery({ queryKey: ["roles"], queryFn: async ({ signal }) => (await api.get<{ roles: Role[] }>("/roles", signal)).roles, staleTime: 60_000 });
 
@@ -27,14 +28,14 @@ export function WarehousePicker({ warehouses, value, onChange, def, onDefault, d
   };
   return (
     <fieldset className={`field fs ${error ? "has-error" : ""}`} disabled={disabled} aria-describedby={error ? `${id}-e` : undefined}>
-      <legend>Magazyny</legend>
+      <legend>{t("Magazyny")}</legend>
       <div className="checks">
         {warehouses.map(w => (
           <label key={w.id} className="check"><input type="checkbox" checked={value.includes(w.id)} onChange={e => toggle(w.id, e.target.checked)} /> {w.name}</label>
         ))}
       </div>
       {value.length > 0 && (
-        <label className="inline">Domyślny:{" "}
+        <label className="inline">{t("Domyślny:")}{" "}
           <select className="ctrl" value={def ?? ""} onChange={e => onDefault(e.target.value || null)}>
             {warehouses.filter(w => value.includes(w.id)).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>

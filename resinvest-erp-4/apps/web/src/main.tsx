@@ -4,10 +4,12 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./app/App";
 import { createQueryClient } from "./app/query";
 import { startPwa } from "./app/pwa";
+import { startTheme } from "./theme";
 import "./styles/app.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Brak elementu #root");
 const queryClient = createQueryClient();
+startTheme();
 startPwa();
 createRoot(root).render(<StrictMode><QueryClientProvider client={queryClient}><App /></QueryClientProvider></StrictMode>);

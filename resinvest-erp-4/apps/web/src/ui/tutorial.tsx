@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 
 /**
  * Samouczek: opisy pod polami formularzy i pod kolumnami tabel. Włączony domyślnie; wybór użytkownika zapamiętuje
@@ -22,7 +23,7 @@ export const useTutorial = () => useSyncExternalStore(subscribe, () => current, 
 export function Hint({ text, id }: { text: string | undefined; id?: string }) {
   const on = useTutorial();
   if (!on || !text) return null;
-  return <small className="tut" data-tut={id}>{text}</small>;
+  return <small className="tut" data-tut={id}>{t(text)}</small>;
 }
 
 /** Opis kolumn tabeli — lista pod tabelą (na telefonie tabele są kartami, więc opis nie może siedzieć w nagłówku). */
@@ -31,8 +32,8 @@ export function ColumnHelp({ items, id }: { items: ReadonlyArray<readonly [strin
   if (!on) return null;
   return (
     <details className="tut-cols" id={id}>
-      <summary>Opis kolumn</summary>
-      <dl>{items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      <summary>{t("Opis kolumn")}</summary>
+      <dl>{items.map(([k, v]) => <div key={k}><dt>{t(k)}</dt><dd>{t(v)}</dd></div>)}</dl>
     </details>
   );
 }
@@ -41,6 +42,6 @@ export function TutorialToggle() {
   const on = useTutorial();
   return (
     <button type="button" className={`btn sm${on ? " on" : ""}`} id="tut-toggle" aria-pressed={on} onClick={() => setTutorial(!on)}
-      title="Opisy pod polami i kolumnami">{on ? "Samouczek: włączony" : "Samouczek: wyłączony"}</button>
+      title={t("Opisy pod polami i kolumnami")}>{on ? t("Samouczek: włączony") : t("Samouczek: wyłączony")}</button>
   );
 }

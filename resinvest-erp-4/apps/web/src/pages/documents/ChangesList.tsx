@@ -1,3 +1,4 @@
+import { m, t } from "../../i18n";
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, errorText } from "../../api/client";
@@ -15,10 +16,10 @@ interface OpRow { operationId: string; operationType: string; status: string; op
 const PAGE = 50;
 const DocList = ({ docs }: { docs: Docs }) => <>{docs.filter(d => d.type !== "TR").map(d => <span key={d.number} className="nowrap"><DocBadge type={d.type} /> <span className="doc">{d.number}</span> </span>)}</>;
 const HELP: Record<ChangesKind, ReadonlyArray<readonly [string, string]>> = {
-  corrections: [["Korekta", "Numer KOR/NNN/MM/RRRR, data i osoba. Numery dokumentów korygowanych się nie zmieniają."], ["Dokumenty", "Dokumenty operacji objęte korektą — kliknij, aby zobaczyć operację i pełną historię."],
-    ["Powód", "Powód podany przy korekcie (wymagany)."], ["Było / Jest", "Pola, które zmieniła korekta: wartość przed i po."]],
-  edited: [["Dokumenty", "Operacje zmienione co najmniej jedną korektą."], ["Korekty", "Liczba korekt tej operacji."], ["Ostatnia", "Numer, data, osoba i powód ostatniej korekty."]],
-  deleted: [["Dokumenty", "Usunięte operacje — ich ruchy magazynowe zostały odwrócone; numery pozostają zajęte."], ["Usunięto", "Data i osoba."], ["Powód", "Powód podany przy usunięciu (wymagany)."]],
+  corrections: [[m("Korekta"), m("Numer KOR/NNN/MM/RRRR, data i osoba. Numery dokumentów korygowanych się nie zmieniają.")], [m("Dokumenty"), m("Dokumenty operacji objęte korektą — kliknij, aby zobaczyć operację i pełną historię.")],
+    [m("Powód"), m("Powód podany przy korekcie (wymagany).")], [m("Było / Jest"), m("Pola, które zmieniła korekta: wartość przed i po.")]],
+  edited: [[m("Dokumenty"), m("Operacje zmienione co najmniej jedną korektą.")], [m("Korekty"), m("Liczba korekt tej operacji.")], [m("Ostatnia"), m("Numer, data, osoba i powód ostatniej korekty.")]],
+  deleted: [[m("Dokumenty"), m("Usunięte operacje — ich ruchy magazynowe zostały odwrócone; numery pozostają zajęte.")], [m("Usunięto"), m("Data i osoba.")], [m("Powód"), m("Powód podany przy usunięciu (wymagany).")]],
 };
 
 /** Zakładki rejestru „Korekty”, „Edytowane”, „Usunięte” — z filtrem dat i stronicowaniem; kliknięcie otwiera operację. */
@@ -34,47 +35,47 @@ export function ChangesList({ kind, warehouseId, onOpen }: { kind: ChangesKind; 
   return (
     <section id={`changes-${kind}`}>
       <div className="filters" role="search">
-        <label className="inline">Od <input className="ctrl" type="date" value={f.from} onChange={set("from")} /></label>
-        <label className="inline">Do <input className="ctrl" type="date" value={f.to} onChange={set("to")} /></label>
+        <label className="inline">{t("Od")} <input className="ctrl" type="date" value={f.from} onChange={set("from")} /></label>
+        <label className="inline">{t("Do")} <input className="ctrl" type="date" value={f.to} onChange={set("to")} /></label>
       </div>
-      {q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">Wczytywanie…</p> : (
+      {q.isError ? <Alert kind="err">{errorText(q.error)}</Alert> : !q.data ? <p className="muted">{t("Wczytywanie…")}</p> : (
         <>
           <div className="table-wrap"><table className="table" id={`changes-${kind}-table`}>
             {kind === "corrections" ? <>
-              <thead><tr><th>Korekta</th><th>Dokumenty</th><th>Powód</th><th>Było / Jest</th></tr></thead>
+              <thead><tr><th>{t("Korekta")}</th><th>{t("Dokumenty")}</th><th>{t("Powód")}</th><th>{t("Było / Jest")}</th></tr></thead>
               <tbody>{q.data.rows.map(r => (
                 <tr key={r.id} data-correction={r.number}>
-                  <td data-label="Korekta"><strong className="doc">{r.number}</strong><br /><small className="muted">{fmtDateTime(r.createdAt)} · {r.createdBy ?? "—"}</small></td>
-                  <td data-label="Dokumenty">{open(r.operationId, r.documents)}<br /><small className="muted">{OP_LABEL[r.operationType] ?? r.operationType}{r.status === "DELETED" ? " · usunięta później" : ""}</small></td>
-                  <td data-label="Powód">{r.reason}</td>
-                  <td data-label="Było / Jest"><ChangesTable changes={r.changes} /></td>
+                  <td data-label={t("Korekta")}><strong className="doc">{r.number}</strong><br /><small className="muted">{fmtDateTime(r.createdAt)} · {r.createdBy ?? "—"}</small></td>
+                  <td data-label={t("Dokumenty")}>{open(r.operationId, r.documents)}<br /><small className="muted">{OP_LABEL[r.operationType] ?? r.operationType}{r.status === "DELETED" ? ` · ${t("usunięta później")}` : ""}</small></td>
+                  <td data-label={t("Powód")}>{r.reason}</td>
+                  <td data-label={t("Było / Jest")}><ChangesTable changes={r.changes} /></td>
                 </tr>))}</tbody>
             </> : kind === "edited" ? <>
-              <thead><tr><th>Dokumenty</th><th>Data</th><th className="r">Korekty</th><th>Ostatnia korekta</th></tr></thead>
+              <thead><tr><th>{t("Dokumenty")}</th><th>{t("Data")}</th><th className="r">{t("Korekty")}</th><th>{t("Ostatnia korekta")}</th></tr></thead>
               <tbody>{q.data.rows.map(r => (
                 <tr key={r.operationId}>
-                  <td data-label="Dokumenty">{open(r.operationId, r.documents)}<br /><small className="muted">{OP_LABEL[r.operationType] ?? r.operationType}</small></td>
-                  <td data-label="Data">{day(r.operationDate)}</td>
-                  <td data-label="Korekty" className="r num">{r.corrections}</td>
-                  <td data-label="Ostatnia">{r.last && <><span className="doc">{r.last.number}</span> · {fmtDateTime(r.last.at)} · {r.last.by ?? "—"}<br /><small className="muted">{r.last.reason}</small></>}</td>
+                  <td data-label={t("Dokumenty")}>{open(r.operationId, r.documents)}<br /><small className="muted">{OP_LABEL[r.operationType] ?? r.operationType}</small></td>
+                  <td data-label={t("Data")}>{day(r.operationDate)}</td>
+                  <td data-label={t("Korekty")} className="r num">{r.corrections}</td>
+                  <td data-label={t("Ostatnia")}>{r.last && <><span className="doc">{r.last.number}</span> · {fmtDateTime(r.last.at)} · {r.last.by ?? "—"}<br /><small className="muted">{r.last.reason}</small></>}</td>
                 </tr>))}</tbody>
             </> : <>
-              <thead><tr><th>Dokumenty</th><th>Data operacji</th><th>Usunięto</th><th>Powód</th></tr></thead>
+              <thead><tr><th>{t("Dokumenty")}</th><th>{t("Data operacji")}</th><th>{t("Usunięto")}</th><th>{t("Powód")}</th></tr></thead>
               <tbody>{q.data.rows.map(r => (
                 <tr key={r.operationId} className="deleted-row">
-                  <td data-label="Dokumenty">{open(r.operationId, r.documents)}<br /><small className="muted">{OP_LABEL[r.operationType] ?? r.operationType}</small></td>
-                  <td data-label="Data">{day(r.operationDate)}</td>
-                  <td data-label="Usunięto">{r.deleted ? `${fmtDateTime(r.deleted.at)} · ${r.deleted.by ?? "—"}` : "—"}</td>
-                  <td data-label="Powód">{r.deleted?.reason ?? "—"}</td>
+                  <td data-label={t("Dokumenty")}>{open(r.operationId, r.documents)}<br /><small className="muted">{OP_LABEL[r.operationType] ?? r.operationType}</small></td>
+                  <td data-label={t("Data")}>{day(r.operationDate)}</td>
+                  <td data-label={t("Usunięto")}>{r.deleted ? `${fmtDateTime(r.deleted.at)} · ${r.deleted.by ?? "—"}` : "—"}</td>
+                  <td data-label={t("Powód")}>{r.deleted?.reason ?? "—"}</td>
                 </tr>))}</tbody>
             </>}
-            {!q.data.rows.length && <tbody><tr><td colSpan={4} className="muted">{kind === "corrections" ? "Brak korekt." : kind === "edited" ? "Brak dokumentów po korekcie." : "Brak usuniętych dokumentów."}</td></tr></tbody>}
+            {!q.data.rows.length && <tbody><tr><td colSpan={4} className="muted">{kind === "corrections" ? t("Brak korekt.") : kind === "edited" ? t("Brak dokumentów po korekcie.") : t("Brak usuniętych dokumentów.")}</td></tr></tbody>}
           </table></div>
           <ColumnHelp items={HELP[kind]} />
-          <nav className="pager" aria-label="Strony">
-            <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Poprzednia</button>
-            <span>Strona {page} z {pages} · {q.data.total}</span>
-            <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>Następna →</button>
+          <nav className="pager" aria-label={t("Strony")}>
+            <button type="button" className="btn sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t("← Poprzednia")}</button>
+            <span>{t("Strona {page} z {pages}", { page, pages })} · {q.data.total}</span>
+            <button type="button" className="btn sm" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>{t("Następna →")}</button>
           </nav>
         </>
       )}

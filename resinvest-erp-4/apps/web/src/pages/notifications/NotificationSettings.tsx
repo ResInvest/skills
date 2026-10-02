@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText } from "../../api/client";
 import { Alert } from "../../ui/components";
+import { t, tm } from "../../i18n";
 
 export interface NotificationRow { event: string; label: string; description: string; enabled: boolean; allowed: boolean }
 
@@ -21,12 +22,12 @@ export function NotificationSettings({ mode, userId }: { mode: "own" | "admin"; 
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const save = useMutation({
     mutationFn: (changes: Record<string, boolean>) => api.put<{ settings: NotificationRow[] }>(path, { changes }),
-    onSuccess: r => { qc.setQueryData(key, r.settings); setMsg({ kind: "ok", text: "Zapisano ustawienia powiadomień." }); },
+    onSuccess: r => { qc.setQueryData(key, r.settings); setMsg({ kind: "ok", text: t("Zapisano ustawienia powiadomień.") }); },
     onError: e => setMsg({ kind: "err", text: errorText(e) }),
     onSettled: () => setPending({}),
   });
   const change = (changes: Record<string, boolean>) => { setMsg(null); setPending(changes); save.mutate(changes); };
-  if (q.isPending) return <p className="muted">Wczytywanie…</p>;
+  if (q.isPending) return <p className="muted">{t("Wczytywanie…")}</p>;
   if (q.isError) return <Alert kind="err">{errorText(q.error)}</Alert>;
   const all = (on: boolean) => change(Object.fromEntries(q.data.filter(r => mode === "admin" || r.allowed).map(r => [r.event, on])));
   return (
@@ -40,20 +41,20 @@ export function NotificationSettings({ mode, userId }: { mode: "own" | "admin"; 
               <label className="check">
                 <input type="checkbox" id={`nt-${mode}-${r.event}`} checked={pending[r.event] ?? r[field]} disabled={locked || save.isPending}
                   onChange={e => change({ [r.event]: e.target.checked })} />
-                <span><strong>{r.label}</strong><small className="muted"> — {r.description}</small>
-                  {locked && <small className="badge warn">wymaga zgody administratora</small>}
-                  {mode === "admin" && r.allowed && <small className={`badge ${r.enabled ? "ok" : "info"}`}>{r.enabled ? "użytkownik włączył" : "użytkownik nie włączył"}</small>}</span>
+                <span><strong>{tm(r.label)}</strong><small className="muted"> — {tm(r.description)}</small>
+                  {locked && <small className="badge warn">{t("wymaga zgody administratora")}</small>}
+                  {mode === "admin" && r.allowed && <small className={`badge ${r.enabled ? "ok" : "info"}`}>{r.enabled ? t("użytkownik włączył") : t("użytkownik nie włączył")}</small>}</span>
               </label>
             </li>);
         })}
       </ul>
       <div className="actions">
-        <button type="button" className="btn sm" disabled={save.isPending} onClick={() => all(true)}>{mode === "admin" ? "Zezwól na wszystkie" : "Włącz wszystkie dozwolone"}</button>
-        <button type="button" className="btn sm" disabled={save.isPending} onClick={() => all(false)}>{mode === "admin" ? "Odbierz wszystkie" : "Wyłącz wszystkie"}</button>
+        <button type="button" className="btn sm" disabled={save.isPending} onClick={() => all(true)}>{mode === "admin" ? t("Zezwól na wszystkie") : t("Włącz wszystkie dozwolone")}</button>
+        <button type="button" className="btn sm" disabled={save.isPending} onClick={() => all(false)}>{mode === "admin" ? t("Odbierz wszystkie") : t("Wyłącz wszystkie")}</button>
       </div>
       <p className="muted small">{mode === "own"
-        ? "Wiadomości dotyczą magazynów, do których masz dostęp; o własnych operacjach nie dostajesz powiadomień. Błąd poczty nie wstrzymuje pracy — wysyłka jest ponawiana."
-        : "Zgoda pozwala użytkownikowi włączyć powiadomienie w „Moje konto”. Odebranie zgody od razu wyłącza wysyłkę."}</p>
+        ? t("Wiadomości dotyczą magazynów, do których masz dostęp; o własnych operacjach nie dostajesz powiadomień. Błąd poczty nie wstrzymuje pracy — wysyłka jest ponawiana.")
+        : t("Zgoda pozwala użytkownikowi włączyć powiadomienie w „Moje konto”. Odebranie zgody od razu wyłącza wysyłkę.")}</p>
     </div>
   );
 }

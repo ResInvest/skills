@@ -1,10 +1,13 @@
 /** Typy odpowiedzi API (zgodne z kontrolerami NestJS). */
+import { m, tmap } from "../i18n";
+import type { Lang, Theme } from "@resinvest/domain";
 export type UserStatus = "INVITED" | "ACTIVE" | "SUSPENDED" | "DISABLED";
 
 export interface Me {
   id: string; email: string; firstName: string; lastName: string;
   role: { code: string; name: string; global: boolean };
   permissions: string[]; warehouseIds: string[]; defaultWarehouseId: string | null; mustChangePassword: boolean;
+  prefs: { lang: Lang; theme: Theme | null; themePrimary: string | null; themeSecondary: string | null };
 }
 export interface Warehouse { id: string; code: string; name: string; address: string | null; active: boolean }
 export interface UserRow {
@@ -19,13 +22,13 @@ export interface AuditRow { id: string; ts: string; userId: string | null; userE
 export interface LoginRow { id: string; ts: string; email: string; success: boolean; reason: string | null; ip: string | null; userAgent: string | null }
 export interface AuthConfig { companyDomains: string[]; allowSelfRegistration: boolean; passwordRules: string }
 
-export const STATUS_LABEL: Record<UserStatus, string> = { INVITED: "zaproszony", ACTIVE: "aktywny", SUSPENDED: "zawieszony", DISABLED: "wyłączony" };
+export const STATUS_LABEL: Record<UserStatus, string> = tmap({ INVITED: m("zaproszony"), ACTIVE: m("aktywny"), SUSPENDED: m("zawieszony"), DISABLED: m("wyłączony") });
 
 // ---- F3: materiały, stany, bilans otwarcia ----
 export type Unit = "M3" | "MP" | "T";
 export const UNIT_LABEL: Record<Unit, string> = { M3: "m³", MP: "MP", T: "t" };
 export interface Material { id: string; code: string; name: string; category: "WOOD" | "CHIPS" | "TONNAGE" | "OTHER"; stockUnit: Unit; allowedUnits: Unit[]; active: boolean; tonPerUnit: string | null; mpPerM3: string | null; tonPerM3: string | null }
-export const CATEGORY_LABEL: Record<Material["category"], string> = { WOOD: "Drewno", CHIPS: "Zrębka", TONNAGE: "Produkty tonowe", OTHER: "Inne" };
+export const CATEGORY_LABEL: Record<Material["category"], string> = tmap({ WOOD: m("Drewno"), CHIPS: m("Zrębka"), TONNAGE: m("Produkty tonowe"), OTHER: m("Inne") });
 export interface BalanceRow { materialId: string; code: string; name: string; category: Material["category"]; unit: Unit; active: boolean; qty: string; movements: number; lastMovementAt: string | null }
 export interface BalancesResponse { warehouseId: string; opening: { id: string; effectiveDate: string; approvedAt: string } | null; balances: BalanceRow[] }
 export interface MovementRow { id: string; seq: string; kind: string; qty: string; before: string; after: string; movementDate: string; createdAt: string; document: { type: string; number: string } | null; operationId: string; operationType: string; user: string | null }
@@ -34,7 +37,7 @@ export interface OpeningBatch {
   id: string; warehouseId: string; warehouse: { code: string; name: string }; effectiveDate: string; status: "DRAFT" | "APPROVED"; note: string | null; version: number;
   createdAt: string; createdBy: string | null; approvedAt: string | null; approvedBy: string | null; operationId: string | null; documentNumber: string | null; lines: OpeningLine[];
 }
-export const MOVEMENT_LABEL: Record<string, string> = {
-  OPENING: "Bilans otwarcia", PURCHASE: "Zakup", SALE: "Sprzedaż", CONSUMPTION: "Zużycie", PRODUCTION: "Produkcja", TRANSFER_OUT: "MM — rozchód",
-  TRANSFER_IN: "MM — przychód", INVENTORY: "Inwentaryzacja", CORRECTION: "Korekta", REVERSAL: "Odwrócenie",
-};
+export const MOVEMENT_LABEL: Record<string, string> = tmap({
+  OPENING: m("Bilans otwarcia"), PURCHASE: m("Zakup"), SALE: m("Sprzedaż"), CONSUMPTION: m("Zużycie"), PRODUCTION: m("Produkcja"), TRANSFER_OUT: m("MM — rozchód"),
+  TRANSFER_IN: m("MM — przychód"), INVENTORY: m("Inwentaryzacja"), CORRECTION: m("Korekta"), REVERSAL: m("Odwrócenie"),
+});

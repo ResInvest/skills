@@ -20,6 +20,8 @@ import { DocumentsPage } from "../pages/documents/DocumentsPage";
 import { NewOperationPage } from "../pages/documents/NewOperationPage";
 import { ReportsPage } from "../pages/reports/ReportsPage";
 import { PwaBanners } from "./pwa";
+import { PrefsSync } from "./prefs";
+import { I18nProvider, t } from "../i18n";
 import { MailPage } from "../pages/notifications/MailPage";
 import { PlannerPage } from "../pages/planner/PlannerPage";
 
@@ -27,7 +29,7 @@ import { PlannerPage } from "../pages/planner/PlannerPage";
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
   const loc = useLocation();
-  if (loading) return <div className="splash" role="status">Wczytywanie…</div>;
+  if (loading) return <div className="splash" role="status">{t("Wczytywanie…")}</div>;
   if (!user) return <Navigate to="/logowanie" replace state={{ from: loc.pathname + loc.search }} />;
   if (user.mustChangePassword) return <ForcedPasswordPage />;
   return <>{children}</>;
@@ -40,10 +42,10 @@ function RequirePerm({ perm, children }: { perm: string; children: ReactNode }) 
 }
 
 function NoAccess() {
-  return <section className="card"><h1>Brak uprawnień</h1><p className="muted">Twoja rola nie ma dostępu do tego ekranu. Jeśli to błąd — skontaktuj się z administratorem.</p><Link to="/">Wróć na pulpit</Link></section>;
+  return <section className="card"><h1>{t("Brak uprawnień")}</h1><p className="muted">{t("Twoja rola nie ma dostępu do tego ekranu. Jeśli to błąd — skontaktuj się z administratorem.")}</p><Link to="/">{t("Wróć na pulpit")}</Link></section>;
 }
 function NotFound() {
-  return <section className="card"><h1>Nie znaleziono strony</h1><Link to="/">Wróć na pulpit</Link></section>;
+  return <section className="card"><h1>{t("Nie znaleziono strony")}</h1><Link to="/">{t("Wróć na pulpit")}</Link></section>;
 }
 
 export function AppRoutes() {
@@ -77,5 +79,5 @@ export function AppRoutes() {
 }
 
 export function App() {
-  return <BrowserRouter><PwaBanners /><SessionProvider><AppRoutes /></SessionProvider></BrowserRouter>;
+  return <BrowserRouter><SessionProvider><I18nProvider><PwaBanners /><PrefsSync /><AppRoutes /></I18nProvider></SessionProvider></BrowserRouter>;
 }

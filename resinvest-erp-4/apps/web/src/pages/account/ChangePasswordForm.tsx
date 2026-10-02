@@ -4,6 +4,7 @@ import { api, ApiRequestError } from "../../api/client";
 import { ME_KEY } from "../../auth/session";
 import { Alert, PasswordInput } from "../../ui/components";
 import { useAuthConfig } from "../auth/LoginPage";
+import { t, tm } from "../../i18n";
 
 /** Zmiana hasła (konto i ekran wymuszonej zmiany). Serwer kończy pozostałe sesje użytkownika. */
 export function ChangePasswordForm({ onDone }: { onDone?: () => void }) {
@@ -15,7 +16,7 @@ export function ChangePasswordForm({ onDone }: { onDone?: () => void }) {
   const [ok, setOk] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setErr(null); setOk(false);
-    if (newPassword !== repeat) { setErr("Nowe hasła nie są identyczne."); return; }
+    if (newPassword !== repeat) { setErr(t("Nowe hasła nie są identyczne.")); return; }
     setBusy(true);
     try {
       await api.post("/auth/password", { oldPassword, newPassword });
@@ -23,7 +24,7 @@ export function ChangePasswordForm({ onDone }: { onDone?: () => void }) {
       await qc.invalidateQueries({ queryKey: ME_KEY });
       await qc.invalidateQueries({ queryKey: ["auth", "sessions"] });
       onDone?.();
-    } catch (x) { setErr(x instanceof ApiRequestError ? x : "Nieznany błąd"); }
+    } catch (x) { setErr(x instanceof ApiRequestError ? x : t("Nieznany błąd")); }
     finally { setBusy(false); }
   };
   const apiErr = err instanceof ApiRequestError ? err : null;
@@ -31,14 +32,14 @@ export function ChangePasswordForm({ onDone }: { onDone?: () => void }) {
   const oldErr = apiErr?.code === "BAD_PASSWORD" ? apiErr.message : undefined;
   const newErr = apiErr && ["PASSWORD_POLICY", "PASSWORD_SAME"].includes(apiErr.code) ? apiErr.message : undefined;
   return (
-    <form onSubmit={e => void submit(e)} className="form" aria-label="Zmiana hasła">
-      {ok && <Alert kind="ok">Hasło zostało zmienione. Pozostałe sesje zostały wylogowane.</Alert>}
+    <form onSubmit={e => void submit(e)} className="form" aria-label={t("Zmiana hasła")}>
+      {ok && <Alert kind="ok">{t("Hasło zostało zmienione. Pozostałe sesje zostały wylogowane.")}</Alert>}
       {typeof err === "string" && <Alert kind="err">{err}</Alert>}
       {apiErr && !oldErr && !newErr && <Alert kind="err">{apiErr.message}</Alert>}
-      <PasswordInput label="Obecne hasło" autoComplete="current-password" value={oldPassword} onChange={e => setOld(e.target.value)} error={oldErr} />
-      <PasswordInput label="Nowe hasło" autoComplete="new-password" value={newPassword} onChange={e => setNew(e.target.value)} error={newErr} hint={cfg.data?.passwordRules} />
-      <PasswordInput label="Powtórz nowe hasło" autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} />
-      <button className="btn primary" disabled={busy || !oldPassword || !newPassword || !repeat}>{busy ? "Zapisywanie…" : "Zmień hasło"}</button>
+      <PasswordInput label={t("Obecne hasło")} autoComplete="current-password" value={oldPassword} onChange={e => setOld(e.target.value)} error={oldErr} />
+      <PasswordInput label={t("Nowe hasło")} autoComplete="new-password" value={newPassword} onChange={e => setNew(e.target.value)} error={newErr} hint={cfg.data ? tm(cfg.data.passwordRules) : undefined} />
+      <PasswordInput label={t("Powtórz nowe hasło")} autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)} />
+      <button className="btn primary" disabled={busy || !oldPassword || !newPassword || !repeat}>{busy ? t("Zapisywanie…") : t("Zmień hasło")}</button>
     </form>
   );
 }

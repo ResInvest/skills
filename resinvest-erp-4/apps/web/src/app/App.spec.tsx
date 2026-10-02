@@ -1,3 +1,4 @@
+import { I18nProvider } from "../i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -24,7 +25,8 @@ function mockApi(routes: Record<string, [number, unknown] | ((body: unknown) => 
 
 const me = (over: Partial<Me> = {}): Me => ({
   id: "u1", email: "jan.kowalski@resinvest.pl", firstName: "Jan", lastName: "Kowalski", role: { code: "MAGAZYNIER", name: "Magazynier", global: false },
-  permissions: ["report.view"], warehouseIds: ["w1"], defaultWarehouseId: "w1", mustChangePassword: false, ...over,
+  permissions: ["report.view"], warehouseIds: ["w1"], defaultWarehouseId: "w1", mustChangePassword: false,
+  prefs: { lang: "pl", theme: null, themePrimary: null, themeSecondary: null }, ...over,
 });
 const COMMON = {
   "GET /auth/config": [200, { ok: true, companyDomains: ["resinvest.pl"], allowSelfRegistration: false, passwordRules: "Min. 12 znaków" }],
@@ -34,7 +36,7 @@ const COMMON = {
 
 const view = (path: string) => render(
   <QueryClientProvider client={createQueryClient()}>
-    <MemoryRouter initialEntries={[path]}><SessionProvider><AppRoutes /></SessionProvider></MemoryRouter>
+    <MemoryRouter initialEntries={[path]}><SessionProvider><I18nProvider initial="pl"><AppRoutes /></I18nProvider></SessionProvider></MemoryRouter>
   </QueryClientProvider>,
 );
 

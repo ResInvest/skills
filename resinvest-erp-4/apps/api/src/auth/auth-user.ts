@@ -17,6 +17,8 @@ export interface AuthUser {
   warehouseIds: readonly string[];
   defaultWarehouseId: string | null;
   mustChangePassword: boolean;
+  /** Preferencje interfejsu (język, motyw, kolory motywu własnego). */
+  prefs: { lang: string; theme: string | null; themePrimary: string | null; themeSecondary: string | null };
   sessionId: string;
   version: number;
 }
@@ -32,7 +34,8 @@ export async function loadAuthUser(db: Db, userId: string, sessionId: string): P
   return {
     id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, status: u.status, roleCode: u.role.code, roleName: u.role.name,
     global: u.role.global, permissions: new Set(u.role.permissions.map(p => p.permissionCode)), warehouseIds,
-    defaultWarehouseId: u.defaultWarehouseId, mustChangePassword: u.mustChangePassword, sessionId, version: u.version,
+    defaultWarehouseId: u.defaultWarehouseId, mustChangePassword: u.mustChangePassword,
+    prefs: { lang: u.lang, theme: u.theme, themePrimary: u.themePrimary, themeSecondary: u.themeSecondary }, sessionId, version: u.version,
   };
 }
 

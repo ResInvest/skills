@@ -6,14 +6,15 @@ import type { AuthConfig, Me } from "../../api/types";
 import { useSession } from "../../auth/session";
 import { Alert, PasswordInput, TextInput } from "../../ui/components";
 import { AuthLayout } from "./AuthLayout";
+import { m, t } from "../../i18n";
 
 export const useAuthConfig = () => useQuery({ queryKey: ["auth", "config"], queryFn: ({ signal }) => api.get<AuthConfig & { ok: true }>("/auth/config", signal), staleTime: 300_000 });
 
 /** Komunikaty kodów błędów logowania (treść z serwera ma pierwszeństwo — tu tylko podpowiedzi). */
 const HINT: Record<string, string> = {
-  LOCKED: "Konto jest czasowo zablokowane po nieudanych próbach. Poczekaj lub poproś administratora o odblokowanie.",
-  NOT_ACTIVATED: "Konto nie zostało jeszcze aktywowane — użyj linku z zaproszenia (e-mail).",
-  OFFLINE: "Sprawdź, czy FortiClient VPN jest połączony, i spróbuj ponownie.",
+  LOCKED: m("Konto jest czasowo zablokowane po nieudanych próbach. Poczekaj lub poproś administratora o odblokowanie."),
+  NOT_ACTIVATED: m("Konto nie zostało jeszcze aktywowane — użyj linku z zaproszenia (e-mail)."),
+  OFFLINE: m("Sprawdź, czy FortiClient VPN jest połączony, i spróbuj ponownie."),
 };
 
 export function LoginPage() {
@@ -44,16 +45,16 @@ export function LoginPage() {
 
   const domains = cfg.data?.companyDomains ?? [];
   return (
-    <AuthLayout title="Logowanie" footer={<>
-      <Link to="/zapomnialem-hasla">Nie pamiętasz hasła?</Link>
-      {cfg.data?.allowSelfRegistration && <Link to="/rejestracja">Załóż konto (wymaga akceptacji administratora)</Link>}
+    <AuthLayout title={t("Logowanie")} footer={<>
+      <Link to="/zapomnialem-hasla">{t("Nie pamiętasz hasła?")}</Link>
+      {cfg.data?.allowSelfRegistration && <Link to="/rejestracja">{t("Załóż konto (wymaga akceptacji administratora)")}</Link>}
     </>}>
       <form onSubmit={e => void submit(e)} noValidate className="form">
-        {err && <Alert kind="err"><strong>{err.message}</strong>{HINT[err.code] && <span>{HINT[err.code]}</span>}</Alert>}
-        <TextInput label="Firmowy adres e-mail" type="email" autoComplete="username" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} required
-          hint={domains.length ? `Dozwolone domeny: ${domains.map(d => "@" + d).join(", ")}` : undefined} autoFocus />
-        <PasswordInput label="Hasło" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
-        <button className="btn primary block" disabled={busy || !email || !password}>{busy ? "Logowanie…" : "Zaloguj"}</button>
+        {err && <Alert kind="err"><strong>{err.message}</strong>{HINT[err.code] && <span>{t(HINT[err.code]!)}</span>}</Alert>}
+        <TextInput label={t("Firmowy adres e-mail")} type="email" autoComplete="username" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} required
+          hint={domains.length ? t("Dozwolone domeny: {list}", { list: domains.map(d => "@" + d).join(", ") }) : undefined} autoFocus />
+        <PasswordInput label={t("Hasło")} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
+        <button className="btn primary block" disabled={busy || !email || !password}>{busy ? t("Logowanie…") : t("Zaloguj")}</button>
       </form>
     </AuthLayout>
   );
