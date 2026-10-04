@@ -7,7 +7,7 @@
 ;    powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ;  Skrypt: buduje ResInvest_ERP.html, generuje dane przykładowe, pobiera
 ;  środowisko Node.js (node.exe, weryfikacja SHA-256) do installer\runtime
-;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.5.0.exe
+;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.6.0.exe
 ;
 ;  Składniki:
 ;   * Program (tryb lokalny)   — samodzielny plik HTML; dane w przeglądarce,
@@ -22,7 +22,7 @@
 ; =========================================================================
 
 #define AppName "ResInvest ERP"
-#define AppVersion "3.5.0"
+#define AppVersion "3.6.0"
 #define AppPublisher "ResInvest Commodities"
 #define AppURL "http://localhost:8080/"
 #define ServerPort "8080"
@@ -50,7 +50,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 UninstallDisplayName={#AppName} {#AppVersion}
-UninstallDisplayIcon={app}\runtime\node.exe
+SetupIconFile=..\app\assets\icons\ric.ico
+UninstallDisplayIcon={app}\ric.ico
 CloseApplications=yes
 SetupLogging=yes
 
@@ -139,6 +140,7 @@ Name: "{commonappdata}\ResInvestERP"; Components: server; Permissions: users-mod
 Source: "..\ResInvest_ERP.html"; DestDir: "{app}"; Components: app; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Components: app; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Components: app; Flags: ignoreversion
+Source: "..\app\assets\icons\ric.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\config\app.config.json"; DestDir: "{app}\config"; Components: app; Flags: ignoreversion
 Source: "..\data\sample_data.json"; DestDir: "{app}\data"; Components: app; Flags: ignoreversion
 Source: "..\docs\*.md"; DestDir: "{app}\docs"; Components: app; Flags: ignoreversion
@@ -160,18 +162,18 @@ Source: "scripts\*.cmd"; DestDir: "{app}"; Components: server; Flags: ignorevers
 Filename: "{app}\ResInvest ERP (serwer).url"; Section: "InternetShortcut"; Key: "URL"; String: "{#AppURL}"; Components: server
 
 [Icons]
-Name: "{group}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; Components: app
-Name: "{group}\{cm:LnkServer}"; Filename: "{app}\ResInvestERP-Serwer.cmd"; WorkingDir: "{app}"; Components: server
-Name: "{group}\{cm:LnkOpen}"; Filename: "{app}\ResInvestERP-Otworz.cmd"; Parameters: "{#AppURL}"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Flags: runminimized; Components: server
-Name: "{group}\{cm:LnkBackup}"; Filename: "{app}\ResInvestERP-Kopia.cmd"; WorkingDir: "{app}"; Components: server
-Name: "{group}\{cm:LnkCheck}"; Filename: "{app}\ResInvestERP-Kontrola.cmd"; WorkingDir: "{app}"; Components: server
+Name: "{group}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; IconFilename: "{app}\ric.ico"; Components: app
+Name: "{group}\{cm:LnkServer}"; Filename: "{app}\ResInvestERP-Serwer.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\ric.ico"; Components: server
+Name: "{group}\{cm:LnkOpen}"; Filename: "{app}\ResInvestERP-Otworz.cmd"; Parameters: "{#AppURL}"; WorkingDir: "{app}"; IconFilename: "{app}\ric.ico"; Flags: runminimized; Components: server
+Name: "{group}\{cm:LnkBackup}"; Filename: "{app}\ResInvestERP-Kopia.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\ric.ico"; Components: server
+Name: "{group}\{cm:LnkCheck}"; Filename: "{app}\ResInvestERP-Kontrola.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\ric.ico"; Components: server
 Name: "{group}\{cm:LnkData}"; Filename: "{commonappdata}\ResInvestERP"; Components: server
 Name: "{group}\{cm:LnkEnv}"; Filename: "{sys}\notepad.exe"; Parameters: """{commonappdata}\ResInvestERP\server.env"""; Components: server
 Name: "{group}\{cm:LnkDocs}"; Filename: "{app}\README.md"; Components: app
 Name: "{group}\{uninstallexe}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; Tasks: desktopicon; Components: app and not server
-Name: "{autodesktop}\{cm:LnkOpen}"; Filename: "{app}\ResInvestERP-Otworz.cmd"; Parameters: "{#AppURL}"; WorkingDir: "{app}"; IconFilename: "{app}\runtime\node.exe"; Flags: runminimized; Tasks: desktopicon; Components: server
-Name: "{commonstartup}\{cm:LnkServer}"; Filename: "{app}\ResInvestERP-Serwer.cmd"; Parameters: "--no-open"; WorkingDir: "{app}"; Flags: runminimized; Tasks: autostart
+Name: "{autodesktop}\{cm:LnkLocal}"; Filename: "{app}\ResInvest_ERP.html"; Tasks: desktopicon; IconFilename: "{app}\ric.ico"; Components: app and not server
+Name: "{autodesktop}\{cm:LnkOpen}"; Filename: "{app}\ResInvestERP-Otworz.cmd"; Parameters: "{#AppURL}"; WorkingDir: "{app}"; IconFilename: "{app}\ric.ico"; Flags: runminimized; Tasks: desktopicon; Components: server
+Name: "{commonstartup}\{cm:LnkServer}"; Filename: "{app}\ResInvestERP-Serwer.cmd"; Parameters: "--no-open"; WorkingDir: "{app}"; Flags: runminimized; IconFilename: "{app}\ric.ico"; Tasks: autostart
 
 [Run]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""ResInvest ERP Serwer"" dir=in action=allow protocol=TCP localport={#ServerPort} profile=private,domain"; Flags: runhidden; Tasks: firewall

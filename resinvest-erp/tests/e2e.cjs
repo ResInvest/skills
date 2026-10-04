@@ -871,6 +871,96 @@ async function fillForestDirect(page) {
     await ctx.close();
   }
 
+  /* ------------- 3.6: zakup ze sprzedażą bezpośrednią z lasu, flota własna / zewnętrzna, RiC, wysyłka e-mailem ------------- */
+  {
+    const ctx = await newCtx(browser);
+    const page = await ctx.newPage(); watch(page, "3.6");
+    await boot(page);
+    check("3.6 Znak RiC w menu bocznym", nb(await page.textContent(".sb-head .mark")) === "RiC");
+    check("3.6 Ikona strony RiC (SVG) i ikona ekranu głównego (PNG)", await page.evaluate(() => /^data:image\/svg\+xml;base64,/.test(document.querySelector('link[rel="icon"]').href) && /^data:image\/png;base64,/.test(document.querySelector('link[rel="apple-touch-icon"]').href)));
+    await preset(page, "zakup");
+    const order = await page.evaluate(() => { const a = document.querySelector("#f-production-enabled"), b = document.querySelector("#f-sale-direct"), c = document.querySelector("#f-skind-firma"); return !!(a && b && c) && !!(a.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); });
+    check("3.6 Zakup: opcje produkcji i sprzedaży bezpośredniej przed wyborem grupy dostawcy", order);
+    check("3.6 Zakup: obie opcje dostępne od razu (nie wyszarzone)", !(await page.isDisabled("#f-production-enabled")) && !(await page.isDisabled("#f-sale-direct")));
+    await page.selectOption("#f-purchase-productId", "pr_zr_tow"); await page.waitForTimeout(150);
+    await tick(page, "f-sale-direct"); await page.waitForSelector("#f-production-kwit");
+    const st = await page.evaluate(() => { const d = RIWForm.draft; return { p: d.purchase.productId, prod: d.production.enabled, sale: d.sale.enabled, direct: d.sale.direct }; });
+    check("3.6 Zakup: „sprzedaż bezpośrednia z lasu” włącza produkcję i ustawia drewno", st.p === "pr_drewno" && st.prod && st.sale && st.direct, st);
+    check("3.6 Zakup: przy produkcji lista produktów zawiera tylko drewno", await page.$$eval("#f-purchase-productId option", o => o.filter(x => x.value).every(x => RIW_DEBUG.R.byId(RIW_DEBUG.store.state.products, x.value).cat === "drewno")));
+    check("3.6 Zakup: sekcja „Sprzedaż bezpośrednia z lasu”", nb(await page.textContent("#h-sale")) === "Sprzedaż bezpośrednia z lasu");
+    await tick(page, "f-skind-nadlesnictwo"); await fillTab(page, "#f-purchase-supplierName", "Nadleśnictwo Rudy Raciborskie"); await page.waitForTimeout(100);
+    await fillTab(page, "#f-purchase-lesnictwo", "Stanica");
+    await fillTab(page, "#f-purchase-qty", "20"); await page.fill("#f-purchase-price", "230");
+    await page.fill("#f-production-kwit", "KW 0900/09/2026");
+    await page.selectOption("#f-sale-buyerId", "pa_ec_zab"); await page.waitForTimeout(100); await fillTab(page, "#f-sale-price", "90");
+    const z0 = [await bal(page, "pr_drewno"), await bal(page, "pr_zr_lesna")];
+    check("3.6 Zakup bezpośredni: zatwierdzenie z formularza", (await approve(page)) === 1);
+    const zop = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { direct: o.direct, scope: o.scope, led: RIW_DEBUG.store.state.ledger.filter(l => l.opId === o.id).map(l => `${l.kind}:${l.qty}:${l.direct ? 1 : 0}`) }; });
+    check("3.6 Zakup bezpośredni: PZ → RW → PW → WZ, produkcja i sprzedaż jako bezpośrednie", zop.direct && zop.led.join(",") === "ZAKUP:20:0,ZUZYCIE:-20:0,PRODUKCJA:80:1,SPRZEDAZ:-80:1", zop);
+    check("3.6 Zakup bezpośredni: stan drewna i zrębki bez zmian (bez magazynowania)", JSON.stringify([await bal(page, "pr_drewno"), await bal(page, "pr_zr_lesna")]) === JSON.stringify(z0));
+    await go(page, "operacje"); await page.waitForTimeout(150);
+    check("3.6 Rejestr operacji: rodzaj „Zakup + produkcja + sprzedaż bezpośrednia z lasu”", nb(await page.textContent("body")).includes("Zakup + produkcja + sprzedaż bezpośrednia z lasu"));
+
+    // flota: dwa pola wyboru — własna i zewnętrzna
+    await go(page, "flota"); await page.waitForSelector("#fleet-scope");
+    const tabs = async () => page.$$eval(".tabs [data-tab]", b => b.map(x => x.dataset.tab));
+    check("3.6 Flota: oba zakresy zaznaczone — 4 zakładki floty własnej + 2 zewnętrznej", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators", "ext_vehicles", "ext_chippers"]), await tabs());
+    await page.click('label.opt:has(#fl-scope-own)'); await page.waitForTimeout(150);
+    check("3.6 Flota: tylko zewnętrzna — samochody i rębaki firm zewnętrznych", JSON.stringify(await tabs()) === JSON.stringify(["ext_vehicles", "ext_chippers"]), await tabs());
+    const extRows = await page.$$eval("#fleet-table tbody tr", r => r.map(x => x.textContent));
+    check("3.6 Flota zewnętrzna: pojazdy ESI Logistics, DAP Trans, Transport Kowalski", extRows.length === 5 && extRows.some(x => x.includes("ESI 18734")) && extRows.some(x => x.includes("SPY 92FR")), extRows.length);
+    await page.click('[data-tab="ext_chippers"]'); await page.waitForTimeout(120);
+    check("3.6 Flota zewnętrzna: rębak firmy zewnętrznej", nb(await page.textContent("#fleet-table")).includes("Bandit 2590XP"));
+    await page.click('[data-tab="ext_vehicles"]'); await page.waitForTimeout(120);
+    await page.click("#fleet-add"); await page.waitForSelector("#fe-owner");
+    check("3.6 Flota zewnętrzna: nowy pojazd ma ustawionego właściciela „firma zewnętrzna”", (await page.inputValue("#fe-owner")) === "external" && await page.isVisible("#fe-company") && !(await page.isVisible("#fe-driverId")));
+    await page.fill("#fe-name", "Iveco S-Way"); await page.fill("#fe-company", "Trans-Bud"); await page.fill("#fe-reg", "WX 1234A"); await page.fill("#fe-driverName", "Jan Wiśniewski");
+    await page.click(".modal [data-yes]"); await page.waitForTimeout(250);
+    check("3.6 Flota zewnętrzna: zapis pojazdu bez kierowcy z kartoteki", await page.evaluate(() => RIW_DEBUG.store.state.fleet.vehicles.some(v => v.reg === "WX 1234A" && v.owner === "external" && v.company === "Trans-Bud" && !v.driverId)));
+    await page.click('label.opt:has(#fl-scope-ext)'); await page.waitForTimeout(150);
+    check("3.6 Flota: żaden zakres — podpowiedź zamiast tabeli", (await tabs()).length === 0 && nb(await page.textContent("body")).includes("Zaznacz flotę własną lub zewnętrzną"));
+    await page.click('label.opt:has(#fl-scope-own)'); await page.waitForTimeout(150);
+    check("3.6 Flota: tylko własna — samochody, kierowcy, rębaki, operatorzy", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators"]));
+    check("3.6 Flota własna: bez pojazdów firm zewnętrznych", !nb(await page.textContent("#fleet-table")).includes("ESI 18734"));
+    // transport: flota własna bez pojazdów zewnętrznych; kursy zewnętrzne z podpowiedzią numerów
+    await preset(page, "zakup"); await tick(page, "f-mode-own"); await page.waitForSelector("#f-transport-own-runCount");
+    await fillTab(page, "#f-transport-own-runCount", "1");
+    const ownOpts = await page.$$eval("#f-transport-own-runs-0-vehicleId option", o => o.map(x => x.value).filter(Boolean));
+    check("3.6 Transport własny: lista pojazdów bez floty zewnętrznej", ownOpts.length > 0 && ownOpts.every(id => !id.startsWith("ve_ext")), ownOpts);
+    await tick(page, "f-mode-own"); await tick(page, "f-mode-external"); await page.waitForSelector("#f-transport-external-runCount");
+    await fillTab(page, "#f-transport-external-runCount", "1");
+    check("3.6 Transport zewnętrzny: podpowiedzi numerów z floty zewnętrznej", (await page.getAttribute("#f-transport-external-runs-0-reg", "list")) === "dl-ext-veh" && (await page.$$("#dl-ext-veh option")).length >= 5);
+    await fillTab(page, "#f-transport-external-runs-0-reg", "ESI 18734"); await page.waitForTimeout(100);
+    check("3.6 Transport zewnętrzny: numer z kartoteki uzupełnia kierowcę i firmę", (await page.inputValue("#f-transport-external-runs-0-driver")) === "Tomasz Lis" && (await page.inputValue("#f-transport-external-company")) === "ESI Logistics");
+
+    // wysyłka e-mailem (OFFLINE: zapis PDF + program pocztowy)
+    await go(page, "raporty"); await page.waitForSelector('[data-mail="rep"]');
+    check("3.6 Raport miesiąca: przycisk „Wyślij e-mailem”", nb(await page.textContent('[data-mail="rep"]')) === "Wyślij e-mailem");
+    await page.click('[data-mail="rep"]'); await page.waitForSelector("#mail-dialog #ml-to");
+    check("3.6 Okno e-mail: temat z tytułem raportu, załącznik PDF, informacja OFFLINE", (await page.inputValue("#ml-subject")).includes("ResInvest ERP") && nb(await page.textContent("#mail-dialog")).includes("PDF") && !!(await page.$("#ml-offline")));
+    await page.fill("#ml-to", "biuro@odbiorca, x"); await page.click("#ml-send"); await page.waitForTimeout(100);
+    check("3.6 Okno e-mail: błędny adres zatrzymany przed wysyłką", nb(await page.textContent('[data-fmsg="to"]')).includes("Nieprawidłowy adres e-mail"));
+    await page.fill("#ml-to", "biuro@odbiorca.pl, ksiegowosc@odbiorca.pl");
+    const [mdl] = await Promise.all([page.waitForEvent("download", { timeout: 8000 }), page.click("#ml-send")]);
+    const lm = await page.evaluate(() => RIW_DEBUG.lastMail);
+    check("3.6 OFFLINE: PDF zapisany i program pocztowy z adresami, tematem i treścią", mdl.suggestedFilename().startsWith("raport_") && mdl.suggestedFilename().endsWith(".pdf") && lm.mode === "offline" && lm.to.length === 2 && lm.href.startsWith("mailto:biuro%40odbiorca.pl,ksiegowosc%40odbiorca.pl?subject="), lm);
+    for (const [route, sel, label] of [["kwit", '[data-mail="kwit"]', "Kwit produkcji dnia"], ["historia", '[data-mail="hist"]', "Historia"], ["planer", "#pl-mail", "Planer zakupów"], ["dokumenty", '[data-mail="reg"]', "Dokumenty"]]) {
+      await go(page, route); await page.waitForTimeout(200);
+      check(`3.6 ${label}: przycisk „Wyślij e-mailem”`, !!(await page.$(sel)));
+    }
+    await page.click('#docs-table [data-view="0"]'); await page.waitForSelector('.modal [data-mail="doc"]');
+    check("3.6 Podgląd dokumentu: przycisk „Wyślij e-mailem”", !!(await page.$('.modal [data-mail="doc"]')));
+    await page.click('.modal [data-mail="doc"]'); await page.waitForSelector("#mail-dialog");
+    check("3.6 Podgląd dokumentu: okno e-mail z numerem dokumentu w treści", /\(.+\/.+\)/.test(await page.inputValue("#ml-msg")));
+    await closeModals(page);
+    // telefon: flota i okno e-mail bez poziomego przewijania
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const r2 of ["flota", "raporty"]) { await go(page, r2); await page.waitForTimeout(200); check(`3.6 Telefon: ${r2} bez poziomego przewijania`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)); }
+    await page.click('[data-mail="rep"]'); await page.waitForSelector("#mail-dialog");
+    check("3.6 Telefon: okno e-mail mieści się na ekranie", await page.evaluate(() => { const r = document.querySelector("#mail-dialog").getBoundingClientRect(); return r.width <= window.innerWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; }));
+    await ctx.close();
+  }
+
   /* ------------- 3.1: ramka z zablokowanym magazynem przeglądarki (podgląd pliku) ------------- */
   {
     const wrap = path.join(TMP, "podglad.html");

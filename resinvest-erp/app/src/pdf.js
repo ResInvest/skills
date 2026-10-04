@@ -187,7 +187,7 @@
     let y = 0;
     const header = () => {
       doc.rect(M, 10 * MM, 9 * MM, 9 * MM, { fill: C.brand });
-      doc.text(M + 4.5 * MM, 16.2 * MM, "RI", { font: "B", size: 11, color: C.white, align: "center" });
+      doc.text(M + 4.5 * MM, 16.2 * MM, "RiC", { font: "B", size: 9, color: C.white, align: "center" });
       doc.text(M + 12 * MM, 13.6 * MM, model.system || "ResInvest ERP", { font: "B", size: 11, color: C.brand });
       doc.text(M + 12 * MM, 18.2 * MM, L.tagline, { size: 7.5, color: C.muted });
       doc.text(W - M, 13.6 * MM, model.number ? fillL(L.no, { no: model.number }) : "", { font: "B", size: 9, align: "right" });
@@ -335,7 +335,7 @@
     const css = `@page{size:A4 ${model.orientation === "landscape" ? "landscape" : "portrait"};margin:14mm}
       body{font:10px/1.35 Arial,"Liberation Sans",sans-serif;color:#17211c;margin:0}
       .hd{display:flex;align-items:center;gap:10px;border-bottom:2px solid #1E6B45;padding-bottom:6px;margin-bottom:10px}
-      .mk{width:30px;height:30px;background:#1E6B45;color:#fff;font-weight:700;display:grid;place-items:center;font-size:13px}
+      .mk{width:30px;height:30px;background:#1E6B45;color:#fff;font-weight:700;display:grid;place-items:center;font-size:11px;letter-spacing:-.01em}
       .hd b{color:#1E6B45;font-size:14px}.hd .r{margin-left:auto;text-align:right}
       h1{font-size:20px;margin:6px 0 2px}h2{font-size:13px;color:#1E6B45;border-bottom:1px solid #ccd6d1;padding-bottom:2px;margin:14px 0 6px}
       .muted{color:#5c6b64}.small{font-size:9px}.err{color:#b32121;font-weight:700}.b td,.b{font-weight:700}
@@ -348,7 +348,7 @@
       .ft{margin-top:16px;border-top:1px solid #ccd6d1;padding-top:4px;color:#5c6b64;font-size:8.5px}
       thead{display:table-header-group}tr{break-inside:avoid}`;
     return `<!DOCTYPE html><html lang="${esc(L.lang)}"><head><meta charset="utf-8"><title>${esc(model.title)}${model.number ? " " + esc(model.number) : ""}</title><style>${css}<\/style></head><body>
-      <div class="hd"><div class="mk">RI</div><div><b>${esc(model.system || "ResInvest ERP")}</b><div class="muted small">${esc(L.tagline)}</div></div><div class="r">${model.number ? `<b>${esc(fillL(L.no, { no: model.number }))}</b>` : ""}<div class="muted small">${esc(model.headerRight || "")}</div></div></div>
+      <div class="hd"><div class="mk">RiC</div><div><b>${esc(model.system || "ResInvest ERP")}</b><div class="muted small">${esc(L.tagline)}</div></div><div class="r">${model.number ? `<b>${esc(fillL(L.no, { no: model.number }))}</b>` : ""}<div class="muted small">${esc(model.headerRight || "")}</div></div></div>
       <h1>${esc(model.title)}</h1>${model.subtitle ? `<div class="muted">${esc(model.subtitle)}</div>` : ""}
       ${model.meta && model.meta.length ? `<div class="meta">${model.meta.map(([k, v]) => `<div><span>${esc(k)}:</span> <b>${esc(v)}</b></div>`).join("")}</div>` : ""}
       ${parts.join("\n")}

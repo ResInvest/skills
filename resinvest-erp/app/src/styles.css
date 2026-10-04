@@ -137,7 +137,7 @@ table{border-collapse:collapse;width:100%}
 .shell{display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);min-height:100vh;min-height:100dvh}
 .sidebar{position:sticky;top:0;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--border);z-index:40}
 .sb-head{display:flex;align-items:center;gap:var(--s3);height:var(--topbar-h);padding:0 var(--s4);border-bottom:1px solid var(--border)}
-.mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;background:linear-gradient(145deg,#2C8A5C,#1E4634);color:#fff;font-weight:800;font-size:12px;letter-spacing:.02em;box-shadow:0 4px 12px rgba(30,70,52,.28)}
+.mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;background:linear-gradient(145deg,#2C8A5C,#1E4634);color:#fff;font-weight:800;font-size:11px;letter-spacing:-.01em;box-shadow:0 4px 12px rgba(30,70,52,.28)}
 [data-theme="azure"] .mark{background:linear-gradient(145deg,#3E8EF7,#123252)}
 [data-theme="ultra"] .mark{background:linear-gradient(145deg,#1F6E48,#06140D);box-shadow:0 0 0 1px #1D4A35}
 [data-theme="premium"] .mark{background:linear-gradient(145deg,#24386A,#10172A);box-shadow:0 0 0 1px #B8912E,0 4px 12px rgba(16,23,42,.22)}
@@ -205,7 +205,7 @@ table{border-collapse:collapse;width:100%}
 .card-h h3{font-size:var(--t-base);font-weight:700}
 .card-h .sub{font-size:var(--t-sm);color:var(--text-3)}
 .card-b{padding:var(--s5)}
-.grid{display:grid;gap:var(--s4)}
+.grid{display:grid;gap:var(--s4)} .grid>*{min-width:0}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))} .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))} .g5{grid-template-columns:repeat(5,minmax(0,1fr))} .g6{grid-template-columns:repeat(6,minmax(0,1fr))}
 .row{display:flex;align-items:center;gap:var(--s3)} .wrap{flex-wrap:wrap}
@@ -484,7 +484,7 @@ details.audit summary{cursor:pointer;color:var(--brand-2);font-size:var(--t-sm)}
 .auth-side{position:relative;overflow:hidden;padding:var(--s10) var(--s9);display:flex;flex-direction:column;justify-content:space-between;gap:var(--s7);background:var(--hero);color:var(--hero-ink)}
 .auth-side .rings{position:absolute;inset:-20% -35% auto auto;width:640px;height:640px;border-radius:50%;border:1px solid rgba(201,162,39,.24);box-shadow:0 0 0 60px rgba(201,162,39,.05),0 0 0 130px rgba(201,162,39,.035);pointer-events:none}
 .auth-brand{position:relative;display:flex;align-items:center;gap:var(--s3)}
-.auth-brand .mark{width:44px;height:44px;border-radius:13px;font-size:15px}
+.auth-brand .mark{width:44px;height:44px;border-radius:13px;font-size:14px}
 .auth-brand b{display:block;font-size:var(--t-lg);color:var(--hero-ink)} .auth-brand span{display:block;font-size:var(--t-sm);color:var(--hero-dim)}
 .auth-side h2{position:relative;font-size:var(--t-4xl);font-weight:700;letter-spacing:-.03em;line-height:1.12;max-width:16ch;color:var(--hero-ink)}
 .auth-side p{position:relative;margin-top:var(--s4);color:var(--hero-dim);max-width:48ch;line-height:1.7}
@@ -536,7 +536,7 @@ html.intro-boot .splash.boot{display:grid}
 .splash-brand{position:relative;display:none;flex-direction:column;align-items:center;gap:14px;text-align:center;color:#EAF3ED;padding:24px}
 .splash.no-video video{display:none}
 .splash.no-video .splash-brand{display:flex}
-.splash-brand .mark{width:72px;height:72px;border-radius:22px;font-size:24px}
+.splash-brand .mark{width:72px;height:72px;border-radius:22px;font-size:23px}
 .splash-brand h2{font-size:26px;font-weight:720;color:#EAF3ED}
 .splash-brand p{color:rgba(234,243,237,.72)}
 .splash-ctl{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
@@ -579,7 +579,7 @@ html.intro-boot .splash.boot{display:grid}
   .dash-row{grid-template-columns:1fr}
 }
 @media (max-width:720px){
-  .fgrid,.fgrid.three,.fgrid.four,.g2,.g3,.scope,.scope.two,.scope.four,.theme-cards{grid-template-columns:1fr}
+  .fgrid,.fgrid.three,.fgrid.four,.g2,.g3,.scope,.scope.two,.scope.four,.theme-cards{grid-template-columns:minmax(0,1fr)}
   .g4,.g5,.g6,.kpi2-grid,.qa-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .span2,.span3{grid-column:auto}
   .topbar{height:auto;min-height:var(--topbar-h);flex-wrap:wrap;padding:8px var(--s3)}

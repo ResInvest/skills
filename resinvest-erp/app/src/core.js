@@ -557,7 +557,7 @@
       document.getElementById("app").innerHTML = `
         <div class="shell">
           <aside class="sidebar" aria-label="${esc(t("Nawigacja"))}">
-            <div class="sb-head"><div class="mark">RI</div><div class="sb-brand"><b>ResInvest ERP</b><span>${esc(t("Wersja {v}", { v: R.VERSION }))}</span></div></div>
+            <div class="sb-head"><div class="mark" aria-label="RiC — ResInvest Commodities">RiC</div><div class="sb-brand"><b>ResInvest ERP</b><span>${esc(t("Wersja {v}", { v: R.VERSION }))}</span></div></div>
             <nav class="sb-nav" id="nav"></nav>
             <div class="sb-foot" id="sb-foot"></div>
           </aside>
@@ -835,7 +835,7 @@
     },
     side() {
       return `<section class="auth-side" aria-hidden="true"><div class="rings"></div>
-        <div class="auth-brand"><div class="mark">RI</div><div><b>ResInvest ERP</b><span>${esc(t("Obrót i magazynowanie biomasy drzewnej"))}</span></div></div>
+        <div class="auth-brand"><div class="mark" aria-label="RiC — ResInvest Commodities">RiC</div><div><b>ResInvest ERP</b><span>${esc(t("Obrót i magazynowanie biomasy drzewnej"))}</span></div></div>
         <div><h2>${esc(t("Biomasa pod pełną kontrolą"))}</h2><p>${esc(t("Zakupy, produkcja zrębki, sprzedaż, transport i inwentaryzacja w jednym systemie — z historią każdej zmiany, raportami miesięcznymi i rocznymi oraz kopiami zapasowymi."))}</p></div>
         <div class="auth-facts"><div><b>3</b><span>${esc(t("języki: PL · CS · EN"))}</span></div><div><b>3</b><span>${esc(t("motywy kolorystyczne"))}</span></div><div><b>100%</b><span>${esc(t("operacji w dzienniku audytu"))}</span></div></div></section>`;
     },

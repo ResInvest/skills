@@ -80,6 +80,7 @@ export function loadConfig(overrides = {}) {
   c.session = Object.assign({ idleMinutes: 30, absoluteHours: 12 }, base.session, overrides.session);
   c.security = Object.assign({ maxFailed: 5, lockMinutes: 15, ipAttemptsPer15Min: 40 }, base.security, overrides.security);
   c.backup = Object.assign({ hour: 2, keepDays: 30, dir: "" }, base.backup, overrides.backup);
+  c.mail = Object.assign({ documentDomains: [] }, base.mail, overrides.mail);
   if (process.env.RIW_PORT) c.port = Number(process.env.RIW_PORT);
   if (process.env.RIW_DATA) c.dataDir = process.env.RIW_DATA;
   if (process.env.RIW_HOST) c.host = process.env.RIW_HOST;
@@ -374,8 +375,10 @@ export class Store {
   enqueueMail(template, to, userId, subject, body, noticeId) {
     const ts = nowIso();
     return Number(this.db.prepare("INSERT INTO outbox(ts, template, to_addr, user_id, status, kind, subject, body, attempts, next_at, notice_id, updated_at) VALUES (?, ?, ?, ?, 'QUEUED', ?, ?, ?, 0, ?, ?, ?)")
-      .run(ts, template, to, userId || null, template === "notice" ? "notice" : "test", String(subject || "").slice(0, 300), JSON.stringify(body), ts, noticeId || null, ts).lastInsertRowid);
+      .run(ts, template, to, userId || null, template === "notice" ? "notice" : template === "document" ? "document" : "test", String(subject || "").slice(0, 300), JSON.stringify(body), ts, noticeId || null, ts).lastInsertRowid);
   }
+  /** Liczba wiadomości z dokumentami wysłanych przez użytkownika od podanej chwili (limit wysyłki). */
+  documentsSince(userId, sinceIso) { return this.db.prepare("SELECT COUNT(*) AS n FROM outbox WHERE kind = 'document' AND user_id = ? AND ts >= ?").get(userId, sinceIso).n; }
   /** Wiadomości do wysłania teraz — pobranie oznacza je jako SENDING (jeden proces serwera). */
   claimDue(limit = 10) {
     const now = nowIso();

@@ -84,7 +84,13 @@
         { id: "ve_scania", name: "Scania R450 — ruchoma podłoga", reg: "SGL 4T821", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kowalski", whId: "wh_zab" },
         { id: "ve_volvo", name: "Volvo FH 500 — ruchoma podłoga", reg: "SZA 12345", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_nowak", whId: "wh_zab" },
         { id: "ve_man", name: "MAN TGX — ciężarowy", reg: "SK 7788X", type: "ciezarowy", status: "serwis", driverId: "dr_zielinski", whId: "wh_bra" },
-        { id: "ve_daf", name: "DAF XF 480 — ruchoma podłoga", reg: "ESR 4R210", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kaminski", whId: "wh_rok" }
+        { id: "ve_daf", name: "DAF XF 480 — ruchoma podłoga", reg: "ESR 4R210", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kaminski", whId: "wh_rok" },
+        // pojazdy firm zewnętrznych (flota zewnętrzna) — podpowiedzi w kursach transportu zewnętrznego, wspólne dla magazynów
+        { id: "ve_ext_esi1", owner: "external", company: "ESI Logistics", name: "Scania — ruchoma podłoga", reg: "ESI 18734", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "Tomasz Lis", whId: "" },
+        { id: "ve_ext_esi2", owner: "external", company: "ESI Logistics", name: "Volvo — ruchoma podłoga", reg: "ESI 20511", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "Robert Kania", whId: "" },
+        { id: "ve_ext_dap1", owner: "external", company: "DAP Trans", name: "MAN — ruchoma podłoga", reg: "SZA 7K901", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "", whId: "" },
+        { id: "ve_ext_dap2", owner: "external", company: "DAP Trans", name: "DAF — wywrotka", reg: "SZA 7K902", type: "wywrotka", status: "aktywny", driverId: "", driverName: "", whId: "" },
+        { id: "ve_ext_kow", owner: "external", company: "Transport Kowalski", name: "Mercedes Actros — ciężarowy", reg: "SPY 92FR", type: "ciezarowy", status: "aktywny", driverId: "", driverName: "Marek Kowalski", whId: "" }
       ],
       operators: [
         { id: "op_lis", name: "Krzysztof Lis", phone: "601 111 222", whId: "wh_zab" },

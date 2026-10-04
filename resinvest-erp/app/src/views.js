@@ -7,7 +7,7 @@
 (function (root) {
   "use strict";
   const UI = root.RIWUI;
-  const { R, t, tp, N_, esc, $, $$, ic, download, csvNum, toCSV, Toast, Modal, Store, App, Views, statusBadge, transportText, CANCEL_REASONS } = UI;
+  const { R, t, tp, N_, esc, $, $$, ic, download, csvNum, toCSV, Toast, Modal, Store, ServerBackend, App, Views, statusBadge, transportText, CANCEL_REASONS } = UI;
   const { fmt, fmtQ, money, Units, Dates, Stock } = R;
   const PDF = root.RIW_PDF;
   const OFFICE = root.RIW_OFFICE;
@@ -19,7 +19,7 @@
   const pName = id => (App.product(id) || {}).name || "—";
   const partnerName = id => (App.partner(id) || {}).name || "";
   const opPartnerId = o => o.purchase ? o.purchase.supplierId : o.sale ? o.sale.buyerId : "";
-  const opTypeLabel = o => o.type === "ZAKUP" ? t("Zakup") + (o.scope.includes("PRODUKCJA") ? " + " + t("produkcja") : "") + (o.scope.includes("SPRZEDAZ") ? " + " + t("sprzedaż") : "")
+  const opTypeLabel = o => o.type === "ZAKUP" ? t("Zakup") + (o.scope.includes("PRODUKCJA") ? " + " + t("produkcja") : "") + (o.scope.includes("SPRZEDAZ") ? " + " + (o.direct ? t("sprzedaż bezpośrednia z lasu") : t("sprzedaż")) : "")
     : o.type === "PRODUKCJA" ? t("Produkcja na magazynie") : o.type === "MM" ? t("Przesunięcie MM") : o.direct ? t("Produkcja + sprzedaż bezpośrednia") : t("Sprzedaż z magazynu (WZ)");
   const TYPE_BADGE = o => `<span class="badge ${o.type === "ZAKUP" ? "ok" : o.type === "PRODUKCJA" ? "brand" : o.type === "MM" ? "info" : "gold"}">${esc(opTypeLabel(o))}</span>`;
   const opProduct = o => o.type === "ZAKUP" ? pName(o.purchase.productId) : o.type === "MM" ? pName(o.mm.productId)
@@ -114,6 +114,71 @@
       } catch (e) { console.error(e); Toast.err(t("Nie udało się wygenerować PDF"), e.message); }
     }
   };
+  /**
+   * Wysyłka e-mailem (3.6): ten sam PDF co „Generuj PDF”, w załączniku.
+   * FIRMOWY — serwer sprawdza adresy, rozmiar i uprawnienie, kolejkuje i wysyła (ponowienia, audyt).
+   * OFFLINE — brak serwera poczty: PDF zapisuje się na dysku, a program pocztowy otwiera się z adresem, tematem i treścią.
+   */
+  Printer.mail = async function (model, kind, fileBase) {
+    let built;
+    try {
+      const no = await this.register(model, kind, "pdf");
+      const m = this.finish(model, no);
+      const bytes = PDF.render(m);
+      const name = `${fileBase || "dokument"}_${(no || "").replace(/\//g, "-")}.pdf`.replace(/[^\w.\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/g, "_");
+      built = { m, bytes, name };
+    } catch (e) { console.error(e); Toast.err(t("Nie udało się wygenerować PDF"), e.message); return; }
+    MailDialog.open(built, kind);
+  };
+  const MAIL_RE = /^[^\s@<>(),;:"\[\]]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+  const splitMails = s => [...new Set(String(s || "").split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean))];
+  function bytesToB64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
+  const MailDialog = {
+    LAST: "riw.mail.lastTo",
+    lastTo() { try { return localStorage.getItem(this.LAST) || ""; } catch (e) { return ""; } },
+    open({ m, bytes, name }, kind) {
+      const server = Store.mode === "server", u = App.user();
+      const subject = `${m.title}${m.rangeText ? " — " + m.rangeText : ""} — ResInvest ERP`.slice(0, 200);
+      const message = t("Dzień dobry,\n\nw załączniku przesyłam: {title}.\n\nPozdrawiam\n{name}", { title: m.title + (m.number ? ` (${m.number})` : ""), name: u.name });
+      const kb = Math.max(1, Math.round(bytes.length / 1024));
+      const dlg = Modal.open({ id: "mail-dialog", title: t("Wyślij e-mailem"), sub: m.title,
+        body: `<div class="stack">
+          <div class="field" data-ff="to"><label for="ml-to">${th("Do (adresy e-mail)")} <span class="req" aria-hidden="true">*</span></label><input class="ctrl" id="ml-to" type="email" multiple inputmode="email" autocomplete="email" value="${esc(this.lastTo())}" placeholder="${esc(t("np. {x}", { x: "biuro@firma.pl, ksiegowosc@firma.pl" }))}"><div class="msg hidden" data-fmsg="to"></div><div class="help">${th("Kilka adresów oddziel przecinkiem (maks. 10).")}</div></div>
+          <div class="field" data-ff="subject"><label for="ml-subject">${th("Temat")}</label><input class="ctrl" id="ml-subject" maxlength="200" value="${esc(subject)}"><div class="msg hidden" data-fmsg="subject"></div></div>
+          <div class="field"><label for="ml-msg">${th("Wiadomość")}</label><textarea class="ctrl" id="ml-msg" rows="6" maxlength="4000">${esc(message)}</textarea></div>
+          <div class="info-line">${ic("pdf", 15)}<span>${esc(t("Załącznik: {f} ({k} kB, PDF)", { f: name, k: kb }))}</span></div>
+          ${server ? "" : `<div class="info-line warn" id="ml-offline">${ic("mail", 15)}<span>${th("Tryb OFFLINE nie ma serwera poczty. Program zapisze PDF na dysku i otworzy program pocztowy z adresem, tematem i treścią — dołącz zapisany plik do wiadomości. Wysyłka bezpośrednio z programu działa w trybie FIRMOWYM.")}</span></div>`}
+        </div>`,
+        footer: `<button class="btn ghost" type="button" data-no>${th("Anuluj")}</button><button class="btn primary" type="button" data-yes id="ml-send">${ic("mail", 15)} ${server ? th("Wyślij") : th("Zapisz PDF i otwórz pocztę")}</button>` });
+      $("[data-no]", dlg.el).onclick = () => dlg.close();
+      const showErr = (k, msg) => { const x = $(`[data-fmsg="${k}"]`, dlg.el); if (x) { x.textContent = msg; x.classList.remove("hidden"); } };
+      $("[data-yes]", dlg.el).onclick = async () => {
+        $$("[data-fmsg]", dlg.el).forEach(x => x.classList.add("hidden"));
+        const to = splitMails($("#ml-to", dlg.el).value), subj = $("#ml-subject", dlg.el).value.trim(), msg = $("#ml-msg", dlg.el).value;
+        if (!to.length) return showErr("to", t("Podaj co najmniej jeden adres e-mail odbiorcy."));
+        if (to.length > 10) return showErr("to", t("Maksymalnie {n} odbiorców w jednej wysyłce.", { n: 10 }));
+        const bad = to.find(x => !MAIL_RE.test(x)); if (bad) return showErr("to", t("Nieprawidłowy adres e-mail: {e}", { e: bad }));
+        if (!subj) return showErr("subject", t("Podaj temat wiadomości."));
+        try { localStorage.setItem(this.LAST, to.join(", ")); } catch (e) {}
+        if (!server) {
+          download(name, new Blob([bytes], { type: "application/pdf" }));
+          const href = `mailto:${to.map(encodeURIComponent).join(",")}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(msg + "\n\n" + t("Załącznik: {f}", { f: name }))}`;
+          root.RIW_DEBUG.lastMail = { mode: "offline", to, subject: subj, name, href };
+          try { const a = document.createElement("a"); a.href = href; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); } catch (e) {}
+          dlg.close(); Toast.ok(t("Zapisano PDF"), t("Dołącz plik {f} do otwartej wiadomości.", { f: name })); return;
+        }
+        const btn = $("#ml-send", dlg.el); btn.disabled = true;
+        const r = await ServerBackend.api("POST", "/api/mail-document", { to: to.join(", "), subject: subj, message: msg, filename: name, pdf: bytesToB64(bytes), kind, title: m.title, number: m.number || "", range: m.rangeText || "", warehouse: m.whText || "" });
+        btn.disabled = false;
+        root.RIW_DEBUG.lastMail = Object.assign({ mode: "server", to, subject: subj, name }, r);
+        if (!r.ok) { if (r.field && r.field !== "pdf") showErr(r.field, r.error); Toast.err(t("Nie wysłano"), r.error); return; }
+        dlg.close(); Toast.ok(r.queued ? t("W kolejce wysyłki") : t("Wysłano e-mail"), r.message);
+      };
+      setTimeout(() => { const el = $("#ml-to", dlg.el); if (el) el.focus(); }, 30);
+    }
+  };
+  /** Przycisk „Wyślij e-mailem” (dla uprawnienia eksportu raportów). */
+  const mailButton = id => App.can("reports.export") ? `<button class="btn" type="button" data-mail="${id}">${ic("mail", 15)} ${th("Wyślij e-mailem")}</button>` : "";
   /** Eksport XLSX / DOCX (pełny model dokumentu — dane ogólne i wszystkie tabele) z rejestracją w audycie. */
   Printer.office = async function (model, kind, fmtName, fileBase) {
     try {
@@ -136,7 +201,7 @@
     Toast.ok(t("Wygenerowano XLSX"), `${name} · ${tp("{n} wiersz|{n} wiersze|{n} wierszy", rows.length)}`);
   }
   const num = v => v === null || v === undefined || v === "" ? "" : R.round(v, 6);
-  const printButtons = id => `<button class="btn" type="button" data-print="${id}">${ic("print", 15)} ${th("Drukuj")}</button><button class="btn" type="button" data-pdf="${id}">${ic("pdf", 15)} ${th("Generuj PDF")}</button>`;
+  const printButtons = id => `<button class="btn" type="button" data-print="${id}">${ic("print", 15)} ${th("Drukuj")}</button><button class="btn" type="button" data-pdf="${id}">${ic("pdf", 15)} ${th("Generuj PDF")}</button>${mailButton(id)}`;
   const officeButtons = id => `<button class="btn" type="button" data-xlsx="${id}">${ic("dl", 15)} XLSX</button><button class="btn" type="button" data-docx="${id}">${ic("file", 15)} DOCX</button>`;
 
   /** Model dokumentu magazynowego (PZ, RW, PW, WZ, MM, TR, KOR, AN). */
@@ -396,6 +461,7 @@
       const o = $("[data-opd]", m.el); if (o) o.onclick = () => { m.close(); OpDetail.open(d.opId); };
       $("[data-print]", m.el).onclick = () => Printer.print(model, "DOC");
       $("[data-pdf]", m.el).onclick = () => Printer.pdf(model, "DOC", d.no.replace(/\//g, "-"));
+      const ml = $("[data-mail]", m.el); if (ml) ml.onclick = () => Printer.mail(model, "DOC", d.no.replace(/\//g, "-"));
       $("[data-xlsx]", m.el).onclick = () => Printer.office(model, "DOC", "xlsx", d.no.replace(/\//g, "-"));
       $("[data-docx]", m.el).onclick = () => Printer.office(model, "DOC", "docx", d.no.replace(/\//g, "-"));
     }
@@ -682,7 +748,7 @@
         rows.filter(d => d.status !== "CANCELLED" && d.stockQty != null && d.productId).forEach(d => { const u = App.product(d.productId).unit; perUnit[u] = R.rq((perUnit[u] || 0) + qOf(d)); });
         const value = rows.filter(d => d.status !== "CANCELLED").reduce((a, d) => a + (d.value || 0), 0);
         return `<div class="page-head"><div class="titles"><h2>${th(cfg.title)}</h2><p>${th(cfg.desc)}</p></div>
-            <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="reg-xlsx">${ic("dl", 15)} XLSX</button></div></div>
+            <div class="actions">${(cfg.buttons || []).filter(() => App.can("op.create")).map(b => `<a class="btn ${b.primary ? "primary" : ""}" href="${b.href}">${ic("plus", 15)} ${th(b.label)}</a>`).join("")}<button class="btn" type="button" id="reg-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="reg-xlsx">${ic("dl", 15)} XLSX</button>${rows.length ? `<button class="btn" type="button" data-pdf="reg">${ic("pdf", 15)} PDF</button>${mailButton("reg")}` : ""}</div></div>
           ${cfg.pre ? cfg.pre() : ""}
           <div class="card"><div class="toolbar">
             ${cfg.typeOptions ? `<div class="field"><label for="r-type">${th("Typ")}</label><select class="ctrl" id="r-type"><option value="">${th("Wszystkie")}</option>${typeOpts.map(([v, l]) => `<option value="${v}" ${f.type === v ? "selected" : ""}>${esc(v)} — ${th(l)}</option>`).join("")}</select></div>` : ""}
@@ -710,6 +776,17 @@
         const rx = $("#reg-xlsx", page); if (rx) rx.onclick = () => xlsxTable(`${cfg.id}_${App.today()}`, t(cfg.title), [t("Nr dokumentu"), t("Typ"), t("Data operacji"), t("Data dokumentu"), t("Treść"), t("Ilość"), t("Jednostka"), t("Tonaż t"), t("Źródło tonażu"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja"), t("Utworzono"), t("Użytkownik")],
           rows.map(d => [d.no, d.type, d.date, d.docDate || d.date, docContent(d), num(d.qty), d.unit ? Units.label(d.unit) : "", num(d.weightT), d.type === "WZ" ? t(R.WEIGHT_SOURCES[d.weightMode] || "AUTO") : "", num(d.value), d.partner || "", d.place || "", d.stock, statusText(d.deleted ? "DELETED" : d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || "", d.createdAt ? Dates.ts(d.createdAt, true) : "", d.userName || ""]), App.whName(App.user().whId));
         bindSearch(page, "#r-q", f, "q", this);
+        // zestawienie dokumentów (filtry jak na ekranie) → PDF / e-mail
+        const regModel = () => {
+          const fl = [f.type ? `${t("Typ")}: ${f.type}` : "", f.status ? `${t("Status")}: ${statusText(f.status)}` : "", f.q ? `${t("Szukaj")}: ${f.q}` : ""].filter(Boolean).join(" · ");
+          const range = f.ym ? f.ym.split("-").reverse().join(".") : t("wszystkie miesiące"), wh = App.whName(App.user().whId);
+          return { title: t(cfg.title), subtitle: `${wh} · ${range}`, orientation: "landscape", rangeText: range, whText: wh, headerRight: wh,
+            meta: [[t("Magazyn"), wh], [t("Okres"), range], [t("Filtry"), fl || "—"], [t("Liczba dokumentów"), String(rows.length)]],
+            blocks: [{ type: "table", size: 7.5, columns: [{ label: t("Nr dokumentu"), w: 1.6 }, { label: t("Typ"), w: 0.6 }, { label: t("Data"), w: 0.9 }, { label: t("Treść"), w: 3 }, { label: t("Ilość"), w: 1.2, align: "right" }, { label: t("Wartość"), w: 1.2, align: "right" }, { label: t("Kontrahent"), w: 2 }, { label: t("Status"), w: 1 }],
+              rows: rows.map(d => [d.no, d.type, Dates.pl(d.date), docContent(d), d.qty != null ? `${fmtQ(d.qty)} ${Units.label(d.unit)}` : "—", d.value ? money(d.value) : "—", d.partner || "", statusText(d.deleted ? "DELETED" : d.status)]) }] };
+        };
+        const rp = $('[data-pdf="reg"]', page); if (rp) rp.onclick = () => Printer.pdf(regModel(), "RAP", `${cfg.id}_${f.ym || App.today()}`);
+        const rm = $('[data-mail="reg"]', page); if (rm) rm.onclick = () => Printer.mail(regModel(), "RAP", `${cfg.id}_${f.ym || App.today()}`);
         $$("[data-view]", page).forEach(b => b.onclick = () => DocPreview.open(rows[+b.dataset.view]));
         $$("[data-opd]", page).forEach(b => b.onclick = () => OpDetail.open(b.dataset.opd));
         $$("[data-receive]", page).forEach(b => b.onclick = () => ReceiveDialog.open(b.dataset.receive));
@@ -821,6 +898,7 @@
       const model = () => kwitModel(R.Reports.productionDay(Store.state, f.date, whId), whText);
       $("[data-print]", page).onclick = () => Printer.print(model(), "KWIT");
       $("[data-pdf]", page).onclick = () => Printer.pdf(model(), "KWIT", `kwit_produkcji_${f.date}`);
+      const ml = $("[data-mail]", page); if (ml) ml.onclick = () => Printer.mail(model(), "KWIT", `kwit_produkcji_${f.date}`);
       bindOps(page);
     }
   };
@@ -1009,6 +1087,7 @@
       const rg = rangeOf(f), whText = f.wh === "all" ? allWh() : App.whName(f.wh);
       const p = $("[data-print]", page); if (p) p.onclick = () => Printer.print(historyModel(this.rows(), f, rg.label, whText), "RAP");
       const d = $("[data-pdf]", page); if (d) d.onclick = () => Printer.pdf(historyModel(this.rows(), f, rg.label, whText), "RAP", `historia_${rg.from}_${rg.to}`);
+      const ml = $("[data-mail]", page); if (ml) ml.onclick = () => Printer.mail(historyModel(this.rows(), f, rg.label, whText), "RAP", `historia_${rg.from}_${rg.to}`);
       const c = $("#h-csv", page);
       if (c) c.onclick = () => download(`historia_${rg.from}_${rg.to}.csv`, toCSV([t("Data"), t("Godzina"), t("Użytkownik"), t("Typ"), t("Nr dokumentu"), t("Magazyn"), t("Produkt"), t("Ilość"), t("Jednostka"), t("Stan przed"), t("Zmiana"), t("Stan po"), t("Kontrahent"), t("Powiązana operacja"), t("Uwagi"), t("Status")],
         this.rows().map(r => [r.date, r.time, r.user, r.typeLabel, r.docNo, r.whName, r.productName, csvNum(r.qty), Units.label(r.unit), csvNum(r.before), csvNum(r.change), csvNum(r.after), r.partner, r.related, r.notes || "", t(R.STATUS[r.status] || r.status)])), "text/csv;charset=utf-8");
@@ -1132,6 +1211,7 @@
       const c = () => Reports.compute();
       $("[data-print]", page).onclick = () => Printer.print(Reports.model(c()), "RAP");
       $("[data-pdf]", page).onclick = () => { const x = c(); Printer.pdf(Reports.model(x), "RAP", `raport_${x.rg.from}_${x.rg.to}`); };
+      const ml = $("[data-mail]", page); if (ml) ml.onclick = () => { const x = c(); Printer.mail(Reports.model(x), "RAP", `raport_${x.rg.from}_${x.rg.to}`); };
       $("[data-xlsx]", page).onclick = () => { const x = c(); Printer.office(Reports.model(x), "RAP", "xlsx", `raport_${x.rg.from}_${x.rg.to}`); };
       $("[data-docx]", page).onclick = () => { const x = c(); Printer.office(Reports.model(x), "RAP", "docx", `raport_${x.rg.from}_${x.rg.to}`); };
       $("#rep-csv", page).onclick = () => { const x = c(); download(`bilans_${x.rg.from}_${x.rg.to}.csv`, toCSV([t("Produkt"), t("Jednostka"), t("Stan pocz."), t("Zakup"), t("Produkcja"), t("Zużycie"), t("Sprzedaż WZ"), t("Bezpośrednia PW-WZ"), "MM", t("Inw./BO"), t("Stan końc."), t("Masa t"), t("Energia GJ"), t("Kontrola")],
@@ -1222,10 +1302,23 @@
   /* ================================================================== */
   /* Flota                                                                */
   /* ================================================================== */
+  /** Zakładki Floty: zakres własny (4 kartoteki) i zewnętrzny (samochody i rębaki firm zewnętrznych). */
+  const FLEET_TABS = {
+    vehicles: { kind: "vehicles", label: N_("Samochody własne"), add: N_("Pojazd") },
+    drivers: { kind: "drivers", label: N_("Kierowcy"), add: N_("Kierowca") },
+    chippers: { kind: "chippers", label: N_("Rębaki własne"), add: N_("Rębak") },
+    operators: { kind: "operators", label: N_("Operatorzy rębaków"), add: N_("Operator rębaka") },
+    ext_vehicles: { kind: "vehicles", ext: true, label: N_("Samochody firm zewnętrznych"), add: N_("Pojazd firmy zewnętrznej") },
+    ext_chippers: { kind: "chippers", ext: true, label: N_("Rębaki firm zewnętrznych"), add: N_("Rębak firmy zewnętrznej") }
+  };
   Views.flota = {
     html() {
       const S = Store.state;
-      const tab = App.tabs.fleet || "vehicles";
+      // dwa zakresy: flota własna (samochody, kierowcy, rębaki, operatorzy) i flota zewnętrzna (samochody i rębaki firm zewnętrznych)
+      const scope = this.scope();
+      const tabs = this.tabsFor(scope);
+      const tab = tabs.includes(App.tabs.fleet) ? App.tabs.fleet : tabs[0] || "";
+      const isExt = x => x.owner === "external";
       const fwh = App.tabs.fleetWh === undefined ? (R.whAccess(App.user()) === null ? "" : App.user().whId) : App.tabs.fleetWh;
       const inWh = x => !fwh || x.whId === fwh || !x.whId;
       const whCell = x => `<td>${x.whId ? esc(App.whName(x.whId)) : `<span class="dim">${th("wspólny")}</span>`}</td>`;
@@ -1238,30 +1331,46 @@
       const edit = App.can("fleet.edit");
       const btn = (kind, id) => edit ? `<button class="btn sm" type="button" data-edit="${kind}|${esc(id)}">${ic("edit", 13)} ${th("Edytuj")}</button> <button class="btn sm danger" type="button" data-del="${kind}|${esc(id)}" aria-label="${th("Usuń")}" title="${th("Usuń")}">${ic("trash", 13)}</button>` : "";
       let body = "";
+      const extRuns = [];  // kursy transportu zewnętrznego (numer rejestracyjny wpisany w kursie)
+      for (const o of S.operations) if (o.transport && (o.transport.mode === "external" || o.transport.mode === "mixed") && o.status !== "CANCELLED") for (const r of (Array.isArray(o.transport.runs) ? o.transport.runs.filter(x => x.kind === "external") : o.transport.mode === "external" ? [o.transport] : [])) extRuns.push({ op: o, r });
+      const regKey = x => String(x || "").replace(/\s+/g, "").toUpperCase();
+      if (!tab) body = `<div class="empty">${th("Zaznacz flotę własną lub zewnętrzną, aby zobaczyć zasoby.")}</div>`;
+      if (tab === "ext_vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Firma")}</th><th>${th("Pojazd")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th>${th("Status")}</th><th>${th("Kierowca")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.vehicles.filter(isExt).filter(inWh).map(v => `<tr data-vehicle-owner="external"><td><b>${esc(v.company || "—")}</b></td><td>${esc(v.name)}</td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(v.driverName || "—")}</td>${whCell(v)}<td class="r">${extRuns.filter(x => regKey(x.r.reg) === regKey(v.reg)).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("") || `<tr><td colspan="9" class="dim">${th("Brak pojazdów firm zewnętrznych.")}</td></tr>`}</tbody></table>`;
+      if (tab === "ext_chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Firma")}</th><th>${th("Rębak")}</th><th>${th("Nr rejestracyjny")}</th><th>${th("Status")}</th><th>${th("Operator")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.chippers.filter(isExt).filter(inWh).map(c => `<tr data-chipper-owner="external"><td><b>${esc(c.company || "—")}</b></td><td>${esc(c.name)}${c.info ? `<br><small class="dim">${esc(c.info)}</small>` : ""}</td><td class="mono">${esc(c.reg || "—")}</td><td>${st(c.status)}</td><td>${esc(c.operatorName || "—")}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("") || `<tr><td colspan="8" class="dim">${th("Brak rębaków firm zewnętrznych.")}</td></tr>`}</tbody></table>`;
       if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Nazwa")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th>${th("Status")}</th><th>${th("Kierowca domyślny")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.vehicles.filter(inWh).map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td>${whCell(v)}<td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
+        ${S.fleet.vehicles.filter(v => !isExt(v)).filter(inWh).map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td>${whCell(v)}<td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("Telefon")}</th><th>${th("Domyślny w pojazdach")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
         ${S.fleet.drivers.filter(inWh).map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td>${whCell(d)}<td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Rębak")}</th><th>${th("Właściciel")}</th><th>${th("Nr rejestracyjny")}</th><th>${th("Status")}</th><th>${th("Operator")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.chippers.filter(inWh).map(c => { const ext = c.owner === "external"; return `<tr data-chipper-owner="${ext ? "external" : "own"}"><td><b>${esc(c.name)}</b>${c.info ? `<br><small class="dim">${esc(c.info)}</small>` : ""}</td><td>${ext ? `<span class="badge info">${th("firma zewnętrzna")}</span><br><small>${esc(c.company || "")}</small>` : `<span class="badge ok">${th("własny")}</span>`}</td><td class="mono">${esc(c.reg || "—")}</td><td>${st(c.status)}</td><td>${esc(ext ? (c.operatorName || "—") : opr(c.operatorId))}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`; }).join("")}</tbody></table>`;
+        ${S.fleet.chippers.filter(c => !isExt(c)).filter(inWh).map(c => { const ext = c.owner === "external"; return `<tr data-chipper-owner="${ext ? "external" : "own"}"><td><b>${esc(c.name)}</b>${c.info ? `<br><small class="dim">${esc(c.info)}</small>` : ""}</td><td>${ext ? `<span class="badge info">${th("firma zewnętrzna")}</span><br><small>${esc(c.company || "")}</small>` : `<span class="badge ok">${th("własny")}</span>`}</td><td class="mono">${esc(c.reg || "—")}</td><td>${st(c.status)}</td><td>${esc(ext ? (c.operatorName || "—") : opr(c.operatorId))}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`; }).join("")}</tbody></table>`;
       if (tab === "operators") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Operator")}</th><th>${th("Telefon")}</th><th>${th("Domyślny przy rębakach")}</th><th>${th("Magazyn")}</th><th></th></tr></thead><tbody>
         ${S.fleet.operators.filter(inWh).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${esc(o.phone || "")}</td><td>${esc(S.fleet.chippers.filter(c => c.operatorId === o.id).map(c => c.name).join(", ") || "—")}</td>${whCell(o)}<td class="r">${btn("operators", o.id)}</td></tr>`).join("")}</tbody></table>`;
       const lastRuns = runs.slice().sort((a, b) => a.op.date < b.op.date ? 1 : -1).slice(0, 12);
-      const labels = { vehicles: N_("Samochody / ruchome podłogi"), drivers: N_("Kierowcy"), chippers: N_("Rębaki (własne i firm zewnętrznych)"), operators: N_("Operatorzy rębaków") };
-      return `<div class="page-head"><div class="titles"><h2>${th("Flota")}</h2><p>${th("Transport własny w „Nowej operacji” korzysta z tej listy. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.")}</p></div>
-          <div class="actions">${edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} ${esc(t("Dodaj: {k}", { k: t(R.Fleet.KINDS[tab].label).toLowerCase() }))}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`}</div></div>
-        <div class="tabs" role="tablist">${Object.entries(labels).map(([k, l]) => `<button class="tab" type="button" role="tab" aria-selected="${k === tab}" data-tab="${k}">${th(l)}</button>`).join("")}</div>
+      const scopeCard = (k, title, text) => `<label class="opt"><input type="checkbox" id="fl-scope-${k}" data-scope="${k}" ${scope[k] ? "checked" : ""}><span class="box">${ic("check", 13)}</span><span class="ct"><b>${esc(title)}</b><span>${esc(text)}</span></span></label>`;
+      return `<div class="page-head"><div class="titles"><h2>${th("Flota")}</h2><p>${th("Transport własny w „Nowej operacji” korzysta z floty własnej, transport zewnętrzny podpowiada pojazdy firm zewnętrznych. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.")}</p></div>
+          <div class="actions">${!tab ? "" : edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} ${esc(t("Dodaj: {k}", { k: t(FLEET_TABS[tab].add).toLowerCase() }))}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`}</div></div>
+        <div class="scope two mb3" role="group" aria-label="${th("Zakres floty")}" id="fleet-scope">
+          ${scopeCard("own", t("Flota własna"), t("Samochody, kierowcy, rębaki i operatorzy firmy."))}
+          ${scopeCard("ext", t("Flota zewnętrzna"), t("Samochody i rębaki firm zewnętrznych (przewoźnicy, usługi rębania)."))}
+        </div>
+        ${tabs.length ? `<div class="tabs" role="tablist">${tabs.map(k => `<button class="tab" type="button" role="tab" aria-selected="${k === tab}" data-tab="${k}">${th(FLEET_TABS[k].label)}</button>`).join("")}</div>` : ""}
         <div class="card"><div class="toolbar"><div class="field"><label for="fl-wh">${th("Magazyn")}</label><select class="ctrl" id="fl-wh"><option value="">${th("Wszystkie")}</option>${S.warehouses.map(w => `<option value="${esc(w.id)}" ${fwh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
           <p class="help" style="align-self:end">${th("Zasoby przypisane do magazynu są dostępne w jego operacjach; „wspólny” — we wszystkich magazynach.")}</p></div><div class="tbl-wrap">${body}</div></div>
         <div class="card mt4"><div class="card-h"><h3>${th("Ostatnie kursy transportu własnego")}</h3><span class="sub">${th("kierowca zapisany w chwili kursu")}</span></div>
           ${lastRuns.length ? `<div class="tbl-wrap"><table class="tbl" id="runs-table"><thead><tr><th>${th("Data")}</th><th>${th("Dokument")}</th><th>${th("Pojazd")}</th><th>${th("Kierowca kursu")}</th><th class="r">km</th><th class="r">${th("Koszt")}</th><th>${th("Miejsce transportu")}</th></tr></thead><tbody>
             ${lastRuns.map(({ op: o, r }) => { const trd = o.documents.find(x => x.type === "TR"); return `<tr class="clickable" data-opid="${esc(o.id)}"><td>${esc(Dates.pl(o.date))}</td><td class="mono">${esc(trd ? trd.no : "")}${(o.transport.runs || []).length > 1 ? ` <small class="dim">${esc(t("kurs {n}", { n: r.no }))}</small>` : ""}</td><td>${esc(r.vehicleName)} · <span class="mono">${esc(r.reg)}</span></td><td>${esc(r.driverName)}${r.driverOverridden ? ` <span class="badge warn">${th("zmieniony dla kursu")}</span>` : ""}</td><td class="r">${fmtQ(r.km)}</td><td class="r">${esc(money(r.cost))}</td><td>${esc(o.place)}</td></tr>`; }).join("")}</tbody></table></div>` : `<div class="empty">${th("Brak kursów.")}</div>`}</div>`;
     },
+    /** Zaznaczone zakresy floty (domyślnie oba); zapamiętane w sesji widoku. */
+    scope() { return Object.assign({ own: true, ext: true }, App.tabs.fleetScope || {}); },
+    tabsFor(scope) { return Object.keys(FLEET_TABS).filter(k => FLEET_TABS[k].ext ? scope.ext : scope.own); },
     bind(page) {
       $$("[data-tab]", page).forEach(b => b.onclick = () => { App.tabs.fleet = b.dataset.tab; App.render(); });
+      $$("[data-scope]", page).forEach(c => c.onchange = () => { App.tabs.fleetScope = Object.assign(this.scope(), { [c.dataset.scope]: c.checked }); App.render(); });
       const fw = $("#fl-wh", page); if (fw) fw.onchange = e => { App.tabs.fleetWh = e.target.value; App.render(); };
       const add = $("#fleet-add", page);
-      if (add) add.onclick = () => this.edit(App.tabs.fleet || "vehicles", null);
+      if (add) add.onclick = () => { const tabs = this.tabsFor(this.scope()), tb = tabs.includes(App.tabs.fleet) ? App.tabs.fleet : tabs[0]; const d = FLEET_TABS[tb]; this.edit(d.kind, null, d.ext ? "external" : "own"); };
       $$("[data-edit]", page).forEach(b => b.onclick = () => { const [k, id] = b.dataset.edit.split("|"); this.edit(k, id); });
       $$("[data-del]", page).forEach(b => b.onclick = async () => {
         const [k, id] = b.dataset.del.split("|");
@@ -1274,18 +1383,22 @@
       });
       bindOps(page);
     },
-    edit(kind, id) {
+    edit(kind, id, owner) {
       const S = Store.state;
-      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", operatorId: "", phone: "", owner: "own", company: "", operatorName: "", info: "", whId: App.tabs.fleetWh || App.user().whId };
-      if (kind === "chippers" && !rec.owner) rec.owner = "own";
+      const ext0 = owner === "external";
+      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "", operatorId: "", phone: "", owner: owner || "own", company: "", operatorName: "", info: "", whId: ext0 ? "" : (App.tabs.fleetWh || App.user().whId) };
+      if ((kind === "chippers" || kind === "vehicles") && !rec.owner) rec.owner = "own";
       const o = (arr, v) => arr.map(([k, l]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(l)}</option>`).join("");
       const f = (k, label, ctrl, help) => `<div class="field" data-ff="${k}"><label for="fe-${k}">${esc(label)}</label>${ctrl}<div class="msg hidden" data-fmsg="${k}"></div>${help ? `<div class="help">${esc(help)}</div>` : ""}</div>`;
       let body = f("name", kind === "vehicles" ? t("Nazwa pojazdu") : kind === "chippers" ? t("Nazwa rębaka") : t("Imię i nazwisko"), `<input class="ctrl" id="fe-name" value="${esc(rec.name)}">`, kind === "vehicles" ? t("np. Scania R450 — ruchoma podłoga") : "");
       if (kind === "vehicles") {
+        body += f("owner", t("Czyj jest pojazd"), `<select class="ctrl" id="fe-owner">${o(Object.entries(R.VEHICLE_OWNERS).map(([k, v]) => [k, t(v)]), rec.owner)}</select>`, t("Pojazd firmy zewnętrznej — podpowiadany w kursach transportu zewnętrznego; kierowca opisowo."));
+        body += `<div data-own-only="external">${f("company", t("Firma (właściciel pojazdu)"), `<input class="ctrl" id="fe-company" value="${esc(rec.company || "")}" list="fe-carriers" placeholder="${esc(t("np. {x}", { x: "ESI Logistics" }))}"><datalist id="fe-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>`)}</div>`;
         body += f("reg", t("Numer rejestracyjny"), `<input class="ctrl" id="fe-reg" value="${esc(rec.reg)}" placeholder="${esc(t("np. {x}", { x: "SGL 4T821" }))}">`);
         body += f("type", t("Typ"), `<select class="ctrl" id="fe-type">${o(Object.entries(R.VEHICLE_TYPES).map(([k, v]) => [k, t(v)]), rec.type)}</select>`);
         body += f("status", t("Status"), `<select class="ctrl" id="fe-status">${o(Object.entries(R.ASSET_STATUS).map(([k, v]) => [k, t(v)]), rec.status)}</select>`, t("Pojazd używany w kursach nie jest usuwany — ustaw „Wycofany” (historia zostaje)."));
-        body += f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Zmiana dotyczy przyszłych kursów."));
+        body += `<div data-own-only="own">${f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Zmiana dotyczy przyszłych kursów."))}</div>`;
+        body += `<div data-own-only="external">${f("driverName", t("Kierowca (jeśli stały)"), `<input class="ctrl" id="fe-driverName" value="${esc(rec.driverName || "")}" placeholder="${esc(t("imię i nazwisko"))}">`)}</div>`;
       }
       if (kind === "chippers") {
         body += f("owner", t("Czyj jest rębak"), `<select class="ctrl" id="fe-owner">${o(Object.entries(R.CHIPPER_OWNERS).map(([k, v]) => [k, t(v)]), rec.owner)}</select>`, t("Rębak firmy zewnętrznej (usługa rębania) — firma, oznaczenie, nr rejestracyjny i operator opisowo."));

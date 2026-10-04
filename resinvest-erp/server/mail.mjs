@@ -19,7 +19,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&a
 /* ---------------- szablony ---------------- */
 const BRAND = { name: "ResInvest ERP", green: "#1E6B45", ink: "#1F2A33", muted: "#5B6B78", line: "#DDE3E8", bg: "#F4F6F8" };
 
-function layout({ title, lead, lines = [], button, link, note }) {
+function layout({ title, lead, lines = [], button, link, note, footer, pre }) {
   const html = `<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title></head>
 <body style="margin:0;padding:0;background:${BRAND.bg};font-family:Segoe UI,Arial,sans-serif;color:${BRAND.ink}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.bg};padding:24px 12px"><tr><td align="center">
@@ -28,15 +28,16 @@ function layout({ title, lead, lines = [], button, link, note }) {
 <tr><td style="padding:24px">
 <h1 style="margin:0 0 12px;font-size:20px;color:${BRAND.ink}">${esc(title)}</h1>
 <p style="margin:0 0 12px;font-size:15px;line-height:1.5">${esc(lead)}</p>
+${pre ? `<div style="margin:0 0 14px;padding:12px 14px;background:${BRAND.bg};border-left:3px solid ${BRAND.green};font-size:14px;line-height:1.55;white-space:pre-wrap">${esc(pre)}</div>` : ""}
 ${lines.map(l => `<p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:${BRAND.muted}">${esc(l)}</p>`).join("")}
 ${button && link ? `<p style="margin:20px 0"><a href="${esc(link)}" style="display:inline-block;background:${BRAND.green};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:6px">${esc(button)}</a></p>
 <p style="margin:0 0 8px;font-size:12px;color:${BRAND.muted}">Jeśli przycisk nie działa, skopiuj adres do przeglądarki:<br><span style="word-break:break-all">${esc(link)}</span></p>` : ""}
 ${note ? `<p style="margin:16px 0 0;font-size:12px;color:${BRAND.muted}">${esc(note)}</p>` : ""}
 </td></tr>
-<tr><td style="padding:14px 24px;border-top:1px solid ${BRAND.line};font-size:11px;color:${BRAND.muted}">Wiadomość wysłana automatycznie przez ${BRAND.name}. Nie odpowiadaj na nią. Jeśli nie spodziewałeś się tej wiadomości, skontaktuj się z administratorem systemu.</td></tr>
+<tr><td style="padding:14px 24px;border-top:1px solid ${BRAND.line};font-size:11px;color:${BRAND.muted}">${esc(footer || `Wiadomość wysłana automatycznie przez ${BRAND.name}. Nie odpowiadaj na nią. Jeśli nie spodziewałeś się tej wiadomości, skontaktuj się z administratorem systemu.`)}</td></tr>
 </table></td></tr></table></body></html>`;
-  const text = [BRAND.name, "", title, "", lead, ...lines, ...(link ? ["", `${button}: ${link}`] : []), ...(note ? ["", note] : []), "",
-    `Wiadomość wysłana automatycznie przez ${BRAND.name}. Nie odpowiadaj na nią.`].join("\n");
+  const text = [BRAND.name, "", title, "", lead, ...(pre ? ["", pre, ""] : []), ...lines, ...(link ? ["", `${button}: ${link}`] : []), ...(note ? ["", note] : []), "",
+    footer || `Wiadomość wysłana automatycznie przez ${BRAND.name}. Nie odpowiadaj na nią.`].join("\n");
   return { html, text };
 }
 
@@ -66,6 +67,11 @@ export const TEMPLATES = {
     title: d.subject, lead: `Dzień dobry ${d.name}, w ResInvest ERP pojawiła się zmiana, o której chcesz być powiadamiany.`,
     lines: d.lines || [], button: "Otwórz w ResInvest ERP", link: d.link,
     note: "Ustawienia powiadomień zmienisz w programie: Powiadomienia → Moje ustawienia." })),
+  /** Dokument / raport wysłany przez użytkownika (3.6): PDF w załączniku, odpowiedź trafia do nadawcy. */
+  document: d => Object.assign({ subject: d.subject }, layout({
+    title: d.title, lead: `Dzień dobry, ${d.by} przesyła dokument z systemu ${BRAND.name}.`, pre: d.message || "",
+    lines: [d.range ? `Zakres: ${d.range}` : "", d.warehouse ? `Magazyn: ${d.warehouse}` : "", `Załącznik: ${d.filename} (${d.sizeKb} kB, PDF)`].filter(Boolean),
+    footer: `Wiadomość wysłana z ${BRAND.name} przez użytkownika ${d.by}${d.byEmail ? ` (${d.byEmail})` : ""}. Odpowiedź trafi do nadawcy.` })),
   test: d => Object.assign({ subject: "Wiadomość testowa — ResInvest ERP" }, layout({
     title: "Wiadomość testowa", lead: `Dzień dobry ${d.name}, to jest wiadomość testowa z ResInvest ERP Serwer.`,
     lines: [`Kanał wysyłki: ${d.transport}`, `Wysłano na prośbę: ${d.by}`], note: "Jeśli ją widzisz, poczta jest skonfigurowana poprawnie." }))
@@ -94,21 +100,29 @@ const b64 = s => Buffer.from(String(s), "utf8").toString("base64");
 const encHeader = s => /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`;
 const addr = s => { const m = /<([^>]+)>/.exec(s); return (m ? m[1] : s).trim(); };
 const encFrom = s => { const m = /^(.*)<([^>]+)>\s*$/.exec(s); return m ? `${encHeader(m[1].trim())} <${m[2]}>` : s; };
+const replyOf = (c, msg) => msg.replyTo || c.replyTo || "";
 function mime(c, msg) {
   const boundary = "riw" + randomBytes(12).toString("hex"), id = `<${randomBytes(16).toString("hex")}@resinvest-erp>`;
   const wrap = s => b64(s).replace(/.{1,76}/g, "$&\r\n");
-  return { id, data: [
-    `From: ${encFrom(c.from)}`, `To: ${msg.to}`, `Subject: ${encHeader(msg.subject)}`, `Date: ${new Date().toUTCString()}`, `Message-ID: ${id}`,
-    ...(c.replyTo ? [`Reply-To: ${c.replyTo}`] : []), "MIME-Version: 1.0", `Content-Type: multipart/alternative; boundary="${boundary}"`, "",
-    `--${boundary}`, "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", wrap(msg.text),
-    `--${boundary}`, "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: base64", "", wrap(msg.html),
-    `--${boundary}--`, ""].join("\r\n") };
+  const files = Array.isArray(msg.attachments) ? msg.attachments : [];
+  const alt = [`--${boundary}`, "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", wrap(msg.text),
+    `--${boundary}`, "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: base64", "", wrap(msg.html), `--${boundary}--`];
+  const reply = replyOf(c, msg);
+  const head = [`From: ${encFrom(c.from)}`, `To: ${msg.to}`, `Subject: ${encHeader(msg.subject)}`, `Date: ${new Date().toUTCString()}`, `Message-ID: ${id}`,
+    ...(reply ? [`Reply-To: ${reply}`] : []), "MIME-Version: 1.0"];
+  if (!files.length) return { id, data: [...head, `Content-Type: multipart/alternative; boundary="${boundary}"`, "", ...alt, ""].join("\r\n") };
+  // multipart/mixed: treść (alternative) + załączniki (base64, nazwa pliku zakodowana RFC 2047)
+  const mixed = "riwm" + randomBytes(12).toString("hex");
+  const parts = files.map(f => [`--${mixed}`, `Content-Type: ${f.contentType || "application/octet-stream"}; name="${encHeader(f.filename)}"`, "Content-Transfer-Encoding: base64",
+    `Content-Disposition: attachment; filename="${encHeader(f.filename)}"`, "", String(f.content).replace(/.{1,76}/g, "$&\r\n")].join("\r\n"));
+  return { id, data: [...head, `Content-Type: multipart/mixed; boundary="${mixed}"`, "", `--${mixed}`, `Content-Type: multipart/alternative; boundary="${boundary}"`, "", ...alt, ...parts, `--${mixed}--`, ""].join("\r\n") };
 }
 async function viaResend(c, msg) {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 15000);
   try {
     const r = await fetch(c.apiUrl, { method: "POST", signal: ctl.signal, headers: { Authorization: `Bearer ${c.key}`, "Content-Type": "application/json" },
-      body: JSON.stringify(Object.assign({ from: c.from, to: [msg.to], subject: msg.subject, html: msg.html, text: msg.text }, c.replyTo ? { reply_to: c.replyTo } : {})) });
+      body: JSON.stringify(Object.assign({ from: c.from, to: [msg.to], subject: msg.subject, html: msg.html, text: msg.text }, replyOf(c, msg) ? { reply_to: replyOf(c, msg) } : {},
+        Array.isArray(msg.attachments) && msg.attachments.length ? { attachments: msg.attachments.map(f => ({ filename: f.filename, content: f.content })) } : {})) });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(`Resend HTTP ${r.status}: ${body.message || body.name || "błąd"}`);
     return { providerId: body.id || "" };

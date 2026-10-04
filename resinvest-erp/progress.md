@@ -1,6 +1,15 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-02 · etap: **ResInvest ERP 3.5.0 — planer zakupów, powiadomienia, poczta**
+Ostatnia aktualizacja: 2026-10-04 · etap: **ResInvest ERP 3.6.0 — zakup z produkcją i sprzedażą bezpośrednią z lasu, flota własna i zewnętrzna, wysyłka e-mailem, znak RiC**
+
+## Wykonane — 3.6.0
+
+- [x] Zakup: zakres (produkcja, sprzedaż bezpośrednia z lasu) przed grupą dostawcy; księgowanie bezpośrednie PW + WZ bez zmiany stanu
+- [x] Flota: „Flota własna” / „Flota zewnętrzna” (pola wyboru), pojazdy firm zewnętrznych, podpowiedzi w kursach zewnętrznych
+- [x] Wysyłka e-mailem z PDF: raport miesiąca, kwit produkcji dnia, planer, historia, dokumenty, raporty (FIRMOWY: serwer z walidacją, limitem, audytem; OFFLINE: PDF + program pocztowy)
+- [x] Znak RiC: aplikacja, PDF, ikona przeglądarki / telefonu / instalatora
+- [x] Testy: jednostkowe 149, serwer 44, E2E 291, E2E serwera 29 — wszystkie zaliczone; i18n 0 braków
+- [ ] Instalator 3.6.0 — po akceptacji wersji HTML
 
 ## Wykonane — 3.1.0 (prototyp końcowy)
 

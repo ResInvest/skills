@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.5.0";
+  const VERSION = "3.6.0";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -328,6 +328,8 @@
   const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
   /** Rębak: własny (operator z kartoteki floty) albo firmy zewnętrznej (firma, oznaczenie, nr rej., operator opisowo). */
   const CHIPPER_OWNERS = { own: N_("Rębak własny"), external: N_("Rębak firmy zewnętrznej") };
+  /** Pojazd: flota własna (kierowca z kartoteki) albo pojazd firmy zewnętrznej (firma, kierowca opisowo). Brak pola = własny. */
+  const VEHICLE_OWNERS = { own: N_("Pojazd własny"), external: N_("Pojazd firmy zewnętrznej") };
   /** Źródło tonażu na dokumencie: przelicznik firmowy (AUTO) albo wartość wpisana z wagi (RĘCZNY) — nigdy nie nadpisywana. */
   const WEIGHT_SOURCES = { auto: N_("AUTO"), manual: N_("RĘCZNY") };
   /** Kartoteka „Dodatkowe operacje” — pozycje startowe (dalej edytowane w programie, zapisywane w danych). */
@@ -797,10 +799,18 @@
           documents.push({ type: "PW", kind: "PRODUKCJA", productId: outProduct.id, qty: outQty, unit: outProduct.unit, stockQty: outQty, stockUnit: outProduct.unit, weightT: Units.mass(outQty, outProduct, cfg), value: totals.chippingCost, stock: "+", meta: prodMeta() });
         }
         if (S.enabled) {
-          const saleQ = planSaleOfOutput(outProduct, outQty, false);
+          // sprzedaż bezpośrednia z lasu: wynik produkcji trafia od razu do odbiorcy, bez magazynowania
+          const direct = !!S.direct;
+          const saleQ = planSaleOfOutput(outProduct, outQty, direct);
+          if (direct) {
+            postings.forEach(p => { if (p.kind === "PRODUKCJA") p.direct = true; });
+            const pw = documents.find(x => x.type === "PW");
+            if (pw) pw.meta = Object.assign({}, pw.meta, { direct: N_("tak — produkcja w lesie") });
+            if (product && consume !== null && stockQty - consume > EPS) warnings.push(t("Nie całe kupione drewno zostało zużyte — pozostałe {a} {u} zostanie przyjęte na stan magazynu.", { a: fmtQ(stockQty - consume), u: U(product.unit) }));
+          }
           if (outProduct && saleQ > 0) {
-            push("SPRZEDAZ", outProduct.id, -saleQ);
-            documents.push({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, weightMode: norm.sale.weightMode, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" });
+            push("SPRZEDAZ", outProduct.id, -saleQ, direct ? { direct: true } : null);
+            documents.push(Object.assign({ type: "WZ", kind: "SPRZEDAZ", productId: outProduct.id, qty: saleQ, unit: outProduct.unit, stockQty: saleQ, stockUnit: outProduct.unit, weightT: norm.sale.weightT, weightMode: norm.sale.weightMode, value: totals.revenue, price: norm.sale.price, priceUnit: S.priceUnit, partnerId: S.buyerId, partner: partyName(S.buyerId), stock: "−" }, direct ? { meta: { direct: N_("sprzedaż bezpośrednia z lasu (bez magazynowania)") } } : {}));
           }
         }
       } else if (S.enabled) err("sale.enabled", t("W zakupie sprzedaż korzysta z wyniku produkcji — zaznacz produkcję albo użyj operacji „Sprzedaż” (WZ z magazynu)"));
@@ -962,6 +972,7 @@
           const v = byId(state.fleet.vehicles, r.vehicleId);
           if (!r.vehicleId) err(K(i, "vehicleId"), t("Wybierz pojazd z floty"));
           else if (!v) err(K(i, "vehicleId"), t("Nieznany pojazd"));
+          else if (v.owner === "external") err(K(i, "vehicleId"), t("Pojazd należy do firmy zewnętrznej — wybierz transport zewnętrzny"));
           else if (v.status !== "aktywny") err(K(i, "vehicleId"), t("Pojazd ma status „{s}” — wybierz aktywny", { s: t(ASSET_STATUS[v.status] || v.status) }));
           else if (v.whId && whId && v.whId !== whId) err(K(i, "vehicleId"), t("Pojazd jest przypisany do magazynu {w}", { w: (byId(state.warehouses, v.whId) || {}).name || "" }));
           const driverId = r.driverId || (v && v.driverId) || "";
@@ -1825,7 +1836,7 @@
   /* ------------------------------------------------------------------ */
   const Fleet = {
     KINDS: {
-      vehicles: { label: N_("Pojazd"), fields: ["name", "reg", "type", "status", "driverId", "whId"] },
+      vehicles: { label: N_("Pojazd"), fields: ["name", "owner", "company", "reg", "type", "status", "driverId", "driverName", "whId"] },
       drivers: { label: N_("Kierowca"), fields: ["name", "phone", "whId"] },
       chippers: { label: N_("Rębak"), fields: ["name", "owner", "company", "reg", "status", "operatorId", "operatorName", "info", "whId"] },
       operators: { label: N_("Operator rębaka"), fields: ["name", "phone", "whId"] }
@@ -1846,7 +1857,10 @@
         else if (list.some(v => v.id !== rec.id && v.reg.replace(/\s/g, "") === reg.replace(/\s/g, ""))) e.reg = t("Taki numer rejestracyjny już istnieje");
         if (!VEHICLE_TYPES[rec.type]) e.type = t("Wybierz typ pojazdu");
         if (!ASSET_STATUS[rec.status]) e.status = t("Wybierz status");
-        if (!byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Wybierz kierowcę domyślnego");
+        const owner = rec.owner || "own";
+        if (!VEHICLE_OWNERS[owner]) e.owner = t("Wybierz, czyj jest pojazd");
+        if (owner === "own" && !byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Wybierz kierowcę domyślnego");
+        if (owner === "external" && str(rec.company).length < 2) e.company = t("Podaj firmę — właściciela pojazdu");
       }
       if (kind === "chippers") {
         const owner = rec.owner || "own";
@@ -1870,6 +1884,10 @@
         clean.owner = clean.owner || "own";
         if (clean.owner === "own") { clean.company = ""; clean.operatorName = ""; } else clean.operatorId = "";
         clean.info = clean.info.slice(0, 300);
+      }
+      if (kind === "vehicles") {
+        clean.owner = clean.owner || "own";
+        if (clean.owner === "own") { clean.company = ""; clean.driverName = ""; } else clean.driverId = "";
       }
       const idx = list.findIndex(x => x.id === clean.id), before = idx >= 0 ? clone(list[idx]) : null;
       if (idx >= 0) list[idx] = Object.assign({}, list[idx], clean); else list.push(clean);
@@ -2477,7 +2495,7 @@
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
-    CHIPPER_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    CHIPPER_OWNERS, VEHICLE_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,

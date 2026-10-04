@@ -1,7 +1,12 @@
-# ResInvest ERP 3.5 (3.5.0)
+# ResInvest ERP 3.6 (3.6.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
+> Wersja 3.6.0 porządkuje **Zakup** (najpierw zakres: „+ Produkcja z automatycznym zużyciem” i „+ Sprzedaż bezpośrednia
+> z lasu (bez magazynowania)”, potem grupa dostawcy), dzieli **Flotę** na **własną** i **zewnętrzną** (dwa pola wyboru,
+> pojazdy firm zewnętrznych), dodaje **wysyłkę e-mailem** (PDF w załączniku) raportu miesiąca, kwitu produkcji dnia,
+> planera, historii, dokumentów i raportów oraz nowy znak aplikacji **RiC** (ResInvest Commodities).
+>
 > Wersja 3.5.0 dodaje **Planer zakupów** (plan dnia [MP] wpisywany ręcznie, wykonanie, tony, ceny, transport i kursy
 > liczone z zatwierdzonych dokumentów), **Powiadomienia** (skrzynka w programie i dzwonek w pasku górnym, zgody
 > administratora, ustawienia użytkownika) oraz **Pocztę** — e-maile z powiadomieniami wysyłane przez serwer z kolejki
@@ -34,6 +39,51 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.6.0
+
+### Zakup — zakres przed wyborem dostawcy
+* W sekcji **Zakup** jako pierwsze są dwie opcje (obie dostępne od razu):
+  **+ Produkcja z automatycznym zużyciem** (RW drewna + PW zrębki w tej samej operacji) oraz
+  **+ Sprzedaż bezpośrednia z lasu (bez magazynowania)** (las → produkcja → odbiorca; włącza produkcję).
+  Dopiero niżej wybiera się grupę dostawcy: **firma branży drzewnej / zewnętrzna** albo **nadleśnictwo (Lasy Państwowe)**.
+* Zaznaczenie produkcji lub sprzedaży bezpośredniej ustawia produkt zakupu na drewno (lista produktów pokazuje wtedy tylko drewno).
+* Księgowanie sprzedaży bezpośredniej z lasu: **PZ → RW → PW → WZ**, gdzie PW i WZ są oznaczone jako bezpośrednie —
+  stan drewna i zrębki w magazynie się nie zmienia; raporty liczą przychód jako „sprzedaż bezpośrednia”, historia pokazuje
+  typ „Sprzedaż bezpośrednia”. Ostrzeżenia: niepełne zużycie drewna lub niepełna sprzedaż produkcji (reszta trafia na stan).
+* Operacje sprzed 3.6 („+ Sprzedaż wyniku produkcji” przez magazyn) działają i korygują się bez zmian.
+  Korekta nie zmienia rodzaju sprzedaży (bezpośrednia ↔ przez magazyn) — w takim wypadku anuluj i wprowadź nową operację.
+
+### Flota własna i zewnętrzna (menu **Kartoteki → Flota**)
+* Dwa pola wyboru: **Flota własna** (samochody, kierowcy, rębaki, operatorzy) i **Flota zewnętrzna** (samochody i rębaki
+  firm zewnętrznych). Zakładki pokazują się według zaznaczenia.
+* Pojazd ma właściciela: **własny** (kierowca domyślny z kartoteki) albo **firma zewnętrzna** (firma, kierowca opisowo).
+  Istniejące pojazdy bez tego pola są traktowane jako własne — bez migracji danych.
+* „Nowa operacja”: transport własny pokazuje tylko flotę własną (pojazd zewnętrzny jest odrzucany po stronie silnika);
+  w kursach transportu zewnętrznego numer rejestracyjny podpowiada się z floty zewnętrznej, a wybór numeru z kartoteki
+  uzupełnia kierowcę i firmę przewozową (wpisanych ręcznie nie nadpisuje).
+
+### Wysyłka e-mailem (PDF w załączniku)
+* Przycisk **Wyślij e-mailem** obok „Generuj PDF”: Raporty (raport miesiąca), Kwit produkcji dnia, Planer zakupów,
+  Historia, podgląd dokumentu oraz rejestry Dokumenty / Przyjęcia / Wydania / MM (zestawienie wg filtrów).
+  Dostępny dla uprawnienia `reports.export`. Okno: adresy (do 10), temat, treść, informacja o załączniku.
+* **FIRMOWY**: PDF trafia do serwera (`POST /api/mail-document`), który **sprawdza** uprawnienie, adresy, temat, rozmiar
+  (maks. 8 MB) i nagłówek pliku PDF, opcjonalnie domeny odbiorców (`mail.documentDomains` w `server.config.json`),
+  limit **40 wiadomości na godzinę** na użytkownika; wiadomość idzie przez kolejkę poczty z ponowieniami, odpowiedź trafia
+  do nadawcy (Reply-To), wpis **MAIL_DOCUMENT** w audycie. Po wysłaniu treść i załącznik są usuwane z kolejki.
+* **OFFLINE**: brak serwera poczty — program zapisuje PDF i otwiera program pocztowy z adresami, tematem i treścią;
+  plik dołącza się ręcznie (komunikat w oknie mówi to wprost).
+
+### Znak RiC
+* Znak aplikacji **RiC** (ResInvest Commodities): menu, logowanie, intro, nagłówek PDF i wydruku, ikona karty
+  przeglądarki (SVG) i ekranu głównego telefonu (PNG), ikona instalatora i skrótów Windows (`ric.ico`).
+  Ikony generuje `tools/make-icons.mjs` z `app/assets/icons/ric.svg`.
+
+### Dane i testy
+* Schemat danych bez zmian (9). Tłumaczenia CS / EN: 2401 tekstów, 0 braków, 0 nieużywanych.
+* Testy: `features36.test.mjs` (9), `mail36.test.mjs` (5, serwer: załącznik w .eml i w API Resend, walidacja, domeny,
+  limit), E2E 291/291 (w tym 36 scenariuszy 3.6), E2E serwera 29/29 (wysyłka raportu z okna programu).
+* Poprawka: na telefonie karty raportów nie poszerzają już strony (siatka `minmax(0,1fr)`).
 
 ## Nowe w 3.5.0
 
@@ -439,3 +489,5 @@ kopią JSON: *Administracja → Pobierz kopię* w trybie lokalnym → *Wczytaj k
 * Tryb lokalny chroni dostęp w obrębie programu, ale dane w przeglądarce może odczytać osoba z dostępem do konta
   Windows — do pracy na danych firmy używaj serwera.
 * Przeglądarki bez kodeka H.264/AAC pokazują w intro planszę firmową z muzyką syntezowaną.
+* Wysyłka e-mailem w trybie OFFLINE nie dołącza pliku automatycznie (przeglądarka nie może przekazać załącznika
+  do programu pocztowego) — PDF zapisuje się na dysku i dołącza się go ręcznie.

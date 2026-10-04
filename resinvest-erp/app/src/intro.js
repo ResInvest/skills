@@ -136,7 +136,7 @@
         el.insertAdjacentHTML("beforeend", `
           <video playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
           <div class="splash-brand" aria-hidden="true">
-            <div class="mark">RI</div>
+            <div class="mark" aria-label="RiC — ResInvest Commodities">RiC</div>
             <h2>ResInvest Commodities</h2>
             <p>${t("ERP · obrót i magazynowanie biomasy drzewnej")}</p>
           </div>

@@ -179,6 +179,32 @@ function queueNotices(ids) {
   if (n) setTimeout(() => drainMail().catch(e => log("ERROR", "Kolejka poczty: " + e.message)), 50);
   return n;
 }
+/* ---------------- wysyłka dokumentów e-mailem: walidacja po stronie serwera ---------------- */
+const MAIL_DOC = { maxMb: 8, maxBody: 12 * 1024 * 1024, maxTo: 10, perHour: 40 };
+const EMAIL_RE = /^[^\s@<>(),;:"\[\]]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+const clean1 = (s, n) => String(s == null ? "" : s).replace(/[\r\n\t]+/g, " ").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, n);
+/** Dane wiadomości z przeglądarki → zweryfikowane pola (adresy, temat, treść, PDF). Domena odbiorców: opcjonalnie lista dozwolonych (konfiguracja serwera). */
+function validateDocumentMail(b, user) {
+  const to = [...new Set(String(b.to || "").split(/[\s,;]+/).map(x => x.trim().toLowerCase()).filter(Boolean))];
+  if (!to.length) return { field: "to", error: t("Podaj co najmniej jeden adres e-mail odbiorcy.") };
+  if (to.length > MAIL_DOC.maxTo) return { field: "to", error: t("Maksymalnie {n} odbiorców w jednej wysyłce.", { n: MAIL_DOC.maxTo }) };
+  const bad = to.find(x => x.length > 254 || !EMAIL_RE.test(x));
+  if (bad) return { field: "to", error: t("Nieprawidłowy adres e-mail: {e}", { e: bad.slice(0, 80) }) };
+  const domains = (cfg.mail && Array.isArray(cfg.mail.documentDomains) ? cfg.mail.documentDomains : []).map(d => String(d).trim().toLowerCase().replace(/^@/, "")).filter(Boolean);
+  if (domains.length) { const out = to.find(x => !domains.includes(x.split("@")[1])); if (out) return { field: "to", error: t("Adres {e} jest spoza dozwolonych domen: {d}", { e: out, d: domains.join(", ") }) }; }
+  const subject = clean1(b.subject, 200), title = clean1(b.title, 200) || subject;
+  if (!subject) return { field: "subject", error: t("Podaj temat wiadomości.") };
+  const message = String(b.message == null ? "" : b.message).replace(/\r\n/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").slice(0, 4000);
+  let filename = clean1(b.filename, 120).replace(/[\\/:*?"<>|]+/g, "_");
+  if (!/\.pdf$/i.test(filename)) filename = (filename || "dokument") + ".pdf";
+  const pdf = String(b.pdf || "").replace(/\s+/g, "");
+  if (!pdf || !/^[A-Za-z0-9+/]+=*$/.test(pdf)) return { field: "pdf", error: t("Brak załącznika PDF.") };
+  const buf = Buffer.from(pdf, "base64");
+  if (buf.length > MAIL_DOC.maxMb * 1024 * 1024) return { field: "pdf", error: t("Załącznik jest za duży (maks. {n} MB).", { n: MAIL_DOC.maxMb }) };
+  if (buf.subarray(0, 5).toString("latin1") !== "%PDF-") return { field: "pdf", error: t("Załącznik nie jest plikiem PDF.") };
+  const kind = ["DOC", "KWIT", "RAP"].includes(b.kind) ? b.kind : "RAP";
+  return { to, subject, title, message, filename, pdf, bytes: buf.length, kind, number: clean1(b.number, 60), range: clean1(b.range, 120), warehouse: clean1(b.warehouse, 120) };
+}
 let draining = null;
 /** Wysyłka wiadomości z kolejki (jedna naraz w procesie serwera). Błąd poczty nie wpływa na dane. */
 function drainMail() {
@@ -190,7 +216,7 @@ function drainMail() {
       if (!rows.length) break;
       for (const row of rows) {
         let body = {}; try { body = JSON.parse(row.body || "{}"); } catch (e) {}
-        const r = await sendRaw(mailCfg, { to: row.to_addr, template: row.template, subject: row.subject, html: body.html || "", text: body.text || "" }, log);
+        const r = await sendRaw(mailCfg, { to: row.to_addr, template: row.template, subject: row.subject, html: body.html || "", text: body.text || "", attachments: body.attachments, replyTo: body.replyTo }, log);
         if (r.ok) { store.markSent(row.id, r, mailCfg.transport); sent++; }
         else { const f = store.markFailed(row.id, r.error, mailCfg.transport); failed++; if (f.dead) log("ERROR", `E-mail #${row.id} → ${row.to_addr} porzucony po ${f.attempts} próbach`); }
       }
@@ -463,6 +489,32 @@ async function handleApi(req, res, url) {
     if (!R.can(user, "users.manage") && !R.can(user, "audit.read")) return json(req, res, 403, { ok: false, code: "FORBIDDEN", error: t("Nie masz uprawnień do wykonania tej operacji.") });
     const rows = store.db.prepare("SELECT ts, login, user_id AS userId, ok, reason, ip FROM login_log ORDER BY id DESC LIMIT 1000").all().map(r => Object.assign({}, r, { ok: !!r.ok }));
     return json(req, res, 200, { ok: true, log: rows, mail: store.mailLog(300), mailConfig: mailInfo(mailCfg) });
+  }
+  /* ---- wysyłka dokumentu / raportu e-mailem (PDF w załączniku) — 3.6 ---- */
+  if (path === "/api/mail-document" && method === "POST") {
+    R.applyRoles(store.state);
+    if (!R.can(user, "reports.export")) return json(req, res, 403, { ok: false, code: "FORBIDDEN", error: t("Brak uprawnienia „{p}”", { p: "reports.export" }) });
+    let b;
+    try { b = await readBody(req, MAIL_DOC.maxBody); } catch (e) { return json(req, res, 413, { ok: false, error: t("Załącznik jest za duży (maks. {n} MB).", { n: MAIL_DOC.maxMb }) }); }
+    const v = validateDocumentMail(b, user);
+    if (v.error) return json(req, res, 400, { ok: false, field: v.field, error: v.error });
+    const since = new Date(Date.now() - 3600 * 1000).toISOString();
+    if (store.documentsSince(user.id, since) + v.to.length > MAIL_DOC.perHour) return json(req, res, 429, { ok: false, error: t("Limit wysyłki: {n} wiadomości z dokumentami na godzinę. Spróbuj później.", { n: MAIL_DOC.perHour }) });
+    const meta = metaOf(req), byEmail = user.email || user.login;
+    const data = { subject: v.subject, title: v.title, message: v.message, range: v.range, warehouse: v.warehouse, filename: v.filename, sizeKb: Math.max(1, Math.round(v.bytes / 1024)), by: user.name, byEmail };
+    const ids = [];
+    for (const to of v.to) {
+      const msg = compose("document", to, data);
+      // treść i załącznik w kolejce do chwili wysłania — po wysyłce usuwane (zostaje wpis w dzienniku)
+      ids.push(store.enqueueMail("document", to, user.id, msg.subject, { html: msg.html, text: msg.text, replyTo: byEmail, attachments: [{ filename: v.filename, content: v.pdf, contentType: "application/pdf" }] }, null));
+    }
+    store.auditEvent({ entityId: v.number || v.filename, opNo: v.number || v.filename, code: "MAIL_DOCUMENT", act: R.Lx(N_("Wysłanie e-mailem: {title} → {to}"), { title: v.title.slice(0, 160), to: v.to.join(", ") }), before: null, after: { odbiorcy: v.to, temat: v.subject, plik: v.filename, kB: data.sizeKb, rodzaj: v.kind }, entity: "report", event: "print", source: N_("Wysyłka e-mailem") }, meta, user);
+    broadcast(store.state.rev, null);
+    const r = await drainMail();
+    const queued = store.outbox("", 50).rows.filter(x => ids.includes(x.id));
+    const sent = queued.filter(x => x.status === "SENT").length;
+    return json(req, res, 200, { ok: true, sent, queued: ids.length - sent, transport: mailCfg.transport,
+      message: sent === ids.length ? t("Wysłano do: {to}.", { to: v.to.join(", ") }) : t("Wiadomość w kolejce wysyłki ({n}) — system ponowi próbę automatycznie.", { n: ids.length - sent }), failed: r.failed });
   }
   /* ---- poczta: dziennik wysyłki, ponowienie, test, przetworzenie kolejki (administrator) ---- */
   if (path.startsWith("/api/mail/")) {

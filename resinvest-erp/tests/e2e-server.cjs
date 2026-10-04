@@ -126,6 +126,22 @@ function parseEml(raw) {
     await page.click('[data-autab="mail"]'); await page.waitForSelector("#mail-log-table");
     const ml = nb(await page.textContent("#mail-log-table"));
     check("Audyt: zakładka wiadomości e-mail (invite, reset, passwordChanged)", ["invite", "reset", "passwordChanged"].every(x => ml.includes(x)));
+    // 3.6: raport miesiąca wysłany e-mailem z programu (PDF w załączniku, kolejka serwera, audyt)
+    await page.evaluate(() => { location.hash = "#/raporty"; }); await page.waitForSelector('[data-mail="rep"]');
+    await page.click('[data-mail="rep"]'); await page.waitForSelector("#mail-dialog #ml-to");
+    check("3.6 FIRMOWY: okno e-mail bez informacji OFFLINE, przycisk „Wyślij”", !(await page.$("#ml-offline")) && nb(await page.textContent("#ml-send")) === "Wyślij");
+    await page.fill("#ml-to", "biuro@odbiorca.pl");
+    await page.click("#ml-send");
+    await page.waitForFunction(() => RIW_DEBUG.lastMail && RIW_DEBUG.lastMail.mode === "server", null, { timeout: 8000 }).catch(() => {});
+    const lm = await page.evaluate(() => RIW_DEBUG.lastMail);
+    check("3.6 FIRMOWY: serwer przyjął i wysłał wiadomość", lm && lm.ok && lm.sent === 1, lm && { ok: lm.ok, sent: lm.sent, error: lm.error });
+    const docEml = fs.existsSync(outDir) ? fs.readdirSync(outDir).filter(f => f.includes("-document-")) : [];
+    const raw = docEml.length ? fs.readFileSync(path.join(outDir, docEml[0]), "utf8") : "";
+    check("3.6 FIRMOWY: wiadomość .eml z załącznikiem PDF (raport_…pdf) do biuro@odbiorca.pl", /^To: biuro@odbiorca\.pl$/m.test(raw) && /Content-Type: application\/pdf; name="raport_[^"]+\.pdf"/.test(raw));
+    const pdfPart = /Content-Disposition: attachment[^\r\n]*\r\n\r\n([A-Za-z0-9+\/=\r\n]+)/.exec(raw);
+    check("3.6 FIRMOWY: załącznik to poprawny PDF wygenerowany w przeglądarce", !!pdfPart && Buffer.from(pdfPart[1].replace(/\s+/g, ""), "base64").subarray(0, 5).toString("latin1") === "%PDF-");
+    await page.evaluate(() => { location.hash = "#/admin/audit"; }); await page.waitForSelector('[data-autab="events"]'); await page.click('[data-autab="events"]'); await page.waitForSelector("#audit-admin-table");
+    check("3.6 FIRMOWY: wysyłka w dzienniku audytu (MAIL_DOCUMENT)", nb(await page.textContent("#audit-admin-table")).includes("MAIL_DOCUMENT"));
     // wylogowanie → #/login, stan wyczyszczony
     await logout();
     check("Wylogowanie: #/login i brak danych w pamięci", await page.evaluate(() => location.hash === "#/login" && !RIW_DEBUG.store.state && !RIW_DEBUG.store.userId));

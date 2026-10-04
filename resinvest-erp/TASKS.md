@@ -1,5 +1,23 @@
 # TASKS — ResInvest ERP
 
+## 3.6.0 — zakup (produkcja / sprzedaż bezpośrednia z lasu), flota własna i zewnętrzna, wysyłka e-mailem, znak RiC
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| zakup: opcje „+ Produkcja z automatycznym zużyciem” i „+ Sprzedaż bezpośrednia z lasu (bez magazynowania)” przed grupą dostawcy, obie dostępne od razu | DONE | E2E „3.6 Zakup: opcje … przed wyborem grupy dostawcy”, „obie opcje dostępne” |
+| zakup bezpośredni: PZ → RW → PW → WZ, PW i WZ bezpośrednie, stan bez zmian, raport / historia | DONE | `features36.test` (6 testów), E2E „Zakup bezpośredni: zatwierdzenie z formularza…” |
+| zakup: dotychczasowa sprzedaż wyniku produkcji przez magazyn bez zmian; korekta nie zmienia rodzaju | DONE | `features36.test`, `engine.test` §22 TEST 4 |
+| flota: pola wyboru „Flota własna” / „Flota zewnętrzna”, zakładki wg zaznaczenia | DONE | E2E „3.6 Flota: …” (7 scenariuszy) |
+| flota zewnętrzna: pojazdy firm (firma, kierowca opisowo), dane przykładowe ESI / DAP / Kowalski | DONE | `features36.test` „flota: …” (3 testy) |
+| transport: własny tylko z floty własnej (walidacja w silniku), zewnętrzny z podpowiedzią numerów i uzupełnieniem kierowcy | DONE | `features36.test`, E2E „3.6 Transport …” |
+| wysyłka e-mailem: raport miesiąca, kwit produkcji dnia, planer, historia, dokumenty (podgląd i rejestry), raporty | DONE | E2E „3.6 … przycisk „Wyślij e-mailem””, E2E serwera „3.6 FIRMOWY …” |
+| wysyłka: walidacja po stronie serwera (uprawnienie, adresy, temat, PDF, 8 MB, domeny, 40/h), audyt MAIL_DOCUMENT, załącznik usuwany z kolejki | DONE | `mail36.test` (5 testów) |
+| wysyłka OFFLINE: zapis PDF + program pocztowy (jawny komunikat) | DONE | E2E „3.6 OFFLINE: PDF zapisany…” |
+| znak RiC: menu, logowanie, intro, PDF, ikona przeglądarki i telefonu, ikona instalatora | DONE | E2E „3.6 Znak RiC…”, „Ikona strony RiC…”; `pdf.test` |
+| tłumaczenia CS / EN | DONE | `npm run i18n`: 2401 tekstów, 0 braków, 0 nieużywanych |
+| telefon 390 px bez poziomego przewijania (flota, raporty, okno e-mail) | DONE | E2E „3.6 Telefon…” (naprawiona siatka raportów) |
+| instalator 3.6.0 | OCZEKUJE na decyzję użytkownika | — |
+
 ## 3.5.0 — planer zakupów, powiadomienia, poczta (na bazie 3.4.1 — ten sam wygląd i mechanizmy)
 
 | Kryterium | Status | Dowód |

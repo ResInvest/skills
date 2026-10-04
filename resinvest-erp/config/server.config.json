@@ -1,5 +1,5 @@
 {
-  "_opis": "Konfiguracja programu ResInvest ERP Serwer. Ścieżki względne liczone od katalogu instalacji. dataDir — baza SQLite, kopie i logi (w instalacji Windows: C:\\ProgramData\\ResInvestERP). host 0.0.0.0 = dostęp z sieci lokalnej; 127.0.0.1 = tylko ten komputer. tls.cert/tls.key — pliki PEM dla HTTPS (zalecane poza siecią lokalną). todayOverride — tylko do testów (RRRR-MM-DD).",
+  "_opis": "Konfiguracja programu ResInvest ERP Serwer. Ścieżki względne liczone od katalogu instalacji. dataDir — baza SQLite, kopie i logi (w instalacji Windows: C:\\ProgramData\\ResInvestERP). host 0.0.0.0 = dostęp z sieci lokalnej; 127.0.0.1 = tylko ten komputer. tls.cert/tls.key — pliki PEM dla HTTPS (zalecane poza siecią lokalną). todayOverride — tylko do testów (RRRR-MM-DD). mail.documentDomains — opcjonalna lista domen, na które wolno wysyłać dokumenty i raporty e-mailem (pusta = dowolny poprawny adres).",
   "port": 8080,
   "host": "0.0.0.0",
   "dataDir": "data-server",
@@ -7,5 +7,6 @@
   "security": { "maxFailed": 5, "lockMinutes": 15, "ipAttemptsPer15Min": 40 },
   "backup": { "hour": 2, "keepDays": 30, "dir": "" },
   "tls": { "cert": "", "key": "" },
+  "mail": { "documentDomains": [] },
   "todayOverride": ""
 }

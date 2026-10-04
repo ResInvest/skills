@@ -191,7 +191,7 @@
         : f.view === "year" ? `<div class="field"><label for="pl-year">${th("Rok")}</label><input class="ctrl" type="number" min="2000" max="2100" id="pl-year" value="${esc(f.year)}"></div>` : "";
       const body = f.view === "year" ? yearHtml(f) : f.view === "drivers" ? driversHtml(f) : f.view === "sources" ? sourcesHtml() : weekHtml(f);
       return `<div class="page-head"><div class="titles"><h2>${th("Planer zakupów")}</h2><p>${th("Plan dzienny zakupów [MP] i wykonanie liczone z zatwierdzonych dokumentów: produkcja z zakupu, produkcja w lesie, zakup zrębki. Ręcznie wpisuje się tylko plan.")}</p></div>
-          <div class="actions">${f.view !== "sources" ? `<button class="btn" type="button" id="pl-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="pl-xlsx">${ic("dl", 15)} XLSX</button><button class="btn" type="button" id="pl-pdf">${ic("pdf", 15)} ${th("Generuj PDF")}</button>` : ""}</div></div>
+          <div class="actions">${f.view !== "sources" ? `<button class="btn" type="button" id="pl-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="pl-xlsx">${ic("dl", 15)} XLSX</button><button class="btn" type="button" id="pl-pdf">${ic("pdf", 15)} ${th("Generuj PDF")}</button>${App.can("reports.export") ? `<button class="btn" type="button" id="pl-mail">${ic("mail", 15)} ${th("Wyślij e-mailem")}</button>` : ""}` : ""}</div></div>
         <div class="card mb4"><div class="toolbar">
           <div class="field"><label for="pl-wh">${th("Magazyn")}</label><select class="ctrl" id="pl-wh">${whs.map(id => `<option value="${esc(id)}" ${f.whId === id ? "selected" : ""}>${esc(App.whName(id))}</option>`).join("")}${whs.length > 1 ? `<option value="ALL" ${f.whId === "ALL" ? "selected" : ""}>${th("Wszystkie magazyny")}</option>` : ""}</select></div>
           ${nav}
@@ -229,14 +229,15 @@
       if (csv) csv.onclick = () => { const x = exp(); download(`planer_${f.view}_${App.today()}.csv`, toCSV(x.cols, x.rows.map(r => r.map(v => typeof v === "number" ? csvNum(v) : v === null ? "" : v))), "text/csv;charset=utf-8"); };
       const xl = $("#pl-xlsx", page);
       if (xl) xl.onclick = () => { const x = exp(); xlsxTable(`planer_${f.view}_${App.today()}`, x.title, x.cols, x.rows.map(r => r.map(v => v === null ? "" : v)), `${whText(f)} · ${x.range}`); };
-      const pd = $("#pl-pdf", page);
-      if (pd) pd.onclick = () => {
+      const plModel = () => {
         const x = exp();
-        Printer.pdf({ title: x.title, subtitle: `${whText(f)} · ${x.range}`, orientation: "landscape", rangeText: x.range, whText: whText(f), headerRight: whText(f),
+        return { title: x.title, subtitle: `${whText(f)} · ${x.range}`, orientation: "landscape", rangeText: x.range, whText: whText(f), headerRight: whText(f),
           meta: [[t("Magazyn"), whText(f)], [t("Okres"), x.range]],
           blocks: [{ type: "table", size: 7.5, columns: x.cols.map((c, i) => ({ label: c, w: i === 0 ? 1.4 : i >= x.cols.length - 2 ? 1.8 : 1, align: i === 0 || i >= x.cols.length - 2 ? "left" : "right" })),
-            rows: x.rows.map(r => r.map((v, i) => i === 0 ? (Dates.isISO(v) ? Dates.pl(v) : v) : typeof v === "number" ? fmtQ(v, 2) : v === null ? "—" : String(v))) }] }, "RAP", "planer");
+            rows: x.rows.map(r => r.map((v, i) => i === 0 ? (Dates.isISO(v) ? Dates.pl(v) : v) : typeof v === "number" ? fmtQ(v, 2) : v === null ? "—" : String(v))) }] };
       };
+      const pd = $("#pl-pdf", page); if (pd) pd.onclick = () => Printer.pdf(plModel(), "RAP", "planer");
+      const pm = $("#pl-mail", page); if (pm) pm.onclick = () => Printer.mail(plModel(), "RAP", "planer");
     }
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

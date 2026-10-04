@@ -136,7 +136,7 @@
   /* ================================================================== */
   const STATUS = { QUEUED: N_("w kolejce"), SENDING: N_("wysyłanie"), SENT: N_("wysłana"), FAILED: N_("nieudana — ponowienie"), DEAD: N_("porzucona"), LOCAL: N_("OFFLINE — bez wysyłki") };
   const STATUS_TONE = { QUEUED: "info", SENDING: "info", SENT: "ok", FAILED: "warn", DEAD: "err", LOCAL: "" };
-  const TEMPLATE = { notice: N_("Powiadomienie"), test: N_("Wiadomość testowa"), invite: N_("Zaproszenie"), reset: N_("Reset hasła"), confirm: N_("Potwierdzenie adresu"), passwordChanged: N_("Zmiana hasła"), emailChanged: N_("Zmiana adresu e-mail"), deactivated: N_("Dezaktywacja konta") };
+  const TEMPLATE = { notice: N_("Powiadomienie"), test: N_("Wiadomość testowa"), document: N_("Dokument / raport (PDF)"), invite: N_("Zaproszenie"), reset: N_("Reset hasła"), confirm: N_("Potwierdzenie adresu"), passwordChanged: N_("Zmiana hasła"), emailChanged: N_("Zmiana adresu e-mail"), deactivated: N_("Dezaktywacja konta") };
   const TRANSPORT = { resend: N_("Resend (API HTTPS)"), smtp: N_("SMTP (TLS)"), file: N_("pliki .eml w katalogu danych") };
   const statusBadge = s => `<span class="badge ${STATUS_TONE[s] || ""}" data-mail-status="${esc(s)}">${th(STATUS[s] || s)}</span>`;
 

@@ -66,6 +66,8 @@ put("<!--@@SCRIPTS@@-->", SCRIPTS.map(f => `<script>\n/* ${f} */\n${read(f)}\n</
 put("@@FONTS@@", JSON.stringify(loadPdfFonts()));
 put("@@INTRO_MEDIA@@", media);
 put("@@INTRO_POSTER@@", poster);
+put("@@ICON_SVG@@", "data:image/svg+xml;base64," + readFileSync(join(ROOT, "app", "assets", "icons", "ric.svg")).toString("base64"));
+put("@@ICON_PNG@@", "data:image/png;base64," + readFileSync(join(ROOT, "app", "assets", "icons", "ric-180.png")).toString("base64"));
 put("@@CONFIG@@", JSON.stringify(cfg));
 put("@@VERSION@@", VERSION);
 put("@@BUILT@@", new Date().toISOString().slice(0, 10));

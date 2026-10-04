@@ -63,7 +63,6 @@
   "Operator / rębak": ["Obsluha / štěpkovač", "Operator / chipper"],
   "Właściciel": ["Vlastník", "Owner"],
   "własny": ["vlastní", "own"],
-  "Rębaki (własne i firm zewnętrznych)": ["Štěpkovače (vlastní a externích firem)", "Chippers (own and external companies)"],
   "Czyj jest rębak": ["Čí je štěpkovač", "Chipper owner"],
   "Rębak firmy zewnętrznej (usługa rębania) — firma, oznaczenie, nr rejestracyjny i operator opisowo.": ["Štěpkovač externí firmy (služba štěpkování) — firma, označení, registrační značka a obsluha popisně.", "External company chipper (chipping service) — company, designation, registration number and operator as text."],
   "Firma (właściciel rębaka)": ["Firma (vlastník štěpkovače)", "Company (chipper owner)"],

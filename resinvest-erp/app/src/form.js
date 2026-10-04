@@ -123,7 +123,7 @@
   /* ------------------------------------------------------------------ */
   const PRESETS = {
     zakup: d => { d.type = "ZAKUP"; d.purchase.productId = "pr_drewno"; d.purchase.unit = "m3"; },
-    lancuch: d => { d.type = "ZAKUP"; d.purchase.productId = "pr_drewno"; d.purchase.unit = "m3"; d.production.enabled = true; d.sale.enabled = true; },
+    lancuch: d => { d.type = "ZAKUP"; d.purchase.productId = "pr_drewno"; d.purchase.unit = "m3"; d.production.enabled = true; d.sale.enabled = true; d.sale.direct = true; },
     wz: d => { d.type = "SPRZEDAZ"; d.sale.direct = false; },
     produkcja: d => { d.type = "PRODUKCJA"; d.production.rawProductId = "pr_drewno"; d.production.outProductId = "pr_zr_lesna"; },
     bezposrednia: d => { d.type = "SPRZEDAZ"; d.sale.direct = true; d.production.rawProductId = "pr_drewno"; d.production.outProductId = "pr_zr_lesna"; },
@@ -185,6 +185,13 @@
     },
     /** Zasoby floty dostępne w magazynie operacji: przypisane do niego i wspólne (oraz już wybrany — dane historyczne). */
     fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
+    /** Aktywne pojazdy firm zewnętrznych dostępne w magazynie operacji; podana firma — tylko jej pojazdy (gdy ma je w kartotece). */
+    extVehicles(company) {
+      const all = this.fleetOf("vehicles", null).filter(v => v.owner === "external" && v.status === "aktywny");
+      const c = String(company || "").trim().toLowerCase();
+      const mine = c ? all.filter(v => String(v.company || "").trim().toLowerCase() === c) : [];
+      return mine.length ? mine : all;
+    },
     whId() {
       if (this.mode === "correct" && this.op) return this.op.whId;
       if (this.review) return this.review.whId;
@@ -398,7 +405,7 @@
       let n = 1;
       let html = section(n++, "type", corr ? t("Korygowany dokument") : t("Rodzaj operacji"), corr ? t("Rodzaju operacji, magazynu i daty dokumentu nie zmienia się korektą — w razie potrzeby anuluj dokument i wprowadź nowy.") : t("Każdy rodzaj działa samodzielnie — wypełniasz tylko to, co jest potrzebne."), `
         <div class="scope four" role="group" aria-label="${esc(t("Rodzaj operacji"))}">
-          ${typeCard("ZAKUP", t("Zakup"), t("Dostawca → magazyn (PZ). Opcjonalnie produkcja i sprzedaż wyniku."))}
+          ${typeCard("ZAKUP", t("Zakup"), t("Dostawca → magazyn (PZ). Opcjonalnie produkcja i sprzedaż bezpośrednia z lasu."))}
           ${typeCard("SPRZEDAZ", t("Sprzedaż"), t("Magazyn → odbiorca (WZ) albo sprzedaż bezpośrednia po produkcji w lesie."))}
           ${typeCard("PRODUKCJA", t("Produkcja na magazynie"), t("Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu."))}
           ${typeCard("MM", t("Przesunięcie MM"), t("Magazyn → inny magazyn firmy. Stan firmy bez zmian."))}
@@ -414,11 +421,17 @@
         const kindCard = (k, text) => optCard("", { checked: sKind === k, struct: false, radio: true, id: `f-skind-${k}`, title: t(R.SUPPLIER_KINDS[k].label), text, attrs: `data-skind="${k}"` });
         const units = prod ? Units.allowed(prod) : Units.LIST;
         const u = Units.label(d.purchase.unit), pu = Units.label(d.purchase.priceUnit || d.purchase.unit);
-        html += section(n++, "purchase", t("Zakup"), t("Co kupujemy, od kogo, w jakiej jednostce i za ile."), `
-          <div class="scope mb3">
-            ${optCard("production.enabled", { checked: d.production.enabled, disabled: !isWood || corr, title: t("+ Produkcja z automatycznym zużyciem"), text: isWood ? t("Zużycie zakupionego drewna (RW) i przyjęcie zrębki (PW) w tej samej operacji.") : t("Dostępna dla drewna.") })}
-            ${optCard("sale.enabled", { checked: d.sale.enabled, disabled: !d.production.enabled || corr, title: t("+ Sprzedaż wyniku produkcji"), text: d.production.enabled ? t("Wydanie zrębki z tej produkcji do odbiorcy (WZ).") : t("Wymaga produkcji. Sprzedaż ze stanu → rodzaj „Sprzedaż”.") })}
-          </div>
+        // 1) zakres zakupu: produkcja i sprzedaż bezpośrednia z lasu — wybierane przed grupą dostawcy
+        const legacySale = d.sale.enabled && !d.sale.direct;
+        const directOn = d.sale.enabled && !!d.sale.direct;
+        html += section(n++, "purchase", t("Zakup"), t("Najpierw zakres zakupu, potem dostawca, produkt, ilość i cena."), `
+          <div class="field span-all" data-field="purchase.scope"><span class="lbl">${esc(t("Zakres zakupu (opcjonalnie)"))}</span>
+          <div class="scope two mb3" role="group" aria-label="${esc(t("Zakres zakupu"))}">
+            ${optCard("production.enabled", { checked: d.production.enabled, disabled: corr, title: t("+ Produkcja z automatycznym zużyciem"), text: t("Zużycie zakupionego drewna (RW) i przyjęcie zrębki (PW) w tej samej operacji. Produkt zakupu: drewno.") })}
+            ${legacySale
+              ? optCard("sale.enabled", { checked: true, disabled: corr, title: t("+ Sprzedaż wyniku produkcji"), text: t("Wydanie zrębki z tej produkcji do odbiorcy (WZ).") })
+              : optCard("sale.direct", { checked: directOn, disabled: corr, title: t("+ Sprzedaż bezpośrednia z lasu (bez magazynowania)"), text: t("las → produkcja → odbiorca. Zrębka z tej produkcji trafia od razu do odbiorcy i nie zwiększa stanu magazynu. Włącza produkcję.") })}
+          </div></div>
           <div class="fgrid four">
             <div class="field span-all" data-field="purchase.supplierKind"><span class="lbl">${esc(t("Dostawca — wybierz grupę"))} <span class="req" aria-hidden="true">*</span></span>
               <div class="scope two" role="group" aria-label="${esc(t("Grupa dostawcy"))}">${kindCard("firma", t("Tartaki, zakłady i firmy leśne. Podstawa domyślnie: KZR."))}${kindCard("nadlesnictwo", t("Lasy Państwowe. Podstawa domyślnie: Deklaracja. Dodatkowo: leśnictwo."))}</div>
@@ -426,7 +439,7 @@
             ${field({ key: "purchase.supplierName", label: sKind === "nadlesnictwo" ? t("Nadleśnictwo") : t("Dostawca (firma)"), req: true, span: "span2", control: textIn("purchase.supplierName", this.supplierText(), { placeholder: sKind === "nadlesnictwo" ? t("wpisz lub wybierz, np. Nadleśnictwo Rybnik") : t("wpisz lub wybierz, np. Lander Agro"), list: "dl-suppliers" }) + `<datalist id="dl-suppliers">${suppliers.map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>` })}
             ${sKind === "nadlesnictwo" ? field({ key: "purchase.lesnictwo", label: t("Leśnictwo"), req: true, control: textIn("purchase.lesnictwo", d.purchase.lesnictwo, { placeholder: t("wybierz lub wpisz nowe"), list: "dl-lesn" }) + `<datalist id="dl-lesn">${this.lesnictwa(d.purchase.supplierId).map(x => `<option value="${esc(x)}">`).join("")}</datalist>` }) : ""}
             ${field({ key: "purchase.basis", label: t("Podstawa"), req: true, span: sKind === "nadlesnictwo" ? "" : "span2", control: selIn("purchase.basis", [{ v: "DEKL", l: t("Deklaracja") }, { v: "KZR", l: "KZR" }], d.purchase.basis) })}
-            ${field({ key: "purchase.productId", label: t("Produkt / surowiec"), req: true, span: "span2", control: selIn("purchase.productId", [pick(t("wybierz produkt"))].concat(S.products.filter(p => active(p) || p.id === d.purchase.productId).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
+            ${field({ key: "purchase.productId", label: t("Produkt / surowiec"), req: true, span: "span2", control: selIn("purchase.productId", [pick(t("wybierz produkt"))].concat(S.products.filter(p => (active(p) || p.id === d.purchase.productId) && (!d.production.enabled || p.cat === "drewno" || p.id === d.purchase.productId)).map(p => ({ v: p.id, l: `${p.name} (${Units.label(p.unit)})` }))), d.purchase.productId, { struct: true, disabled: corr }) })}
             ${field({ key: "purchase.qty", label: t("Ilość"), req: true, control: numIn("purchase.qty", d.purchase.qty, { suffix: u, placeholder: eg("20") }) })}
             ${field({ key: "purchase.unit", label: t("Jednostka ilości"), req: true, control: selIn("purchase.unit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.unit, { struct: true }) })}
             ${field({ key: "purchase.priceUnit", label: t("Jednostka zakupu (cena za)"), req: true, control: selIn("purchase.priceUnit", units.map(x => ({ v: x, l: Units.label(x) })), d.purchase.priceUnit || d.purchase.unit, { struct: true }) })}
@@ -439,7 +452,9 @@
             ${this.docNoFields(d.sale.enabled ? ["PZ", "WZ"] : ["PZ"])}
           </div>`);
         html += d.production.enabled ? section(n++, "prod", t("Produkcja z automatycznym zużyciem"), t("Zakupione drewno jest od razu dostępne do pobrania. Kolejność: zakup → zużycie → produkcja."), this.productionFields("chain")) : "";
-        html += d.sale.enabled ? section(n++, "sale", t("Sprzedaż wyniku produkcji"), t("Sprzedajemy zrębkę z tej produkcji. Zmniejsza stan zrębki."), this.saleOfOutputFields()) : "";
+        html += d.sale.enabled ? (directOn
+          ? section(n++, "sale", t("Sprzedaż bezpośrednia z lasu"), t("Zrębka z tej produkcji trafia od razu do odbiorcy — bez przyjęcia na magazyn. Sprzedaż nie może przekroczyć produkcji."), this.saleOfOutputFields())
+          : section(n++, "sale", t("Sprzedaż wyniku produkcji"), t("Sprzedajemy zrębkę z tej produkcji. Zmniejsza stan zrębki."), this.saleOfOutputFields())) : "";
       } else if (type === "SPRZEDAZ") {
         const direct = !!d.sale.direct;
         const toggle = `<div class="scope one mb3">${optCard("sale.direct", { checked: direct, disabled: corr, title: t("Sprzedaż bezpośrednia po produkcji / prosto z lasu"), text: t("las → produkcja → sprzedaż → odbiorca. Towar NIE jest pobierany z magazynu i nie zwiększa stanu.") })}</div>`;
@@ -522,7 +537,7 @@
         const O = this.ownRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
         const u = Units.label(this.shippedUnit());
-        const vehOpts = this.fleetOf("vehicles", null).map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[v.status]) : ""}`, disabled: v.status !== "aktywny" }));
+        const vehOpts = this.fleetOf("vehicles", null).filter(v => v.owner !== "external").map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[v.status]) : ""}`, disabled: v.status !== "aktywny" }));
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = O.runs[i] || R.blankRun(), veh = R.byId(S.fleet.vehicles, r.vehicleId), k = f => `transport.own.runs.${i}.${f}`;
@@ -555,7 +570,7 @@
           runs.push(`<div class="run-card" data-xrun="${i}">
             <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="xrun.${i}.cost">—</span></div>
             <div class="fgrid four">
-              ${field({ key: k("reg"), label: t("Nr rejestracyjny"), req: true, help: false, control: textIn(k("reg"), r.reg, { placeholder: eg("ESI 18734") }) })}
+              ${field({ key: k("reg"), label: t("Nr rejestracyjny"), req: true, help: false, control: textIn(k("reg"), r.reg, { placeholder: eg("ESI 18734"), list: "dl-ext-veh" }) })}
               ${field({ key: k("driver"), label: t("Kierowca"), help: false, control: textIn(k("driver"), r.driver, { placeholder: t("imię i nazwisko") }) })}
               ${forest ? `${field({ key: k("kwit"), label: t("Nr kwitu wywozowego"), req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: eg("KW 0217/09/2026") }) })}
               ${field({ key: k("kwitM3"), label: t("m³ z kwitu"), help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: eg("25") }) })}` : ""}
@@ -566,8 +581,11 @@
               ${inc ? "" : field({ key: k("freight"), label: t("Fracht kursu (zł) — opcjonalnie"), span: "span2", help: false, control: numIn(k("freight"), r.freight, { suffix: "zł", placeholder: t("z faktury; puste = km × stawka") }) })}
             </div></div>`);
         }
-        modeHtml += `${mode === "mixed" ? `<h4 class="mini-h mt4">${esc(t("Kursy firmy zewnętrznej"))}</h4>` : ""}<div class="fgrid four mt4">
-          ${field({ key: "transport.external.company", label: t("Firma transportowa"), req: true, span: "span2", control: textIn("transport.external.company", X.company, { placeholder: eg("ESI Logistics"), list: "dl-carriers" }) + `<datalist id="dl-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
+        // flota zewnętrzna: pojazdy firm przewozowych z kartoteki — podpowiedzi numerów (najpierw wybranej firmy)
+        const extVeh = this.extVehicles(X.company);
+        const carriers = [...new Set((S.carriers || []).concat(this.extVehicles("").map(v => v.company)).filter(Boolean))];
+        modeHtml += `${mode === "mixed" ? `<h4 class="mini-h mt4">${esc(t("Kursy firmy zewnętrznej"))}</h4>` : ""}<datalist id="dl-ext-veh">${extVeh.map(v => `<option value="${esc(v.reg)}" label="${esc(`${v.company} · ${v.name}${v.driverName ? " · " + v.driverName : ""}`)}">`).join("")}</datalist><div class="fgrid four mt4">
+          ${field({ key: "transport.external.company", label: t("Firma transportowa"), req: true, span: "span2", control: textIn("transport.external.company", X.company, { placeholder: eg("ESI Logistics"), list: "dl-carriers" }) + `<datalist id="dl-carriers">${carriers.map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
           ${field({ key: "transport.external.runCount", label: t("Liczba kursów"), req: true, control: numIn("transport.external.runCount", X.runCount, { suffix: t("szt."), placeholder: eg("4") }) })}
           <div></div>
           <div class="field span-all" data-field="transport.external.includedInPrice">
@@ -729,8 +747,10 @@
       if (isChange && el.dataset) {
         if (el.dataset.type !== undefined) {
           if (!el.checked) { el.checked = true; return; }
+          const prevType = d.type;
           d.type = el.dataset.type;
           d.sale.enabled = false; d.production.enabled = false;
+          if (prevType === "ZAKUP" || d.type === "ZAKUP") d.sale.direct = false;
           if (d.transport.mode === "supplier" && d.type !== "ZAKUP") d.transport.mode = "none";
           if (d.type === "PRODUKCJA" || (d.type === "SPRZEDAZ" && d.sale.direct)) { if (!d.production.rawProductId) d.production.rawProductId = "pr_drewno"; if (!d.production.outProductId) d.production.outProductId = "pr_zr_lesna"; }
           if (!d.transport.placeTouched) d.transport.place = this.defaultPlace();
@@ -788,7 +808,7 @@
       if (key === "purchase.productId") {
         const p = App.product(v);
         if (p) { d.purchase.unit = p.unit; d.purchase.priceUnit = ""; }
-        if (!p || p.cat !== "drewno") { d.production.enabled = false; d.sale.enabled = false; }
+        if (!p || p.cat !== "drewno") { d.production.enabled = false; d.sale.enabled = false; d.sale.direct = false; }
       }
       if (key === "sale.productId") { const p = App.product(v); if (p) d.sale.unit = p.unit; }
       if (key === "mm.productId") { const p = App.product(v); if (p) d.mm.unit = p.unit; }
@@ -803,11 +823,30 @@
         if (p && !(Stock.balance(S, v, p.id) > R.EPS) && !String(d.mm.qty).trim()) d.mm.productId = "";
       }
       if (key === "production.type" && R.PROD_TYPES[v] && d.type !== "PRODUKCJA") d.production.outProductId = R.PROD_TYPES[v].productId;
-      if (key === "production.enabled" && !v) d.sale.enabled = false;
+      if (key === "production.enabled" && !v) { d.sale.enabled = false; d.sale.direct = false; }
+      if (d.type === "ZAKUP" && (key === "production.enabled" || key === "sale.direct") && v) {
+        // produkcja i sprzedaż bezpośrednia z lasu dotyczą drewna — produkt zakupu ustawiany automatycznie
+        const p = App.product(d.purchase.productId);
+        if (!p || p.cat !== "drewno") { const w = S.products.find(x => x.id === "pr_drewno" && x.active !== false) || S.products.find(x => x.cat === "drewno" && x.active !== false); if (w) { d.purchase.productId = w.id; d.purchase.unit = w.unit; d.purchase.priceUnit = ""; } }
+        d.production.enabled = true;
+        if (key === "sale.direct") d.sale.enabled = true;
+      }
+      if (d.type === "ZAKUP" && key === "sale.direct" && !v) d.sale.enabled = false;
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c && c.owner !== "external" ? c.operatorId : ""; d.production.operatorName = ""; }
       if (key === "extras.enabled" && v) this.extras();
       const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
       if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
+      const xregKey = key.match(/^transport\.external\.runs\.(\d+)\.reg$/);
+      if (xregKey) {
+        // numer z floty zewnętrznej → kierowca i firma podpowiadane z kartoteki (wpisane ręcznie nie są nadpisywane)
+        const norm = x => String(x || "").replace(/\s+/g, "").toUpperCase();
+        const veh = S.fleet.vehicles.find(x => x.owner === "external" && norm(x.reg) === norm(v));
+        const X = this.extRuns(), run = X.runs[+xregKey[1]];
+        if (veh && run) {
+          if (!String(run.driver || "").trim() && veh.driverName) { run.driver = veh.driverName; const el = document.getElementById(fid(`transport.external.runs.${xregKey[1]}.driver`)); if (el) el.value = run.driver; }
+          if (!String(X.company || "").trim() && veh.company) { X.company = veh.company; const el = document.getElementById(fid("transport.external.company")); if (el) el.value = X.company; }
+        }
+      }
       const m3Key = key.match(/^transport\.(own|external)\.runs\.(\d+)\.kwitM3$/);
       if (m3Key) {
         const r = NumParse.parse(v), run = d.transport[m3Key[1]].runs[+m3Key[2]];
@@ -843,7 +882,7 @@
       if (key === "purchase.lesnictwo" && this.supplierKind() === "nadlesnictwo") d.production.lesnictwo = v;
       if (key === "transport.place") d.transport.placeTouched = true;
       if ((key === "sale.buyerId" || key === "sale.enabled" || key === "sale.direct" || key === "mm.toWhId") && !d.transport.placeTouched) d.transport.place = this.defaultPlace();
-      if (key === "sale.direct" && v) { if (!d.production.rawProductId) d.production.rawProductId = "pr_drewno"; if (!d.production.outProductId) d.production.outProductId = "pr_zr_lesna"; }
+      if (key === "sale.direct" && v && d.type === "SPRZEDAZ") { if (!d.production.rawProductId) d.production.rawProductId = "pr_drewno"; if (!d.production.outProductId) d.production.outProductId = "pr_zr_lesna"; }
       if (key === "transport.train.wagonCount") {
         const n = Math.max(0, Math.min(S.config.maxWagons, Math.floor(NumParse.value(v, 0)) || 0));
         const arr = (d.transport.train.wagonT || []).slice(0, n);

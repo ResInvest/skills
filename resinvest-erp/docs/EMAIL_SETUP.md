@@ -83,6 +83,22 @@ runtime\node.exe --disable-warning=ExperimentalWarning server\riw-server.mjs --d
 Wynik `Wysłano (resend)` oznacza przyjęcie wiadomości przez Resend. Sprawdź skrzynkę (także SPAM) i w panelu Resend
 zakładkę *Emails* (status *Delivered*).
 
+## 5a. Wysyłka dokumentów i raportów (3.6)
+
+Przycisk **Wyślij e-mailem** (raporty, kwit produkcji dnia, planer, historia, dokumenty) w trybie FIRMOWYM wysyła PDF
+przez ten sam kanał (Resend / SMTP / pliki `.eml`) z kolejką i ponowieniami. Serwer sprawdza uprawnienie
+`reports.export`, adresy (do 10), temat, rozmiar (maks. 8 MB) i to, że załącznik jest plikiem PDF; limit 40 wiadomości
+z dokumentami na godzinę na użytkownika. Odpowiedź odbiorcy trafia do nadawcy (nagłówek Reply-To). Każda wysyłka
+ma wpis **MAIL_DOCUMENT** w dzienniku audytu; po wysłaniu treść i załącznik są usuwane z kolejki (zostaje wpis w dzienniku).
+
+Ograniczenie odbiorców do wybranych domen — `config\server.config.json`:
+
+```json
+"mail": { "documentDomains": ["resinvest.group", "odbiorca.pl"] }
+```
+
+Pusta lista = dowolny poprawny adres. Domena nadawcy (`EMAIL_FROM`) musi być zweryfikowana w Resend (punkt 1).
+
 ## 6. Błędy i rozwiązania
 
 | Objaw (dziennik serwera `logs\server-RRRR-MM-DD.log`) | Przyczyna |
