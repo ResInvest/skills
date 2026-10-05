@@ -100,6 +100,20 @@ zakładkę *Emails* (status *Delivered*).
 3. Uruchom serwer ponownie. Konsola i ekran *Poczta* pokazują kanał „AgentMail (API HTTPS)” i adres nadawcy;
    *Wyślij test do mnie* sprawdza wysyłkę.
 
+### Nadawca `magazyn@resinvest.group` (ustawiony domyślnie w `server.env`)
+
+Skrzynka w domenie firmy działa w AgentMail dopiero po dodaniu i weryfikacji domeny:
+
+1. *console.agentmail.to → Domains → Add domain* → `resinvest.group`; panel pokaże rekordy DNS.
+2. U dostawcy domeny dodaj rekordy **DKIM** (TXT) i **DMARC** z panelu AgentMail. **SPF** — tylko jeden rekord
+   na domenę: dopisz `include:spf.agentmail.to` do istniejącego, np. `v=spf1 include:_spf.google.com include:spf.agentmail.to ~all`.
+3. **Rekordów MX nie zmieniaj**, jeśli `magazyn@resinvest.group` jest już Twoją skrzynką (Gmail, Outlook itp.) — zmiana MX
+   przeniosłaby odbiór całej poczty domeny do AgentMail. Program tylko **wysyła** — odpowiedzi trafią jak dotąd do Twojej skrzynki.
+   (Jeśli panel AgentMail wymaga MX do weryfikacji, użyj subdomeny, np. `erp.resinvest.group`, i skrzynki
+   `magazyn@erp.resinvest.group`, a w `EMAIL_REPLY_TO` wpisz `magazyn@resinvest.group`.)
+4. Po weryfikacji: *Inboxes → Create* → `magazyn` @ `resinvest.group` (nazwa wyświetlana: ResInvest ERP).
+5. `server.env`: `AGENTMAIL_API_KEY=am_...`, `AGENTMAIL_INBOX=magazyn@resinvest.group`; ponowne uruchomienie serwera.
+
 Kanałem AgentMail idą wszystkie wiadomości programu (zaproszenia, reset hasła, potwierdzenie rejestracji, powiadomienia,
 dokumenty i raporty z PDF) — przez tę samą kolejkę z ponowieniami. Nadawcą jest skrzynka `AGENTMAIL_INBOX`
 (`EMAIL_FROM` nie jest używany); odpowiedzi na dokumenty trafiają do użytkownika, który je wysłał (Reply-To).
