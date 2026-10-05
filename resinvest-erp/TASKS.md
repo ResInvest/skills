@@ -1,5 +1,20 @@
 # TASKS — ResInvest ERP
 
+## 3.7.0 — motyw Szkło, rejestracja użytkowników, czysta baza z kontem startowym administratora
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| motyw „Szkło” w stylu wzoru (pastelowe tło, szklane karty, kolorowe kafelki ikon, zielone przyciski) | DONE | E2E „3.7 Szkło…”, `npm run themes` (WCAG) |
+| czysta baza na start: administrator, 3 magazyny, katalog produktów; bez danych przykładowych | DONE | E2E „3.7 Czysta baza…”, `reg37.test` „czysta baza…” |
+| administrator `magazyn@resinvest.group` / hasło startowe `Admin1234` z konfiguracji (nie z kodu), zmiana wymagana | DONE | E2E „3.7 Administrator…”, `reg37.test` |
+| jednorazowe usunięcie danych demonstracyjnych poprzednich wersji z przeglądarki (z kopią) | DONE | E2E „3.7 Czysta baza… kopia danych demonstracyjnych” |
+| rejestracja: domena na serwerze, hasło, duplikaty, limit prób, brak samodzielnego nadania roli | DONE | `reg37.test`, E2E „3.7 Rejestracja…” |
+| rejestracja FIRMOWY: potwierdzenie adresu linkiem, powiadomienie administratorów, zatwierdzenie po potwierdzeniu, e-mail o zatwierdzeniu, audyt | DONE | `reg37.test`, `server.test` „rejestracja samodzielna…” |
+| rejestracja OFFLINE: zgłoszenie → powiadomienie → zatwierdzenie z rolą i magazynem → logowanie | DONE | E2E „3.7 Zatwierdzenie…”, „Zatwierdzony użytkownik loguje się…” |
+| usunięcie obcych plików bazowych repozytorium; brak śladów w plikach instalatora | DONE | `grep` repozytorium i `ResInvest_ERP.html`, `node.exe` |
+| tłumaczenia CS / EN | DONE | `npm run i18n`: 0 braków, 0 nieużywanych |
+| instalator 3.7.0 | OCZEKUJE na decyzję użytkownika | — |
+
 ## 3.6.0 — zakup (produkcja / sprzedaż bezpośrednia z lasu), flota własna i zewnętrzna, wysyłka e-mailem, znak RiC
 
 | Kryterium | Status | Dowód |

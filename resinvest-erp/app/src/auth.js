@@ -123,6 +123,7 @@
     log(entry) { const s = this.read(); s.log.push(Object.assign({ ts: new Date().toISOString() }, entry)); if (s.log.length > 500) s.log = s.log.slice(-500); this.write(); },
     /** Konta danych przykładowych dostają hasło startowe przy pierwszym uruchomieniu. */
     async ensureDemo(state) {
+      if (!state || !state.meta || !state.meta.sample) return;            // tylko dane przykładowe (nie czysta baza firmy)
       const s = this.read(); let changed = false;
       for (const u of state.users) {
         if (s.accounts[u.id] || !DEMO_LOGINS.includes(u.login)) continue;
@@ -131,8 +132,21 @@
       }
       if (changed) this.write();
     },
+    /**
+     * Konto startowe administratora (pierwsze uruchomienie, hasło z konfiguracji): tylko gdy konto nie ma jeszcze hasła;
+     * przy pierwszym logowaniu program wymusza zmianę hasła.
+     */
+    async ensureStartup(state, login, pw) {
+      const u = state.users.find(x => String(x.login).toLowerCase() === String(login).toLowerCase());
+      const s = this.read();
+      if (!u || s.accounts[u.id] || !pw) return false;
+      s.accounts[u.id] = Object.assign(await hashPassword(pw), { mustChange: true, failed: 0, lockedUntil: null, changedAt: null, startup: true });
+      this.write();
+      this.log({ login: u.login, userId: u.id, ok: true, reason: N_("konto startowe administratora") });
+      return true;
+    },
     hasPassword(userId) { return !!this.read().accounts[userId]; },
-    info(userId) { const a = this.read().accounts[userId]; return a ? { hasPassword: true, mustChange: !!a.mustChange, failed: a.failed || 0, lockedUntil: a.lockedUntil || null, lastLogin: a.lastLogin || null, changedAt: a.changedAt || null, demo: !!a.demo } : { hasPassword: false }; },
+    info(userId) { const a = this.read().accounts[userId]; return a ? { hasPassword: true, mustChange: !!a.mustChange, failed: a.failed || 0, lockedUntil: a.lockedUntil || null, lastLogin: a.lastLogin || null, changedAt: a.changedAt || null, demo: !!a.demo, startup: !!a.startup && !a.lastLogin } : { hasPassword: false }; },
     async login(state, login, password) {
       const L = String(login || "").trim().toLowerCase();
       const u = state.users.find(x => String(x.login).toLowerCase() === L || String(x.email || "").toLowerCase() === L);

@@ -319,6 +319,7 @@
     const name = String(opts.name || "Administrator").trim(), [firstName, ...rest] = name.split(/\s+/);
     s.users = [{ id: "u_admin", login: email, email, name, firstName, lastName: rest.join(" "), role: "admin", whId: "wh_zab", warehouseIds: ["wh_zab"], status: "ACTIVE", active: true, lang: opts.lang || "", theme: "", notifyAllowed: [], notify: { events: [], email: true } }];
     s.carriers = [];
+    if (opts.allowSelfRegistration !== undefined) s.config.allowSelfRegistration = !!opts.allowSelfRegistration;
     s.meta.createdAt = new Date().toISOString();
     s.meta.lastMonthCheck = RIW.Dates.ym(opts.today || RIW.Dates.localToday());
     return s;

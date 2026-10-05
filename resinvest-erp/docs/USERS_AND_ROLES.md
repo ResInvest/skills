@@ -1,9 +1,12 @@
-# Użytkownicy, role i magazyny — ResInvest ERP 3.2
+# Użytkownicy, role i magazyny — ResInvest ERP 3.7
 
 ## 1. Główny administrator
 
-Konto **`magazyn@resinvest.group`** (rola ADMINISTRATOR) powstaje przy pierwszym uruchomieniu serwera
-(ekran *Pierwsze uruchomienie* — hasło ustala osoba konfigurująca; w kodzie nie ma hasła administratora).
+Konto **`magazyn@resinvest.group`** (rola ADMINISTRATOR) powstaje przy pierwszym uruchomieniu z pustą bazą.
+Hasło startowe **`Admin1234`** pochodzi z konfiguracji instalacji (`config/server.config.json` → `initialAdmin`,
+tryb OFFLINE: `config/app.config.json` → `startup`), nie z kodu programu; przy pierwszym logowaniu program wymusza
+ustawienie własnego hasła. Konto startowe powstaje tylko raz — gdy w bazie nie ma żadnego konta. Pusty `initialAdmin.email`
+= ekran *Pierwsze uruchomienie* (hasło ustala osoba konfigurująca).
 Administrator może tworzyć innych administratorów, nadawać i odbierać role.
 
 ## 2. Role
@@ -93,7 +96,11 @@ Kierownik i Audytor widzą listę bez możliwości zmian (`users.read`).
 * **Obieg zatwierdzania operacji** — domyślnie **wyłączony**: osoba z uprawnieniem do wprowadzania zatwierdza operację
   sama. Włączony: operacje osób bez `op.approve` mają status DO ZATWIERDZENIA (bez numeru i wpływu na stany),
   zatwierdza kierownik magazynu.
-* **Samodzielna rejestracja** — domyślnie **wyłączona** (tylko zaproszenia).
+* **Samodzielna rejestracja** — w nowej bazie 3.7 **włączona** (wyłączenie: odznacz pole; zostają zaproszenia e-mailem).
+  Przebieg: zakładka *Rejestracja* → adres w domenie firmy (sprawdzany na serwerze) i hasło → (FIRMOWY) link potwierdzający
+  na podany adres → powiadomienie administratorów → *Użytkownicy → Zgłoszenia rejestracji → Nadaj rolę i aktywuj*
+  (rola, magazyn, dostęp) albo *Odrzuć* → e-mail „Konto zatwierdzone”. Rola i magazyn z przeglądarki są ignorowane —
+  nadaje je wyłącznie administrator. Zatwierdzenie przed potwierdzeniem adresu jest zablokowane.
 
 Każda zmiana: audyt `SETTINGS_CHANGED`.
 

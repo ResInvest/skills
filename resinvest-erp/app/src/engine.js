@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.6.0";
+  const VERSION = "3.7.0";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -376,7 +376,10 @@
   }
   function companyEmail(state, email) { return validateCompanyEmail(email, state && state.config && state.config.companyDomains).ok; }
 
+  /** Klucze konfiguracji instalacji (pierwsze uruchomienie) — nie są częścią danych firmy. */
+  const INSTALL_KEYS = ["startup", "sampleData"];
   function emptyState(config) {
+    config = Object.fromEntries(Object.entries(config || {}).filter(([k]) => !INSTALL_KEYS.includes(k) && !k.startsWith("_")));
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
       config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
@@ -2057,7 +2060,8 @@
     { id: "graphite", label: N_("Grafit (ciemny)"), scheme: "dark", icon: "moon", sw: ["#141B17", "#0D120F", "#3AA76E"] },
     { id: "azure", label: N_("Graphite Azure"), scheme: "dark", icon: "drop", sw: ["#111823", "#090C11", "#3E8EF7"] },
     { id: "ultra", label: N_("Ultra Dark (OLED)"), scheme: "dark", icon: "eclipse", sw: ["#0A0C0B", "#000000", "#4CC38A"] },
-    { id: "premium", label: N_("Light Premium"), scheme: "light", icon: "gem", sw: ["#FFFFFF", "#F7F4EE", "#1B2A4A", "#B8912E"] }
+    { id: "premium", label: N_("Light Premium"), scheme: "light", icon: "gem", sw: ["#FFFFFF", "#F7F4EE", "#1B2A4A", "#B8912E"] },
+    { id: "glass", label: N_("Szkło (pastelowy)"), scheme: "light", icon: "layers", sw: ["#FFFFFF", "#E4E2FB", "#DDF4E8", "#1F7F45"] }
   ];
   const THEMES = Object.fromEntries(THEME_REGISTRY.map(x => [x.id, x.label]));
   const Users = {
@@ -2119,6 +2123,7 @@
         createdAt: prev ? (prev.createdAt || null) : nowIso(ctx), notifyAllowed: [], notify: { events: [], email: true } };
       // ustawienia powiadomień zmienia się osobnymi komendami (zgody administratora, ustawienia własne) — zapis profilu ich nie rusza
       for (const k of ["invitedAt", "activatedAt", "emailVerifiedAt", "emailUnverified", "registeredAt", "selfRegistered", "approvedAt", "approvedBy", "notifyAllowed", "notify"]) if (prev && prev[k] !== undefined) clean[k] = clone(prev[k]);
+      if (prev && statusOf(prev) === "INVITED" && clean.status === "ACTIVE" && prev.selfRegistered && prev.emailUnverified) return { ok: false, error: t("Zgłoszenie czeka na potwierdzenie adresu e-mail przez użytkownika — zatwierdzenie będzie możliwe po kliknięciu linku z wiadomości (możesz wysłać go ponownie)."), errors: { status: t("Adres e-mail niepotwierdzony") } };
       if (prev && statusOf(prev) === "INVITED" && clean.status === "ACTIVE" && prev.selfRegistered) { clean.approvedAt = nowIso(ctx); clean.approvedBy = actor.name; delete clean.selfRegistered; }
       if (!prev && clean.status === "INVITED") clean.invitedAt = nowIso(ctx);
       const idx = state.users.findIndex(u => u.id === clean.id);
@@ -2166,6 +2171,8 @@
       if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
       const clean = { id: uid("u"), firstName: r.firstName, lastName: r.lastName, name: this.fullName(r), login: r.email, email: r.email, role: "obserwator", whId: r.whId, warehouseIds: [r.whId],
         status: "INVITED", active: false, selfRegistered: true, phone: r.phone, lang: str(rec.lang), theme: "", registeredAt: nowIso(ctx), createdAt: nowIso(ctx), notifyAllowed: [], notify: { events: [], email: true } };
+      // tryb FIRMOWY: adres trzeba potwierdzić linkiem z e-maila, zanim administrator zatwierdzi konto
+      if (ctx && ctx.emailUnverified) clean.emailUnverified = true;
       state.users.push(clean); state.rev += 1;
       audit(state, Object.assign({}, ctx, { user: null }), { entity: "user", entityId: clean.id, opNo: clean.login, event: "register", code: "USER_REGISTERED", act: Lx("Rejestracja konta {l} — oczekuje na zatwierdzenie", { l: clean.login }), before: null, after: { nazwa: clean.name, email: clean.login }, source: N_("Rejestracja") });
       return { ok: true, rec: clean };

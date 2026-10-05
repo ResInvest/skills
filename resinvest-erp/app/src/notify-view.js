@@ -20,8 +20,8 @@
 
   const mine = () => (Store.state.notices || []).filter(n => n.userId === Store.userId).slice().sort((a, b) => a.ts < b.ts ? 1 : -1);
   const unread = () => mine().filter(n => !n.read).length;
-  const KIND_ICON = { create: "file", "mm-received": "swap", correction: "edit", cancel: "ban", delete: "trash", approval: "clock", approved: "check", rejected: "x" };
-  const KIND_TONE = { correction: "warn", cancel: "err", delete: "err", approval: "warn", approved: "ok", rejected: "err", "mm-received": "info" };
+  const KIND_ICON = { registration: "user", create: "file", "mm-received": "swap", correction: "edit", cancel: "ban", delete: "trash", approval: "clock", approved: "check", rejected: "x" };
+  const KIND_TONE = { registration: "info", correction: "warn", cancel: "err", delete: "err", approval: "warn", approved: "ok", rejected: "err", "mm-received": "info" };
   const evChips = n => (n.events || []).map(e => N.EVENTS[e] ? `<span class="chip">${th(N.EVENTS[e].label)}</span>` : "").join("");
 
   /** Otwarcie powiadomienia: oznaczenie jako przeczytane i przejście do operacji / kolejki zatwierdzania. */
@@ -32,6 +32,7 @@
     Dropdown.close();
     if (n.opId && R.byId(Store.state.operations, n.opId)) { App.render(); OpDetail.open(n.opId); }
     else if (n.kind === "approval" || n.kind === "rejected") App.go("operacje");
+    else if (n.kind === "registration") App.go("uzytkownicy");
     else { App.render(); Toast.info(t("Operacja niedostępna"), t("Dokument nie jest już widoczny w Twoich magazynach.")); }
   }
   const noticeItem = (n, compact) => `<button class="nt-item ${n.read ? "" : "unread"}" type="button" data-notice="${esc(n.id)}">

@@ -3,7 +3,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, readdirSync } from "node:fs";
+import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,13 +19,16 @@ require("../app/src/seed.js");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SERVER = join(ROOT, "server", "riw-server.mjs");
 const DATA = mkdtempSync(join(tmpdir(), "riw-srv-"));
+// konfiguracja bez konta startowego (initialAdmin) — testy przechodzą przez ekran pierwszej konfiguracji
+const CFG = join(mkdtempSync(join(tmpdir(), "riw-srv-cfg-")), "server.config.json");
+writeFileSync(CFG, JSON.stringify(Object.assign({}, JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "config", "server.config.json"), "utf8")), { initialAdmin: { email: "" } })));
 let proc, BASE;
 
 const freePort = () => new Promise(res => { const s = createServer(); s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => res(p)); }); });
 const startServer = async (extra = []) => {
   const port = await freePort();
   BASE = `http://127.0.0.1:${port}`;
-  proc = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", SERVER, "--port", String(port), "--data", DATA, ...extra], { env: Object.assign({}, process.env, { RIW_TODAY: "2026-09-23", RIW_HOST: "127.0.0.1" }), stdio: "pipe" });
+  proc = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", SERVER, "--port", String(port), "--data", DATA, ...extra], { env: Object.assign({}, process.env, { RIW_TODAY: "2026-09-23", RIW_HOST: "127.0.0.1", RIW_CONFIG: CFG }), stdio: "pipe" });
   for (let i = 0; i < 100; i++) { try { const r = await fetch(BASE + "/api/health"); if (r.ok) return; } catch (e) {} await new Promise(r => setTimeout(r, 100)); }
   throw new Error("Serwer nie wystartował");
 };
@@ -139,6 +142,11 @@ test("Serwer: rejestracja samodzielna (po włączeniu przez administratora) → 
   assert.equal((await anon.get("/api/health")).json.selfRegistration, true);
   assert.equal((await anon.post("/api/auth/register", { rec: { name: "Obcy Ktoś", email: "obcy@gmail.com" }, password: "Rejestracja2026" })).status, 400);
   assert.equal((await anon.post("/api/auth/register", { rec: { name: "Ewa Nowicka", email: "ewa.nowicka@resinvest.group" }, password: "Rejestracja2026" })).status, 200);
+  const unv = await anon.post("/api/auth/login", { login: "ewa.nowicka@resinvest.group", password: "Rejestracja2026" });
+  assert.equal(unv.json.code, "UNVERIFIED", "3.7: najpierw potwierdzenie adresu e-mail");
+  const box = join(DATA, "mail-outbox"), eml = readdirSync(box).filter(f => f.includes("-confirm-")).map(f => readFileSync(join(box, f), "utf8")).find(x => /^To: ewa\.nowicka@resinvest\.group$/m.test(x));
+  const txt = Buffer.from(/Content-Type: text\/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([\s\S]*?)\r\n--/.exec(eml)[1].replace(/\s+/g, ""), "base64").toString("utf8");
+  assert.equal((await anon.post("/api/auth/confirm", { token: /token=([A-Za-z0-9_-]+)/.exec(txt)[1] })).status, 200);
   const pend = await anon.post("/api/auth/login", { login: "ewa.nowicka@resinvest.group", password: "Rejestracja2026" });
   assert.equal(pend.json.code, "INVITED");
   const ewa = (await a.get("/api/state")).json.state.users.find(u => u.login === "ewa.nowicka@resinvest.group");

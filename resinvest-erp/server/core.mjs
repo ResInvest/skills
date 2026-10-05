@@ -261,6 +261,7 @@ export class Store {
       return bad(N_("błędne hasło"));
     }
     const st = R.statusOf(u);
+    if (st === "INVITED" && u.selfRegistered && u.emailUnverified) { this.logLogin(L, u.id, false, N_("rejestracja — adres e-mail niepotwierdzony"), ip); return { ok: false, code: "UNVERIFIED", error: t("Potwierdź adres e-mail — kliknij link z wiadomości wysłanej po rejestracji. Potem administrator nada rolę i magazyn.") }; }
     if (st === "INVITED") { this.logLogin(L, u.id, false, N_("konto nieaktywowane"), ip); return { ok: false, code: "INVITED", error: u.selfRegistered ? t("Konto oczekuje na zatwierdzenie przez administratora. Otrzymasz dostęp po nadaniu roli i magazynu.") : t("Twoje konto nie zostało jeszcze aktywowane.") }; }
     if (st !== "ACTIVE") { this.logLogin(L, u.id, false, st === "SUSPENDED" ? N_("konto zawieszone") : N_("konto dezaktywowane"), ip); return { ok: false, code: "INACTIVE", error: t("Twoje konto jest nieaktywne.") }; }
     if (u.emailUnverified) { this.logLogin(L, u.id, false, N_("adres e-mail niepotwierdzony"), ip); return { ok: false, code: "UNVERIFIED", error: t("Adres e-mail nie został potwierdzony. Kliknij link z wiadomości albo poproś administratora o ponowne wysłanie.") }; }
@@ -294,6 +295,23 @@ export class Store {
   purgeSessions() { this.db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(nowIso()); }
 
   /* ---------------- pierwsze uruchomienie ---------------- */
+  /**
+   * Pusta baza + konfiguracja `initialAdmin` → konto administratora z hasłem startowym (zmiana wymagana przy pierwszym
+   * logowaniu), 3 magazyny, katalog produktów, rejestracja z ekranu logowania włączona. Wykonywane tylko raz.
+   */
+  bootstrap(init) {
+    if (this.hasAccounts() || !init || !init.email) return { ok: false, skipped: true };
+    const L = String(init.email).trim().toLowerCase();
+    if (!R.EMAIL_RE.test(L)) return { ok: false, error: "initialAdmin.email: nieprawidłowy adres" };
+    const pe = AuthLib.passwordError(init.password, L); if (pe) return { ok: false, error: "initialAdmin.password: " + pe };
+    const s = R.Seed.minimal({ email: L, name: String(init.name || "Administrator").trim(), today: this.today(), allowSelfRegistration: init.allowSelfRegistration !== false });
+    if (!R.companyEmail(s, L)) return { ok: false, error: "initialAdmin.email: adres spoza domen firmowych" };
+    s.rev = (s.rev || 0) + 1;
+    this.saveState(s, { id: "u_admin", login: L }, "system.setup", { sample: false, bootstrap: true }, 0);
+    this.setPassword("u_admin", init.password, true);
+    this.log("INFO", `Pierwsze uruchomienie: administrator ${L} (hasło startowe z konfiguracji — zmiana wymagana przy pierwszym logowaniu)`);
+    return { ok: true };
+  }
   setup({ name, email, login, password, sample, lang }) {
     if (this.hasAccounts()) return { ok: false, error: t("Serwer jest już skonfigurowany") };
     const L = String(email || login || "").trim().toLowerCase();
@@ -322,13 +340,14 @@ export class Store {
     I18N.setLang(lang || "pl");
     const pe = AuthLib.passwordError(password, rec && rec.email); if (pe) return { ok: false, errors: { password: pe }, error: pe };
     const rev0 = this.state.rev;
-    const { res, state } = Service.register(this.state, rec, this.today(), meta);
+    // adres potwierdza się linkiem z e-maila; administratorzy dostają powiadomienie po potwierdzeniu
+    const { res, state } = Service.register(this.state, rec, this.today(), meta, { emailUnverified: true });
     if (!state) return res;
     try { this.saveState(state, null, "auth.register", { email: res.rec.login }, rev0); }
     catch (e) { return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }) }; }
     this.setPassword(res.rec.id, password, false);
-    this.log("INFO", `Rejestracja: ${res.rec.login} — oczekuje na zatwierdzenie`);
-    return { ok: true };
+    this.log("INFO", `Rejestracja: ${res.rec.login} — oczekuje na potwierdzenie adresu i zatwierdzenie`);
+    return { ok: true, userId: res.rec.id };
   }
   /* ---------------- tokeny e-mail (jednorazowe, w bazie tylko skrót) ---------------- */
   /** Nowy token; poprzednie niewykorzystane tokeny tego rodzaju dla użytkownika tracą ważność. */

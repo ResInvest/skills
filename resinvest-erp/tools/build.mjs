@@ -52,6 +52,12 @@ export function loadConfig() {
     cfg[k] = raw[k];
   }
   cfg.currency = String(raw.currency || "zł");
+  // pierwsze uruchomienie (tryb OFFLINE): konto administratora z hasłem startowym, rejestracja; dane przykładowe — tylko gdy wskazano
+  const st = raw.startup || {};
+  if (st.adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(st.adminEmail))) throw new Error("config/app.config.json: „startup.adminEmail” — nieprawidłowy adres");
+  if (st.adminPassword && !(String(st.adminPassword).length >= 8 && /\d/.test(st.adminPassword) && /[A-Za-z]/.test(st.adminPassword))) throw new Error("config/app.config.json: „startup.adminPassword” — co najmniej 8 znaków, litery i cyfry");
+  cfg.startup = { adminEmail: String(st.adminEmail || ""), adminName: String(st.adminName || "Administrator"), adminPassword: String(st.adminPassword || ""), allowSelfRegistration: st.allowSelfRegistration !== false };
+  cfg.sampleData = raw.sampleData === true;
   return cfg;
 }
 const cfg = loadConfig();

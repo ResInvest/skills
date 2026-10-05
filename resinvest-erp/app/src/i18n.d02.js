@@ -102,7 +102,6 @@
   "Nowa operacja": ["Nová operace", "New operation"],
   "Korekta dokumentu": ["Oprava dokladu", "Document correction"],
   "Dane były uszkodzone lub w starszym formacie": ["Data byla poškozená nebo ve starším formátu", "The data was damaged or in an older format"],
-  "Zachowano kopię i wczytano dane przykładowe. {p}": ["Záloha zachována a načtena ukázková data. {p}", "A backup was kept and sample data loaded. {p}"],
   "Przeniesiono dane z Demo 2.x": ["Data přenesena z Demo 2.x", "Data moved from Demo 2.x"],
   "Dane zostały zmigrowane do wersji 3.0. Zaloguj się kontem z danych przykładowych.": ["Data byla převedena na verzi 3.0. Přihlaste se účtem z ukázkových dat.", "Data has been migrated to version 3.0. Sign in with an account from the sample data."],
   "Tryb bez zapisu": ["Režim bez ukládání", "Read-only mode"],

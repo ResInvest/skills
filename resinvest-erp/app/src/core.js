@@ -230,7 +230,9 @@
     write(s) { if (!this.memoryOnly) localStorage.setItem(KEY, JSON.stringify(s)); },
     async boot() {
       try { localStorage.setItem("riw.probe", "1"); localStorage.removeItem("riw.probe"); } catch (e) { this.memoryOnly = true; }
-      let s = null, problem = null, migrated = false;
+      let s = null, problem = null, migrated = false, cleaned = false;
+      const sample = this.sampleWanted();
+      if (!this.memoryOnly && !sample && this.cleanOldDemo()) cleaned = true;
       if (!this.memoryOnly) {
         // dane przykładowe z wersji 3.0 (magazyn Pyskowice, loginy bez e-maili) → nowe dane przykładowe 3.1; stare zostają w kopii
         try {
@@ -251,11 +253,44 @@
           }
         }
       }
-      if (!s) s = R.Seed.build(App.today());
+      let fresh = false;
+      if (!s) {
+        // pierwsze uruchomienie: czysta baza (administrator, magazyny, katalog produktów); dane przykładowe tylko na życzenie
+        const st = this.startup();
+        s = sample ? R.Seed.build(App.today()) : R.Seed.minimal({ email: st.adminEmail, name: st.adminName, today: App.today(), allowSelfRegistration: st.allowSelfRegistration !== false });
+        fresh = !sample;
+      }
       try { if (!this.memoryOnly) this.write(s); } catch (e) { this.memoryOnly = true; }
       Store.state = s;
       await this.auth.ensureDemo(s);
-      return { problem, migrated };
+      const st = this.startup();
+      if (st.adminEmail && st.adminPassword) await this.auth.ensureStartup(s, st.adminEmail, st.adminPassword);
+      return { problem, migrated, cleaned, fresh };
+    },
+    /** Konfiguracja pierwszego uruchomienia (config/app.config.json → startup). */
+    startup() { const c = (root.RIW_CONFIG && root.RIW_CONFIG.startup) || {}; return { adminEmail: String(c.adminEmail || R.Seed.ADMIN_EMAIL).trim().toLowerCase(), adminName: c.adminName || "Administrator", adminPassword: c.adminPassword || "", allowSelfRegistration: c.allowSelfRegistration }; },
+    /** Dane przykładowe na start: konfiguracja sampleData albo przełącznik szkoleniowy riw.sample = 1. */
+    sampleWanted() { return (root.RIW_CONFIG && root.RIW_CONFIG.sampleData === true) || lsGet("riw.sample", "") === "1"; },
+    /**
+     * Jednorazowo (3.7): dane demonstracyjne z poprzednich wersji w tej przeglądarce → kopia pod osobnym kluczem
+     * i start od zera. Dane firmy (bez kont demonstracyjnych) nie są ruszane.
+     */
+    cleanOldDemo() {
+      try {
+        if (localStorage.getItem("riw.clean37")) return false;
+        localStorage.setItem("riw.clean37", new Date().toISOString());
+        const raw = localStorage.getItem(KEY);
+        if (!raw) return false;
+        const old = JSON.parse(raw);
+        const demo = (old.users || []).some(u => u.login === "anna.gorska@resinvest.group" || u.login === "adrian.wojciechowski@resinvest.group");
+        if (!demo) return false;
+        localStorage.setItem(KEY + ".demo-przed-3.7", raw);
+        const auth = localStorage.getItem(AuthLib.AUTH_KEY);
+        if (auth) localStorage.setItem(AuthLib.AUTH_KEY + ".demo-przed-3.7", auth);
+        localStorage.removeItem(KEY); localStorage.removeItem(AuthLib.AUTH_KEY); localStorage.removeItem(DRAFT_KEY);
+        AuthLib.LocalAuth.store = null;
+        return true;
+      } catch (e) { return false; }
     },
     /** Zapis „wszystko albo nic”: świeży odczyt → komenda na kopii → jeden zapis (Web Locks między kartami). */
     exec(cmd, args, source) {
@@ -483,7 +518,8 @@
       const info = await ServerBackend.detect();
       Store.backend = info ? ServerBackend : LocalBackend;
       const r = await Store.backend.boot(info);
-      if (r.problem) setTimeout(() => Toast.err(t("Dane były uszkodzone lub w starszym formacie"), t("Zachowano kopię i wczytano dane przykładowe. {p}", { p: r.problem })), 400);
+      if (r.problem) setTimeout(() => Toast.err(t("Dane były uszkodzone lub w starszym formacie"), t("Zachowano kopię uszkodzonych danych i uruchomiono czystą bazę. {p}", { p: r.problem })), 400);
+      if (r.cleaned) setTimeout(() => Toast.info(t("Czysta baza danych"), t("Dane demonstracyjne poprzednich wersji zostały usunięte z tej przeglądarki (kopia zachowana). Program startuje od zera.")), 600);
       if (r.migrated === "sample30") setTimeout(() => Toast.info(t("Nowe dane przykładowe 3.1"), t("Magazyny RiC Zabrze, RiC Brąszewice i RiC Rokitki, logowanie e-mailem firmowym. Poprzednie dane zachowano w kopii przeglądarki.")), 600);
       else if (r.migrated) setTimeout(() => Toast.info(t("Przeniesiono dane z Demo 2.x"), t("Dane zostały zmigrowane do wersji 3.0. Zaloguj się kontem z danych przykładowych.")), 600);
       if (Store.memoryOnly) setTimeout(() => Toast.warn(t("Tryb bez zapisu"), t("Przeglądarka blokuje localStorage — zmiany znikną po zamknięciu karty.")), 400);
@@ -797,7 +833,7 @@
         this.frame("token-screen", t(T[0]), t("Sprawdzanie linku…"), "");
         const info = kind === "confirm" ? await ServerBackend.api("POST", "/api/auth/confirm", { token }) : await ServerBackend.api("POST", "/api/auth/token", { kind, token });
         if (!info || !info.ok) return bad((info && info.error) || t("Link jest nieprawidłowy."));
-        if (kind === "confirm") { history.replaceState(null, "", location.pathname + location.search + "#/login"); return this.loginScreen({ login: info.email, ok: true, info: t("Adres e-mail {e} potwierdzony. Możesz się zalogować.", { e: info.email }) }); }
+        if (kind === "confirm") { history.replaceState(null, "", location.pathname + location.search + "#/login"); return this.loginScreen({ login: info.email, ok: true, info: info.pending ? t("Adres e-mail {e} potwierdzony. Zgłoszenie trafiło do administratora — po zatwierdzeniu dostaniesz e-mail i zalogujesz się tym adresem.", { e: info.email }) : t("Adres e-mail {e} potwierdzony. Możesz się zalogować.", { e: info.email }) }); }
         this.opts.info = info;
       }
       const info = this.opts.info;
@@ -837,7 +873,7 @@
       return `<section class="auth-side" aria-hidden="true"><div class="rings"></div>
         <div class="auth-brand"><div class="mark" aria-label="RiC — ResInvest Commodities">RiC</div><div><b>ResInvest ERP</b><span>${esc(t("Obrót i magazynowanie biomasy drzewnej"))}</span></div></div>
         <div><h2>${esc(t("Biomasa pod pełną kontrolą"))}</h2><p>${esc(t("Zakupy, produkcja zrębki, sprzedaż, transport i inwentaryzacja w jednym systemie — z historią każdej zmiany, raportami miesięcznymi i rocznymi oraz kopiami zapasowymi."))}</p></div>
-        <div class="auth-facts"><div><b>3</b><span>${esc(t("języki: PL · CS · EN"))}</span></div><div><b>3</b><span>${esc(t("motywy kolorystyczne"))}</span></div><div><b>100%</b><span>${esc(t("operacji w dzienniku audytu"))}</span></div></div></section>`;
+        <div class="auth-facts"><div><b>3</b><span>${esc(t("języki: PL · CS · EN"))}</span></div><div><b>${THEME_LIST.length}</b><span>${esc(t("motywy kolorystyczne"))}</span></div><div><b>100%</b><span>${esc(t("operacji w dzienniku audytu"))}</span></div></div></section>`;
     },
     /** Stopka autorska — ekran logowania i program. */
     credit() { return `<p class="credit">${esc(t("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"))} · © 2026</p>`; },
@@ -849,6 +885,9 @@
       const local = Store.mode === "local";
       const domains = ((Store.state && Store.state.config && Store.state.config.companyDomains) || ["resinvest.group"]).map(d => "@" + d).join(", ");
       const demo = local && Store.state ? Store.state.users.filter(u => AuthLib.DEMO_LOGINS.includes(u.login) && u.active !== false && AuthLib.LocalAuth.info(u.id).demo) : [];
+      // pierwsze uruchomienie (czysta baza): podpowiedź konta administratora — bez hasła na ekranie
+      const firstAdmin = local && Store.state ? Store.state.users.find(u => u.role === "admin" && AuthLib.LocalAuth.info(u.id).startup) : null;
+      if (firstAdmin && !opts.info && !reg) { opts = Object.assign({}, opts, { info: t("Pierwsze uruchomienie: zaloguj się kontem administratora {e} hasłem startowym z instrukcji instalacji — program poprosi o ustawienie własnego hasła.", { e: firstAdmin.login }), login: opts.login || firstAdmin.login }); }
       const tabs = !this.selfRegistration() ? "" : `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
       const loginForm = `<form id="login-form" novalidate autocomplete="on">
               <div class="field"><label for="lg-login">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
@@ -926,7 +965,10 @@
         try { r = await Store.backend.register(rec, pw); } catch (x) { r = { ok: false, error: x.message }; }
         $("#rg-submit").disabled = false;
         if (!r || !r.ok) return fail((r && r.error) || t("Nie udało się utworzyć konta"));
-        this.loginScreen({ login: rec.email, ok: true, info: t("Konto {e} zarejestrowane. Administrator nada rolę i magazyn — potem zalogujesz się tym adresem.", { e: rec.email }) });
+        this.loginScreen({ login: rec.email, ok: true, info: r.confirm
+          ? (r.mail && r.mail.ok ? t("Konto {e} zarejestrowane. Wysłaliśmy link potwierdzający na ten adres — kliknij go, a następnie administrator nada rolę i magazyn.", { e: rec.email })
+            : t("Konto {e} zarejestrowane, ale nie udało się wysłać e-maila z linkiem potwierdzającym. Poproś administratora o ponowne wysłanie.", { e: rec.email }))
+          : t("Konto {e} zarejestrowane. Administrator nada rolę i magazyn — potem zalogujesz się tym adresem.", { e: rec.email }) });
       };
       $("#rg-name").focus();
     },

@@ -172,7 +172,7 @@ function queueNotices(ids) {
     const to = u && (u.email || u.login);
     if (!to || R.statusOf(u) !== "ACTIVE") continue;
     const c = R.Notify.mailContent(x);
-    const msg = compose("notice", to, { name: u.name, subject: c.subject, lines: c.lines, link: `${appUrl()}/#/${x.opId ? "operacje?op=" + encodeURIComponent(x.opId) : x.kind === "approval" || x.kind === "rejected" ? "operacje" : "powiadomienia"}` });
+    const msg = compose("notice", to, { name: u.name, subject: c.subject, lines: c.lines, link: `${appUrl()}/#/${x.opId ? "operacje?op=" + encodeURIComponent(x.opId) : x.kind === "approval" || x.kind === "rejected" ? "operacje" : x.kind === "registration" ? "uzytkownicy" : "powiadomienia"}` });
     store.enqueueMail("notice", to, u.id, msg.subject, { html: msg.html, text: msg.text }, x.id);
     n++;
   }
@@ -235,6 +235,11 @@ async function afterUserSave(r, actor, meta) {
   if (R.statusOf(u) !== "ACTIVE") store.dropUserSessions(u.id);
   if (!before) return;
   if (R.statusOf(before) !== "DISABLED" && u.status === "DISABLED") { store.dropTokens(u.id); await mailTo("deactivated", u, {}); }
+  // zatwierdzone zgłoszenie rejestracji → e-mail z informacją o roli i magazynie
+  if (before.selfRegistered && R.statusOf(before) === "INVITED" && R.statusOf(u) === "ACTIVE") {
+    const m = await mailTo("approved", u, { link: appUrl(), role: R.ROLES[u.role] ? R.ROLES[u.role].code : u.role, warehouse: whName(u.whId), by: actor ? actor.name : "" });
+    store.auditEvent({ entityId: u.id, opNo: u.login, code: m.ok ? "REGISTRATION_APPROVED_SENT" : "REGISTRATION_APPROVED_EMAIL_FAILED", act: R.Lx(N_("Powiadomienie o zatwierdzeniu konta: {l}"), { l: u.login }), before: null, after: { wysylka: m.ok ? mailCfg.transport : "błąd" }, source: N_("Administracja — użytkownicy") }, meta, actor);
+  }
   const oldEmail = before.email || before.login;
   if (oldEmail !== u.email) {
     store.dropTokens(u.id);
@@ -281,10 +286,15 @@ async function handleApi(req, res, url) {
     const ip = ipOf(req);
     if (rateLimited(ip)) return json(req, res, 429, { ok: false, code: "RATE", error: t("Zbyt wiele prób logowania z tego adresu. Spróbuj za kilka minut.") });
     if (!store.state) return json(req, res, 503, { ok: false, error: t("Serwer nie jest skonfigurowany") });
-    const b = await readBody(req);
+    const b = await readBody(req, 64 * 1024);
+    // ten sam adres e-mail: najwyżej 3 wiadomości na godzinę (ochrona skrzynek przed zalewem)
+    if (mailLimited("reg:" + String((b.rec && b.rec.email) || "").trim().toLowerCase(), 3, 60)) return json(req, res, 429, { ok: false, code: "RATE", error: t("Zbyt wiele prób rejestracji dla tego adresu. Spróbuj za godzinę.") });
     const r = store.register(b.rec || {}, b.password, L, metaOf(req));
-    if (r.ok) broadcast(store.state.rev, null);
-    return json(req, res, r.ok ? 200 : 400, r);
+    if (!r.ok) return json(req, res, 400, r);
+    broadcast(store.state.rev, null);
+    const u = R.byId(store.state.users, r.userId);
+    const mail = u ? await sendConfirm(u, null, metaOf(req)) : { ok: false };
+    return json(req, res, 200, { ok: true, confirm: true, mail: { ok: !!mail.ok, transport: mail.transport || "" } });
   }
   /* ---- linki z e-maili (bez sesji): zaproszenie, reset hasła, potwierdzenie adresu ---- */
   if (path === "/api/auth/token" && method === "POST") {
@@ -338,13 +348,18 @@ async function handleApi(req, res, url) {
     const u = R.byId(store.state.users, p.row.user_id);
     if (!u || p.row.email !== u.email) return json(req, res, 400, tokenError("BAD"));
     if (!store.useToken(String(b.token), "confirm").ok) return json(req, res, 400, tokenError("USED"));
+    let notices = [];
     store.applyChange("auth.emailConfirm", s => {
       const x = R.byId(s.users, u.id); delete x.emailUnverified; x.emailVerifiedAt = new Date().toISOString(); s.rev += 1;
       R.audit(s, Object.assign({ user: x }, metaOf(req)), { entity: "user", entityId: x.id, opNo: x.login, event: "user", code: "EMAIL_CONFIRMED", act: R.Lx(N_("Potwierdzenie adresu e-mail: {l}"), { l: x.login }), before: null, after: { email: x.login }, source: N_("Potwierdzenie adresu e-mail") });
+      // zgłoszenie rejestracji z potwierdzonym adresem → powiadomienie administratorów (w programie i e-mailem)
+      if (x.selfRegistered && R.statusOf(x) === "INVITED") { R.applyRoles(s); notices = R.Notify.forRegistration(s, x, { today: store.today(), source: N_("Rejestracja") }).map(n => n.id); }
       return { ok: true };
     }, { userId: u.id }, u);
     broadcast(store.state.rev, u.id);
-    return json(req, res, 200, { ok: true, email: u.email });
+    if (notices.length) queueNotices(notices);
+    const pending = !!u.selfRegistered && R.statusOf(R.byId(store.state.users, u.id)) === "INVITED";
+    return json(req, res, 200, { ok: true, email: u.email, pending });
   }
   /** „Nie pamiętam hasła” — zawsze ta sama odpowiedź (bez ujawniania, czy konto istnieje), limit prób. */
   if (path === "/api/auth/forgot" && method === "POST") {
@@ -576,6 +591,11 @@ async function handler(req, res) {
   }
 }
 
+// pusta baza + initialAdmin w konfiguracji → konto startowe administratora (jednorazowo, przed przyjęciem żądań)
+if (!store.hasAccounts() && cfg.initialAdmin && cfg.initialAdmin.email) {
+  const b = store.bootstrap(cfg.initialAdmin);
+  if (!b.ok) log("ERROR", "Konto startowe administratora nie zostało utworzone: " + b.error);
+}
 const server = tls ? createHttps({ cert: readFileSync(cfg.tls.cert), key: readFileSync(cfg.tls.key) }, handler) : createHttp(handler);
 server.requestTimeout = 120000;
 server.listen(cfg.port, cfg.host, () => {

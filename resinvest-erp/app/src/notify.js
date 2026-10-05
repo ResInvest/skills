@@ -216,6 +216,17 @@
     }, ctx);
   }
 
+  /** Nowe zgłoszenie rejestracji → aktywni administratorzy (uprawnienie users.manage). */
+  function forRegistration(state, reg, ctx) {
+    if (!reg) return [];
+    const admins = state.users.filter(u => statusOf(u) === "ACTIVE" && u.id !== reg.id && R.can(u, "users.manage"));
+    const lines = [Lx("E-mail: {e}", { e: reg.email || reg.login })];
+    if (reg.phone) lines.push(Lx("Telefon: {p}", { p: reg.phone }));
+    lines.push(Lx("Zatwierdź w: Administracja → Użytkownicy (nadaj rolę i magazyn) albo odrzuć zgłoszenie."));
+    return push(state, admins, { kind: "registration", events: [], opId: null, opNo: null, draftId: null, whId: null, toWhId: null, userRef: reg.id,
+      title: Lx("Nowe zgłoszenie rejestracji: {n}", { n: reg.name }), lines }, Object.assign({}, ctx, { user: null }));
+  }
+
   /**
    * Wywoływane przez usługę po udanej komendzie (na tej samej kopii stanu, przed zapisem).
    * `before` — stan rekordów potrzebny do decyzji (np. autor przekazanej operacji).
@@ -254,6 +265,6 @@
     return { subject: I18N.canon(n.title), lines: (n.lines || []).map(l => I18N.canon(l)) };
   }
 
-  R.Notify = { EVENTS, EVENT_IDS, MAX_NOTICES, allowedFor, enabledFor, wantsEmail, setMine, allow, markRead, opEvents, opSummary, forOperation, forSubmit, forDecision, afterCommand, COMMANDS, beforeOf, mailContent, recipients };
+  R.Notify = { EVENTS, EVENT_IDS, MAX_NOTICES, allowedFor, enabledFor, wantsEmail, setMine, allow, markRead, opEvents, opSummary, forOperation, forSubmit, forDecision, forRegistration, afterCommand, COMMANDS, beforeOf, mailContent, recipients };
   if (typeof module !== "undefined" && module.exports) module.exports = R.Notify;
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -1,6 +1,15 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-04 · etap: **ResInvest ERP 3.6.0 — zakup z produkcją i sprzedażą bezpośrednią z lasu, flota własna i zewnętrzna, wysyłka e-mailem, znak RiC**
+Ostatnia aktualizacja: 2026-10-05 · etap: **ResInvest ERP 3.7.0 — wersja startowa: czysta baza, konto administratora, rejestracja użytkowników, motyw Szkło**
+
+## Wykonane — 3.7.0
+
+- [x] Motyw „Szkło” (6. motyw) w stylu wzoru: pastelowe tło, szklane karty, kolorowe kafelki ikon menu
+- [x] Czysta baza na start (OFFLINE i serwer); konto startowe administratora magazyn@resinvest.group z hasłem z konfiguracji (Admin1234, zmiana wymagana)
+- [x] Rejestracja użytkowników: e-mail firmowy (serwer), potwierdzenie adresu, powiadomienie administratorów, zatwierdzenie z rolą i magazynem, e-mail o zatwierdzeniu, audyt
+- [x] Usunięcie obcych plików bazowych z repozytorium
+- [x] Testy: jednostkowe 149, serwer 47, E2E 307, E2E serwera 29 — wszystkie zaliczone; i18n 0 braków
+- [ ] Instalator 3.7.0 — po akceptacji wersji HTML
 
 ## Wykonane — 3.6.0
 

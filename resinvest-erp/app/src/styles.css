@@ -107,6 +107,25 @@
   --select-arrow:%23626A7C;
   color-scheme:light;
 }
+/* Szkło (3.7): pastelowe tło z miękkimi plamami koloru, matowe szklane karty, duże zaokrąglenia, kolorowe kafelki ikon */
+[data-theme="glass"]{
+  --bg:#EEF0F8; --bg-grad:radial-gradient(900px 620px at 8% 4%,#E4E2FB 0%,rgba(228,226,251,0) 60%),radial-gradient(820px 600px at 46% -8%,#DDE9FB 0%,rgba(221,233,251,0) 62%),radial-gradient(760px 560px at 96% 18%,#DDF4E8 0%,rgba(221,244,232,0) 60%),radial-gradient(900px 700px at 70% 108%,#F3E4F4 0%,rgba(243,228,244,0) 60%),linear-gradient(180deg,#F1F2F9 0%,#EEF0F8 100%);
+  --surface:#FFFFFF; --surface-2:#F6F7FB; --surface-3:#ECEEF5; --field:#FFFFFF; --row-alt:#F8F9FC;
+  --border:#E3E6EF; --border-strong:#CDD2DF; --border-hover:#A9B0C2;
+  --text:#1D2130; --text-head:#111420; --text-2:#4B5165; --text-3:#5F667A;
+  --brand:#1F7F45; --brand-2:#176A39; --brand-ink:#FFFFFF; --brand-soft:#E6F5EC; --brand-line:#B5DEC4; --brand-ring:rgba(31,127,69,.18);
+  --gold:#7A4FD0; --gold-strong:#8FE3B0; --gold-soft:#EFEAFD;
+  --ok:#1C6E40; --ok-soft:#E4F4EA; --ok-line:#B0DCC0; --warn:#8A5300; --warn-soft:#FCF1DD; --warn-line:#EFCB8C;
+  --err:#B42318; --err-soft:#FDECEA; --err-line:#F3B8B2; --info:#2F55C9; --info-soft:#EAF0FD; --info-line:#C4D3F6;
+  --shadow:0 24px 60px rgba(54,60,104,.16),0 4px 14px rgba(54,60,104,.06); --shadow-1:0 1px 2px rgba(54,60,104,.05),0 8px 24px rgba(54,60,104,.06);
+  --shadow-2:0 14px 34px rgba(54,60,104,.10),0 2px 6px rgba(54,60,104,.05);
+  --focus:#1F7F45; --overlay:rgba(30,32,52,.34); --tip-bg:#1C1E2E; --tip-ink:#FFFFFF;
+  --chart-grid:#E7E9F2; --chart-a:#3B6FE0; --chart-b:#1F8F4E; --chart-c:#8B5CF6;
+  --hero:linear-gradient(135deg,#1B1D2B 0%,#24263A 55%,#2C2945 100%); --hero-ink:#F4F5FA; --hero-dim:rgba(244,245,250,.70);
+  --select-arrow:%235F667A;
+  --r-sm:12px; --r-md:16px; --r-lg:24px; --r-xl:28px;
+  color-scheme:light;
+}
 /* zmiana motywu bez migotania przejść kolorów */
 html.theme-switching *,html.theme-switching *::before,html.theme-switching *::after{transition:none!important}
 
@@ -730,3 +749,52 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
 .nt-matrix td.c small{margin-left:4px}
 @media (max-width:720px){ .nt-events{grid-template-columns:1fr} .nt-list .nt-item{padding:12px var(--s4)} }
 @media (max-width:640px){ .nt-matrix td.c{grid-template-columns:70% minmax(0,1fr)} }
+
+/* ---------- motyw „Szkło” — reguły komponentów (tylko ten motyw) ---------- */
+[data-theme="glass"] body{background-attachment:fixed}
+[data-theme="glass"] .card,[data-theme="glass"] .kpi,[data-theme="glass"] .sec,[data-theme="glass"] .modal,[data-theme="glass"] .dropdown{
+  background:rgba(255,255,255,.72);border-color:rgba(255,255,255,.85);-webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5)}
+[data-theme="glass"] .modal,[data-theme="glass"] .dropdown{background:rgba(255,255,255,.9)}
+[data-theme="glass"] .topbar{background:rgba(238,240,248,.55);border-bottom-color:transparent}
+[data-theme="glass"] .sidebar{background:rgba(255,255,255,.55);border-right-color:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(26px) saturate(1.5);backdrop-filter:blur(26px) saturate(1.5)}
+@media (min-width:901px){
+  [data-theme="glass"] .sidebar{margin:12px 0 12px 12px;height:calc(100vh - 24px);height:calc(100dvh - 24px);top:12px;border:1px solid rgba(255,255,255,.85);border-radius:28px;box-shadow:var(--shadow-2);overflow:hidden}
+}
+[data-theme="glass"] .sb-head,[data-theme="glass"] .sb-foot{border-color:rgba(205,210,223,.55)}
+[data-theme="glass"] .sb-group{text-transform:none;letter-spacing:0;font-size:var(--t-sm);font-weight:600}
+[data-theme="glass"] .nav-item{padding:7px 10px;font-weight:580;color:var(--text)}
+[data-theme="glass"] .nav-item:hover{background:rgba(255,255,255,.7)}
+[data-theme="glass"] .nav-item[aria-current="page"]{background:rgba(255,255,255,.95);box-shadow:var(--shadow-1);color:var(--text-head)}
+[data-theme="glass"] .nav-item[aria-current="page"]::before{display:none}
+/* kolorowe kafelki ikon menu (jak w skrzynkach pocztowych) */
+[data-theme="glass"] .nav-item>.ic{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;color:#FFFFFF;background:linear-gradient(160deg,#5B8DEF,#3B6FE0);box-shadow:0 2px 6px rgba(59,111,224,.28);flex-shrink:0}
+[data-theme="glass"] .nav-item:nth-child(5n+2)>.ic{background:linear-gradient(160deg,#4FC27A,#23974F);box-shadow:0 2px 6px rgba(35,151,79,.28)}
+[data-theme="glass"] .nav-item:nth-child(5n+3)>.ic{background:linear-gradient(160deg,#A57BF7,#7A4FD0);box-shadow:0 2px 6px rgba(122,79,208,.28)}
+[data-theme="glass"] .nav-item:nth-child(5n+4)>.ic{background:linear-gradient(160deg,#F47A86,#E0485A);box-shadow:0 2px 6px rgba(224,72,90,.28)}
+[data-theme="glass"] .nav-item:nth-child(5n+5)>.ic{background:linear-gradient(160deg,#9AA3B8,#6B7389);box-shadow:0 2px 6px rgba(107,115,137,.28)}
+[data-theme="glass"] .nav-item .cnt{background:transparent;color:var(--text-3);font-weight:600}
+[data-theme="glass"] .mark{background:linear-gradient(150deg,#6C8DFA,#4F5BE3 55%,#7A4FD0);box-shadow:0 6px 16px rgba(79,91,227,.35)}
+[data-theme="glass"] .page-head h2{font-size:clamp(28px,3.2vw,40px);font-weight:800;letter-spacing:-.035em}
+[data-theme="glass"] .kpi .k-v{font-size:26px;font-weight:800;letter-spacing:-.035em}
+[data-theme="glass"] .btn{border-radius:var(--r-full);background:rgba(236,238,245,.9);border-color:transparent;font-weight:620}
+[data-theme="glass"] .btn:hover{background:#E2E5EF}
+[data-theme="glass"] .btn.primary{background:var(--brand);color:var(--brand-ink);box-shadow:0 6px 16px rgba(31,127,69,.28)}
+[data-theme="glass"] .btn.primary:hover{background:var(--brand-2)}
+[data-theme="glass"] .btn.danger{background:var(--err-soft)}
+[data-theme="glass"] .ctrl{border-color:rgba(205,210,223,.9);background:rgba(255,255,255,.92)}
+[data-theme="glass"] .user-btn,[data-theme="glass"] .wh-chip{border-radius:var(--r-full)}
+[data-theme="glass"] .tabs{border-bottom-color:rgba(205,210,223,.6)}
+[data-theme="glass"] .tab[aria-selected="true"]{color:var(--text-head);border-bottom-color:var(--brand)}
+[data-theme="glass"] .badge{font-weight:640}
+[data-theme="glass"] .hero{border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 60px rgba(27,29,43,.28)}
+[data-theme="glass"] .hero .rings{border-color:rgba(143,227,176,.22);box-shadow:0 0 0 56px rgba(143,227,176,.05),0 0 0 120px rgba(122,79,208,.05)}
+[data-theme="glass"] .hero .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:var(--hero-ink);box-shadow:none}
+[data-theme="glass"] .hero .btn:hover{background:rgba(255,255,255,.2)}
+[data-theme="glass"] .hero .btn.primary{background:#2E9E57;color:#FFFFFF;border-color:transparent}
+[data-theme="glass"] .auth{background:transparent}
+[data-theme="glass"] .auth-form{background:rgba(255,255,255,.6);-webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px)}
+[data-theme="glass"] .auth-side .rings{border-color:rgba(143,227,176,.2);box-shadow:0 0 0 60px rgba(143,227,176,.05),0 0 0 130px rgba(122,79,208,.05)}
+[data-theme="glass"] .opt{background:rgba(255,255,255,.8)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  [data-theme="glass"] .card,[data-theme="glass"] .kpi,[data-theme="glass"] .sec,[data-theme="glass"] .sidebar,[data-theme="glass"] .modal{background:#FFFFFF}
+}

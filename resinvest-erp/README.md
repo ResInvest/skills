@@ -1,7 +1,12 @@
-# ResInvest ERP 3.6 (3.6.0)
+# ResInvest ERP 3.7 (3.7.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
+> Wersja 3.7.0 to wersja startowa dla firmy: **czysta baza danych** (bez danych przykładowych), konto startowe
+> administratora **`magazyn@resinvest.group`** z hasłem startowym **`Admin1234`** (zmiana wymagana przy pierwszym
+> logowaniu), gotowa **rejestracja użytkowników** (e-mail firmowy, potwierdzenie adresu, zatwierdzenie przez
+> administratora z rolą i magazynem) oraz nowy motyw **Szkło** — pastelowe tło, szklane karty, kolorowe ikony menu.
+>
 > Wersja 3.6.0 porządkuje **Zakup** (najpierw zakres: „+ Produkcja z automatycznym zużyciem” i „+ Sprzedaż bezpośrednia
 > z lasu (bez magazynowania)”, potem grupa dostawcy), dzieli **Flotę** na **własną** i **zewnętrzną** (dwa pola wyboru,
 > pojazdy firm zewnętrznych), dodaje **wysyłkę e-mailem** (PDF w załączniku) raportu miesiąca, kwitu produkcji dnia,
@@ -39,6 +44,47 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.7.0
+
+### Czysta baza i konto startowe administratora
+* Pierwsze uruchomienie (OFFLINE i serwer) tworzy **pustą bazę**: konto administratora, magazyny RiC Zabrze, RiC Brąszewice,
+  RiC Rokitki, katalog produktów i rodzaje operacji dodatkowych. Bez operacji, kontrahentów, floty i kont demonstracyjnych.
+* Administrator: **`magazyn@resinvest.group`**, hasło startowe **`Admin1234`** — przy pierwszym logowaniu program wymusza
+  ustawienie własnego hasła. Hasło startowe nie jest zapisane w kodzie programu, tylko w konfiguracji instalacji:
+  `config/app.config.json` → `startup` (tryb OFFLINE, wbudowywane do `ResInvest_ERP.html`) i
+  `config/server.config.json` → `initialAdmin` (serwer). Konto powstaje **tylko raz** — przy pustej bazie; zmiana
+  konfiguracji nie nadpisuje istniejącego hasła.
+* Dane demonstracyjne z poprzednich wersji zapisane w przeglądarce są jednorazowo usuwane (kopia zostaje pod kluczem
+  `riw.v3.state.demo-przed-3.7`); dane firmy nie są ruszane. Dane przykładowe do nauki: *Administracja → Przywróć dane
+  przykładowe* albo plik `data/sample_data.json` (*Wczytaj kopię*); serwer — pole „dane przykładowe” na ekranie pierwszej
+  konfiguracji (gdy `initialAdmin` jest pusty).
+
+### Rejestracja użytkowników
+* Zakładka **Rejestracja** na ekranie logowania (włączona w nowej bazie; wyłącza się w *Administracja → Konfiguracja*).
+* Wymagany adres w domenie firmy (`@resinvest.group`) — sprawdzany **po stronie serwera**; hasło wg polityki (min. 8 znaków,
+  litery i cyfry); ten sam adres nie zarejestruje się dwa razy; limit prób (3 na godzinę na adres, limit na adres IP).
+* Osoba rejestrująca **nie wybiera roli ani magazynu** — dane przesłane z przeglądarki (np. `role`, `status`, `whId`) są
+  ignorowane; konto czeka ze statusem „zaproszony”.
+* Tryb FIRMOWY: **potwierdzenie adresu** linkiem z e-maila (ważny 48 h, jednorazowy). Dopiero po potwierdzeniu
+  administratorzy dostają **powiadomienie** (w programie i e-mailem), a zgłoszenie można zatwierdzić; przycisk
+  „Wyślij link ponownie”. Tryb OFFLINE: powiadomienie administratora od razu.
+* Zatwierdzenie: *Użytkownicy → Zgłoszenia rejestracji → Nadaj rolę i aktywuj* (rola, magazyn domyślny, dostęp do magazynów);
+  użytkownik dostaje e-mail „Konto zatwierdzone”. Odrzucenie usuwa zgłoszenie (konto bez historii). Każdy krok w audycie:
+  `USER_REGISTERED`, `EMAIL_CONFIRMATION_SENT`, `EMAIL_CONFIRMED`, zmiana statusu i roli, `REGISTRATION_APPROVED_SENT`.
+
+### Motyw „Szkło”
+* Szósty motyw (Mój profil → Wygląd, Ctrl+D): pastelowe tło z miękkimi plamami koloru, półprzezroczyste karty z rozmyciem,
+  pływający panel menu z kolorowymi kafelkami ikon, duże zaokrąglenia, zielone przyciski w kształcie pigułki, ciemny pas
+  powitalny. Kontrast tekstu spełnia WCAG 2.1 (`npm run themes`); przeglądarki bez rozmycia dostają pełne białe karty.
+
+### Repozytorium
+* Gałąź zawiera wyłącznie ResInvest ERP (3.x i 4.0) — usunięto obce pliki bazowe repozytorium.
+
+### Testy 3.7
+* `reg37.test.mjs` (3, serwer: konto startowe z konfiguracji, rejestracja z potwierdzeniem adresu, zatwierdzenie,
+  e-mail o zatwierdzeniu, limit prób), E2E 307/307 (w tym 22 scenariusze 3.7: czysta baza, rejestracja, zatwierdzenie,
+  motyw Szkło), E2E serwera 29/29; tłumaczenia CS / EN: 0 braków.
 
 ## Nowe w 3.6.0
 
@@ -303,9 +349,10 @@ Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie us
 ### Pierwsze uruchomienie serwera
 
 1. Menu Start → *ResInvest ERP Serwer — uruchom* (okno konsoli musi pozostać otwarte; przy autostarcie działa zminimalizowane).
-2. Przeglądarka otworzy `http://localhost:8080/` → ekran **Pierwsze uruchomienie**: imię i nazwisko administratora,
-   e-mail firmowy (domyślnie `magazyn@resinvest.group`), hasło (min. 8 znaków, litery i cyfry); powstają magazyny
-   RiC Zabrze, RiC Brąszewice i RiC Rokitki; opcjonalnie dane przykładowe do nauki.
+2. Przeglądarka otworzy `http://localhost:8080/` → zaloguj się kontem **`magazyn@resinvest.group`** z hasłem startowym
+   **`Admin1234`** i ustaw własne hasło (wymagane). Baza jest pusta: magazyny RiC Zabrze, RiC Brąszewice, RiC Rokitki,
+   katalog produktów. (Gdy `initialAdmin` w `config\server.config.json` jest pusty — ekran **Pierwsze uruchomienie**
+   z własnym adresem, hasłem i opcją danych przykładowych.)
 3. **Poczta:** Menu Start → *Konfiguracja poczty i adresu* → uzupełnij `APP_URL` (adres programu w sieci, np.
    `http://192.168.1.20:8080`) i `RESEND_API_KEY`; uruchom serwer ponownie. Konfiguracja Resend i DNS (SPF, DKIM, DMARC):
    [`docs/EMAIL_SETUP.md`](docs/EMAIL_SETUP.md). Bez klucza zaproszenia zapisują się w `C:\ProgramData\ResInvestERP\mail-outbox`.
@@ -316,7 +363,11 @@ Instalator jest dostępny po polsku, czesku i angielsku. Odinstalowanie **nie us
 ### Tryb lokalny (bez serwera)
 
 Otwórz `ResInvest_ERP.html` w Chrome / Edge / Firefox (zapisany na dysku — podgląd pliku w komunikatorze lub poczcie
-działa w trybie „bez zapisu”). Dane przykładowe zawierają konta demonstracyjne — hasło **`demo1234`**
+działa w trybie „bez zapisu”). Program startuje z **czystą bazą**: zaloguj się jako **`magazyn@resinvest.group`**
+hasłem startowym **`Admin1234`** i ustaw własne hasło. Pracownicy rejestrują się zakładką **Rejestracja**, administrator
+zatwierdza ich w *Użytkownicy*.
+
+**Dane przykładowe (nauka, testy)** — *Administracja → Przywróć dane przykładowe*. Zawierają konta demonstracyjne — hasło **`demo1234`**
 (zmień je w *Mój profil* przed pracą na prawdziwych danych; pulpit przypomina o tym w „Do załatwienia”):
 
 | E-mail (login) | Osoba | Rola | Magazyn |
@@ -442,12 +493,12 @@ Wymagany **Node.js ≥ 22.13** (moduł `node:sqlite`).
 cd resinvest-erp
 npm run check         # kontrola składni
 npm run i18n          # pokrycie tłumaczeń CS/EN (kod wyjścia 1 przy brakach)
-npm run themes        # kontrast WCAG wszystkich 5 motywów
+npm run themes        # kontrast WCAG wszystkich 6 motywów
 npm run build         # → ResInvest_ERP.html (konfiguracja, słowniki, czcionki PDF, film intro)
 npm run test:unit     # silnik (w tym MM dwuetapowe), PDF, platforma: jednostki, korekty, transport, i18n, hasła, role, funkcje 3.4: operacje dodatkowe, numery ręczne, tonaż, usuwanie, XLSX/DOCX (127)
 npm run test:server   # serwer (9) + konta i bezpieczeństwo §34/§35, MM przez serwer: zaproszenia, reset, izolacja magazynów, 403 (26)
 npm i --no-save playwright && npx playwright install chromium   # jednorazowo
-npm run test:e2e      # przeglądarka: tryb OFFLINE (234 kontrole) + tryb FIRMOWY z serwerem i pocztą .eml (24 kontrole)
+npm run test:e2e      # przeglądarka: tryb OFFLINE (307 kontroli) + tryb FIRMOWY z serwerem i pocztą .eml (29 kontroli)
 FFMPEG=ffmpeg node tests/e2e-intro.cjs   # intro na prawdziwym filmie (wariant WebM dla Chromium bez H.264)
 ```
 

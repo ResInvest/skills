@@ -23,8 +23,9 @@ function watch(page, label) {
   page.on("pageerror", e => { consoleErrors.push(`${label}: ${e.message}`); if (process.env.E2E_STACK) console.log("STACK", e.stack); });
 }
 async function newCtx(browser, opts = {}) {
-  const ctx = await browser.newContext(Object.assign({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: "pl-PL" }, opts));
-  await ctx.addInitScript(d => { try { if (!sessionStorage.getItem("riw.today")) sessionStorage.setItem("riw.today", d); if (!localStorage.getItem("riw.lang")) localStorage.setItem("riw.lang", "pl"); } catch (e) {} }, TODAY);
+  const { sample, ...ctxOpts } = opts;    // sample: false → czysta baza (pierwsze uruchomienie)
+  const ctx = await browser.newContext(Object.assign({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: "pl-PL" }, ctxOpts));
+  await ctx.addInitScript(([d, sample]) => { try { if (!sessionStorage.getItem("riw.today")) sessionStorage.setItem("riw.today", d); if (!localStorage.getItem("riw.lang")) localStorage.setItem("riw.lang", "pl"); if (sample) localStorage.setItem("riw.sample", "1"); } catch (e) {} }, [TODAY, sample !== false]);
   return ctx;
 }
 async function boot(page) {
@@ -108,14 +109,16 @@ async function fillForestDirect(page) {
     check("§19 Jasny motyw: jasne tło, białe karty", lum(bg) > 0.85 && card === "rgb(255, 255, 255)", { bg, card });
     // 3.2: pięć motywów — przełączanie z profilu, zapis w profilu użytkownika, Ctrl+D przez całą piątkę
     await go(page, "profil"); await page.waitForSelector(".theme-cards");
-    check("3.2 Motywy: 5 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium");
+    check("3.2 Motywy: 6 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium, Szkło)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium,glass");
     const themeLook = async id => { await page.click(`[data-ptheme="${id}"]`); await page.waitForTimeout(200); return page.evaluate(() => ({ th: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, cs: document.documentElement.style.colorScheme, saved: RIW_DEBUG.store.state.users.find(u => u.id === RIW_DEBUG.store.userId).theme })); };
     const ul = await themeLook("ultra");
     check("3.2 Ultra Dark: czarne tło (OLED), schemat ciemny, zapis w profilu", ul.th === "ultra" && ul.bg === "rgb(0, 0, 0)" && ul.cs === "dark" && ul.saved === "ultra", ul);
     const pr = await themeLook("premium");
     check("3.2 Light Premium: tło kość słoniowa, schemat jasny, granat marki", pr.th === "premium" && pr.bg === "rgb(247, 244, 238)" && pr.cs === "light" && (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--brand").trim())) === "#1B2A4A", pr);
-    const cyc = []; for (let i = 0; i < 5; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
-    check("3.2 Ctrl+D przełącza przez pięć motywów", cyc.join(",") === "pearl,graphite,azure,ultra,premium", cyc);
+    const cyc = []; for (let i = 0; i < 6; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
+    check("3.2 Ctrl+D przełącza przez sześć motywów", cyc.join(",") === "glass,pearl,graphite,azure,ultra,premium", cyc);
+    const gl = await themeLook("glass");
+    check("3.7 Szkło: pastelowe tło z gradientem, szklane karty z rozmyciem, zielona marka, zapis w profilu", gl.th === "glass" && gl.cs === "light" && gl.saved === "glass" && await page.evaluate(() => { const c = getComputedStyle(document.querySelector(".card, .theme-cards") || document.body); return getComputedStyle(document.body).backgroundImage.includes("radial-gradient") && getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() === "#1F7F45"; }) && await page.evaluate(() => /blur/.test(getComputedStyle(document.querySelector(".sidebar")).backdropFilter)), gl);
     await themeLook("pearl"); await go(page, "pulpit"); await page.waitForSelector("#kpi-wood");
 
     /* ------------- pulpit ------------- */
@@ -871,6 +874,57 @@ async function fillForestDirect(page) {
     await ctx.close();
   }
 
+  /* ------------- 3.7: czysta baza, administrator startowy, rejestracja i zatwierdzenie ------------- */
+  {
+    const ctx = await newCtx(browser, { sample: false });
+    const page = await ctx.newPage(); watch(page, "3.7-czysta");
+    // dane demonstracyjne z poprzedniej wersji w tej przeglądarce → kopia i czysta baza
+    await page.goto(FILE); await page.keyboard.press("Escape"); await page.waitForSelector("#login-form", { timeout: 8000 }); await page.evaluate(() => { localStorage.setItem("riw.v3.state", JSON.stringify(Object.assign(RIW_DEBUG.R.Seed.build("2026-09-23"), {}))); localStorage.removeItem("riw.clean37"); });
+    await page.goto(FILE);
+    await page.waitForSelector(".splash", { timeout: 5000 }).catch(() => {}); await page.keyboard.press("Escape");
+    await page.waitForSelector("#login-form", { timeout: 8000 });
+    const st0 = await page.evaluate(() => ({ users: RIW_DEBUG.store.state.users.map(u => u.login), ops: RIW_DEBUG.store.state.operations.length, partners: RIW_DEBUG.store.state.partners.length, fleet: RIW_DEBUG.store.state.fleet.vehicles.length, wh: RIW_DEBUG.store.state.warehouses.length, backup: !!localStorage.getItem("riw.v3.state.demo-przed-3.7"), cfgKeys: Object.keys(RIW_DEBUG.store.state.config) }));
+    check("3.7 Czysta baza: tylko administrator, 3 magazyny, bez operacji, kontrahentów i floty; kopia danych demonstracyjnych", st0.users.join() === "magazyn@resinvest.group" && st0.ops === 0 && st0.partners === 0 && st0.fleet === 0 && st0.wh === 3 && st0.backup && !st0.cfgKeys.includes("startup"), st0);
+    check("3.7 Ekran logowania: podpowiedź pierwszego uruchomienia (bez hasła), brak kont demonstracyjnych", nb(await page.textContent("#auth-info")).includes("Pierwsze uruchomienie") && !nb(await page.textContent("#auth-info")).includes("Admin1234") && !(await page.$("#demo-users")));
+    check("3.7 Rejestracja włączona na ekranie logowania", !!(await page.$('[data-auth-tab="register"]')));
+    // rejestracja: zła domena, różne hasła, poprawna
+    await page.click('[data-auth-tab="register"]'); await page.waitForSelector("#reg-form");
+    const reg = async (name, email, pw, pw2) => { await page.fill("#rg-name", name); await page.fill("#rg-email", email); await page.fill("#rg-pass", pw); await page.fill("#rg-pass2", pw2); await page.click("#rg-submit"); await page.waitForTimeout(300); };
+    await reg("Jan Kowalski", "jan.kowalski@gmail.com", "Magazyn2026", "Magazyn2026");
+    check("3.7 Rejestracja: adres spoza domeny firmy odrzucony", nb(await page.textContent("#rg-err")).includes("resinvest.group"), nb(await page.textContent("#rg-err")));
+    await reg("Jan Kowalski", "jan.kowalski@resinvest.group", "Magazyn2026", "Inne2026x");
+    check("3.7 Rejestracja: różne hasła odrzucone", nb(await page.textContent("#rg-err")).includes("nie są takie same"));
+    await reg("Jan Kowalski", "jan.kowalski@resinvest.group", "abc", "abc");
+    check("3.7 Rejestracja: słabe hasło odrzucone", nb(await page.textContent("#rg-err")).includes("Hasło musi mieć"));
+    await reg("Jan Kowalski", "jan.kowalski@resinvest.group", "Magazyn2026", "Magazyn2026");
+    check("3.7 Rejestracja: konto zgłoszone, komunikat o zatwierdzeniu przez administratora", nb(await page.textContent("#auth-info")).includes("Administrator nada rolę i magazyn"));
+    const ru = await page.evaluate(() => { const u = RIW_DEBUG.store.state.users.find(x => x.login === "jan.kowalski@resinvest.group"); return { st: RIW_DEBUG.R.statusOf(u), role: u.role, perms: RIW_DEBUG.R.permsOf ? RIW_DEBUG.R.permsOf(u).length : null }; });
+    check("3.7 Rejestracja: status „zaproszony”, bez samodzielnego nadania roli administratora", ru.st === "INVITED" && ru.role !== "admin", ru);
+    await page.fill("#lg-login", "jan.kowalski@resinvest.group"); await page.fill("#lg-pass", "Magazyn2026"); await page.click("#lg-submit"); await page.waitForTimeout(300);
+    check("3.7 Rejestracja: logowanie przed zatwierdzeniem zablokowane", nb(await page.textContent("#lg-err")).includes("oczekuje na zatwierdzenie"));
+    // administrator: hasło startowe z konfiguracji → wymuszona zmiana
+    await page.fill("#lg-login", "magazyn@resinvest.group"); await page.fill("#lg-pass", "Admin1234"); await page.click("#lg-submit");
+    await page.waitForSelector("#force-form", { timeout: 6000 });
+    check("3.7 Administrator magazyn@resinvest.group: hasło startowe Admin1234 działa, wymuszona zmiana hasła", !!(await page.$("#force-form")));
+    await page.fill("#fc-old", "Admin1234"); await page.fill("#fc-new", "Biomasa2027"); await page.fill("#fc-new2", "Biomasa2027");
+    await page.click('#force-form [type="submit"]'); await page.waitForSelector("#nav .nav-item", { timeout: 8000 });
+    check("3.7 Administrator: po zmianie hasła pulpit pustej bazy", (await page.evaluate(() => RIW_DEBUG.store.state.operations.length)) === 0 && !!(await page.$("#nav")));
+    const nt = await page.evaluate(() => (RIW_DEBUG.store.state.notices || []).filter(n => n.kind === "registration" && n.userId === RIW_DEBUG.store.userId).map(n => n.title));
+    check("3.7 Powiadomienie administratora o zgłoszeniu rejestracji", nt.length === 1, nt);
+    await go(page, "uzytkownicy"); await page.waitForSelector('tr[data-reg]');
+    check("3.7 Użytkownicy: zgłoszenie rejestracji na liście do zatwierdzenia", nb(await page.textContent('tr[data-reg]')).includes("jan.kowalski@resinvest.group"));
+    await page.click("[data-uapprove]"); await page.waitForSelector("#me-role");
+    await page.selectOption("#me-role", "magazynier"); await page.selectOption("#me-whId", "wh_bra"); await page.waitForTimeout(100);
+    await page.click(".modal [data-yes]"); await page.waitForTimeout(400);
+    const ap = await page.evaluate(() => { const u = RIW_DEBUG.store.state.users.find(x => x.login === "jan.kowalski@resinvest.group"); return { st: RIW_DEBUG.R.statusOf(u), role: u.role, wh: u.whId, by: u.approvedBy, audit: RIW_DEBUG.store.state.audit.some(a => a.code === "USER_REGISTERED") }; });
+    check("3.7 Zatwierdzenie: rola magazynier, magazyn RiC Brąszewice, aktywne, zapis w audycie", ap.st === "ACTIVE" && ap.role === "magazynier" && ap.wh === "wh_bra" && !!ap.by && ap.audit, ap);
+    await page.evaluate(() => RIW_DEBUG.app.logout()); await page.waitForSelector("#login-form");
+    await page.fill("#lg-login", "jan.kowalski@resinvest.group"); await page.fill("#lg-pass", "Magazyn2026"); await page.click("#lg-submit");
+    await page.waitForSelector("#nav .nav-item", { timeout: 8000 }).catch(() => {});
+    check("3.7 Zatwierdzony użytkownik loguje się hasłem z rejestracji (bez dostępu do administracji)", !!(await page.$("#nav")) && !(await page.$('#nav [data-nav="uzytkownicy"]')));
+    await ctx.close();
+  }
+
   /* ------------- 3.6: zakup ze sprzedażą bezpośrednią z lasu, flota własna / zewnętrzna, RiC, wysyłka e-mailem ------------- */
   {
     const ctx = await newCtx(browser);
@@ -970,7 +1024,10 @@ async function fillForestDirect(page) {
     const f = page.frames().find(x => x.url().endsWith("ResInvest_ERP.html"));
     await f.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))).catch(() => {});
     await f.waitForSelector("#login-form", { timeout: 8000 });
-    await f.fill("#lg-login", LOGINS.u_admin); await f.fill("#lg-pass", "demo1234"); await f.click("#lg-submit");
+    // ramka bez pamięci przeglądarki = czysta baza: konto startowe administratora (hasło z konfiguracji, wymuszona zmiana)
+    await f.fill("#lg-login", LOGINS.u_admin); await f.fill("#lg-pass", "Admin1234"); await f.click("#lg-submit");
+    await f.waitForSelector("#force-form", { timeout: 8000 }).catch(() => {});
+    await f.fill("#fc-old", "Admin1234"); await f.fill("#fc-new", "Biomasa2027"); await f.fill("#fc-new2", "Biomasa2027"); await f.click('#force-form [type="submit"]');
     await f.waitForSelector("#nav .nav-item", { timeout: 8000 }).catch(() => {});
     check("3.1 Logowanie działa także w ramce bez dostępu do pamięci przeglądarki", (await f.$$("#nav .nav-item")).length > 10 && !!(await f.$("#kpis")));
     await ctx.close();

@@ -174,9 +174,12 @@
     },
     replaceState,
     /** Rejestracja z ekranu logowania (bez sesji) — tylko gdy włączona w konfiguracji; konto czeka na administratora. */
-    register(state, rec, today, meta) {
+    register(state, rec, today, meta, opts = {}) {
       const work = R.clone(state), rev0 = work.rev;
-      const res = R.Users.register(work, rec || {}, Object.assign({ today, source: N_("Rejestracja") }, meta || {}));
+      const ctx = Object.assign({ today, source: N_("Rejestracja"), emailUnverified: !!opts.emailUnverified }, meta || {});
+      const res = R.Users.register(work, rec || {}, ctx);
+      // administratorzy dostają powiadomienie od razu (OFFLINE) albo po potwierdzeniu adresu (FIRMOWY — robi to serwer)
+      if (res.ok && !opts.emailUnverified && R.Notify) res.notices = R.Notify.forRegistration(work, res.rec, Object.assign({}, ctx, { user: null })).map(n => n.id);
       return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
     },
     /** Zmiana stanu wykonywana przez hosta poza sesją (aktywacja zaproszenia, wpis audytu). */

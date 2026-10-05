@@ -62,6 +62,11 @@ export const TEMPLATES = {
   deactivated: d => Object.assign({ subject: "Konto dezaktywowane — ResInvest ERP" }, layout({
     title: "Konto dezaktywowane", lead: `Dzień dobry ${d.name}, Twoje konto ${d.email} w ResInvest ERP zostało dezaktywowane.`,
     lines: ["Historia Twoich operacji pozostaje w systemie."], note: "W razie pytań skontaktuj się z administratorem." })),
+  /** Zgłoszenie rejestracji zatwierdzone przez administratora (3.7). */
+  approved: d => Object.assign({ subject: "Konto zatwierdzone — ResInvest ERP" }, layout({
+    title: "Konto zatwierdzone", lead: `Dzień dobry ${d.name}, administrator zatwierdził Twoje zgłoszenie rejestracji w ResInvest ERP.`,
+    lines: [`Login: ${d.email}`, d.role ? `Rola: ${d.role}` : "", d.warehouse ? `Magazyn: ${d.warehouse}` : "", d.by ? `Zatwierdził: ${d.by}` : ""].filter(Boolean),
+    button: "Zaloguj się", link: d.link, note: "Logujesz się adresem e-mail i hasłem podanym przy rejestracji." })),
   /** Powiadomienie o zmianie w magazynie (3.5): temat i linie z silnika (R.Notify.mailContent). */
   notice: d => Object.assign({ subject: `${d.subject} — ResInvest ERP` }, layout({
     title: d.subject, lead: `Dzień dobry ${d.name}, w ResInvest ERP pojawiła się zmiana, o której chcesz być powiadamiany.`,
