@@ -1,4 +1,4 @@
-# ResInvest ERP 3.7 (3.7.2)
+# ResInvest ERP 3.7 (3.7.3)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
@@ -44,6 +44,11 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.7.3
+* **AgentMail** jako kanał wysyłki poczty (obok Resend, SMTP i plików .eml): `AGENTMAIL_API_KEY` i `AGENTMAIL_INBOX`
+  w `server.env` — wszystkie wiadomości programu, także dokumenty z PDF. Konfiguracja:
+  [`docs/EMAIL_SETUP.md`](docs/EMAIL_SETUP.md) (punkt 4a).
 
 ## Nowe w 3.7.2
 * **Konto testowe administratora** (tryb OFFLINE, okres testów): **`test@resinvest.group`**, hasło **`Test1234`** —

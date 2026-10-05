@@ -4,6 +4,7 @@
    Transport (EMAIL_TRANSPORT):
      resend — API HTTPS Resend (https://api.resend.com/emails), klucz RESEND_API_KEY,
      smtp   — SMTP z TLS (domyślnie smtp.resend.com:465, użytkownik „resend”, hasło = klucz API),
+     agentmail — API HTTPS AgentMail (https://api.agentmail.to), klucz AGENTMAIL_API_KEY, nadawca = skrzynka AGENTMAIL_INBOX,
      file   — zapis wiadomości .eml do katalogu danych (instalacja bez poczty, testy).
    Brak konfiguracji → „file” (wiadomości trafiają do <dataDir>/mail-outbox; administrator
    może przekazać link ręcznie). Klucze są czytane WYŁĄCZNIE po stronie serwera
@@ -84,12 +85,15 @@ export const TEMPLATES = {
 
 /* ---------------- konfiguracja ---------------- */
 export function mailConfig(env, dataDir) {
-  const key = String(env.RESEND_API_KEY || "").trim();
+  const resendKey = String(env.RESEND_API_KEY || "").trim(), amKey = String(env.AGENTMAIL_API_KEY || "").trim();
   let transport = String(env.EMAIL_TRANSPORT || "").trim().toLowerCase();
-  if (!transport) transport = key ? "resend" : "file";
-  if (!["resend", "smtp", "file"].includes(transport)) transport = "file";
+  if (!transport) transport = resendKey ? "resend" : amKey ? "agentmail" : "file";
+  if (!["resend", "smtp", "agentmail", "file"].includes(transport)) transport = "file";
+  const key = transport === "agentmail" ? amKey : resendKey;
+  const amInbox = String(env.AGENTMAIL_INBOX || "").trim().toLowerCase();
   return {
     transport, key,
+    agentmail: { inbox: amInbox, apiUrl: String(env.AGENTMAIL_API_URL || "https://api.agentmail.to").replace(/\/+$/, "") },
     from: String(env.EMAIL_FROM || "ResInvest ERP <no-reply@resinvest.group>").trim(),
     replyTo: String(env.EMAIL_REPLY_TO || "").trim(),
     smtp: { host: String(env.SMTP_HOST || "smtp.resend.com"), port: Number(env.SMTP_PORT || 465), user: String(env.SMTP_USER || "resend"), pass: String(env.SMTP_PASS || key) },
@@ -98,7 +102,8 @@ export function mailConfig(env, dataDir) {
   };
 }
 /** Opis konfiguracji bez sekretów (panel administratora, raport startowy). */
-export const mailInfo = c => ({ transport: c.transport, from: c.from, configured: c.transport === "file" || !!c.key || (c.transport === "smtp" && !!c.smtp.pass), outDir: c.transport === "file" ? c.outDir : "" });
+export const mailInfo = c => ({ transport: c.transport, from: c.transport === "agentmail" ? c.agentmail.inbox : c.from,
+  configured: c.transport === "file" || (c.transport === "agentmail" ? !!c.key && !!c.agentmail.inbox : !!c.key || (c.transport === "smtp" && !!c.smtp.pass)), outDir: c.transport === "file" ? c.outDir : "" });
 
 /* ---------------- wysyłka ---------------- */
 const b64 = s => Buffer.from(String(s), "utf8").toString("base64");
@@ -131,6 +136,22 @@ async function viaResend(c, msg) {
     const body = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(`Resend HTTP ${r.status}: ${body.message || body.name || "błąd"}`);
     return { providerId: body.id || "" };
+  } finally { clearTimeout(timer); }
+}
+/** AgentMail: wysyłka ze skrzynki AGENTMAIL_INBOX (POST /v0/inboxes/{inbox}/messages/send). */
+async function viaAgentMail(c, msg) {
+  if (!c.agentmail.inbox) throw new Error("brak AGENTMAIL_INBOX (adres skrzynki nadawcy)");
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const reply = replyOf(c, msg);
+    const body = Object.assign({ to: [msg.to], subject: msg.subject, text: msg.text, html: msg.html, labels: ["resinvest-erp", String(msg.template || "mail")] },
+      reply ? { reply_to: [addr(reply)] } : {},
+      Array.isArray(msg.attachments) && msg.attachments.length ? { attachments: msg.attachments.map(f => ({ filename: f.filename, content_type: f.contentType || "application/octet-stream", content: f.content })) } : {});
+    const r = await fetch(`${c.agentmail.apiUrl}/v0/inboxes/${encodeURIComponent(c.agentmail.inbox)}/messages/send`, { method: "POST", signal: ctl.signal,
+      headers: { Authorization: `Bearer ${c.key}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`AgentMail HTTP ${r.status}: ${res.message || res.name || res.error || "błąd"}`);
+    return { providerId: res.message_id || "" };
   } finally { clearTimeout(timer); }
 }
 function viaSmtp(c, msg) {
@@ -176,8 +197,8 @@ export function compose(template, to, data) {
 /** Wysyłka gotowej wiadomości (kolejka). Nigdy nie rzuca — zwraca { ok, error?, providerId?, file? }. */
 export async function sendRaw(c, msg, log) {
   try {
-    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error("brak klucza RESEND_API_KEY / SMTP_PASS");
-    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
+    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error(c.transport === "agentmail" ? "brak klucza AGENTMAIL_API_KEY" : "brak klucza RESEND_API_KEY / SMTP_PASS");
+    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "agentmail" ? await viaAgentMail(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
     if (log) log("INFO", `E-mail „${msg.template}” → ${msg.to} (${c.transport}${r.file ? ": " + r.file : ""})`);
     return Object.assign({ ok: true, subject: msg.subject }, r);
   } catch (e) {
@@ -195,8 +216,8 @@ export async function sendMail(c, template, to, data, log) {
   if (!tpl) return { ok: false, error: "unknown template" };
   const msg = Object.assign({ to, template }, tpl(data || {}));
   try {
-    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error("brak klucza RESEND_API_KEY / SMTP_PASS");
-    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
+    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error(c.transport === "agentmail" ? "brak klucza AGENTMAIL_API_KEY" : "brak klucza RESEND_API_KEY / SMTP_PASS");
+    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "agentmail" ? await viaAgentMail(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
     if (log) log("INFO", `E-mail „${template}” → ${to} (${c.transport}${r.file ? ": " + r.file : ""})`);
     return Object.assign({ ok: true, subject: msg.subject }, r);
   } catch (e) {

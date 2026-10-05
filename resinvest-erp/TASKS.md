@@ -1,5 +1,12 @@
 # TASKS — ResInvest ERP
 
+## 3.7.3 — kanał poczty AgentMail
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| AgentMail jako transport poczty (klucz tylko na serwerze, skrzynka nadawcy, załączniki PDF, Reply-To, kolejka z ponowieniami) | DONE | `mail36.test` „kanał AgentMail…” (atrapa API) |
+| wysyłka na prawdziwe konto AgentMail | NIEPOTWIERDZONE | wymaga klucza i skrzynki użytkownika |
+
 ## 3.7.2 — konto testowe administratora
 
 | Kryterium | Status | Dowód |

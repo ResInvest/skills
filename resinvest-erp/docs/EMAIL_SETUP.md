@@ -40,7 +40,7 @@ APP_URL=http://192.168.1.20:8080          # adres, pod którym pracownicy otwier
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx     # klucz z punktu 1.5 — NIE commituj do repozytorium
 EMAIL_FROM=ResInvest ERP <no-reply@resinvest.group>
 EMAIL_REPLY_TO=magazyn@resinvest.group     # opcjonalnie
-EMAIL_TRANSPORT=                           # puste = resend (gdy jest klucz), inaczej file
+EMAIL_TRANSPORT=                           # puste = resend (gdy jest klucz Resend), agentmail (gdy jest tylko klucz AgentMail), inaczej file
 ```
 
 Kolejność odczytu (późniejsze nadpisują wcześniejsze): `<program>\.env` → `<program>\config\server.env` →
@@ -60,6 +60,7 @@ icacls "C:\ProgramData\ResInvestERP\server.env" /inheritance:r /grant:r Administ
 | `EMAIL_TRANSPORT` | Działanie |
 |---|---|
 | `resend` (domyślny przy kluczu) | `POST https://api.resend.com/emails`, nagłówek `Authorization: Bearer <klucz>`, limit czasu 15 s |
+| `agentmail` (domyślny przy samym `AGENTMAIL_API_KEY`) | `POST https://api.agentmail.to/v0/inboxes/<AGENTMAIL_INBOX>/messages/send`, nagłówek `Authorization: Bearer <klucz>`, limit czasu 20 s — patrz punkt 4a |
 | `smtp` | TLS `smtp.resend.com:465`, użytkownik `resend`, hasło = klucz API (`SMTP_HOST/PORT/USER/PASS` do zmiany) |
 | `file` (domyślny bez klucza) | wiadomość `.eml` zapisana w `<dataDir>\mail-outbox` — **bez wysyłki**; administrator może otworzyć plik i przekazać link ręcznie |
 
@@ -82,6 +83,27 @@ runtime\node.exe --disable-warning=ExperimentalWarning server\riw-server.mjs --d
 
 Wynik `Wysłano (resend)` oznacza przyjęcie wiadomości przez Resend. Sprawdź skrzynkę (także SPAM) i w panelu Resend
 zakładkę *Emails* (status *Delivered*).
+
+## 4a. Kanał AgentMail (3.7.3) — alternatywa dla Resend
+
+1. Załóż konto na https://console.agentmail.to, utwórz skrzynkę nadawcy (np. `resinvest-erp@agentmail.to`
+   albo skrzynkę we własnej domenie — domena dodana i zweryfikowana w AgentMail: SPF, DKIM, DMARC; jeden rekord SPF
+   na domenę, np. `v=spf1 include:spf.agentmail.to ~all`) i wygeneruj klucz API.
+2. W `server.env` (na serwerze, nigdy w przeglądarce ani w repozytorium):
+
+   ```
+   AGENTMAIL_API_KEY=am_...
+   AGENTMAIL_INBOX=resinvest-erp@agentmail.to
+   EMAIL_TRANSPORT=agentmail        # wymagane tylko, gdy w pliku jest też RESEND_API_KEY
+   # AGENTMAIL_API_URL=https://api.agentmail.eu   # region EU (opcjonalnie)
+   ```
+3. Uruchom serwer ponownie. Konsola i ekran *Poczta* pokazują kanał „AgentMail (API HTTPS)” i adres nadawcy;
+   *Wyślij test do mnie* sprawdza wysyłkę.
+
+Kanałem AgentMail idą wszystkie wiadomości programu (zaproszenia, reset hasła, potwierdzenie rejestracji, powiadomienia,
+dokumenty i raporty z PDF) — przez tę samą kolejkę z ponowieniami. Nadawcą jest skrzynka `AGENTMAIL_INBOX`
+(`EMAIL_FROM` nie jest używany); odpowiedzi na dokumenty trafiają do użytkownika, który je wysłał (Reply-To).
+Serwer łączy się z API bezpośrednio przez HTTPS — pakiet npm `agentmail` nie jest potrzebny, instalator zostaje bez zależności.
 
 ## 5a. Wysyłka dokumentów i raportów (3.6)
 

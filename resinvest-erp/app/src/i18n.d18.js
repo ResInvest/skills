@@ -7,6 +7,7 @@
   "Konto testowe administratora": ["Testovací účet správce", "Test administrator account"],
   "Administrator testowy": ["Testovací správce", "Test administrator"],
   "hasło": ["heslo", "password"],
+  "AgentMail (API HTTPS)": ["AgentMail (API HTTPS)", "AgentMail (HTTPS API)"],
   "Kliknij, aby wpisać dane konta testowego, i zaloguj się. Konto działa niezależnie od danych zapisanych w tej przeglądarce (okres testów).": ["Kliknutím vyplníte údaje testovacího účtu a přihlásíte se. Účet funguje nezávisle na datech uložených v tomto prohlížeči (zkušební období).", "Click to fill in the test account details, then sign in. The account works regardless of data saved in this browser (testing period)."],
   /* --- czysta baza, konto startowe --- */
   "konto startowe administratora": ["počáteční účet správce", "initial administrator account"],

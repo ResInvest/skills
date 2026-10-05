@@ -31,7 +31,7 @@ async function startServer(env, extra) {
   const port = await freePort();
   const cfgFile = join(dir, "server.config.json");
   writeFileSync(cfgFile, JSON.stringify(Object.assign({ port, host: "127.0.0.1", dataDir: join(dir, "data"), security: { maxFailed: 5, lockMinutes: 15, ipAttemptsPer15Min: 1000 } }, extra || {})));
-  const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(RESEND_|EMAIL_|SMTP_|APP_URL|RIW_)/.test(k)));
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(RESEND_|AGENTMAIL_|EMAIL_|SMTP_|APP_URL|RIW_)/.test(k)));
   const proc = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", SERVER], { env: Object.assign(clean, { RIW_CONFIG: cfgFile, RIW_TODAY: TODAY, APP_URL: "https://erp.resinvest.test" }, env), stdio: "pipe" });
   let out = ""; proc.stdout.on("data", d => { out += d; }); proc.stderr.on("data", d => { out += d; });
   const base = `http://127.0.0.1:${port}`;
@@ -147,4 +147,30 @@ test("wysyłka dokumentu: limit 40 wiadomości z dokumentami na godzinę na uży
     const over = await kier.post("/api/mail-document", DOC({ to: ten(1) }));
     assert.equal(over.status, 429); assert.match(over.json.error, /Limit wysyłki/);
   } finally { await s.stop(); rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test("kanał AgentMail: wysyłka ze skrzynki AGENTMAIL_INBOX, klucz tylko w nagłówku serwera, PDF w attachments, reply_to = nadawca", async () => {
+  let hit = null;
+  const am = httpServer((req, res) => { let b = ""; req.on("data", d => b += d); req.on("end", () => { hit = { url: req.url, auth: req.headers.authorization, body: JSON.parse(b) }; res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ message_id: "msg_test_1", thread_id: "thr_1" })); }); });
+  await new Promise(r => am.listen(0, "127.0.0.1", r));
+  const s = await startServer({ EMAIL_TRANSPORT: "", AGENTMAIL_API_KEY: "am_test_key", AGENTMAIL_INBOX: "resinvest-erp@agentmail.to", AGENTMAIL_API_URL: `http://127.0.0.1:${am.address().port}` });
+  try {
+    const admin = await user(s, ADMIN, ADMIN_PW);
+    const o = (await admin.get("/api/mail/outbox")).json;
+    assert.equal(o.mail.transport, "agentmail", "AgentMail wybrany automatycznie przy samym kluczu AgentMail");
+    assert.equal(o.mail.from, "resinvest-erp@agentmail.to"); assert.equal(o.mail.configured, true);
+    assert.ok(!JSON.stringify(o).includes("am_test_key"), "klucz nie trafia do przeglądarki");
+    const kier = await user(s, "anna.gorska@resinvest.group");
+    const r = await kier.post("/api/mail-document", DOC({ to: "biuro@odbiorca.pl" }));
+    assert.equal(r.status, 200, JSON.stringify(r.json)); assert.equal(r.json.sent, 1);
+    assert.equal(hit.url, "/v0/inboxes/resinvest-erp%40agentmail.to/messages/send");
+    assert.equal(hit.auth, "Bearer am_test_key");
+    assert.deepEqual(hit.body.to, ["biuro@odbiorca.pl"]);
+    assert.deepEqual(hit.body.reply_to, ["anna.gorska@resinvest.group"]);
+    assert.equal(hit.body.attachments[0].content_type, "application/pdf");
+    assert.equal(hit.body.attachments[0].content, PDF_B64);
+    assert.match(hit.body.subject, /Raport miesiąca/); assert.ok(hit.body.text && hit.body.html);
+    const sent = (await admin.get("/api/mail/outbox")).json.rows.find(x => x.kind === "document");
+    assert.equal(sent.status, "SENT"); assert.equal(sent.transport, "agentmail");
+  } finally { await s.stop(); rmSync(s.dir, { recursive: true, force: true }); am.close(); }
 });

@@ -32,7 +32,7 @@ async function startServer(env) {
   const port = await freePort();
   const cfgFile = join(dir, "server.config.json");
   writeFileSync(cfgFile, JSON.stringify({ port, host: "127.0.0.1", dataDir: join(dir, "data"), security: { maxFailed: 5, lockMinutes: 15, ipAttemptsPer15Min: 1000 } }));
-  const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(RESEND_|EMAIL_|SMTP_|APP_URL|RIW_)/.test(k)));
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(RESEND_|AGENTMAIL_|EMAIL_|SMTP_|APP_URL|RIW_)/.test(k)));
   const proc = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", SERVER], { env: Object.assign(clean, { RIW_CONFIG: cfgFile, RIW_TODAY: TODAY, APP_URL: "https://erp.resinvest.test" }, env), stdio: "pipe" });
   let out = ""; proc.stdout.on("data", d => { out += d; }); proc.stderr.on("data", d => { out += d; });
   const base = `http://127.0.0.1:${port}`;

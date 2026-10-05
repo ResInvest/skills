@@ -68,7 +68,7 @@ export function loadEnv(dataDir) {
   const files = [join(ROOT, ".env"), join(ROOT, "config", "server.env"), dataDir ? join(dataDir, "server.env") : null].filter(Boolean);
   const env = {}, used = [];
   for (const f of files) if (existsSync(f)) { Object.assign(env, parseEnv(readFileSync(f, "utf8"))); used.push(f); }
-  for (const [k, v] of Object.entries(process.env)) if (/^(RESEND_|EMAIL_|SMTP_|APP_URL|SUPABASE_)/.test(k)) env[k] = v;
+  for (const [k, v] of Object.entries(process.env)) if (/^(RESEND_|AGENTMAIL_|EMAIL_|SMTP_|APP_URL|SUPABASE_)/.test(k)) env[k] = v;
   return { env, files: used };
 }
 

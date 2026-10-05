@@ -30,7 +30,7 @@ function parseEml(raw) {
   const port = await freePort(), BASE = `http://127.0.0.1:${port}`;
   const cfg = path.join(dir, "server.config.json");
   fs.writeFileSync(cfg, JSON.stringify({ port, host: "127.0.0.1", dataDir: path.join(dir, "data") }));
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(RESEND_|EMAIL_|SMTP_|APP_URL|RIW_)/.test(k)));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(RESEND_|AGENTMAIL_|EMAIL_|SMTP_|APP_URL|RIW_)/.test(k)));
   const proc = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", path.join(ROOT, "server", "riw-server.mjs")],
     { env: Object.assign(env, { RIW_CONFIG: cfg, RIW_TODAY: "2026-09-23", EMAIL_TRANSPORT: "file", APP_URL: BASE }), stdio: "pipe" });
   let log = ""; proc.stdout.on("data", d => { log += d; }); proc.stderr.on("data", d => { log += d; });
