@@ -1,4 +1,4 @@
-# ResInvest ERP 3.7 (3.7.0)
+# ResInvest ERP 3.7 (3.7.1)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
@@ -44,6 +44,16 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.7.1
+* **Nowy film startowy** (las, rębak i samochód ResInvest Commodities; 1280×720, 10 s, z dźwiękiem). Muzyka jest
+  **włączona przy każdym starcie** — „Wycisz” dotyczy tylko bieżącego odtworzenia. Gdy przeglądarka blokuje automatyczny
+  dźwięk (pliki otwierane bezpośrednio w Chrome / Edge), film gra i dźwięk włącza się przy pierwszym kliknięciu lub klawiszu;
+  skrót „ResInvest ERP — otwórz” z instalatora uruchamia program z dźwiękiem od razu.
+* **Poprawka logowania** `magazyn@resinvest.group` / `Admin1234`: dane demonstracyjne zapisane w przeglądarce przez
+  wcześniejsze wersje (także przez otwartą jeszcze starą kartę programu) są przy każdym starcie przenoszone do kopii,
+  a konto administratora z hasłem demonstracyjnym dostaje hasło startowe z konfiguracji. Dane przykładowe wczytane
+  świadomie w Administracji nie są ruszane.
 
 ## Nowe w 3.7.0
 

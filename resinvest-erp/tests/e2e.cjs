@@ -883,6 +883,18 @@ async function fillForestDirect(page) {
     await page.goto(FILE);
     await page.waitForSelector(".splash", { timeout: 5000 }).catch(() => {}); await page.keyboard.press("Escape");
     await page.waitForSelector("#login-form", { timeout: 8000 });
+    // 3.8: konto administratora z hasłem demonstracyjnym zapisane przez starą kartę → hasło startowe z konfiguracji działa
+    const stale = await newCtx(browser, { sample: false }); const sp = await stale.newPage(); watch(sp, "3.8-stare-dane");
+    await sp.goto(FILE); await sp.keyboard.press("Escape"); await sp.waitForSelector("#login-form", { timeout: 8000 });
+    await sp.evaluate(() => { localStorage.setItem("riw.v3.state", JSON.stringify(RIW_DEBUG.R.Seed.build("2026-09-23"))); localStorage.setItem("riw.clean37", "x"); });
+    await sp.reload(); await sp.keyboard.press("Escape"); await sp.waitForSelector("#login-form", { timeout: 8000 });
+    await sp.fill("#lg-login", "magazyn@resinvest.group"); await sp.fill("#lg-pass", "Admin1234"); await sp.click("#lg-submit");
+    check("3.8 Logowanie Admin1234 działa, gdy stara karta zapisała dane demonstracyjne po pierwszym starcie", await sp.waitForSelector("#force-form", { timeout: 6000 }).then(() => true).catch(() => false));
+    await sp.evaluate(() => { const a = JSON.parse(localStorage.getItem("riw.v3.auth")); a.accounts.u_admin = Object.assign({}, a.accounts.u_admin, { demo: true, hash: "00", startup: false }); localStorage.setItem("riw.v3.auth", JSON.stringify(a)); sessionStorage.removeItem("riw.v3.session"); });
+    await sp.reload(); await sp.keyboard.press("Escape"); await sp.waitForSelector("#login-form", { timeout: 8000 });
+    await sp.fill("#lg-login", "magazyn@resinvest.group"); await sp.fill("#lg-pass", "Admin1234"); await sp.click("#lg-submit");
+    check("3.8 Logowanie Admin1234 działa, gdy konto administratora miało hasło demonstracyjne", await sp.waitForSelector("#force-form", { timeout: 6000 }).then(() => true).catch(() => false));
+    await stale.close();
     const st0 = await page.evaluate(() => ({ users: RIW_DEBUG.store.state.users.map(u => u.login), ops: RIW_DEBUG.store.state.operations.length, partners: RIW_DEBUG.store.state.partners.length, fleet: RIW_DEBUG.store.state.fleet.vehicles.length, wh: RIW_DEBUG.store.state.warehouses.length, backup: !!localStorage.getItem("riw.v3.state.demo-przed-3.7"), cfgKeys: Object.keys(RIW_DEBUG.store.state.config) }));
     check("3.7 Czysta baza: tylko administrator, 3 magazyny, bez operacji, kontrahentów i floty; kopia danych demonstracyjnych", st0.users.join() === "magazyn@resinvest.group" && st0.ops === 0 && st0.partners === 0 && st0.fleet === 0 && st0.wh === 3 && st0.backup && !st0.cfgKeys.includes("startup"), st0);
     check("3.7 Ekran logowania: podpowiedź pierwszego uruchomienia (bez hasła), brak kont demonstracyjnych", nb(await page.textContent("#auth-info")).includes("Pierwsze uruchomienie") && !nb(await page.textContent("#auth-info")).includes("Admin1234") && !(await page.$("#demo-users")));
@@ -1044,9 +1056,16 @@ async function fillForestDirect(page) {
     check("Intro: pierwsza klatka filmu na pierwszym malowaniu (przed skryptami programu)", fcp !== null && (await p.evaluate(() => !!document.querySelector("#splash .splash-poster").complete)), fcp);
     await p.waitForTimeout(700);
     check("Intro: muzyka domyślnie włączona i gra", await p.evaluate(() => RIW_DEBUG.intro.music && RIW_DEBUG.intro.audible));
+    check("Intro 3.8: nowy film wbudowany w program (MP4 H.264 + AAC, ok. 3,8 MB)", await p.evaluate(() => typeof INTRO_SRC === "string" && INTRO_SRC.startsWith("data:video/mp4;base64,") && INTRO_SRC.length > 4.9e6 && INTRO_SRC.length < 5.3e6));
     await p.click(".splash [data-music]");
-    check("Intro: „Wycisz” działa", await p.evaluate(() => !RIW_DEBUG.intro.audible && localStorage.getItem("riw.music") === "0"));
+    check("Intro: „Wycisz” działa (tylko dla bieżącego odtworzenia)", await p.evaluate(() => !RIW_DEBUG.intro.audible && localStorage.getItem("riw.music") === null));
     await p.click(".splash [data-skip]"); await p.waitForSelector(".splash", { state: "detached" });
+    // wyciszenie z poprzedniej wersji (riw.music = 0) nie wyłącza muzyki przy kolejnym starcie
+    const p0 = await b1.newPage(); watch(p0, "intro-2");
+    await p0.goto(FILE, { waitUntil: "commit" }); await p0.evaluate(() => localStorage.setItem("riw.music", "0"));
+    await p0.reload(); await p0.waitForSelector("#splash .splash-poster", { state: "visible", timeout: 5000 }); await p0.waitForTimeout(700);
+    check("Intro 3.8: muzyka włączona od razu przy każdym starcie (także po wcześniejszym wyciszeniu)", await p0.evaluate(() => RIW_DEBUG.intro.music && RIW_DEBUG.intro.audible));
+    await p0.close();
     check("Intro: „Pomiń intro”", (await p.evaluate(() => RIW_DEBUG.intro.result)) === "skip");
     const disp = await p.evaluate(() => ({ d: RIW_DEBUG.intro.disposed, media: document.querySelectorAll("video,audio").length, blob: RIW_DEBUG.introModule._blob, login: !!document.querySelector("#login-form") }));
     check("Intro: po pominięciu odtwarzacz odmontowany, zasoby zwolnione, ekran logowania", disp.login && disp.media === 0 && disp.blob === null && Object.values(disp.d).every(Boolean), disp);

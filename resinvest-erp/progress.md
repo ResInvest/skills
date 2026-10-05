@@ -2,6 +2,12 @@
 
 Ostatnia aktualizacja: 2026-10-05 · etap: **ResInvest ERP 3.7.0 — wersja startowa: czysta baza, konto administratora, rejestracja użytkowników, motyw Szkło**
 
+## Wykonane — 3.7.1
+
+- [x] Nowy film startowy, muzyka włączona przy każdym starcie
+- [x] Poprawka logowania administratora (dane demonstracyjne poprzednich wersji, konto z hasłem demo)
+- [x] Testy: jednostkowe 149, serwer 47, E2E 311, E2E serwera 29, intro 15 — wszystkie zaliczone
+
 ## Wykonane — 3.7.0
 
 - [x] Motyw „Szkło” (6. motyw) w stylu wzoru: pastelowe tło, szklane karty, kolorowe kafelki ikon menu

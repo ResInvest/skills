@@ -80,8 +80,10 @@
     active: false,
     _blob: null, _blobPromise: null,
 
-    musicOn() { try { return localStorage.getItem(PREF_MUSIC) !== "0"; } catch (e) { return true; } },
-    setMusic(on) { try { localStorage.setItem(PREF_MUSIC, on ? "1" : "0"); } catch (e) {} },
+    /** Muzyka intro jest włączona przy każdym starcie programu; „Wycisz” dotyczy tylko bieżącego odtworzenia. */
+    _music: true,
+    musicOn() { return this._music !== false; },
+    setMusic(on) { this._music = !!on; try { localStorage.removeItem(PREF_MUSIC); } catch (e) {} },
     enabled() { try { return localStorage.getItem(PREF_INTRO) !== "0"; } catch (e) { return true; } },
     setEnabled(on) { try { localStorage.setItem(PREF_INTRO, on ? "1" : "0"); } catch (e) {} },
     reducedMotion() { return typeof root.matchMedia === "function" && root.matchMedia("(prefers-reduced-motion: reduce)").matches; },

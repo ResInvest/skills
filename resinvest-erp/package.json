@@ -1,6 +1,6 @@
 {
   "name": "resinvest-erp",
-  "version": "3.7.0",
+  "version": "3.7.1",
   "private": true,
   "description": "ResInvest ERP 3.7 — motyw Szkło, rejestracja użytkowników z potwierdzeniem e-mail i zatwierdzeniem, czysta baza z kontem startowym administratora; zakup z produkcją i sprzedażą bezpośrednią z lasu, flota własna i zewnętrzna, wysyłka dokumentów i raportów e-mailem (PDF w załączniku), znak RiC; planer zakupów, powiadomienia w programie i e-mail z kolejką ponowień, poczta; obrót i magazynowanie biomasy drzewnej: logowanie e-mailem firmowym, zaproszenia i reset hasła (Resend), role i uprawnienia, izolacja magazynów, przesunięcia MM dwuetapowe (w drodze → przyjęcie), praca wielostanowiskowa (serwer Node.js + SQLite), PL/CS/EN, 5 motywów (Perła, Grafit, Azure, Ultra Dark, Light Premium), dokumenty, korekty, inwentaryzacja, raporty, druk i PDF",
   "author": "Mateusz Roesner",

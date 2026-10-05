@@ -139,7 +139,10 @@
     async ensureStartup(state, login, pw) {
       const u = state.users.find(x => String(x.login).toLowerCase() === String(login).toLowerCase());
       const s = this.read();
-      if (!u || s.accounts[u.id] || !pw) return false;
+      if (!u || !pw) return false;
+      // konto z hasłem demonstracyjnym w danych firmy (pozostałość po danych przykładowych) → hasło startowe z konfiguracji
+      const stale = s.accounts[u.id] && s.accounts[u.id].demo && !(state.meta && state.meta.sample);
+      if (s.accounts[u.id] && !stale) return false;
       s.accounts[u.id] = Object.assign(await hashPassword(pw), { mustChange: true, failed: 0, lockedUntil: null, changedAt: null, startup: true });
       this.write();
       this.log({ login: u.login, userId: u.id, ok: true, reason: N_("konto startowe administratora") });

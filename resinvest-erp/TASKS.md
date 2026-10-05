@@ -1,5 +1,13 @@
 # TASKS — ResInvest ERP
 
+## 3.7.1 — nowy film startowy, muzyka od razu, poprawka logowania administratora
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| nowy film startowy (z nagrania użytkownika, 1280×720, H.264 + AAC) | DONE | E2E „Intro 3.8: nowy film…”, `e2e-intro` 15/15 (odtwarzanie z dźwiękiem) |
+| muzyka włączona przy każdym starcie (także po wcześniejszym wyciszeniu) | DONE | E2E „Intro 3.8: muzyka włączona od razu…” |
+| logowanie Admin1234 przy danych demonstracyjnych zapisanych przez starą kartę / koncie z hasłem demo | DONE | E2E „3.8 Logowanie Admin1234…” (2 scenariusze) |
+
 ## 3.7.0 — motyw Szkło, rejestracja użytkowników, czysta baza z kontem startowym administratora
 
 | Kryterium | Status | Dowód |

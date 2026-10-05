@@ -272,17 +272,17 @@
     /** Dane przykładowe na start: konfiguracja sampleData albo przełącznik szkoleniowy riw.sample = 1. */
     sampleWanted() { return (root.RIW_CONFIG && root.RIW_CONFIG.sampleData === true) || lsGet("riw.sample", "") === "1"; },
     /**
-     * Jednorazowo (3.7): dane demonstracyjne z poprzednich wersji w tej przeglądarce → kopia pod osobnym kluczem
-     * i start od zera. Dane firmy (bez kont demonstracyjnych) nie są ruszane.
+     * Dane demonstracyjne zapisane przez wcześniejsze wersje (albo przez otwartą jeszcze starą kartę programu) →
+     * kopia pod osobnym kluczem i start od zera. Nie dotyczy danych firmy ani danych przykładowych wczytanych
+     * świadomie w Administracji (meta.keepSample).
      */
     cleanOldDemo() {
       try {
-        if (localStorage.getItem("riw.clean37")) return false;
-        localStorage.setItem("riw.clean37", new Date().toISOString());
         const raw = localStorage.getItem(KEY);
         if (!raw) return false;
         const old = JSON.parse(raw);
-        const demo = (old.users || []).some(u => u.login === "anna.gorska@resinvest.group" || u.login === "adrian.wojciechowski@resinvest.group");
+        if (old && old.meta && old.meta.keepSample) return false;
+        const demo = (old.meta && old.meta.sample) || (old.users || []).some(u => u.login === "anna.gorska@resinvest.group" || u.login === "adrian.wojciechowski@resinvest.group");
         if (!demo) return false;
         localStorage.setItem(KEY + ".demo-przed-3.7", raw);
         const auth = localStorage.getItem(AuthLib.AUTH_KEY);

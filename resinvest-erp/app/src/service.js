@@ -37,6 +37,8 @@
     n.rev = Math.max(s.rev, n.rev || 0) + 1;
     Object.keys(s).forEach(k => delete s[k]);
     Object.assign(s, n);
+    // dane wczytane świadomie (import kopii, dane przykładowe) — start programu ich nie czyści
+    s.meta = Object.assign({}, s.meta, { keepSample: true });
     R.audit(s, ctx, { entity: "system", entityId: action, opNo: action, event: action, action: detail, before, after: { rewizja: s.rev, operacje: s.operations.length, migracja: m.from !== m.to ? `${m.from} → ${m.to}` : "" } });
     return { ok: true, migrated: m.from !== m.to, notes: m.notes };
   }
