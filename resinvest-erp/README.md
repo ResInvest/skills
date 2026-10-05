@@ -1,4 +1,4 @@
-# ResInvest ERP 3.7 (3.7.1)
+# ResInvest ERP 3.7 (3.7.2)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
@@ -44,6 +44,16 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.7.2
+* **Konto testowe administratora** (tryb OFFLINE, okres testów): **`test@resinvest.group`**, hasło **`Test1234`** —
+  przycisk „Konto testowe administratora” na ekranie logowania wpisuje dane. Logowanie działa niezależnie od danych
+  zapisanych wcześniej w przeglądarce: gdy e-mail i hasło zgadzają się z konfiguracją (`config/app.config.json` →
+  `startup.testAdmin`), program odtwarza konto (rola administrator, aktywne, odblokowane) i zapisuje to w audycie
+  (`CONFIG_ACCOUNT_RESTORED`). Przed wdrożeniem usuń `startup.testAdmin` z konfiguracji i zbuduj program ponownie.
+* `magazyn@resinvest.group` / `Admin1234` działa tak samo (dopóki administrator nie ustawi własnego hasła).
+* Spacje na początku i końcu hasła (dopisywane przez klawiatury telefonów) są pomijane przy logowaniu, rejestracji
+  i zmianie hasła.
 
 ## Nowe w 3.7.1
 * **Nowy film startowy** (las, rębak i samochód ResInvest Commodities; 1280×720, 10 s, z dźwiękiem). Muzyka jest

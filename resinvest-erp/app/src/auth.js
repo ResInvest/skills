@@ -148,6 +148,15 @@
       this.log({ login: u.login, userId: u.id, ok: true, reason: N_("konto startowe administratora") });
       return true;
     },
+    /** Hasło konta z konfiguracji instalacji (konto testowe / startowe administratora). */
+    async setConfigPassword(state, userId, pw, mustChange) {
+      const u = state.users.find(x => x.id === userId); if (!u) return false;
+      const s = this.read();
+      s.accounts[userId] = Object.assign(await hashPassword(pw, 20000), { mustChange: !!mustChange, failed: 0, lockedUntil: null, changedAt: null, startup: !!mustChange, config: true });
+      this.write();
+      this.log({ login: u.login, userId, ok: true, reason: N_("konto z konfiguracji instalacji") });
+      return true;
+    },
     hasPassword(userId) { return !!this.read().accounts[userId]; },
     info(userId) { const a = this.read().accounts[userId]; return a ? { hasPassword: true, mustChange: !!a.mustChange, failed: a.failed || 0, lockedUntil: a.lockedUntil || null, lastLogin: a.lastLogin || null, changedAt: a.changedAt || null, demo: !!a.demo, startup: !!a.startup && !a.lastLogin } : { hasPassword: false }; },
     async login(state, login, password) {

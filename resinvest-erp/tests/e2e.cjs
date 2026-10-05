@@ -895,9 +895,27 @@ async function fillForestDirect(page) {
     await sp.fill("#lg-login", "magazyn@resinvest.group"); await sp.fill("#lg-pass", "Admin1234"); await sp.click("#lg-submit");
     check("3.8 Logowanie Admin1234 działa, gdy konto administratora miało hasło demonstracyjne", await sp.waitForSelector("#force-form", { timeout: 6000 }).then(() => true).catch(() => false));
     await stale.close();
+    // 3.7.2: konto testowe administratora z konfiguracji — działa przy dowolnych danych zapisanych w przeglądarce
+    {
+      const tc = await newCtx(browser, { sample: false }); const tp = await tc.newPage(); watch(tp, "3.7.2-test");
+      await tp.goto(FILE); await tp.keyboard.press("Escape"); await tp.waitForSelector("#login-form", { timeout: 8000 });
+      await tp.evaluate(() => { localStorage.setItem("riw.v3.state", JSON.stringify(RIW_DEBUG.R.Seed.minimal({ email: "szef@resinvest.group" }))); localStorage.setItem("riw.v3.auth", JSON.stringify({ v: 1, accounts: { u_admin: { algo: "pbkdf2-sha256", iter: 1, salt: "00", hash: "00" } }, log: [] })); });
+      await tp.reload(); await tp.keyboard.press("Escape"); await tp.waitForSelector("#test-admin", { timeout: 8000 });
+      check("3.7.2 Ekran logowania: przycisk konta testowego administratora (test@resinvest.group)", nb(await tp.textContent("#test-admin")).includes("test@resinvest.group"));
+      await tp.click("#test-admin"); await tp.click("#lg-submit");
+      const okT = await tp.waitForSelector("#nav .nav-item", { timeout: 8000 }).then(() => true).catch(() => false);
+      check("3.7.2 Konto testowe: logowanie przy obcych danych w przeglądarce, rola administratora, wpis w audycie", okT && await tp.evaluate(() => RIW_DEBUG.app.user().role === "admin" && RIW_DEBUG.store.state.audit.some(a => a.code === "CONFIG_ACCOUNT_RESTORED")));
+      await tp.evaluate(() => RIW_DEBUG.app.logout()); await tp.waitForSelector("#login-form");
+      await tp.fill("#lg-login", "test@resinvest.group"); await tp.fill("#lg-pass", "Test1234 "); await tp.click("#lg-submit");
+      check("3.7.2 Hasło ze spacją na końcu (klawiatura telefonu) przyjęte", await tp.waitForSelector("#nav .nav-item", { timeout: 8000 }).then(() => true).catch(() => false));
+      await tp.evaluate(() => RIW_DEBUG.app.logout()); await tp.waitForSelector("#login-form");
+      await tp.fill("#lg-login", "test@resinvest.group"); await tp.fill("#lg-pass", "Zle12345"); await tp.click("#lg-submit"); await tp.waitForTimeout(800);
+      check("3.7.2 Konto testowe: błędne hasło odrzucone", !(await tp.$("#nav")) && nb(await tp.textContent("#lg-err")).includes("Nieprawidłowy"));
+      await tc.close();
+    }
     const st0 = await page.evaluate(() => ({ users: RIW_DEBUG.store.state.users.map(u => u.login), ops: RIW_DEBUG.store.state.operations.length, partners: RIW_DEBUG.store.state.partners.length, fleet: RIW_DEBUG.store.state.fleet.vehicles.length, wh: RIW_DEBUG.store.state.warehouses.length, backup: !!localStorage.getItem("riw.v3.state.demo-przed-3.7"), cfgKeys: Object.keys(RIW_DEBUG.store.state.config) }));
     check("3.7 Czysta baza: tylko administrator, 3 magazyny, bez operacji, kontrahentów i floty; kopia danych demonstracyjnych", st0.users.join() === "magazyn@resinvest.group" && st0.ops === 0 && st0.partners === 0 && st0.fleet === 0 && st0.wh === 3 && st0.backup && !st0.cfgKeys.includes("startup"), st0);
-    check("3.7 Ekran logowania: podpowiedź pierwszego uruchomienia (bez hasła), brak kont demonstracyjnych", nb(await page.textContent("#auth-info")).includes("Pierwsze uruchomienie") && !nb(await page.textContent("#auth-info")).includes("Admin1234") && !(await page.$("#demo-users")));
+    check("3.7 Ekran logowania: konto testowe administratora, brak kont demonstracyjnych", !!(await page.$("#test-admin")) && !(await page.$("#demo-users")));
     check("3.7 Rejestracja włączona na ekranie logowania", !!(await page.$('[data-auth-tab="register"]')));
     // rejestracja: zła domena, różne hasła, poprawna
     await page.click('[data-auth-tab="register"]'); await page.waitForSelector("#reg-form");

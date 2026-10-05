@@ -57,6 +57,11 @@ export function loadConfig() {
   if (st.adminEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(st.adminEmail))) throw new Error("config/app.config.json: „startup.adminEmail” — nieprawidłowy adres");
   if (st.adminPassword && !(String(st.adminPassword).length >= 8 && /\d/.test(st.adminPassword) && /[A-Za-z]/.test(st.adminPassword))) throw new Error("config/app.config.json: „startup.adminPassword” — co najmniej 8 znaków, litery i cyfry");
   cfg.startup = { adminEmail: String(st.adminEmail || ""), adminName: String(st.adminName || "Administrator"), adminPassword: String(st.adminPassword || ""), allowSelfRegistration: st.allowSelfRegistration !== false };
+  const ta = st.testAdmin || null;
+  if (ta && ta.email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(ta.email)) || !(String(ta.password || "").length >= 8)) throw new Error("config/app.config.json: „startup.testAdmin” — podaj email i hasło (min. 8 znaków)");
+    cfg.startup.testAdmin = { email: String(ta.email).trim().toLowerCase(), name: String(ta.name || "Administrator testowy"), password: String(ta.password) };
+  }
   cfg.sampleData = raw.sampleData === true;
   return cfg;
 }

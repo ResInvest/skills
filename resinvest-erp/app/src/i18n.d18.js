@@ -1,6 +1,13 @@
 /* Słownik CS/EN — część 18 (3.7: motyw Szkło, rejestracja z potwierdzeniem e-mail, czysta baza i konto startowe administratora) */
 (function (root) { "use strict"; (root.RIW_I18N || require("./i18n.js")).addPairs({
   "Szkło (pastelowy)": ["Sklo (pastelový)", "Glass (pastel)"],
+  /* --- 3.7.2: konto testowe administratora --- */
+  "konto z konfiguracji instalacji": ["účet z konfigurace instalace", "account from the installation configuration"],
+  "Odtworzenie konta z konfiguracji instalacji: {l}": ["Obnovení účtu z konfigurace instalace: {l}", "Account restored from the installation configuration: {l}"],
+  "Konto testowe administratora": ["Testovací účet správce", "Test administrator account"],
+  "Administrator testowy": ["Testovací správce", "Test administrator"],
+  "hasło": ["heslo", "password"],
+  "Kliknij, aby wpisać dane konta testowego, i zaloguj się. Konto działa niezależnie od danych zapisanych w tej przeglądarce (okres testów).": ["Kliknutím vyplníte údaje testovacího účtu a přihlásíte se. Účet funguje nezávisle na datech uložených v tomto prohlížeči (zkušební období).", "Click to fill in the test account details, then sign in. The account works regardless of data saved in this browser (testing period)."],
   /* --- czysta baza, konto startowe --- */
   "konto startowe administratora": ["počáteční účet správce", "initial administrator account"],
   "Zachowano kopię uszkodzonych danych i uruchomiono czystą bazę. {p}": ["Kopie poškozených dat byla uložena a spuštěna čistá databáze. {p}", "A copy of the damaged data was kept and a clean database was started. {p}"],

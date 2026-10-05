@@ -312,7 +312,48 @@
       }
       return Promise.resolve(run());
     },
-    async login(login, pw) { const r = await this.auth.login(Store.state, login, pw); if (r.ok) Store.userId = r.userId; return r; },
+    async login(login, pw) {
+      await this.ensureConfigAccount(login, pw);
+      const r = await this.auth.login(Store.state, login, pw); if (r.ok) Store.userId = r.userId; return r;
+    },
+    /**
+     * Konta z konfiguracji instalacji (config/app.config.json → startup): konto testowe administratora (zawsze) i konto
+     * startowe administratora (dopóki ma hasło startowe). Gdy podany e-mail i hasło zgadzają się z konfiguracją, konto
+     * i profil są odtwarzane w danych tej przeglądarki — logowanie działa niezależnie od starszych danych zapisanych lokalnie.
+     */
+    async ensureConfigAccount(login, pw) {
+      const L = String(login || "").trim().toLowerCase(), P = String(pw || "");
+      const st = this.startup(), ta = (root.RIW_CONFIG && root.RIW_CONFIG.startup && root.RIW_CONFIG.startup.testAdmin) || null;
+      const cand = [];
+      if (ta && ta.email && ta.password) cand.push({ email: ta.email, name: ta.name, password: ta.password, test: true });
+      if (st.adminEmail && st.adminPassword) cand.push({ email: st.adminEmail, name: st.adminName, password: st.adminPassword, test: false });
+      const c = cand.find(x => x.email === L && (x.password === P || x.password === P.trim()));
+      if (!c || !Store.state) return false;
+      let s; try { s = this.read() || Store.state; } catch (e) { s = Store.state; }
+      let u = s.users.find(x => String(x.login).toLowerCase() === c.email || String(x.email || "").toLowerCase() === c.email);
+      const acc = u ? this.auth.read().accounts[u.id] : null;
+      // konto startowe: tylko dopóki administrator nie ustawił własnego hasła
+      if (!c.test && acc && !acc.demo && !acc.startup) return false;
+      let changed = false;
+      const wh = (s.warehouses.find(w => w.active !== false) || s.warehouses[0] || {}).id || "";
+      if (!u) {
+        const [firstName, ...rest] = String(c.name || "Administrator").split(/\s+/);
+        const id = R.byId(s.users, c.test ? "u_test_admin" : "u_admin") ? R.uid("u") : (c.test ? "u_test_admin" : "u_admin");
+        u = { id, login: c.email, email: c.email, name: c.name || "Administrator", firstName, lastName: rest.join(" "), role: "admin", whId: wh, warehouseIds: wh ? [wh] : [], status: "ACTIVE", active: true, lang: "", theme: "", notifyAllowed: [], notify: { events: [], email: true }, configAccount: c.test ? "test" : "startup", createdAt: new Date().toISOString() };
+        s.users.push(u); changed = true;
+      } else if (c.test && (u.role !== "admin" || R.statusOf(u) !== "ACTIVE")) {
+        Object.assign(u, { role: "admin", status: "ACTIVE", active: true }); changed = true;
+      }
+      if (!u.whId || !R.byId(s.warehouses, u.whId)) { u.whId = wh; u.warehouseIds = wh ? [wh] : []; changed = true; }
+      if (changed) {
+        s.rev = (s.rev || 0) + 1;
+        R.audit(s, { user: null, today: App.today(), source: N_("Logowanie") }, { entity: "user", entityId: u.id, opNo: u.login, event: "user", code: "CONFIG_ACCOUNT_RESTORED", act: R.Lx(N_("Odtworzenie konta z konfiguracji instalacji: {l}"), { l: u.login }), before: null, after: { rola: "admin" } });
+        try { this.write(s); } catch (e) { this.memoryOnly = true; }
+        Store.state = s;
+      }
+      if (!acc || acc.demo || acc.lockedUntil || !(await AuthLib.verifyPassword(c.password, acc))) await this.auth.setConfigPassword(s, u.id, c.password, !c.test);
+      return true;
+    },
     async resume() { const s = this.auth.session(); if (s && R.byId(Store.state.users, s.userId) && R.statusOf(R.byId(Store.state.users, s.userId)) === "ACTIVE") { Store.userId = s.userId; return { ok: true, mustChange: this.auth.info(s.userId).mustChange }; } return { ok: false }; },
     async logout(reason) { this.auth.logout(reason || "user"); Store.userId = null; },
     async afterPasswordChange() {},
@@ -847,7 +888,7 @@
       $("#tk-form", scope).onsubmit = async e => {
         e.preventDefault();
         const err = $("#tk-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
-        const pw = $("#tk-pass").value, pw2 = $("#tk-pass2").value;
+        const pw = $("#tk-pass").value.trim(), pw2 = $("#tk-pass2").value.trim();
         if (pw !== pw2) return fail(t("Hasła nie są takie same"));
         const pe = AuthLib.passwordError(pw, info.email); if (pe) return fail(pe);
         $("#tk-submit").disabled = true;
@@ -885,9 +926,10 @@
       const local = Store.mode === "local";
       const domains = ((Store.state && Store.state.config && Store.state.config.companyDomains) || ["resinvest.group"]).map(d => "@" + d).join(", ");
       const demo = local && Store.state ? Store.state.users.filter(u => AuthLib.DEMO_LOGINS.includes(u.login) && u.active !== false && AuthLib.LocalAuth.info(u.id).demo) : [];
+      const testAdm = local ? ((root.RIW_CONFIG && root.RIW_CONFIG.startup && root.RIW_CONFIG.startup.testAdmin) || null) : null;
       // pierwsze uruchomienie (czysta baza): podpowiedź konta administratora — bez hasła na ekranie
       const firstAdmin = local && Store.state ? Store.state.users.find(u => u.role === "admin" && AuthLib.LocalAuth.info(u.id).startup) : null;
-      if (firstAdmin && !opts.info && !reg) { opts = Object.assign({}, opts, { info: t("Pierwsze uruchomienie: zaloguj się kontem administratora {e} hasłem startowym z instrukcji instalacji — program poprosi o ustawienie własnego hasła.", { e: firstAdmin.login }), login: opts.login || firstAdmin.login }); }
+      if (firstAdmin && !opts.info && !reg && !testAdm) { opts = Object.assign({}, opts, { info: t("Pierwsze uruchomienie: zaloguj się kontem administratora {e} hasłem startowym z instrukcji instalacji — program poprosi o ustawienie własnego hasła.", { e: firstAdmin.login }), login: opts.login || firstAdmin.login }); }
       const tabs = !this.selfRegistration() ? "" : `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
       const loginForm = `<form id="login-form" novalidate autocomplete="on">
               <div class="field"><label for="lg-login">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
@@ -916,6 +958,9 @@
             ${tabs}
             ${opts.info ? `<div class="info-line mt4 ${opts.ok ? "ok" : ""}">${ic(opts.ok ? "check" : "alert", 15)}<span id="auth-info">${esc(opts.info)}</span></div>` : ""}
             ${reg ? regForm : loginForm}
+            ${!reg && testAdm ? `<div class="auth-divider">${esc(t("Konto testowe administratora"))}</div>
+              <div class="auth-users"><button class="auth-user" type="button" id="test-admin" data-tlogin="${esc(testAdm.email)}" data-tpass="${esc(testAdm.password)}"><span class="avatar">${esc(initials(testAdm.name || "AT"))}</span><div><b>${esc(testAdm.name || t("Administrator testowy"))} · ${esc(t("Administrator"))}</b><small>${esc(testAdm.email)} · ${esc(t("hasło"))}: ${esc(testAdm.password)}</small></div></button></div>
+              <p class="help mt2">${esc(t("Kliknij, aby wpisać dane konta testowego, i zaloguj się. Konto działa niezależnie od danych zapisanych w tej przeglądarce (okres testów)."))}</p>` : ""}
             ${!reg && demo.length ? `<div class="auth-divider">${esc(t("Konta demonstracyjne"))}</div>
               <div class="auth-users" id="demo-users">${demo.map(u => `<button class="auth-user" type="button" data-demo="${esc(u.login)}"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)} · ${esc(App.roleLabel(u.role))}</b><small>${esc(u.login)} · ${esc(App.whName(u.whId))}</small></div></button>`).join("")}</div>
               <p class="help mt2">${esc(t("Hasło kont demonstracyjnych: {p} — zmień je w „Mój profil” przed pracą na prawdziwych danych.", { p: AuthLib.DEMO_PASSWORD }))}</p>` : ""}
@@ -929,16 +974,17 @@
       const login = $("#lg-login"), pass = $("#lg-pass"), err = $("#lg-err");
       pass.addEventListener("keyup", e => $("#lg-caps").classList.toggle("hidden", !(e.getModifierState && e.getModifierState("CapsLock"))));
       $$("[data-demo]", scope).forEach(b => b.onclick = () => { login.value = b.dataset.demo; pass.value = AuthLib.DEMO_PASSWORD; pass.focus(); });
+      const tb = $("#test-admin", scope); if (tb) tb.onclick = () => { login.value = tb.dataset.tlogin; pass.value = tb.dataset.tpass; $("#lg-submit").focus(); };
       $("#login-form").onsubmit = async e => {
         e.preventDefault();
         const btn = $("#lg-submit");
         btn.disabled = true; err.classList.add("hidden");
         let res;
         const em = R.validateCompanyEmail(login.value, ((Store.state && Store.state.config) || root.RIW_CONFIG || {}).companyDomains || ["resinvest.group"]);
-        if (!pass.value) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(t("Podaj e-mail służbowy i hasło"))}</span>`; err.classList.remove("hidden"); return; }
+        if (!pass.value.trim()) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(t("Podaj e-mail służbowy i hasło"))}</span>`; err.classList.remove("hidden"); return; }
         if (!em.ok) { btn.disabled = false; err.innerHTML = ic("alert", 15) + `<span>${esc(em.error)}</span>`; err.classList.remove("hidden"); login.focus(); return; }
         login.value = em.email;
-        try { res = await Store.backend.login(em.email, pass.value); }
+        try { res = await Store.backend.login(em.email, pass.value.trim()); }   // spacje na brzegach (klawiatury telefonów) nie są częścią hasła
         catch (x) { res = { ok: false, error: t("Nie udało się zalogować: {m}", { m: x.message }) }; }
         btn.disabled = false;
         if (!res.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(res.error)}</span>`; err.classList.remove("hidden"); pass.select(); return; }
@@ -957,9 +1003,9 @@
         const err = $("#rg-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
         err.classList.add("hidden");
         const rec = { name: $("#rg-name").value.trim(), email: $("#rg-email").value.trim().toLowerCase(), phone: $("#rg-phone").value.trim(), lang: I18N.lang };
-        const pw = $("#rg-pass").value;
+        const pw = $("#rg-pass").value.trim();
         if (rec.name.length < 3) return fail(t("Podaj imię i nazwisko (co najmniej 3 znaki)"));
-        if (pw !== $("#rg-pass2").value) return fail(t("Hasła nie są takie same"));
+        if (pw !== $("#rg-pass2").value.trim()) return fail(t("Hasła nie są takie same"));
         $("#rg-submit").disabled = true;
         let r;
         try { r = await Store.backend.register(rec, pw); } catch (x) { r = { ok: false, error: x.message }; }
@@ -996,9 +1042,9 @@
       $("#setup-form").onsubmit = async e => {
         e.preventDefault();
         const err = $("#su-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
-        const name = $("#su-name").value.trim(), login = $("#su-login").value.trim().toLowerCase(), pw = $("#su-pass").value;
+        const name = $("#su-name").value.trim(), login = $("#su-login").value.trim().toLowerCase(), pw = $("#su-pass").value.trim();
         if (name.length < 3) return fail(t("Podaj imię i nazwisko (co najmniej 3 znaki)"));
-        if (pw !== $("#su-pass2").value) return fail(t("Hasła nie są takie same"));
+        if (pw !== $("#su-pass2").value.trim()) return fail(t("Hasła nie są takie same"));
         const pe = AuthLib.passwordError(pw, login); if (pe) return fail(pe);
         $("#su-submit").disabled = true;
         const r = await ServerBackend.api("POST", "/api/setup", { name, email: login, login, password: pw, sample: $("#su-sample").checked, lang: I18N.lang });
@@ -1034,8 +1080,8 @@
       $("#force-form").onsubmit = async e => {
         e.preventDefault();
         const err = $("#fc-err"), fail = m => { err.innerHTML = ic("alert", 15) + `<span>${esc(m)}</span>`; err.classList.remove("hidden"); };
-        if ($("#fc-new").value !== $("#fc-new2").value) return fail(t("Hasła nie są takie same"));
-        const r = await Store.backend.changePassword($("#fc-old").value, $("#fc-new").value);
+        if ($("#fc-new").value.trim() !== $("#fc-new2").value.trim()) return fail(t("Hasła nie są takie same"));
+        const r = await Store.backend.changePassword($("#fc-old").value.trim(), $("#fc-new").value.trim());
         if (!r || !r.ok) return fail((r && r.error) || t("Nie udało się zmienić hasła"));
         await Store.backend.afterPasswordChange();
         App.afterLogin({ ok: true, mustChange: false });
@@ -1052,8 +1098,8 @@
       $("[data-no]", m.el).onclick = () => m.close();
       $("[data-yes]", m.el).onclick = async () => {
         const msg = $("#cp-msg", m.el), fail = x => { msg.textContent = x; msg.classList.remove("hidden"); };
-        if ($("#cp-new", m.el).value !== $("#cp-new2", m.el).value) return fail(t("Hasła nie są takie same"));
-        const r = await Store.backend.changePassword($("#cp-old", m.el).value, $("#cp-new", m.el).value);
+        if ($("#cp-new", m.el).value.trim() !== $("#cp-new2", m.el).value.trim()) return fail(t("Hasła nie są takie same"));
+        const r = await Store.backend.changePassword($("#cp-old", m.el).value.trim(), $("#cp-new", m.el).value.trim());
         if (!r || !r.ok) return fail((r && r.error) || t("Nie udało się zmienić hasła"));
         m.close(); Toast.ok(t("Hasło zmienione"), t("Użyj nowego hasła przy następnym logowaniu."));
       };

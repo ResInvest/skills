@@ -326,8 +326,8 @@
       $("[data-no]", m.el).onclick = () => m.close();
       $("[data-yes]", m.el).onclick = async () => {
         const msg = $("#rp-msg", m.el), fail = x => { msg.textContent = x; msg.classList.remove("hidden"); };
-        if ($("#rp-pw", m.el).value !== $("#rp-pw2", m.el).value) return fail(t("Hasła nie są takie same"));
-        const r = await Store.backend.setPassword(id, $("#rp-pw", m.el).value, $("#rp-must", m.el).checked);
+        if ($("#rp-pw", m.el).value.trim() !== $("#rp-pw2", m.el).value.trim()) return fail(t("Hasła nie są takie same"));
+        const r = await Store.backend.setPassword(id, $("#rp-pw", m.el).value.trim(), $("#rp-must", m.el).checked);
         if (!r || !r.ok) return fail((r && r.error) || t("Nie udało się ustawić hasła"));
         m.close(); Toast.ok(t("Hasło ustawione"), u.login); App.render();
       };

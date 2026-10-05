@@ -2,6 +2,11 @@
 
 Ostatnia aktualizacja: 2026-10-05 · etap: **ResInvest ERP 3.7.0 — wersja startowa: czysta baza, konto administratora, rejestracja użytkowników, motyw Szkło**
 
+## Wykonane — 3.7.2
+
+- [x] Konto testowe administratora test@resinvest.group / Test1234 (przycisk na ekranie logowania), odporne na stare dane w przeglądarce
+- [x] Pomijanie spacji na brzegach hasła; testy: jednostkowe 149, serwer 47, E2E 315, E2E serwera 29
+
 ## Wykonane — 3.7.1
 
 - [x] Nowy film startowy, muzyka włączona przy każdym starcie

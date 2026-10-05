@@ -1,5 +1,12 @@
 # TASKS — ResInvest ERP
 
+## 3.7.2 — konto testowe administratora
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| konto testowe test@resinvest.group / Test1234 działa przy dowolnych danych w przeglądarce (obcy administrator, konto zablokowane / nieaktywne) | DONE | E2E „3.7.2 Konto testowe…”, scenariusze ręczne 1–4 |
+| hasło ze spacją na końcu (klawiatura telefonu) przyjęte; błędne hasło odrzucone | DONE | E2E „3.7.2 Hasło ze spacją…”, „błędne hasło odrzucone” |
+
 ## 3.7.1 — nowy film startowy, muzyka od razu, poprawka logowania administratora
 
 | Kryterium | Status | Dowód |
