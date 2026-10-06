@@ -54,8 +54,6 @@
   "Rodzaj operacji": ["Druh operace", "Operation type"],
   "Rodzaju operacji, magazynu i daty dokumentu nie zmienia się korektą — w razie potrzeby anuluj dokument i wprowadź nowy.": ["Druh operace, sklad a datum dokladu se opravou nemění — v případě potřeby doklad stornujte a zadejte nový.", "The operation type, warehouse and document date cannot be changed by a correction — if needed, cancel the document and enter a new one."],
   "Każdy rodzaj działa samodzielnie — wypełniasz tylko to, co jest potrzebne.": ["Každý druh funguje samostatně — vyplňujete jen to, co je potřeba.", "Each type works on its own — you fill in only what is needed."],
-  "Magazyn → odbiorca (WZ) albo sprzedaż bezpośrednia po produkcji w lesie.": ["Sklad → odběratel (WZ) nebo přímý prodej po výrobě v lese.", "Warehouse → customer (WZ), or direct sale after production in the forest."],
-  "Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu.": ["Surovina ze skladu → produkt na sklad (RW + PW). Bez dopravy.", "Raw material from stock → product to stock (RW + PW). No transport."],
   "Magazyn → inny magazyn firmy. Stan firmy bez zmian.": ["Sklad → jiný sklad firmy. Zásoba firmy beze změny.", "Warehouse → another company warehouse. Company stock unchanged."],
   "Magazyn: <b>{w}</b> — magazyn dokumentu.": ["Sklad: <b>{w}</b> — sklad dokladu.", "Warehouse: <b>{w}</b> — the document's warehouse."],
   "Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).": ["Sklad: <b>{w}</b> — vyplývá z přihlášeného uživatele ({u}).", "Warehouse: <b>{w}</b> — follows from the signed-in user ({u})."],

@@ -10,6 +10,8 @@ import { inflateRawSync } from "node:zlib";
 
 const require = createRequire(import.meta.url);
 globalThis.RIW_CONFIG = JSON.parse(readFileSync(new URL("../config/app.config.json", import.meta.url), "utf8"));
+// testy numeracji według rodzaju dokumentu (PZ, WZ, RW, KOR…) — tryb config.docNumbering = "types"; jedna seria WZ: features38.test.mjs
+globalThis.RIW_CONFIG.docNumbering = "types";
 require("../app/src/i18n.js");
 const R = require("../app/src/engine.js");
 require("../app/src/seed.js");

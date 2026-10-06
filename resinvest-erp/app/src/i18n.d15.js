@@ -121,7 +121,6 @@
   "Numer {no} jest już użyty w magazynie {w} w roku {y}": ["Číslo {no} je již použito ve skladu {w} v roce {y}", "Number {no} is already used in warehouse {w} in {y}"],
   "Data dokumentu nie może być z przyszłości": ["Datum dokladu nemůže být v budoucnosti", "The document date cannot be in the future"],
   "Data dokumentu": ["Datum dokladu", "Document date"],
-  "<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data operacji. <b>Data operacji</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system.": ["<b>Co:</b> datum vystavení dokladu (např. datum z dokladu dodavatele). Prázdné = datum operace. <b>Datum operace</b> je den příjmu / výdeje zboží; datum a čas vytvoření záznamu ukládá systém.", "<b>What:</b> the document issue date (e.g. the date on the supplier's document). Empty = operation date. The <b>operation date</b> is the day goods are received / issued; the system stores the date and time the entry was created."],
   "Nr {t}": ["Č. {t}", "{t} no."],
   "Nr {t} (ręcznie)": ["Č. {t} (ručně)", "{t} no. (manual)"],
   "Podpowiedź: <b>{s}</b>": ["Návrh: <b>{s}</b>", "Suggestion: <b>{s}</b>"],

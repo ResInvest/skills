@@ -1,7 +1,6 @@
 /* Słownik CS/EN — część 17 (3.6: zakup z produkcją i sprzedażą bezpośrednią z lasu, flota własna i zewnętrzna, wysyłka dokumentów e-mailem) */
 (function (root) { "use strict"; (root.RIW_I18N || require("./i18n.js")).addPairs({
   /* --- zakup: zakres, sprzedaż bezpośrednia z lasu --- */
-  "Dostawca → magazyn (PZ). Opcjonalnie produkcja i sprzedaż bezpośrednia z lasu.": ["Dodavatel → sklad (PZ). Volitelně výroba a přímý prodej z lesa.", "Supplier → warehouse (PZ). Optionally production and direct sale from the forest."],
   "Najpierw zakres zakupu, potem dostawca, produkt, ilość i cena.": ["Nejprve rozsah nákupu, potom dodavatel, produkt, množství a cena.", "First the purchase scope, then supplier, product, quantity and price."],
   "Zakres zakupu (opcjonalnie)": ["Rozsah nákupu (volitelně)", "Purchase scope (optional)"],
   "Zakres zakupu": ["Rozsah nákupu", "Purchase scope"],

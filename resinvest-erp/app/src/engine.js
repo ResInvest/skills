@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.7.3";
+  const VERSION = "3.8.0";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -305,6 +305,8 @@
   const partnerKind = p => !p ? null : SUPPLIER_KINDS[p.kind] ? p.kind : /^nadle[sś]nictwo/i.test(p.name || "") ? "nadlesnictwo" : "firma";
   const ndlName = p => String((p && p.name) || "").replace(/^nadle[sś]nictwo\s+/i, "").trim();
   const MAX_RUNS = 50;
+  /** Maksymalna liczba firm transportu zewnętrznego w jednej operacji (lista 1–10 w formularzu). */
+  const MAX_EXT_COMPANIES = 10;
   const PROD_TYPES = {
     lesna: { label: N_("Zrębka produkcyjna leśna"), productId: "pr_zr_lesna" },
     inwestycyjna: { label: N_("Zrębka produkcyjna inwestycyjna"), productId: "pr_zr_inw", sourceType: N_("Wycinka inwestycyjna") }
@@ -382,7 +384,7 @@
     config = Object.fromEntries(Object.entries(config || {}).filter(([k]) => !INSTALL_KEYS.includes(k) && !k.startsWith("_")));
     return {
       schema: SCHEMA, version: VERSION, rev: 0,
-      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two" }, config || {}),
+      config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two", docNumbering: "wz" }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [], extraTypes: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
       operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {}, plans: [], notices: [],
@@ -548,7 +550,7 @@
   /* ------------------------------------------------------------------ */
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
-  function blankExtRun() { return { reg: "", driver: "", km: "", rate: "", freight: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
+  function blankExtRun() { return { company: "", reg: "", driver: "", km: "", rate: "", freight: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
   function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
@@ -561,7 +563,7 @@
       transport: {
         mode: "none", place: "", placeTouched: false,
         own: { runCount: "1", runs: [blankRun()] },
-        external: { company: "", includedInPrice: false, runCount: "1", runs: [blankExtRun()] },
+        external: { companyCount: "1", company: "", includedInPrice: false, runCount: "1", runs: [blankExtRun()] },
         train: { trainNo: "", carrier: "", docNo: "", loadPlace: "", wagonCount: "", capUnit: "t", capacity: "", tonMode: "same", sameT: "", wagonT: [], price: "", priceUnit: "t" }
       },
       extras: { enabled: false, items: [blankExtra()] },
@@ -1016,9 +1018,18 @@
            Koszt kursu = fracht kursu (jeśli podany) albo km × stawka; „wliczony w cenę” → 0 zł.
            Dane ≤ 2.3 (jeden kurs bez listy: reg, km, freight) = jeden kurs z frachtem. */
         const X = T.external || {};
-        if (!str(X.company)) err("transport.external.company", t("Podaj firmę transportową"));
         const included = !!X.includedInPrice;
         const legacy = !Array.isArray(X.runs);
+        /* Liczba firm przewozowych (1–10). Jedna firma — pole „Firma transportowa” dla wszystkich kursów
+           (także dane sprzed 3.8 bez tego pola); kilka firm — firma wybierana / wpisywana w każdym kursie. */
+        let companyCount = 1;
+        if (!legacy && str(X.companyCount) !== "") {
+          const n = num("transport.external.companyCount", X.companyCount, { gt: 0, integer: true, label: N_("liczbę firm") });
+          if (n !== null && n > MAX_EXT_COMPANIES) err("transport.external.companyCount", t("Maksymalnie {n} firm zewnętrznych w jednej operacji", { n: MAX_EXT_COMPANIES }));
+          else if (n !== null) companyCount = n;
+        }
+        const multi = companyCount > 1;
+        if (!multi && !str(X.company)) err("transport.external.company", t("Podaj firmę transportową"));
         const K = (i, f) => legacy ? `transport.external.${f === "freight" || f === "km" || f === "reg" ? f : "runs.0." + f}` : `transport.external.runs.${i}.${f}`;
         let count = 1;
         if (!legacy) {
@@ -1032,6 +1043,8 @@
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = src[i] || {};
+          const company = multi ? str(r.company).replace(/\s+/g, " ") : str(X.company);
+          if (multi && !company) err(K(i, "company"), t("Wybierz albo wpisz firmę transportową kursu {n}", { n: i + 1 }));
           if (!str(r.reg)) err(K(i, "reg"), t("Podaj numer rejestracyjny pojazdu przewoźnika"));
           const freight = str(r.freight) === "" ? null : num(K(i, "freight"), r.freight, { min: 0, label: N_("fracht kursu") });
           const needKm = !included && freight === null && !legacy;
@@ -1045,18 +1058,28 @@
           else q = sp.qty || null;
           const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: N_("wagę rzeczywistą") });
           const cost = included ? 0 : freight !== null ? round(freight, 2) : km !== null && rate !== null ? round(km * rate, 2) : 0;
-          runs.push({ no: i + 1, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? N_("wliczony w cenę") : freight !== null ? N_("fracht") : N_("km × stawka"), qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
+          runs.push({ no: i + 1, company, reg: str(r.reg).toUpperCase(), driver: str(r.driver), km: km || 0, rate: rate || 0, freight, cost, costBasis: included ? N_("wliczony w cenę") : freight !== null ? N_("fracht") : N_("km × stawka"), qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
+        // podsumowanie per firma (nazwy porównywane bez wielkości liter — pierwsza pisownia wygrywa)
+        const byCo = new Map();
+        for (const r of runs) {
+          if (!r.company) continue;
+          const k = r.company.toLowerCase(), c = byCo.get(k) || { company: r.company, runs: 0, km: 0, qty: 0, cost: 0 };
+          r.company = c.company; c.runs++; c.km = rq(c.km + r.km); c.qty = rq(c.qty + r.qty); c.cost = round(c.cost + r.cost, 2); byCo.set(k, c);
+        }
+        const companies = [...byCo.values()];
+        if (multi && count > 0 && companies.length > companyCount) err("transport.external.companyCount", t("W kursach podano {a} firm, a zadeklarowano {b} — zwiększ liczbę firm albo popraw kursy", { a: companies.length, b: companyCount }));
+        else if (multi && count > 0 && companies.length && companies.length < companyCount && runs.every(r => r.company)) warnings.push(t("Zadeklarowano {b} firm transportowych, a w kursach podano {a}.", { a: companies.length, b: companyCount }));
         Object.assign(part, {
-          company: str(X.company), includedInPrice: included, runs, runCount: runs.length, qtyUnit: sp.unit, totalQty,
+          company: multi ? companies.map(c => c.company).join(", ") : str(X.company), companyCount: multi ? companyCount : 1, companies, includedInPrice: included, runs, runCount: runs.length, qtyUnit: sp.unit, totalQty,
           totalWeightT: weighed.length ? rq(weighed.reduce((a, r) => a + r.weightT, 0)) : null, weightMissing: runs.length - weighed.length,
           reg: [...new Set(runs.map(r => r.reg).filter(Boolean))].join(", "), driverName: [...new Set(runs.map(r => r.driver).filter(Boolean))].join(", "),
           km: rq(runs.reduce((a, r) => a + r.km, 0)), freight: round(runs.reduce((a, r) => a + (r.freight || 0), 0), 2), cost: round(runs.reduce((a, r) => a + r.cost, 0), 2)
         });
         if (!legacy && runs.length && weighed.length < runs.length) warnings.push(t("Brak wagi rzeczywistej dla {a} z {b} kursów.", { a: runs.length - weighed.length, b: runs.length }));
-        part.runs.forEach(r => { r.kind = "external"; r.company = part.company; });
+        part.runs.forEach(r => { r.kind = "external"; });
         return part;
       };
       if (mode === "own") Object.assign(transport, ownPart());
@@ -1167,8 +1190,20 @@
     /* ---------- numery PZ / WZ / MM (tryb z listy: automatyczny albo ręczny) i data dokumentu ----------
        Numer ręczny jest unikalny w obrębie typu, magazynu i roku. Korekta nie zmienia numeru dokumentu.
        Bez wybranego trybu (starsze szkice): wpisany numer = ręczny, puste pole = automatyczny.            */
-    const DN = draft.docNos || {}, DM = draft.docNoMode || {};
-    for (const ty of DOC_NO_TYPES) {
+    const DN = draft.docNos || {}, DM = draft.docNoMode || {}, unified = unifiedNumbering(state);
+    if (unified && documents.length && !(ctx && ctx.correction)) {
+      // jedna seria WZ: jeden numer dla całej transakcji (wszystkich jej dokumentów)
+      const sn = seriesNoOf(draft), K = `docNos.${DOC_SERIES}`;
+      if (!NO_MODES[sn.mode]) err(`docNoMode.${DOC_SERIES}`, t("Wybierz sposób numeracji"));
+      else if (sn.mode === "manual") {
+        const want = sn.no.replace(/\s+/g, " ");
+        if (!want) err(K, t("Wpisz numer dokumentu albo wybierz numerację automatyczną"));
+        else if (want.length > 40 || !/^[\p{L}0-9][\p{L}0-9 /._-]*$/u.test(want)) err(K, t("Numer dokumentu: litery, cyfry oraz znaki / . - _ (do 40 znaków)"));
+        else if (whId && Dates.isISO(date) && docNoTaken(state, DOC_SERIES, whId, date.slice(0, 4), want)) err(K, t("Numer {no} jest już użyty w magazynie {w} w roku {y}", { no: want, w: wh ? wh.name : "", y: date.slice(0, 4) }), "DOC_NO");
+        else norm.docNos[DOC_SERIES] = want;
+      }
+    }
+    for (const ty of unified ? [] : DOC_NO_TYPES) {
       if (!documents.some(d => d.type === ty) || (ctx && ctx.correction)) continue;
       const mode = docNoModeOf(draft, ty), K = `docNos.${ty}`;
       if (DM[ty] && !NO_MODES[DM[ty]]) { err(`docNoMode.${ty}`, t("Wybierz sposób numeracji")); continue; }
@@ -1183,7 +1218,11 @@
     if (docDate && !Dates.isISO(docDate)) err("docDate", t("Podaj datę w formacie RRRR-MM-DD"));
     else if (docDate && docDate > today) err("docDate", t("Data dokumentu nie może być z przyszłości"));
     norm.docDate = docDate && Dates.isISO(docDate) ? docDate : (Dates.isISO(date) ? date : "");
-    documents.forEach(d => { if (DOC_NO_TYPES.includes(d.type)) { d.docDate = norm.docDate; if (norm.docNos[d.type]) d.manualNo = norm.docNos[d.type]; } });
+    documents.forEach(d => {
+      if (DOC_NO_TYPES.includes(d.type)) d.docDate = norm.docDate;
+      if (unified) { d.series = DOC_SERIES; if (norm.docNos[DOC_SERIES]) d.manualNo = norm.docNos[DOC_SERIES]; }
+      else if (DOC_NO_TYPES.includes(d.type) && norm.docNos[d.type]) d.manualNo = norm.docNos[d.type];
+    });
 
     /* ---------- symulacja sald krok po kroku (magazyn × produkt) ---------- */
     postings.forEach((p, i) => { p.step = i + 1; p.doc = KINDS[p.kind].doc; });
@@ -1207,13 +1246,42 @@
     return { ok: errorList.length === 0, errors, errorCodes: codes, errorList, warnings, whId, date, type, norm, postings, balances, documents, totals, user: user ? { id: user.id, name: user.name } : null };
   }
 
+  /** Nowe firmy transportu zewnętrznego (wpisane w kursach) dopisują się do listy przewoźników — kolejne operacje podpowiadają je z listy. */
+  function rememberCarriers(state, T) {
+    if (!T || !Array.isArray(T.runs)) return;
+    if (!Array.isArray(state.carriers)) state.carriers = [];
+    const have = new Set(state.carriers.map(c => String(c).trim().toLowerCase()));
+    for (const r of T.runs) {
+      const c = r.kind === "external" ? str(r.company) : "";
+      if (c && !have.has(c.toLowerCase())) { have.add(c.toLowerCase()); state.carriers.push(c); }
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /* Numeracja, audyt                                                    */
   /* ------------------------------------------------------------------ */
+  /** Numeracja dokumentów magazynowych (od 3.8): jedna wspólna seria „WZ” dla wszystkich dokumentów — zakup, sprzedaż,
+      produkcja, MM, transport, korekty, anulowania, inwentaryzacja i bilans otwarcia. Jedna transakcja (operacja) = jeden
+      numer WZ, wspólny dla jej dokumentów. Rodzaj ruchu (przychód / rozchód) zostaje w danych do raportów i stanów.
+      config.docNumbering = "types" przywraca osobne serie PZ / WZ / RW / PW / MM… Numery nadane wcześniej nie zmieniają się. */
+  const DOC_SERIES = "WZ";
+  const WAREHOUSE_DOCS = ["PZ", "WZ", "RW", "PW", "MM", "TR", "KOR", "AN", "IN", "BO"];
+  const DOC_NUMBERING = { wz: N_("Jedna seria WZ dla wszystkich dokumentów"), types: N_("Osobne serie według rodzaju dokumentu (PZ, WZ, RW, PW, MM…)") };
+  const unifiedNumbering = state => !(state && state.config && state.config.docNumbering === "types");
   function nextNo(state, type, date) {
-    const ym = Dates.ym(date), k = `${type}-${ym}`;
+    const series = WAREHOUSE_DOCS.includes(type) && unifiedNumbering(state) ? DOC_SERIES : type;
+    const ym = Dates.ym(date), k = `${series}-${ym}`;
     state.seq[k] = (state.seq[k] || 0) + 1;
-    return `${type}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+    return `${series}/${String(state.seq[k]).padStart(3, "0")}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+  }
+  /** Numer WZ transakcji w szkicu: tryb (auto / ręczny) i wpisany numer — także ze szkiców sprzed 3.8 (pola PZ / MM). */
+  function seriesNoOf(draft) {
+    const DN = (draft && draft.docNos) || {}, DM = (draft && draft.docNoMode) || {};
+    const legacyNo = str(DN.WZ) || str(DN.PZ) || str(DN.MM);
+    if (DM.WZ === "auto") return { mode: "auto", no: "" };
+    if (DM.WZ === "manual") return { mode: "manual", no: str(DN.WZ) };
+    if (DM.WZ) return { mode: DM.WZ, no: str(DN.WZ) };
+    return ["PZ", "MM"].some(k => DM[k] === "manual") || legacyNo ? { mode: "manual", no: legacyNo } : { mode: "auto", no: "" };
   }
   /** Dokumenty z wyborem numeracji (automatyczna / ręczna). */
   const DOC_NO_TYPES = ["PZ", "WZ", "MM"];
@@ -1227,19 +1295,24 @@
   const normNo = no => String(no == null ? "" : no).replace(/\s+/g, "").toUpperCase();
   /** Czy numer dokumentu danego typu jest już użyty w magazynie w danym roku (numer ręczny lub automatyczny). */
   function docNoTaken(state, type, whId, year, no) {
-    const k = normNo(no);
-    return state.operations.some(o => o.whId === whId && String(o.date).slice(0, 4) === year && (o.documents || []).some(d => d.type === type && normNo(d.no) === k));
+    const k = normNo(no), any = unifiedNumbering(state);
+    const inYear = d => String(d || "").slice(0, 4) === year;
+    if (state.operations.some(o => o.whId === whId && inYear(o.date) && (o.documents || []).some(d => (any || d.type === type) && normNo(d.no) === k))) return true;
+    if (!any) return false;
+    // jedna seria: numer nie może powtórzyć numeru korekty, anulowania, inwentaryzacji ani bilansu otwarcia
+    if (state.operations.some(o => o.whId === whId && ((o.corrections || []).some(c => inYear(c.date) && normNo(c.no) === k) || (o.cancel && inYear(o.cancel.date) && normNo(o.cancel.no) === k)))) return true;
+    return (state.ledger || []).some(l => l.whId === whId && (l.kind === "BO" || l.kind === "INW") && inYear(l.date) && normNo(l.docNo) === k);
   }
   /** Kolejny numer automatyczny — z pominięciem numerów wpisanych ręcznie. */
   function autoNo(state, type, date, whId) {
     let no = nextNo(state, type, date), guard = 0;
-    while (whId && DOC_NO_TYPES.includes(type) && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
+    while (whId && (unifiedNumbering(state) || DOC_NO_TYPES.includes(type)) && docNoTaken(state, type, whId, date.slice(0, 4), no) && guard++ < 1000) no = nextNo(state, type, date);
     return no;
   }
   /** Podpowiedź numeru (bez rezerwacji) — pokazywana w formularzu przy polu numeru PZ / WZ. */
   function suggestDocNo(state, type, whId, date) {
     const d = Dates.isISO(date) ? date : Dates.localToday();
-    const tmp = { seq: Object.assign({}, state.seq), operations: state.operations };
+    const tmp = { seq: Object.assign({}, state.seq), operations: state.operations, ledger: state.ledger, config: state.config };
     return autoNo(tmp, type, d, whId);
   }
   function nextLedgerSeq(state) { let m = 0; for (const l of state.ledger) if (l.seq > m) m = l.seq; return m + 1; }
@@ -1278,8 +1351,11 @@
     const keys = [...new Set(plan.postings.map(p => `${p.whId}|${p.productId}`))];
     const before = snap(state, keys);
     const opId = uid("op");
-    const docs = plan.documents.map(d => Object.assign({}, d, { no: d.manualNo || autoNo(state, d.type, plan.date, plan.whId) }));
+    // jedna seria WZ: wszystkie dokumenty transakcji dostają ten sam numer; tryb „types” — numer według rodzaju dokumentu
+    const opSeriesNo = unifiedNumbering(state) && plan.documents.length ? (plan.norm.docNos[DOC_SERIES] || autoNo(state, DOC_SERIES, plan.date, plan.whId)) : null;
+    const docs = plan.documents.map(d => Object.assign({}, d, { no: opSeriesNo || d.manualNo || autoNo(state, d.type, plan.date, plan.whId) }));
     const docNo = t => (docs.find(d => d.type === t) || {}).no || null;
+    rememberCarriers(state, plan.norm.transport);
     const pw = docs.find(d => d.type === "PW"), rw = docs.find(d => d.type === "RW");
     if (pw && rw) pw.meta = Object.assign({}, pw.meta, { fromDoc: rw.no });
     let seq = nextLedgerSeq(state);
@@ -1697,6 +1773,7 @@
     const prevStatus = op.status;
     op.input = Object.assign(clone(newDraft), { date: op.date }); delete op.input.idemKey; delete op.input.draftId;
     Object.assign(op, pc.nextOp, { place: pc.nextOp.transport.place, totals: pc.plan.totals, status: "CORRECTED" });
+    rememberCarriers(state, op.transport);
     op.documents.forEach(dc => { if (dc.type === "PZ" || dc.type === "WZ") dc.docDate = op.docDate; if (dc.type === "WZ" && op.sale) { dc.weightT = op.sale.weightT; dc.weightMode = op.sale.weightMode; } });
     if (pc.valueChanged) op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "correct", no }, pc.valueDelta));
     state.rev += 1;
@@ -2235,14 +2312,14 @@
   };
   /** Konfiguracja systemu (obieg zatwierdzania, rejestracja samodzielna). */
   const Settings = {
-    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool", mmMode: ["one", "two"] },
+    KEYS: { requireApproval: "bool", allowSelfRegistration: "bool", mmMode: ["one", "two"], docNumbering: ["wz", "types"] },
     save(state, next, ctx) {
       if (!can(ctx && ctx.user, "settings.edit")) return { ok: false, error: t("Konfigurację zmienia administrator"), code: "FORBIDDEN" };
       const before = {}, after = {};
       for (const [k, ty] of Object.entries(this.KEYS)) if (next[k] !== undefined) {
         if (Array.isArray(ty) && !ty.includes(next[k])) return { ok: false, error: t("Nieprawidłowa wartość ustawienia „{k}”", { k }) };
         const v = ty === "bool" ? !!next[k] && next[k] !== "false" : next[k];
-        const cur = k === "mmMode" ? mmMode(state.config) : state.config[k];
+        const cur = k === "mmMode" ? mmMode(state.config) : k === "docNumbering" ? (unifiedNumbering(state) ? "wz" : "types") : state.config[k];
         if (cur !== v) { before[k] = cur; after[k] = v; state.config[k] = v; }
       }
       if (!Object.keys(after).length) return { ok: true, unchanged: true };
@@ -2501,8 +2578,8 @@
 
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
-    PROD_TYPES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
-    CHIPPER_OWNERS, VEHICLE_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    PROD_TYPES, MAX_EXT_COMPANIES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
+    CHIPPER_OWNERS, VEHICLE_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, DOC_SERIES, WAREHOUSE_DOCS, DOC_NUMBERING, unifiedNumbering, seriesNoOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,

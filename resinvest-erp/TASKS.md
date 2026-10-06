@@ -1,5 +1,17 @@
 # TASKS — ResInvest ERP
 
+## 3.8.0 — kilka firm transportu zewnętrznego, data przyjęcia, jedna seria WZ
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| lista „Liczba firm przewidzianych do transportu” 1–10 z samouczkiem; firma w każdym kursie (lista lub nowa nazwa) | DONE | E2E „3.8 Transport zewnętrzny…”, „3.8 Kilka firm…” |
+| silnik: firma per kurs, kontrola liczby firm, podsumowanie per firma, transport mieszany, dane sprzed 3.8 | DONE | `features38.test` (5 testów transportu) |
+| nowe firmy dopisują się do listy przewoźników; raport transportu per firma | DONE | `features38.test` „nowe firmy z kursów…” |
+| „Data przyjęcia” + samouczek „Wprowadź datę przyjęcia produktu na magazyn.” | DONE | E2E „3.8 Zakup: pole Data przyjęcia…” |
+| „Numeracja WZ”; jedna seria WZ dla wszystkich dokumentów, jeden numer na transakcję; stare numery bez zmian | DONE | `features38.test` (numeracja), E2E „3.8 Rejestr…” |
+| przełącznik trybu numeracji w Administracji (audyt) | DONE | `features38.test` „administrator przełącza tryb…” |
+| formularz bez przewijania w bok na telefonie (390 px) | DONE | pomiar Playwright: szerokość strony 390 px |
+
 ## 3.7.3 — kanał poczty AgentMail
 
 | Kryterium | Status | Dowód |

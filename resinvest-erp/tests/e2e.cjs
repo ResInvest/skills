@@ -155,13 +155,13 @@ async function fillForestDirect(page) {
     await page.fill("#f-extDoc", "KP 1/09/2026");
     await page.click("#summary [data-save]"); await page.waitForSelector("#confirm-op");
     const conf = nb(await page.textContent("#confirm-op"));
-    check("§31.15 Podsumowanie przed zatwierdzeniem: zużycie, produkt, stan przed/po, masa, GJ, rąbanie", ["125 m³", "500 MP", "817 m³", "692 m³", "8 293 MP", "8 793 MP", "GJ", "5 000,00 zł", "RW", "PW"].every(x => conf.includes(x)), conf.slice(0, 300));
+    check("§31.15 Podsumowanie przed zatwierdzeniem: zużycie, produkt, stan przed/po, masa, GJ, rąbanie", ["125 m³", "500 MP", "817 m³", "692 m³", "8 293 MP", "8 793 MP", "GJ", "5 000,00 zł", "WZ", "Rozchód wewnętrzny (zużycie)", "Przyjęcie wewnętrzne (produkcja)"].every(x => conf.includes(x)), conf.slice(0, 300));
     await page.click("#confirm-op [data-no]"); await page.waitForTimeout(100);
     check("§31.15 „Wróć do edycji” nie zapisuje", (await opsN(page)) === 11);
     const nProd = await approve(page, { dbl: true });
     check("§31.16 F: podwójne kliknięcie „Zatwierdź dokument” = jedna operacja", nProd === 1, nProd);
     const prodOp = await lastOp(page);
-    check("§22 T1: po zapisie drewno 692 m³, zrębka 8 793 MP, status ZATWIERDZONY", (await bal(page, "pr_drewno")) === 692 && (await bal(page, "pr_zr_lesna")) === 8793 && prodOp.status === "POSTED" && prodOp.no.startsWith("PW/"));
+    check("§22 T1: po zapisie drewno 692 m³, zrębka 8 793 MP, status ZATWIERDZONY", (await bal(page, "pr_drewno")) === 692 && (await bal(page, "pr_zr_lesna")) === 8793 && prodOp.status === "POSTED" && prodOp.no.startsWith("WZ/"));
 
     /* ------------- §31.16 B: brak surowca (Brąszewice 30 m³) ------------- */
     await setUser(page, "u_bra");
@@ -235,7 +235,7 @@ async function fillForestDirect(page) {
     const mmSt = () => page.evaluate(id => { const o = RIW_DEBUG.store.state.operations.find(x => x.id === id); return { st: RIW_DEBUG.R.mmState(o), w: o.mm.weightT, rc: o.mm.receipt }; }, mmOp.id);
     await openOp(page, mmOp.id);
     const st1 = await mmSt();
-    check("MM: W DRODZE — źródło 7 993 MP, cel bez zmian (220 MP), tonaż 98,6 t", (await bal(page, "pr_zr_lesna")) === 7993 && (await bal(page, "pr_zr_lesna", "wh_bra")) === 220 && st1.st === "W_DRODZE" && st1.w === 98.6 && mmOp.no.startsWith("MM/") && !!(await page.$("#op-detail #mm-transit-info")),
+    check("MM: W DRODZE — źródło 7 993 MP, cel bez zmian (220 MP), tonaż 98,6 t", (await bal(page, "pr_zr_lesna")) === 7993 && (await bal(page, "pr_zr_lesna", "wh_bra")) === 220 && st1.st === "W_DRODZE" && st1.w === 98.6 && mmOp.no.startsWith("WZ/") && !!(await page.$("#op-detail #mm-transit-info")),
       [await bal(page, "pr_zr_lesna"), await bal(page, "pr_zr_lesna", "wh_bra"), st1.st, st1.w, mmOp.no, !!(await page.$("#op-detail #mm-transit-info"))]);
     await closeModals(page);
     await setUser(page, "u_bra"); await go(page, "mm"); await page.waitForSelector("#mm-incoming");
@@ -271,7 +271,7 @@ async function fillForestDirect(page) {
     check("§32.2 Anulowanie wymaga przyczyny", nb(await page.textContent("#cancel-msg")).length > 0 && (await page.$("#cancel-dialog")) !== null);
     await page.selectOption("#cancel-reason", "błędny kontrahent"); await page.click("#cancel-yes");
     await page.waitForSelector("#op-detail"); await page.waitForTimeout(200);
-    check("§32.23 T1: dokument ANULOWANY, stan przywrócony (+500 MP), dokument AN", nb(await page.textContent("#op-detail .modal-h")).includes("ANULOWANY") && (await bal(page, "pr_zr_lesna")) === 8493 && nb(await page.textContent("#op-docs")).includes("AN/"));
+    check("§32.23 T1: dokument ANULOWANY, stan przywrócony (+500 MP), dokument AN", nb(await page.textContent("#op-detail .modal-h")).includes("ANULOWANY") && (await bal(page, "pr_zr_lesna")) === 8493 && nb(await page.textContent("#op-docs")).includes("ANULOWANIE"));
     check("§32.3 Anulowany dokument: brak przycisków Koryguj / Anuluj", !(await page.$("#op-detail [data-correct]")) && !(await page.$("#op-detail [data-cancel]")));
     await closeModals(page);
 
@@ -305,7 +305,7 @@ async function fillForestDirect(page) {
     await page.selectOption("#corr-reason", "błędne zużycie surowca");
     await page.click("#summary [data-save]"); await page.click(".scrim [data-yes]");
     await page.waitForSelector("#op-detail"); await page.waitForTimeout(200);
-    check("§32.23 Korekta produkcji: status SKORYGOWANY, drewno +25 m³, zrębka −100 MP, dokument KOR", nb(await page.textContent("#op-detail .modal-h")).includes("SKORYGOWANY") && (await bal(page, "pr_drewno")) === 717 && (await bal(page, "pr_zr_lesna")) === 8393 && nb(await page.textContent("#op-corr")).includes("KOR/"));
+    check("§32.23 Korekta produkcji: status SKORYGOWANY, drewno +25 m³, zrębka −100 MP, dokument korekty w serii WZ", nb(await page.textContent("#op-detail .modal-h")).includes("SKORYGOWANY") && (await bal(page, "pr_drewno")) === 717 && (await bal(page, "pr_zr_lesna")) === 8393 && nb(await page.textContent("#op-corr")).includes("WZ/"));
     await page.click("#op-corr [data-reverse]"); await page.fill("#cf-in", "test odwrócenia"); await page.click(".scrim:last-child [data-yes]");
     await page.waitForTimeout(400);
     check("§32.16 Odwrócenie korekty nową korektą (stan jak przed korektą)", (await bal(page, "pr_drewno")) === 692 && (await page.evaluate(id => RIW_DEBUG.store.state.operations.find(o => o.id === id).corrections.length, prodOp.id)) === 2);
@@ -324,7 +324,7 @@ async function fillForestDirect(page) {
     const hHead = await page.$$eval("#hist-table thead th", t => t.map(x => x.textContent));
     check("§10 Historia: kolumny data, godzina, użytkownik, typ, dokument, magazyn, produkt, ilość, jednostka, stan przed/zmiana/po, kontrahent, powiązana, uwagi", ["Data", "Godz.", "Użytkownik", "Typ", "Nr dokumentu", "Magazyn", "Produkt", "Ilość", "Jedn.", "Stan przed", "Zmiana", "Stan po", "Kontrahent", "Powiązana operacja", "Uwagi"].every(h => hHead.includes(h)), hHead);
     await page.selectOption("#h-type", "KOREKTA"); await page.waitForTimeout(150);
-    check("§32.18 Historia: filtr typu Korekta", (await page.$$eval("#hist-table tbody tr", r => r.length)) >= 2 && nb(await page.textContent("#hist-table")).includes("KOR/"));
+    check("§32.18 Historia: filtr typu Korekta", (await page.$$eval("#hist-table tbody tr", r => r.length)) >= 2 && nb(await page.textContent("#hist-table")).includes("WZ/"));
     await page.selectOption("#h-type", ""); await page.selectOption("#h-mode", "custom"); await page.waitForTimeout(100);
     await page.fill("#h-from", "2026-09-15"); await page.press("#h-from", "Tab"); await page.fill("#h-to", "2026-09-16"); await page.press("#h-to", "Tab"); await page.waitForTimeout(150);
     const dates = await page.$$eval("#hist-table tbody tr td:first-child", t => [...new Set(t.map(x => x.textContent))]);
@@ -378,7 +378,7 @@ async function fillForestDirect(page) {
     /* ------------- dokumenty, rejestry ------------- */
     await go(page, "dokumenty");
     await page.check("#r-aux"); await page.waitForTimeout(150); // KOR / AN to dokumenty pomocnicze (od 3.4.1 domyślnie ukryte)
-    check("Dokumenty: kolumna Status i dokumenty KOR / AN", (await page.$$eval("#docs-table thead th", t => t.map(x => x.textContent))).includes("Status") && nb(await page.textContent("#docs-table")).includes("KOR/") && nb(await page.textContent("#docs-table")).includes("AN/"));
+    check("Dokumenty: kolumna Status i dokumenty KOR / AN", (await page.$$eval("#docs-table thead th", t => t.map(x => x.textContent))).includes("Status") && nb(await page.textContent("#docs-table")).includes("Korekta dokumentu") && nb(await page.textContent("#docs-table")).includes("Anulowanie dokumentu"));
     await page.uncheck("#r-aux"); await page.waitForTimeout(150);
     await page.click("#docs-table [data-view] >> nth=0"); await page.waitForSelector("#doc-preview");
     const pdfD = await downloadPdf(page, "#doc-preview [data-pdf]", "dok.pdf");
@@ -514,7 +514,7 @@ async function fillForestDirect(page) {
     const mop = await page.evaluate(() => { const o = RIW_DEBUG.store.state.operations.at(-1); return { id: o.id, mode: o.transport.mode, n: o.transport.runs.length, cost: o.transport.cost }; });
     check("2.5 Zapisane: tryb mieszany, 5 kursów, 1 125 zł", mop.mode === "mixed" && mop.n === 5 && mop.cost === 1125, mop);
     await openOp(page, mop.id);
-    await page.click("#op-docs tr:has-text('TR/') [data-doc]"); await page.waitForSelector("#doc-preview");
+    await page.click("#op-docs [data-doctype='TR']"); await page.waitForSelector("#doc-preview");
     const trTxt = nb(await page.textContent("#doc-preview"));
     check("2.5 Karta TR: kursy floty własnej i firmy zewnętrznej osobno", trTxt.includes("Kursy floty własnej") && trTxt.includes("Kursy firmy zewnętrznej — ESI Logistics"));
     await closeModals(page);
@@ -761,15 +761,16 @@ async function fillForestDirect(page) {
     // rejestr dokumentów: akcje, kolory, eksport XLSX
     await go(page, "dokumenty"); await page.waitForTimeout(150);
     check("3.4 Rejestr dokumentów: akcje Otwórz / Podgląd / Koryguj / Usuń", await allExist(page, ["[data-corr]", "[data-del]"]) && nb(await page.textContent("#page")).includes("Podgląd"));
-    check("3.4 Rejestr: PZ i WZ oznaczone kolorem (klasy dokumentu)", !!(await page.$("tr.doc-row-WZ .doc-badge.doc-WZ")) && !!(await page.$("tr.doc-row-PZ .doc-badge.doc-PZ")));
-    const bg = sel => page.$eval(sel, e => getComputedStyle(e).backgroundColor);
-    const pzColor = await bg(".doc-badge.doc-PZ"), wzColor = await bg(".doc-badge.doc-WZ"), mmColor = await bg(".doc-badge.doc-MM");
-    check("3.4.1 Rejestr: PZ, WZ, MM w różnych, mocnych kolorach (pełne tło)", new Set([pzColor, wzColor, mmColor]).size === 3 && pzColor === "rgb(21, 128, 61)", { pzColor, wzColor, mmColor });
-    const types = await page.$$eval("#docs-table tbody tr td:nth-child(2)", t => [...new Set(t.map(x => x.textContent.trim()))].sort().join(","));
-    check("3.4.1 Rejestr: domyślnie tylko PZ, WZ, MM", types.split(",").every(x => ["PZ", "WZ", "MM"].includes(x)), types);
+    // 3.8: jedna seria WZ — wszystkie dokumenty mają znacznik WZ (jeden kolor), rodzaj ruchu tylko jako opis pomocniczy
+    const badges = await page.$$eval("#docs-table tbody .doc-badge", b => [...new Set(b.map(x => x.textContent.trim() + "|" + x.className))]);
+    check("3.8 Rejestr: wszystkie dokumenty w jednej serii WZ (znacznik WZ, jeden kolor)", badges.length === 1 && badges[0].startsWith("WZ|") && badges[0].includes("doc-WZ") && !!(await page.$("tr.doc-row-WZ")) && !(await page.$("tr.doc-row-PZ")), badges);
+    const wzColor = await page.$eval(".doc-badge.doc-WZ", e => getComputedStyle(e).backgroundColor);
+    check("3.8 Rejestr: znacznik WZ — mocny kolor (pełne tło)", wzColor === "rgb(194, 65, 12)", wzColor);
+    const rows1 = await page.$$eval("#docs-table tbody tr", r => r.length);
+    check("3.8 Rejestr: numery w formacie WZ/NNN/MM/RRRR", (await page.$$eval("#docs-table tbody tr td:first-child b", b => b.map(x => x.textContent))).every(n => /^WZ\//.test(n) || n === "WZ/27"));
     await page.check("#r-aux"); await page.waitForTimeout(200);
-    const types2 = await page.$$eval("#docs-table tbody tr td:nth-child(2)", t => [...new Set(t.map(x => x.textContent.trim()))]);
-    check("3.4.1 Rejestr: „Pokaż dokumenty pomocnicze” dodaje PW / RW / TR (szare)", ["PW", "RW", "TR"].every(x => types2.includes(x)) && !!(await page.$(".doc-badge.doc-aux")), types2);
+    const txt2 = nb(await page.textContent("#docs-table"));
+    check("3.8 Rejestr: „Pokaż dokumenty pomocnicze” dodaje zużycie, produkcję i transport (także w serii WZ)", (await page.$$eval("#docs-table tbody tr", r => r.length)) > rows1 && ["Rozchód wewnętrzny (zużycie)", "Przyjęcie wewnętrzne (produkcja)", "Karta transportu"].every(x => txt2.includes(x)), rows1);
     await page.uncheck("#r-aux"); await page.waitForTimeout(150);
     const [dlx] = await Promise.all([page.waitForEvent("download"), page.click("#reg-xlsx")]);
     const xfile = path.join(TMP, "rejestr.xlsx"); await dlx.saveAs(xfile);
@@ -1016,6 +1017,24 @@ async function fillForestDirect(page) {
     check("3.6 Transport zewnętrzny: podpowiedzi numerów z floty zewnętrznej", (await page.getAttribute("#f-transport-external-runs-0-reg", "list")) === "dl-ext-veh" && (await page.$$("#dl-ext-veh option")).length >= 5);
     await fillTab(page, "#f-transport-external-runs-0-reg", "ESI 18734"); await page.waitForTimeout(100);
     check("3.6 Transport zewnętrzny: numer z kartoteki uzupełnia kierowcę i firmę", (await page.inputValue("#f-transport-external-runs-0-driver")) === "Tomasz Lis" && (await page.inputValue("#f-transport-external-company")) === "ESI Logistics");
+
+    /* ------------- 3.8: Data przyjęcia, Numeracja WZ, kilka firm transportu zewnętrznego ------------- */
+    check("3.8 Zakup: pole „Data przyjęcia” z samouczkiem „Wprowadź datę przyjęcia produktu na magazyn.”", nb(await page.textContent('[data-field="date"] label')).startsWith("Data przyjęcia") && nb(await page.textContent('[data-field="date"] .help')) === "Wprowadź datę przyjęcia produktu na magazyn.");
+    check("3.8 Zakup: „Numeracja WZ” zamiast „Numeracja PZ” (jedna seria)", !!(await page.$("#f-docNoMode-WZ")) && !(await page.$("#f-docNoMode-PZ")) && nb(await page.textContent('[data-field="docNoMode.WZ"] label')).startsWith("Numeracja WZ") && (await page.$eval("#f-docNoMode-WZ option", o => o.textContent)).includes("WZ/"));
+    const coOpts = await page.$$eval("#f-transport-external-companyCount option", o => o.map(x => x.value).join(","));
+    check("3.8 Transport zewnętrzny: lista „Liczba firm przewidzianych do transportu” 1–10 z samouczkiem", coOpts === "1,2,3,4,5,6,7,8,9,10" && nb(await page.textContent('[data-field="transport.external.companyCount"] label')).startsWith("Liczba firm przewidzianych do transportu") && nb(await page.textContent('[data-field="transport.external.companyCount"] .help')).includes("Wpisz ilość firm zewnętrznych, którym zlecono transport."), coOpts);
+    check("3.8 Jedna firma: pole „Firma transportowa” wspólne, bez firmy w kursie", !!(await page.$("#f-transport-external-company")) && !(await page.$("#f-transport-external-runs-0-company")));
+    await page.selectOption("#f-transport-external-companyCount", "2"); await page.waitForSelector("#f-transport-external-runs-0-company");
+    check("3.8 Kilka firm: firma w każdym kursie (lista + nowa nazwa), dotychczasowa firma przeniesiona do kursu", !(await page.$("#f-transport-external-company")) && (await page.inputValue("#f-transport-external-runs-0-company")) === "ESI Logistics" && (await page.getAttribute("#f-transport-external-runs-0-company", "list")) === "dl-carriers" && (await page.$$("#dl-carriers option")).length >= 3);
+    await fillTab(page, "#f-transport-external-runCount", "2"); await page.waitForSelector("#f-transport-external-runs-1-company");
+    check("3.8 Nowy kurs przejmuje firmę z poprzedniego", (await page.inputValue("#f-transport-external-runs-1-company")) === "ESI Logistics");
+    await fillTab(page, "#f-transport-external-runs-0-km", "40"); await fillTab(page, "#f-transport-external-runs-0-qty", "5");
+    await fillTab(page, "#f-transport-external-runs-1-company", "Nowa Firma Testowa"); await fillTab(page, "#f-transport-external-runs-1-reg", "SK 12345");
+    await fillTab(page, "#f-transport-external-runs-1-km", "60"); await fillTab(page, "#f-transport-external-runs-1-qty", "5"); await page.waitForTimeout(250);
+    const sumTxt = nb(await page.textContent('[data-out="runs.summary"]'));
+    check("3.8 Podsumowanie kursów: kolumna „Przewoźnik” i rozbicie na firmy", (await page.$$eval("#runs-summary thead th", t => t.map(x => x.textContent))).includes("Przewoźnik") && sumTxt.includes("ESI Logistics") && sumTxt.includes("Nowa Firma Testowa") && !!(await page.$("[data-runs-companies]")), sumTxt.slice(0, 300));
+    await page.selectOption("#f-transport-external-companyCount", "1"); await page.waitForSelector("#f-transport-external-company");
+    check("3.8 Powrót do jednej firmy: pole wspólne z pierwszą firmą z kursów", (await page.inputValue("#f-transport-external-company")) === "ESI Logistics");
 
     // wysyłka e-mailem (OFFLINE: zapis PDF + program pocztowy)
     await go(page, "raporty"); await page.waitForSelector('[data-mail="rep"]');

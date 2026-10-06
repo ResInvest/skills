@@ -61,6 +61,7 @@
     "transport.place": N_("<b>Co:</b> dokąd jedzie ładunek (miejsce dostawy). Trafia na dokumenty jako „Miejsce transportu”."),
     "transport.mode": N_("<b>Co:</b> kto wiezie ładunek. <b>Transport nie zmienia stanu</b> — to wyłącznie koszt i karta transportu (TR)."),
     "transport.external.company": N_("<b>Co:</b> firma przewozowa. <b>Przykład:</b> ESI Logistics."),
+    "transport.external.companyCount": N_("Wpisz ilość firm zewnętrznych, którym zlecono transport."),
     "transport.external.includedInPrice": N_("Zaznacz, gdy transport jest wliczony w cenę towaru. Koszt transportu tej operacji = 0 zł."),
     "transport.train.trainNo": N_("<b>Co:</b> numer składu. <b>Przykład:</b> RC 50931."),
     "transport.train.carrier": N_("<b>Co:</b> przewoźnik kolejowy. <b>Przykład:</b> PKP Cargo."),
@@ -77,7 +78,7 @@
     "docNos.PZ": N_("<b>Co:</b> numer PZ z dokumentu (wpisz ręcznie, np. <b>PZ/11</b>). Numer musi być unikalny w magazynie w danym roku."),
     "docNos.WZ": N_("<b>Co:</b> numer WZ (wpisz ręcznie, np. <b>WZ/27</b>). Numer musi być unikalny w magazynie w danym roku."),
     "docNos.MM": N_("<b>Co:</b> numer MM (wpisz ręcznie, np. <b>MM/5</b>). Numer musi być unikalny w magazynie źródłowym w danym roku."),
-    "docDate": N_("<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data operacji. <b>Data operacji</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system."),
+    "docDate": N_("<b>Co:</b> data wystawienia dokumentu (np. data z dokumentu dostawcy). Puste = data przyjęcia (data operacji). <b>Data przyjęcia</b> to dzień przyjęcia / wydania towaru; datę i godzinę utworzenia wpisu zapisuje system."),
     "production.operatorName": N_("<b>Co:</b> operator rębaka firmy zewnętrznej (opcjonalnie) — domyślnie z kartoteki rębaka."),
     "notes": N_("<b>Co:</b> dodatkowe informacje (opcjonalnie)."),
     "extDoc": N_("<b>Co:</b> numer dokumentu zewnętrznego (faktura, kwit wagowy, zlecenie) — opcjonalnie.")
@@ -97,7 +98,7 @@
       ${control}
       <div class="calc" data-calc="${esc(key)}">${calc}</div>
       <div class="msg hidden" data-msg="${esc(key)}" role="alert"></div>
-      ${help && HELP[key] ? `<div class="help tut">${t(HELP[key])}</div>` : ""}
+      ${(typeof help === "string" ? help : help && HELP[key]) ? `<div class="help tut">${t(typeof help === "string" ? help : HELP[key])}</div>` : ""}
     </div>`;
   }
   const textIn = (key, v, { placeholder = "", list = "", disabled = false } = {}) =>
@@ -246,8 +247,21 @@
     hasRuns() { return ["own", "external", "mixed"].includes(this.draft.transport.mode); },
     extRuns() {
       const X = this.draft.transport.external;
-      if (!Array.isArray(X.runs)) this.draft.transport.external = { company: X.company || "", includedInPrice: !!X.includedInPrice, runCount: "1", runs: [Object.assign(R.blankExtRun(), { reg: X.reg || "", km: X.km || "", freight: X.includedInPrice ? "" : (X.freight || "") })] };
-      return this.draft.transport.external;
+      if (!Array.isArray(X.runs)) this.draft.transport.external = { companyCount: "1", company: X.company || "", includedInPrice: !!X.includedInPrice, runCount: "1", runs: [Object.assign(R.blankExtRun(), { reg: X.reg || "", km: X.km || "", freight: X.includedInPrice ? "" : (X.freight || "") })] };
+      const E = this.draft.transport.external;
+      if (E.companyCount === undefined || E.companyCount === "") E.companyCount = "1";
+      return E;
+    },
+    /** Liczba firm transportu zewnętrznego zadeklarowana w formularzu (1–10). */
+    extCompanyCount() { return Math.max(1, Math.min(R.MAX_EXT_COMPANIES, Math.floor(NumParse.value(this.extRuns().companyCount, 1)) || 1)); },
+    /** Podpowiedzi firm przewozowych: firmy wpisane w kursach tej operacji, kartoteka przewoźników i właściciele pojazdów floty zewnętrznej. */
+    extCompanies() {
+      const S = Store.state, X = this.extRuns(), seen = new Set(), out = [];
+      for (const c of X.runs.map(r => r.company).concat([X.company], S.carriers || [], this.extVehicles("").map(v => v.company))) {
+        const v = String(c || "").trim(), k = v.toLowerCase();
+        if (v && !seen.has(k)) { seen.add(k); out.push(v); }
+      }
+      return out;
     },
     ownRuns() {
       const O = this.draft.transport.own;
@@ -363,10 +377,16 @@
       const d = this.draft, corr = this.mode === "correct";
       if (!d.docNos) d.docNos = { PZ: "", WZ: "", MM: "" };
       if (!d.docNoMode) d.docNoMode = {};
-      const op = this.op;
+      const op = this.op, unified = R.unifiedNumbering(Store.state);
+      // jedna seria WZ: jedno pole numeracji dla całej transakcji (zakup, produkcja, sprzedaż, MM…)
+      if (unified) {
+        const sn = R.seriesNoOf(d);
+        if (!d.docNoMode.WZ) { d.docNoMode.WZ = sn.mode; if (sn.mode === "manual" && !String(d.docNos.WZ || "").trim()) d.docNos.WZ = sn.no; }
+        types = [R.DOC_SERIES];
+      }
       return types.map(ty => {
         const key = `docNos.${ty}`;
-        if (corr) { const doc = op && op.documents.find(x => x.type === ty); return field({ key, label: t("Nr {t}", { t: ty }), help: false, control: outBox(key, esc(doc ? doc.no : "—")) }); }
+        if (corr) { const doc = op && (unified ? op.documents[0] : op.documents.find(x => x.type === ty)); return field({ key, label: t("Nr {t}", { t: ty }), help: false, control: outBox(key, esc(doc ? doc.no : "—")) }); }
         const sug = R.suggestDocNo(Store.state, ty, this.whId(), d.date), mode = R.docNoModeOf(d, ty);
         d.docNoMode[ty] = mode;
         const sel = field({ key: `docNoMode.${ty}`, label: t("Numeracja {t}", { t: ty }), req: true, help: false,
@@ -403,15 +423,16 @@
       const active = p => p.active !== false;
       const typeCard = (tt, title, text) => optCard("", { checked: type === tt, disabled: corr, struct: false, radio: true, id: `f-type-${tt}`, title, text, attrs: `data-type="${tt}"` });
       let n = 1;
+      const receipt = d.type !== "SPRZEDAZ";   // zakup, produkcja, MM — „Data przyjęcia” (dzień przyjęcia towaru na magazyn)
       let html = section(n++, "type", corr ? t("Korygowany dokument") : t("Rodzaj operacji"), corr ? t("Rodzaju operacji, magazynu i daty dokumentu nie zmienia się korektą — w razie potrzeby anuluj dokument i wprowadź nowy.") : t("Każdy rodzaj działa samodzielnie — wypełniasz tylko to, co jest potrzebne."), `
         <div class="scope four" role="group" aria-label="${esc(t("Rodzaj operacji"))}">
-          ${typeCard("ZAKUP", t("Zakup"), t("Dostawca → magazyn (PZ). Opcjonalnie produkcja i sprzedaż bezpośrednia z lasu."))}
-          ${typeCard("SPRZEDAZ", t("Sprzedaż"), t("Magazyn → odbiorca (WZ) albo sprzedaż bezpośrednia po produkcji w lesie."))}
-          ${typeCard("PRODUKCJA", t("Produkcja na magazynie"), t("Surowiec ze stanu → produkt na stanie (RW + PW). Bez transportu."))}
+          ${typeCard("ZAKUP", t("Zakup"), t("Dostawca → magazyn. Opcjonalnie produkcja i sprzedaż bezpośrednia z lasu."))}
+          ${typeCard("SPRZEDAZ", t("Sprzedaż"), t("Magazyn → odbiorca albo sprzedaż bezpośrednia po produkcji w lesie."))}
+          ${typeCard("PRODUKCJA", t("Produkcja na magazynie"), t("Surowiec ze stanu → produkt na stanie. Bez transportu."))}
           ${typeCard("MM", t("Przesunięcie MM"), t("Magazyn → inny magazyn firmy. Stan firmy bez zmian."))}
         </div>
         <div class="info-line mt3">${ic("layers", 15)}<span>${corr ? t("Magazyn: <b>{w}</b> — magazyn dokumentu.", { w: esc(wh ? wh.name : "—") }) : type === "MM" ? t("Magazyn źródłowy i docelowy wybierasz w sekcji przesunięcia.") : t("Magazyn: <b>{w}</b> — wynika z zalogowanego użytkownika ({u}).", { w: esc(wh ? wh.name : "—"), u: esc(App.user().name) })}</span></div>
-        <div class="fgrid four mt4">${field({ key: "date", label: t("Data operacji"), req: true, control: `<input class="ctrl" type="date" id="${fid("date")}" data-bind="date" value="${esc(d.date)}" max="${esc(App.today())}" ${corr ? "disabled" : ""}>` })}</div>`);
+        <div class="fgrid four mt4">${field({ key: "date", label: receipt ? t("Data przyjęcia") : t("Data operacji"), req: true, help: receipt ? N_("Wprowadź datę przyjęcia produktu na magazyn.") : true, control: `<input class="ctrl" type="date" id="${fid("date")}" data-bind="date" value="${esc(d.date)}" max="${esc(App.today())}" ${corr ? "disabled" : ""}>` })}</div>`);
 
       if (type === "ZAKUP") {
         const prod = App.product(d.purchase.productId);
@@ -564,12 +585,14 @@
         const X = this.extRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(X.runCount, 0)) || 0));
         const u = Units.label(this.shippedUnit()), inc = !!X.includedInPrice;
+        const coCount = this.extCompanyCount(), multiCo = coCount > 1;
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = X.runs[i] || R.blankExtRun(), k = f => `transport.external.runs.${i}.${f}`;
           runs.push(`<div class="run-card" data-xrun="${i}">
             <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="xrun.${i}.cost">—</span></div>
             <div class="fgrid four">
+              ${multiCo ? field({ key: k("company"), label: t("Firma transportowa"), req: true, span: "span2", help: false, control: textIn(k("company"), r.company, { placeholder: t("wybierz z listy albo wpisz nową firmę"), list: "dl-carriers" }) }) : ""}
               ${field({ key: k("reg"), label: t("Nr rejestracyjny"), req: true, help: false, control: textIn(k("reg"), r.reg, { placeholder: eg("ESI 18734"), list: "dl-ext-veh" }) })}
               ${field({ key: k("driver"), label: t("Kierowca"), help: false, control: textIn(k("driver"), r.driver, { placeholder: t("imię i nazwisko") }) })}
               ${forest ? `${field({ key: k("kwit"), label: t("Nr kwitu wywozowego"), req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: eg("KW 0217/09/2026") }) })}
@@ -582,12 +605,17 @@
             </div></div>`);
         }
         // flota zewnętrzna: pojazdy firm przewozowych z kartoteki — podpowiedzi numerów (najpierw wybranej firmy)
-        const extVeh = this.extVehicles(X.company);
-        const carriers = [...new Set((S.carriers || []).concat(this.extVehicles("").map(v => v.company)).filter(Boolean))];
+        const extVeh = this.extVehicles(multiCo ? "" : X.company);
+        const carriers = this.extCompanies();
+        const coSel = field({ key: "transport.external.companyCount", label: t("Liczba firm przewidzianych do transportu"), req: true, span: "span2",
+          control: selIn("transport.external.companyCount", Array.from({ length: R.MAX_EXT_COMPANIES }, (_, i) => ({ v: String(i + 1), l: String(i + 1) })), String(coCount), { struct: true }) });
         modeHtml += `${mode === "mixed" ? `<h4 class="mini-h mt4">${esc(t("Kursy firmy zewnętrznej"))}</h4>` : ""}<datalist id="dl-ext-veh">${extVeh.map(v => `<option value="${esc(v.reg)}" label="${esc(`${v.company} · ${v.name}${v.driverName ? " · " + v.driverName : ""}`)}">`).join("")}</datalist><div class="fgrid four mt4">
-          ${field({ key: "transport.external.company", label: t("Firma transportowa"), req: true, span: "span2", control: textIn("transport.external.company", X.company, { placeholder: eg("ESI Logistics"), list: "dl-carriers" }) + `<datalist id="dl-carriers">${carriers.map(c => `<option value="${esc(c)}">`).join("")}</datalist>` })}
+          ${coSel}
           ${field({ key: "transport.external.runCount", label: t("Liczba kursów"), req: true, control: numIn("transport.external.runCount", X.runCount, { suffix: t("szt."), placeholder: eg("4") }) })}
           <div></div>
+          ${multiCo ? `<div class="field span-all"><div class="help">${esc(t("Kilka firm: w każdym kursie wybierz firmę z listy albo wpisz nową nazwę."))}</div></div>`
+            : field({ key: "transport.external.company", label: t("Firma transportowa"), req: true, span: "span2", control: textIn("transport.external.company", X.company, { placeholder: eg("ESI Logistics"), list: "dl-carriers" }) })}
+          <datalist id="dl-carriers">${carriers.map(c => `<option value="${esc(c)}">`).join("")}</datalist>
           <div class="field span-all" data-field="transport.external.includedInPrice">
             ${optCard("transport.external.includedInPrice", { checked: inc, title: t("Transport wliczony w cenę"), text: t("Koszt transportu tej operacji = 0 zł (kursy i ilości nadal są ewidencjonowane).") })}</div>
         </div>
@@ -844,7 +872,9 @@
         const X = this.extRuns(), run = X.runs[+xregKey[1]];
         if (veh && run) {
           if (!String(run.driver || "").trim() && veh.driverName) { run.driver = veh.driverName; const el = document.getElementById(fid(`transport.external.runs.${xregKey[1]}.driver`)); if (el) el.value = run.driver; }
-          if (!String(X.company || "").trim() && veh.company) { X.company = veh.company; const el = document.getElementById(fid("transport.external.company")); if (el) el.value = X.company; }
+          if (this.extCompanyCount() > 1) {
+            if (!String(run.company || "").trim() && veh.company) { run.company = veh.company; const el = document.getElementById(fid(`transport.external.runs.${xregKey[1]}.company`)); if (el) el.value = run.company; }
+          } else if (!String(X.company || "").trim() && veh.company) { X.company = veh.company; const el = document.getElementById(fid("transport.external.company")); if (el) el.value = X.company; }
         }
       }
       const m3Key = key.match(/^transport\.(own|external)\.runs\.(\d+)\.kwitM3$/);
@@ -859,8 +889,14 @@
       if (key === "transport.external.runCount") {
         const X = this.extRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
         const arr = X.runs.slice(0, n);
-        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankExtRun(), { km: prev.km, rate: prev.rate }) : R.blankExtRun()); }
+        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankExtRun(), { company: prev.company || "", km: prev.km, rate: prev.rate }) : R.blankExtRun()); }
         X.runs = arr;
+      }
+      if (key === "transport.external.companyCount") {
+        // przejście 1 → kilka firm: dotychczasowa firma trafia do pustych kursów; kilka → 1: pierwsza firma z kursów
+        const X = this.extRuns();
+        if (this.extCompanyCount() > 1) { if (String(X.company || "").trim()) X.runs.forEach(r => { if (!String(r.company || "").trim()) r.company = X.company; }); }
+        else if (!String(X.company || "").trim()) { const f = X.runs.find(r => String(r.company || "").trim()); if (f) X.company = f.company; }
       }
       if (key === "transport.own.runCount") {
         const O = this.ownRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
@@ -1061,7 +1097,7 @@
         + (plan.norm.transport.mode !== "none" ? `<li><span class="d">${plan.norm.transport.mode === "supplier" ? "—" : "TR"}</span><span>${esc(t(R.TRANSPORT_MODES[plan.norm.transport.mode]))} — ${esc(transportText(plan.norm.transport))}<br><small class="dim">${esc(t("koszt {m} · wpływ na stan: brak", { m: money(plan.norm.transport.cost) }))}</small></span><span class="q zero">0</span></li>` : "");
       const bal = plan.balances.map(b => `<tr><td>${esc(name(b.productId))}${b.whId !== plan.whId ? `<br><small class="dim">${esc(App.whName(b.whId))}</small>` : ""}</td><td class="r">${esc(App.qtyNative(b.before, b.productId))}</td><td class="r"><b>${esc(App.qtyNative(b.after, b.productId))}</b></td></tr>`).join("");
       const tt = plan.totals;
-      const docs = plan.documents.map(dc => `<tr><td><span class="badge ${dc.type === "TR" ? "info" : dc.stock === "+" ? "ok" : dc.stock === "±" ? "" : "warn"}">${dc.type}</span></td>
+      const docs = plan.documents.map(dc => `<tr><td><span class="badge ${dc.type === "TR" ? "info" : dc.stock === "+" ? "ok" : dc.stock === "±" ? "" : "warn"}" title="${esc(t(R.DOC_LABEL[dc.type] || dc.type))}">${esc(dc.series || dc.type)}</span></td>
           <td>${esc(dc.type === "TR" ? t(R.TRANSPORT_MODES[dc.transport.mode]) : name(dc.productId))}${dc.partner ? `<br><small class="dim">${esc(dc.partner)}</small>` : dc.toWh ? `<br><small class="dim">→ ${esc(dc.toWh)}</small>` : ""}</td>
           <td class="r">${dc.qty !== null ? esc(fmtQ(dc.qty) + " " + Units.label(dc.unit)) : "—"}</td>
           <td class="r">${dc.value ? esc(money(dc.value)) : "—"}</td>
@@ -1239,7 +1275,7 @@
           sub: esc(action === "submit" ? t("Operacja trafi do kierownika magazynu. Numer dokumentu i zmiana stanów nastąpią dopiero po zatwierdzeniu.") : t("Sprawdź dane — po zatwierdzeniu dokument otrzyma numer i status ZATWIERDZONY. Zmiany później wyłącznie przez korektę lub anulowanie.")), wide: true, id: "confirm-op",
           body: `<div class="grid g2 confirm-grid"><dl class="money-list">${kv.join("")}</dl>
             <div><h4 class="mini-h">${esc(t("Stan magazynowy"))}</h4><div class="tbl-wrap"><table class="tbl" id="confirm-bal"><thead><tr><th>${esc(t("Produkt"))}</th><th class="r">${esc(t("Przed"))}</th><th class="r">${esc(t("Zmiana"))}</th><th class="r">${esc(t("Po"))}</th></tr></thead><tbody>${bal}</tbody></table></div>
-            <h4 class="mini-h">${esc(t("Dokumenty"))}</h4><p>${plan.documents.map(d => `<span class="badge">${d.type}</span>`).join(" ")}</p>
+            <h4 class="mini-h">${esc(t("Dokumenty"))}</h4><p>${plan.documents.some(d => d.series) ? `<span class="badge">${esc(R.DOC_SERIES)}</span> <small class="dim">${esc(plan.documents.map(d => t(R.DOC_LABEL[d.type] || d.type)).join(" · "))}</small>` : plan.documents.map(d => `<span class="badge">${d.type}</span>`).join(" ")}</p>
             ${plan.warnings.length ? `<ul class="warn-list mt3">${plan.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}</div></div>`,
           footer: `<button class="btn ghost" type="button" data-no>${esc(t("Wróć do edycji"))}</button><button class="btn primary" type="button" data-yes id="confirm-yes">${ic("check", 15)} ${esc(action === "submit" ? t("Przekaż do zatwierdzenia") : t("Zatwierdź dokument"))}</button>`,
           onClose: () => { if (!done) resolve(false); }
@@ -1273,18 +1309,21 @@
   function runsSummary(T) {
     if (!T.runs || !T.runs.length) return "—";
     const U = Units.label(T.qtyUnit || ""), mixed = T.mode === "mixed";
+    // kolumna „Przewoźnik”: transport mieszany albo kilka firm zewnętrznych
+    const multiCo = !mixed && T.mode === "external" && new Set(T.runs.map(r => String(r.company || "").toLowerCase()).filter(Boolean)).size > 1, showWho = mixed || multiCo;
     const kw = T.runs.some(r => r.kwit || (r.kwitM3 !== null && r.kwitM3 !== undefined));
     const who = r => (r.kind || T.mode) === "own" ? t("Flota własna") : (r.company || T.company || t("Firma zewnętrzna"));
     const drv = r => ((r.kind || T.mode) === "own" ? r.driverName : r.driver) || "—";
     const basis = r => (r.kind || T.mode) === "own" || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : esc(t(r.costBasis));
     const part = P => P ? `${P.runs.length} × ${P.kind === "own" ? esc(t("flota własna")) : esc(P.company || t("firma zewnętrzna"))}: ${fmtQ(P.totalQty)} ${U}, ${money(P.cost)}` : "";
-    const lead = mixed ? 4 : 3;
+    const lead = showWho ? 4 : 3;
     const over = T.limitQty > 0 && T.totalQty > T.limitQty + R.EPS;
     const th = s => esc(t(s));
-    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>${th("Kurs")}</th>${mixed ? `<th>${th("Przewoźnik")}</th>` : ""}<th>${th("Pojazd")}</th><th>${th("Kierowca")}</th>${kw ? `<th>${th("Kwit wywozowy")}</th><th class="r">m³</th>` : ""}<th class="r">km</th><th class="r">${th("Rozliczenie")}</th><th class="r">${th("Ilość")}</th><th class="r">${kw ? th("Tony") : th("Waga rzecz.")}</th><th class="r">${th("Koszt")}</th></tr></thead><tbody>
-      ${T.runs.map(r => `<tr data-run-kind="${esc(r.kind || T.mode)}"><td>${r.no}</td>${mixed ? `<td>${esc(who(r))}</td>` : ""}<td>${esc(r.reg || "—")}</td><td>${esc(drv(r))}</td>${kw ? `<td class="mono nowrap">${esc(r.kwit || "—")}</td><td class="r">${r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"}</td>` : ""}<td class="r">${fmtQ(r.km)}</td><td class="r">${basis(r)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
+    return `<div class="tbl-wrap"><table class="tbl" id="runs-summary"><thead><tr><th>${th("Kurs")}</th>${showWho ? `<th>${th("Przewoźnik")}</th>` : ""}<th>${th("Pojazd")}</th><th>${th("Kierowca")}</th>${kw ? `<th>${th("Kwit wywozowy")}</th><th class="r">m³</th>` : ""}<th class="r">km</th><th class="r">${th("Rozliczenie")}</th><th class="r">${th("Ilość")}</th><th class="r">${kw ? th("Tony") : th("Waga rzecz.")}</th><th class="r">${th("Koszt")}</th></tr></thead><tbody>
+      ${T.runs.map(r => `<tr data-run-kind="${esc(r.kind || T.mode)}"><td>${r.no}</td>${showWho ? `<td>${esc(who(r))}</td>` : ""}<td>${esc(r.reg || "—")}</td><td>${esc(drv(r))}</td>${kw ? `<td class="mono nowrap">${esc(r.kwit || "—")}</td><td class="r">${r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"}</td>` : ""}<td class="r">${fmtQ(r.km)}</td><td class="r">${basis(r)}</td><td class="r">${fmtQ(r.qty)} ${U}</td><td class="r">${r.weightT !== null ? fmtQ(r.weightT) + " t" : "—"}</td><td class="r">${money(r.cost)}</td></tr>`).join("")}</tbody>
       <tfoot><tr><td colspan="${lead}">${esc(t("Razem: {x}", { x: tp("{n} kurs|{n} kursy|{n} kursów", T.runs.length) }))}${T.mode === "external" ? ` · ${esc(T.company || "")}` : ""}</td>${kw ? `<td></td><td class="r" data-runs-m3>${T.totalM3 !== null && T.totalM3 !== undefined ? fmtQ(T.totalM3) + " m³" : "—"}</td>` : ""}<td class="r">${fmtQ(T.km)}</td><td></td><td class="r" data-runs-qty>${fmtQ(T.totalQty)} ${U}</td><td class="r" data-runs-t>${T.totalWeightT !== null ? fmtQ(T.totalWeightT) + " t" : "—"}${T.weightMissing && T.totalWeightT !== null ? ` <small class="dim">${esc(t("(bez {n})", { n: T.weightMissing }))}</small>` : ""}</td><td class="r" data-runs-cost>${money(T.cost)}${T.includedInPrice && !mixed ? ` <small class="dim">${esc(t("(wliczony w cenę)"))}</small>` : ""}</td></tr></tfoot></table></div>
       ${T.limitQty > 0 ? `<p class="help mt2" data-runs-limit>${t("Ilość do przewiezienia: <b>{a}</b> · w kursach: <b>{b}</b>", { a: `${fmtQ(T.limitQty)} ${U}`, b: `${fmtQ(T.totalQty)} ${U}` })} · <span class="${over ? "neg" : T.remainingQty > R.EPS ? "" : "pos"}">${esc(over ? t("przekroczono o {q}", { q: `${fmtQ(-T.remainingQty)} ${U}` }) : T.remainingQty > R.EPS ? t("pozostało {q}", { q: `${fmtQ(T.remainingQty)} ${U}` }) : t("wszystko rozwiezione ✓"))}</span></p>` : ""}
+      ${multiCo && T.companies && T.companies.length ? `<p class="help mt2" data-runs-companies>${T.companies.map(c => `${esc(c.company)}: ${tp("{n} kurs|{n} kursy|{n} kursów", c.runs)}, ${fmtQ(c.qty)} ${U}, ${money(c.cost)}`).join(" · ")}</p>` : ""}
       ${mixed ? `<p class="help mt2" data-runs-split>${part(T.own)} · ${part(T.external)}${T.external.includedInPrice ? " " + esc(t("(wliczony w cenę)")) : ""}</p>` : ""}`;
   }
   function transportText(x) {

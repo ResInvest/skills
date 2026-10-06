@@ -1,6 +1,13 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-05 · etap: **ResInvest ERP 3.7.0 — wersja startowa: czysta baza, konto administratora, rejestracja użytkowników, motyw Szkło**
+Ostatnia aktualizacja: 2026-10-06 · etap: **ResInvest ERP 3.8.0 — kilka firm transportu zewnętrznego, data przyjęcia, jedna seria numeracji WZ**
+
+## Wykonane — 3.8.0
+
+- [x] Kilka firm transportu zewnętrznego (lista 1–10, firma w każdym kursie), podsumowanie i PDF per firma
+- [x] „Data przyjęcia” w zakupie, produkcji i MM; „Numeracja WZ” — jedna seria dla wszystkich dokumentów
+- [x] Poprawka przewijania w bok na telefonie (formularz z transportem zewnętrznym)
+- [x] Testy: jednostkowe 159, serwer 48, E2E 323, E2E serwera 29, intro 15 — wszystkie zaliczone
 
 ## Wykonane — 3.7.2
 

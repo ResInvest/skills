@@ -45,6 +45,28 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.8.0
+* **Kilka firm transportu zewnętrznego w jednej operacji.** Po zaznaczeniu „Transport zewnętrzny” pojawia się lista
+  **„Liczba firm przewidzianych do transportu”** (1–10) z samouczkiem „Wpisz ilość firm zewnętrznych, którym zlecono
+  transport.” Przy jednej firmie — jak dotąd, jedno pole „Firma transportowa” dla wszystkich kursów. Przy kilku firmach
+  pod każdym numerem kursu jest pole **„Firma transportowa”**: wybór z listy (firmy z tej operacji, kartoteka
+  przewoźników, właściciele pojazdów floty zewnętrznej) albo wpisanie nowej nazwy. Nowa firma dopisuje się do listy
+  przewoźników przy zatwierdzeniu. Numer rejestracyjny z floty zewnętrznej podpowiada firmę kursu.
+  Silnik kontroluje: firma w każdym kursie, liczba firm w kursach nie większa niż zadeklarowana (mniejsza —
+  ostrzeżenie). Podsumowanie kursów, karta transportu (PDF) i raport transportu pokazują koszt, km i ilość per firma.
+  Operacje zapisane wcześniej (jedna firma) działają bez zmian.
+* **„Data przyjęcia”** zamiast „Data operacji” w zakupie, produkcji i MM — samouczek: „Wprowadź datę przyjęcia
+  produktu na magazyn.” (W sprzedaży pole nadal nazywa się „Data operacji”.)
+* **Jedna seria numeracji WZ.** „Numeracja PZ” → **„Numeracja WZ”**. Wszystkie dokumenty magazynowe — zakup, sprzedaż,
+  produkcja (RW / PW), MM, transport, korekty, anulowania, inwentaryzacja, bilans otwarcia — są numerowane w jednej
+  serii **WZ/NNN/MM/RRRR**. Jedna transakcja = jeden numer WZ, wspólny dla wszystkich jej dokumentów; rodzaj ruchu
+  (przychód / rozchód) zostaje tylko jako opis pomocniczy i w danych do stanów i raportów. Numer ręczny jest unikalny
+  w magazynie i roku (także wobec numerów korekt, anulowań, inwentaryzacji). **Numery nadane wcześniej nie zmieniają
+  się.** Administracja → Konfiguracja dostępu → „Numeracja dokumentów magazynowych” pozwala wrócić do osobnych serii
+  (PZ, WZ, RW, PW, MM…) — zmiana zapisuje się w audycie.
+* Poprawka: na telefonie formularz z transportem zewnętrznym nie przewija się już w bok (tabela kursów przewija się
+  we własnym polu).
+
 ## Nowe w 3.7.3
 * **AgentMail** jako kanał wysyłki poczty (obok Resend, SMTP i plików .eml): `AGENTMAIL_API_KEY` i `AGENTMAIL_INBOX`
   w `server.env` — wszystkie wiadomości programu, także dokumenty z PDF. Konfiguracja:

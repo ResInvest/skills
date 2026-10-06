@@ -567,6 +567,9 @@
             <div class="field"><label for="cfg-mmmode">${th("Przesunięcia międzymagazynowe (MM)")}</label>
               <select class="ctrl" id="cfg-mmmode">${Object.entries(R.MM_MODES).map(([k, l]) => `<option value="${k}" ${R.mmMode(S.config) === k ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
             <p class="help">${th("Dwuetapowy (domyślnie): wysłanie zmniejsza stan źródła, dokument ma status „W drodze”, a stan magazynu docelowego rośnie dopiero po „Przyjmij MM” (z ilością faktyczną i przyczyną różnicy). Zmiana dotyczy nowych dokumentów — MM już wysłane zachowują swój tryb.")}</p>
+            <div class="field"><label for="cfg-docno">${th("Numeracja dokumentów magazynowych")}</label>
+              <select class="ctrl" id="cfg-docno">${Object.entries(R.DOC_NUMBERING).map(([k, l]) => `<option value="${k}" ${(R.unifiedNumbering(S) ? "wz" : "types") === k ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+            <p class="help">${th("Jedna seria WZ (domyślnie): każda transakcja — zakup, sprzedaż, produkcja, MM, korekta, inwentaryzacja, bilans otwarcia — dostaje kolejny numer WZ/NNN/MM/RRRR. Numery nadane wcześniej nie zmieniają się.")}</p>
             <label class="inline-opt"><input type="checkbox" id="cfg-selfreg" ${S.config.allowSelfRegistration ? "checked" : ""}> ${th("Samodzielna rejestracja z ekranu logowania")}</label>
             <p class="help">${th("Wyłączona (zalecane): konta zakłada wyłącznie administrator — zaproszeniem e-mail. Włączona: zgłoszenie czeka na nadanie roli i magazynu przez administratora.")}</p>
             <p class="help">${esc(t("Dozwolone domeny e-mail: {d} (config/app.config.json).", { d: (S.config.companyDomains || []).map(d => "@" + d).join(", ") }))}</p>
@@ -607,6 +610,7 @@
       };
       const ca = $("#cfg-approval", page); if (ca) ca.onchange = e => setCfg("requireApproval", e.target.checked);
       const cm = $("#cfg-mmmode", page); if (cm) cm.onchange = e => setCfg("mmMode", e.target.value);
+      const cd = $("#cfg-docno", page); if (cd) cd.onchange = e => setCfg("docNumbering", e.target.value);
       const cs = $("#cfg-selfreg", page); if (cs) cs.onchange = e => setCfg("allowSelfRegistration", e.target.checked);
       $("#bk-export", page).onclick = async () => {
         download(`resinvest_kopia_${App.today()}.json`, JSON.stringify(Store.state, null, 1), "application/json");

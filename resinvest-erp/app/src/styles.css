@@ -798,3 +798,7 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   [data-theme="glass"] .card,[data-theme="glass"] .kpi,[data-theme="glass"] .sec,[data-theme="glass"] .sidebar,[data-theme="glass"] .modal{background:#FFFFFF}
 }
+
+/* 3.8: kolumny formularza operacji nie rozpychają strony — szerokie tabele (podsumowanie kursów) przewijają się we własnym kontenerze */
+.op-layout>*{min-width:0}
+.tbl-wrap{max-width:100%}

@@ -9,6 +9,8 @@ import { readFileSync, readdirSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 globalThis.RIW_CONFIG = JSON.parse(readFileSync(new URL("../config/app.config.json", import.meta.url), "utf8"));
+// testy numeracji według rodzaju dokumentu (PZ, WZ, RW, KOR…) — tryb config.docNumbering = "types"; jedna seria WZ: features38.test.mjs
+globalThis.RIW_CONFIG.docNumbering = "types";
 require("../app/src/i18n.js");
 for (const f of readdirSync(new URL("../app/src/", import.meta.url)).filter(f => /^i18n\.d\d+\.js$/.test(f)).sort()) require("../app/src/" + f);
 const R = require("../app/src/engine.js");

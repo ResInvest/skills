@@ -37,7 +37,12 @@
   /** Typ dokumentu z kolorem: PZ — zielony, WZ — złoty, MM — niebieski, PW / RW — marka, KOR / AN — ostrzegawcze. */
   /** Dokumenty główne — wyróżnione mocnym kolorem (PZ zielony, WZ pomarańczowo-złoty, MM niebieski); pozostałe neutralnie. */
   const MAIN_DOCS = ["PZ", "WZ", "MM"];
-  const docBadge = ty => `<span class="badge doc-badge ${MAIN_DOCS.includes(ty) ? "doc-" + esc(ty) : "doc-aux"}">${esc(ty)}</span>`;
+  /** Seria numeracji dokumentu: od 3.8 wszystkie dokumenty magazynowe w jednej serii WZ (starsze — według rodzaju). */
+  const docSeries = d => d.series || (/^WZ\//.test(String(d.no || "")) ? "WZ" : d.type);
+  /** Znacznik dokumentu: seria (WZ) — rodzaj ruchu (zakup, zużycie, produkcja…) tylko jako opis pomocniczy. */
+  const docBadge = d => { const ty = docSeries(d); return `<span class="badge doc-badge ${MAIN_DOCS.includes(ty) ? "doc-" + esc(ty) : "doc-aux"}" title="${esc(t(R.DOC_LABEL[d.type] || d.type))}">${esc(ty)}</span>${ty !== d.type ? `<br><small class="dim">${esc(t(R.DOC_LABEL[d.type] || d.type))}</small>` : ""}`; };
+  /** Tytuł dokumentu: „Dokument WZ WZ/001/10/2026” (jedna seria) albo „Przyjęcie zewnętrzne (zakup) PZ/…” (starsze). */
+  const docTitle = d => docSeries(d) !== d.type ? `${t("Dokument WZ")} ${d.no}` : `${t(R.DOC_LABEL[d.type])} ${d.no}`;
   const extrasTotal = op => R.round((op.extras || []).reduce((a, x) => a + x.cost, 0), 2);
   const extraLine = x => `${x.typeName}${x.reg ? ` (${x.reg})` : ""}: ${money(x.cost)}${x.qty !== null && x.qty !== undefined && x.rate !== null && x.rate !== undefined && x.costBasis === "qtyRate" ? ` (${fmtQ(x.qty)} × ${fmt(x.rate)} zł)` : ""}${x.desc ? " — " + x.desc : ""}`;
   const tonLine = s => s && s.weightT != null ? `${fmtQ(s.qty)} ${Units.label(s.unit)} | ${fmt(s.weightT, 2)} t | ${t(R.WEIGHT_SOURCES[s.weightMode] || "AUTO")}` : "";
@@ -210,6 +215,7 @@
     const kv = [];
     const add = (k, v) => { if (v !== undefined && v !== null && v !== "") kv.push([k, String(v)]); };
     add(t("Numer"), d.no + (d.manualNo ? " " + t("(wpisany ręcznie)") : "")); add(t("Rodzaj"), t(R.DOC_LABEL[d.type]));
+    if (docSeries(d) !== d.type) add(t("Seria"), t("WZ — wspólna numeracja wszystkich dokumentów transakcji"));
     if (d.type === "PZ" || d.type === "WZ") {
       add(t("Data dokumentu"), Dates.pl(d.docDate || d.date));
       add(d.type === "PZ" ? t("Data przyjęcia") : t("Data wydania"), Dates.pl(d.date));
@@ -267,7 +273,7 @@
     }
     if (op) blocks.push({ type: "p", muted: true, text: t("Operacja {no} · {type} · wystawił: {u}", { no: op.no, type: opTypeLabel(op), u: op.userName }) + (op.extDoc ? " · " + t("dokument zewnętrzny: {x}", { x: op.extDoc }) : "") + (op.notes ? " · " + t("uwagi: {x}", { x: op.notes }) : "") });
     blocks.push({ type: "signatures", labels: d.type === "WZ" || d.type === "PZ" ? [t("Wydał / przyjął (magazyn)"), t("Kierowca / odbiorca")] : d.type === "MM" ? [t("Wydał (magazyn źródłowy)"), t("Kierowca"), t("Przyjął (magazyn docelowy)")] : [t("Sporządził"), t("Zatwierdził")] });
-    return { title: `${t(R.DOC_LABEL[d.type])} ${d.no}`, number: d.no, headerRight: App.whName(d.whId), rangeText: Dates.pl(d.date), whText: App.whName(d.whId), blocks };
+    return { title: docTitle(d), number: d.no, headerRight: App.whName(d.whId), rangeText: Dates.pl(d.date), whText: App.whName(d.whId), blocks };
   }
 
   /** Transport na dokumencie TR: dane ogólne + tabela kursów (własny, zewnętrzny albo oba). */
@@ -275,14 +281,16 @@
     const U = Units.label(x.qtyUnit || "");
     const tk = [[t("Transport"), t(R.TRANSPORT_MODES[x.mode])]];
     const hasKw = P => P.runs.some(r => r.kwit);
-    const runTable = (P, own) => { const kw = hasKw(P); return { type: "table", columns: [{ label: t("Kurs"), w: 0.6 }, { label: t("Pojazd"), w: 1.4 }, { label: t("Kierowca"), w: 1.8 }].concat(kw ? [{ label: t("Kwit wywozowy"), w: 1.8 }, { label: "m³", w: 0.7, align: "right" }] : []).concat([{ label: "km", w: 0.8, align: "right" }, { label: t("Rozliczenie"), w: 1.3, align: "right" }, { label: t("Ilość"), w: 1.2, align: "right" }, { label: kw ? t("Tony") : t("Waga rzecz. [t]"), w: 1.2, align: "right" }, { label: t("Koszt"), w: 1.2, align: "right" }]),
-      rows: P.runs.map(r => [String(r.no), r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—"].concat(kw ? [r.kwit || "—", r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"] : []).concat([fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : t(r.costBasis), `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)])),
-      foot: [t("Razem"), "", ""].concat(kw ? ["", fmtQ(P.runs.reduce((a, r) => a + (r.kwitM3 || 0), 0))] : []).concat([fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)]), note: own && P.runs.some(r => r.driverOverridden) ? t("* kierowca zmieniony tylko dla tego kursu") : "" }; };
+    const multiCo = P => !!P && P.kind !== "own" && new Set((P.runs || []).map(r => String(r.company || "").toLowerCase()).filter(Boolean)).size > 1;
+    const runTable = (P, own) => { const kw = hasKw(P), co = !own && multiCo(P); return { type: "table", columns: [{ label: t("Kurs"), w: 0.6 }].concat(co ? [{ label: t("Przewoźnik"), w: 1.8 }] : []).concat([{ label: t("Pojazd"), w: 1.4 }, { label: t("Kierowca"), w: 1.8 }]).concat(kw ? [{ label: t("Kwit wywozowy"), w: 1.8 }, { label: "m³", w: 0.7, align: "right" }] : []).concat([{ label: "km", w: 0.8, align: "right" }, { label: t("Rozliczenie"), w: 1.3, align: "right" }, { label: t("Ilość"), w: 1.2, align: "right" }, { label: kw ? t("Tony") : t("Waga rzecz. [t]"), w: 1.2, align: "right" }, { label: t("Koszt"), w: 1.2, align: "right" }]),
+      rows: P.runs.map(r => [String(r.no)].concat(co ? [r.company || P.company || "—"] : []).concat([r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—"]).concat(kw ? [r.kwit || "—", r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"] : []).concat([fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : t(r.costBasis), `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)])),
+      foot: [t("Razem"), "", ""].concat(co ? [""] : []).concat(kw ? ["", fmtQ(P.runs.reduce((a, r) => a + (r.kwitM3 || 0), 0))] : []).concat([fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)]), note: own && P.runs.some(r => r.driverOverridden) ? t("* kierowca zmieniony tylko dla tego kursu") : "" }; };
     const ownP = x.mode === "own" ? x : x.mode === "mixed" ? x.own : null, extP = x.mode === "external" ? x : x.mode === "mixed" ? x.external : null;
     if (ownP || extP) tk.push([t("Liczba kursów"), String((x.runs || [x]).length)], [t("Kilometry łącznie"), `${fmtQ(x.km)} km`], [t("Ilość przewieziona"), `${fmtQ(x.totalQty || 0)} ${U}`], [t("Waga rzeczywista łącznie"), x.totalWeightT !== null && x.totalWeightT !== undefined ? `${fmtQ(x.totalWeightT)} t` : "—"]);
     if (x.kwity && x.kwity.length) tk.push([t("Kwity wywozowe"), x.kwity.join(", ")]);
     if (x.totalM3 !== null && x.totalM3 !== undefined) tk.push([t("m³ z kwitów łącznie"), `${fmtQ(x.totalM3)} m³`]);
-    if (extP) tk.push([t("Przewoźnik zewnętrzny"), extP.company + (extP.includedInPrice ? " " + t("(wliczony w cenę)") : "")]);
+    if (extP) tk.push([multiCo(extP) ? t("Przewoźnicy zewnętrzni") : t("Przewoźnik zewnętrzny"), extP.company + (extP.includedInPrice ? " " + t("(wliczony w cenę)") : "")]);
+    if (multiCo(extP) && extP.companies) for (const c of extP.companies) tk.push([`  ${c.company}`, `${tp("{n} kurs|{n} kursy|{n} kursów", c.runs)} · ${fmtQ(c.qty)} ${U} · ${fmtQ(c.km)} km · ${money(c.cost)}`]);
     if (x.mode === "train") {
       tk.push([t("Skład / przewoźnik"), `${x.trainNo || "—"} · ${x.carrier || "—"}`], [t("Nr dokumentu przewozowego"), x.docNo || "—"], [t("Miejsce załadunku"), x.loadPlace || "—"], [t("Liczba wagonów"), String(x.wagonCount)]);
       if (x.capacity !== null) tk.push([t("Łączna ładowność"), `${fmtQ(x.totalCapacity)} ${x.capUnit}`]);
@@ -352,7 +360,7 @@
           : op.status === "CANCELLED" ? `<div class="info-line err mb3">${ic("ban", 15)}<span>${esc(t("Dokument anulowany {d} przez {u} — dokument {no}. Przyczyna: {r}. Skutki magazynowe zostały odwrócone; dokument pozostaje w historii.", { d: Dates.pl(op.cancel.date), u: op.cancel.userName, no: op.cancel.no, r: R.trReason(op.cancel.reason) }))}</span></div>` : ""}
         <div class="grid g2 detail-grid"><dl class="money-list" id="op-kv">${kv.join("")}</dl>
           <div><h4 class="mini-h">${th("Dokumenty")}</h4><div class="tbl-wrap"><table class="tbl" id="op-docs"><thead><tr><th>${th("Nr")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th>${th("Stan")}</th><th></th></tr></thead><tbody>
-            ${docs.map(d => `<tr><td class="mono nowrap">${esc(d.no)}</td><td>${esc(docContent(d))}</td><td class="r">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td><td>${stockLbl(d)}</td><td class="r nowrap"><button class="btn sm" type="button" data-doc="${esc(d.no)}">${th("Podgląd")}</button></td></tr>`).join("")}
+            ${docs.map(d => `<tr><td class="mono nowrap">${esc(d.no)}</td><td>${esc(docContent(d))}</td><td class="r">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td><td>${stockLbl(d)}</td><td class="r nowrap"><button class="btn sm" type="button" data-doc="${esc(d.no)}" data-doctype="${esc(d.type)}">${th("Podgląd")}</button></td></tr>`).join("")}
           </tbody></table></div>
           ${rel.length ? `<h4 class="mini-h">${th("Powiązania dokumentów")}</h4><ul class="rel-list">${rel.map(x => `<li>${x}</li>`).join("")}</ul>` : ""}</div></div>
         <h4 class="mini-h">${th("Ruchy magazynowe (księga)")}</h4>
@@ -374,7 +382,7 @@
       const cb = $("[data-cancel]", m.el); if (cb) cb.onclick = () => { m.close(); CancelDialog.open(op.id); };
       const db = $("[data-delete]", m.el); if (db) db.onclick = () => { m.close(); DeleteDialog.open(op.id); };
       const rb = $("[data-receive]", m.el); if (rb) rb.onclick = () => { m.close(); ReceiveDialog.open(op.id); };
-      $$("[data-doc]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); const d = allDocuments(Store.state).find(x => x.no === b.dataset.doc); if (d) DocPreview.open(d); });
+      $$("[data-doc]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); const d = allDocuments(Store.state).find(x => x.no === b.dataset.doc && (!b.dataset.doctype || x.type === b.dataset.doctype)); if (d) DocPreview.open(d); });
       $$("[data-op]", m.el).forEach(b => b.onclick = e => { e.preventDefault(); m.close(); OpDetail.open(b.dataset.op); });
       $$("[data-reverse]", m.el).forEach(b => b.onclick = async () => {
         const r = await Modal.confirm({ title: t("Odwrócić korektę {no}?", { no: b.dataset.reverse }), text: t("Powstanie nowa korekta przywracająca dane sprzed korekty. Korekty nie usuwa się — obie pozostają w historii."), ok: t("Odwróć korektę"), input: { label: t("Powód odwrócenia"), placeholder: t("np. korekta wprowadzona omyłkowo"), required: true } });
@@ -455,7 +463,7 @@
         b.type === "kv" ? `<table>${b.rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</table>`
           : b.type === "h" ? `<h5>${esc(b.text)}</h5>` : b.type === "p" ? (b.bold ? `<h5>${esc(b.text)}</h5>` : `<p class="${b.muted ? "muted" : ""}">${esc(b.text)}</p>`)
           : `<table class="tbl"><thead><tr>${b.columns.map(c => `<th class="${c.align === "right" ? "r" : ""}">${esc(c.label)}</th>`).join("")}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map((v, i) => `<td class="${b.columns[i].align === "right" ? "r" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}</div>`;
-      const m = Modal.open({ title: `${d.type} ${d.no}`, sub: esc(t(R.DOC_LABEL[d.type])), wide: true, id: "doc-preview", body: html,
+      const m = Modal.open({ title: docSeries(d) !== d.type ? d.no : `${d.type} ${d.no}`, sub: esc(t(R.DOC_LABEL[d.type])), wide: true, id: "doc-preview", body: html,
         footer: `${d.opId ? `<button class="btn ghost" type="button" data-opd>${esc(t("Operacja {no}", { no: d.opNo }))}</button>` : ""}<span class="spacer"></span>${printButtons("doc")}${officeButtons("doc")}<button class="btn primary" type="button" data-ok>${th("Zamknij")}</button>` });
       $("[data-ok]", m.el).onclick = () => m.close();
       const o = $("[data-opd]", m.el); if (o) o.onclick = () => { m.close(); OpDetail.open(d.opId); };
@@ -758,7 +766,7 @@
             <label class="inline-opt"><input type="checkbox" id="r-deleted" ${f.showDeleted ? "checked" : ""}> ${th("Pokaż usunięte")}</label>
             ${hasAux ? `<label class="inline-opt"><input type="checkbox" id="r-aux" ${f.showAux ? "checked" : ""}> ${esc(t("Pokaż dokumenty pomocnicze ({l})", { l: auxTypes.join(", ") }))}</label>` : ""}</div>
             ${rows.length ? `<div class="tbl-wrap"><table class="tbl sticky-act" id="docs-table"><thead><tr><th>${th("Nr dokumentu")}</th><th>${th("Typ")}</th><th>${th("Data")}</th><th>${th("Treść")}</th><th class="r">${th("Ilość")}</th><th class="r">${th("Wartość")}</th><th>${th("Kontrahent")}</th><th>${th("Miejsce transportu")}</th><th>${th("Wpływ na stan")}</th><th>${th("Status")}</th><th><span class="sr-only">${th("Akcje")}</span></th></tr></thead><tbody>
-              ${rows.map((d, i) => `<tr class="doc-row doc-row-${esc(d.type)} ${d.status === "CANCELLED" ? "void" : ""}" data-docno="${esc(d.no)}"><td class="mono nowrap"><b>${esc(d.no)}</b>${d.manualNo ? ` <small class="dim" title="${th("numer wpisany ręcznie")}">✎</small>` : ""}</td><td>${docBadge(d.type)}</td><td class="nowrap">${esc(Dates.pl(d.date))}${d.docDate && d.docDate !== d.date ? `<br><small class="dim">${esc(t("dok. {d}", { d: Dates.pl(d.docDate) }))}</small>` : ""}</td>
+              ${rows.map((d, i) => `<tr class="doc-row doc-row-${esc(docSeries(d))} ${d.status === "CANCELLED" ? "void" : ""}" data-docno="${esc(d.no)}"><td class="mono nowrap"><b>${esc(d.no)}</b>${d.manualNo ? ` <small class="dim" title="${th("numer wpisany ręcznie")}">✎</small>` : ""}</td><td>${docBadge(d)}</td><td class="nowrap">${esc(Dates.pl(d.date))}${d.docDate && d.docDate !== d.date ? `<br><small class="dim">${esc(t("dok. {d}", { d: Dates.pl(d.docDate) }))}</small>` : ""}</td>
                 <td>${esc(docContent(d))}</td><td class="r nowrap">${d.qty != null ? esc(fmtQ(d.qty) + " " + Units.label(d.unit)) : "—"}</td>
                 <td class="r nowrap">${d.value ? esc(money(d.value)) : "—"}</td><td>${esc(d.partner || (d.transport && (d.transport.company || d.transport.carrier)) || "")}</td>
                 <td>${esc(d.place || "—")}</td><td>${d.type === "MM" && d.mmState === "W_DRODZE" && cfg.id === "przyjecia" ? `<span class="badge warn">${th("oczekuje na przyjęcie")}</span>` : stockLbl(d)}</td><td>${d.deleted ? `<span class="badge err">${th("USUNIĘTY")}</span>` : statusBadge(d.status)}${d.type === "MM" ? " " + mmBadge(d) : ""}</td>
