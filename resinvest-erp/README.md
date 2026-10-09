@@ -45,6 +45,16 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.8.1
+* **Ewidencja obrotu w CSV** — kolumny według zestawienia firmy: data załadunku do klienta końcowego, miejsce
+  załadunku, data operacji, dostawca, Zakup/Sprzedaż, Nr. WZ, czy magazynowane, Deklaracja/KZR, volumen i jednostka,
+  ceny zakupu/produkcji i sprzedaży, wartość, produkt, rodzaj zrębki a/b, rąbanie własne/wynajęte i jego koszt,
+  transport (firma, nr rejestracyjny, km, koszt), odbiorca, uwagi, miejsce pochodzenia, data dodania wpisu,
+  Wolumen_MP/t/GJ, Ruch_magazyn_MP/t, wartości *_calc, typ transportu, koszt rąbania, miesiąc i rok —
+  **plus dane z planera zakupów** (plan dnia, plan i wykonanie miesiąca, realizacja %, udział transakcji w planie).
+  Jeden wiersz = jeden ruch towaru w transakcji WZ. Pobierasz go przyciskiem **CSV** w Operacjach i w rejestrach
+  dokumentów, **CSV ewidencji** w Raportach i w Planerze. Opis każdej kolumny: [`docs/EWIDENCJA_CSV.md`](docs/EWIDENCJA_CSV.md).
+
 ## Nowe w 3.8.0
 * **Kilka firm transportu zewnętrznego w jednej operacji.** Po zaznaczeniu „Transport zewnętrzny” pojawia się lista
   **„Liczba firm przewidzianych do transportu”** (1–10) z samouczkiem „Wpisz ilość firm zewnętrznych, którym zlecono

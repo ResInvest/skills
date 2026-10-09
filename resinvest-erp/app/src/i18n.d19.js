@@ -26,5 +26,10 @@
   "Jedna seria WZ (domyślnie): każda transakcja — zakup, sprzedaż, produkcja, MM, korekta, inwentaryzacja, bilans otwarcia — dostaje kolejny numer WZ/NNN/MM/RRRR. Numery nadane wcześniej nie zmieniają się.": ["Jedna řada WZ (výchozí): každá transakce — nákup, prodej, výroba, MM, oprava, inventura, počáteční stav — dostane další číslo WZ/NNN/MM/RRRR. Dříve přidělená čísla se nemění.", "One WZ series (default): every transaction — purchase, sale, production, MM, correction, stocktaking, opening balance — gets the next number WZ/NNN/MM/YYYY. Numbers assigned earlier do not change."],
   "Dokument WZ": ["Doklad WZ", "WZ document"],
   "Seria": ["Řada", "Series"],
-  "WZ — wspólna numeracja wszystkich dokumentów transakcji": ["WZ — společné číslování všech dokladů transakce", "WZ — common numbering of all documents of the transaction"]
+  "WZ — wspólna numeracja wszystkich dokumentów transakcji": ["WZ — společné číslování všech dokladů transakce", "WZ — common numbering of all documents of the transaction"],
+
+  /* --- ewidencja obrotu (CSV) --- */
+  "CSV ewidencji": ["CSV evidence", "Ledger CSV"],
+  "CSV planera": ["CSV plánovače", "Planner CSV"],
+  "Pobrano ewidencję CSV": ["Evidence CSV stažena", "Ledger CSV downloaded"]
 }); })(typeof globalThis !== "undefined" ? globalThis : this);

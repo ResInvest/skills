@@ -1036,6 +1036,32 @@ async function fillForestDirect(page) {
     await page.selectOption("#f-transport-external-companyCount", "1"); await page.waitForSelector("#f-transport-external-company");
     check("3.8 Powrót do jednej firmy: pole wspólne z pierwszą firmą z kursów", (await page.inputValue("#f-transport-external-company")) === "ESI Logistics");
 
+    /* ------------- 3.8: ewidencja obrotu CSV (kolumny zestawienia firmy + planer) ------------- */
+    const csvOf = async (route, btn, before) => {
+      await go(page, route); await page.waitForTimeout(250); if (before) await before();
+      const [d] = await Promise.all([page.waitForEvent("download"), page.click(btn)]);
+      const file = path.join(TMP, d.suggestedFilename()); await d.saveAs(file);
+      // parser CSV (średnik, pola w cudzysłowie mogą zawierać średnik i podwojony cudzysłów)
+      const parse = txt => { const out = [[]]; let cell = "", q = false; for (let i = 0; i < txt.length; i++) { const ch = txt[i];
+        if (q) { if (ch === '"' && txt[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+        else if (ch === '"') q = true; else if (ch === ";") { out[out.length - 1].push(cell); cell = ""; } else if (ch === "\r" && txt[i + 1] === "\n") { out[out.length - 1].push(cell); cell = ""; out.push([]); i++; } else cell += ch; }
+        out[out.length - 1].push(cell); return out.filter(r => r.length > 1 || r[0] !== ""); };
+      const lines = parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+      return { name: d.suggestedFilename(), head: lines[0], rows: lines.slice(1) };
+    };
+    const HEAD8 = ["Data załadunku do klienta końcowego", "Miejsce załadunku", "Data operacji", "Dostawca", "Zakup/Sprzedaż", "Nr. WZ", "Czy magazynowane (TAK / NIE)", "Deklaracja/KZR"];
+    const ops38 = await csvOf("operacje", "#ops-csv");
+    check("3.8 CSV Operacje: ewidencja z kolumnami zestawienia (Zakup/Sprzedaż, Nr. WZ, Volumen, transport, Wolumen_MP/t/GJ, Miesiąc_tekst, Rok)", ops38.name.startsWith("ewidencja_operacje_") && HEAD8.every((h, i) => ops38.head[i] === h) && ["Volumen", "Transport: Firma", "Nr. Rejestracyjny", "Odległość km", "Koszt transportu", "Wolumen_GJ", "Ruch_magazyn_MP", "Typ_transportu_heurystyka", "Koszt_rąbania_total", "Miesiąc_tekst", "Rok"].every(h => ops38.head.includes(h)) && ops38.rows.length > 5 && ops38.rows.every(r => r.length === ops38.head.length), { name: ops38.name, n: ops38.rows.length });
+    const kinds = new Set(ops38.rows.map(r => r[4]));
+    check("3.8 CSV Operacje: wiersze Zakup, Produkcja, Sprzedaż, MM; numery WZ; liczby z przecinkiem", ["Zakup", "Produkcja", "Sprzedaż", "MM"].every(k => kinds.has(k)) && ops38.rows.every(r => /^WZ\//.test(r[5])) && ops38.rows.some(r => /^\d+,\d+$/.test(r[ops38.head.indexOf("Wolumen_t")])), [...kinds]);
+    check("3.8 CSV Operacje: kolumny planera (plan dnia, plan i wykonanie miesiąca)", ["Plan_dnia_MP", "Uwagi_planu", "Plan_miesiąca_MP", "Wykonanie_miesiąca_MP", "Realizacja_miesiąca_%", "Wykonanie_planera_MP"].every(h => ops38.head.includes(h)) && ops38.rows.some(r => Number(r[ops38.head.indexOf("Plan_miesiąca_MP")]) > 0));
+    const docs38 = await csvOf("dokumenty", "#reg-csv");
+    check("3.8 CSV Dokumenty: ta sama ewidencja dla dokumentów z filtra", docs38.name.startsWith("ewidencja_dokumenty_") && docs38.head.join(";") === ops38.head.join(";") && docs38.rows.length > 0);
+    const rep38 = await csvOf("raporty", "#rep-trade");
+    check("3.8 CSV Raporty: „CSV ewidencji” za okres raportu", rep38.name.startsWith("ewidencja_") && rep38.head.join(";") === ops38.head.join(";"), rep38.name);
+    const pl38 = await csvOf("planer", "#pl-trade");
+    check("3.8 CSV Planer: „CSV ewidencji” za tydzień planera, obok „CSV planera”", pl38.name.startsWith("ewidencja_planer_") && pl38.head.join(";") === ops38.head.join(";") && !!(await page.$("#pl-csv")), pl38.name);
+
     // wysyłka e-mailem (OFFLINE: zapis PDF + program pocztowy)
     await go(page, "raporty"); await page.waitForSelector('[data-mail="rep"]');
     check("3.6 Raport miesiąca: przycisk „Wyślij e-mailem”", nb(await page.textContent('[data-mail="rep"]')) === "Wyślij e-mailem");

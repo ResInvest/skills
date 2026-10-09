@@ -197,6 +197,13 @@
     } catch (e) { console.error(e); Toast.err(t("Nie udało się wygenerować pliku"), e.message); }
   };
   /** Tabela rejestru → XLSX (ten sam zakres i kolumny co CSV). */
+  /** Ewidencja obrotu (CSV): stałe kolumny zestawienia firmy + dane planera — jeden wiersz na ruch towaru w transakcji WZ. */
+  function tradeCsv(fileBase, filter) {
+    const rows = R.Trade.rows(Store.state, filter);
+    download(`${fileBase}.csv`, toCSV(R.Trade.COLUMNS, rows.map(r => r.map(v => typeof v === "number" ? csvNum(v) : v == null ? "" : v))), "text/csv;charset=utf-8");
+    Toast.ok(t("Pobrano ewidencję CSV"), tp("{n} wiersz|{n} wiersze|{n} wierszy", rows.length));
+    return rows.length;
+  }
   function xlsxTable(fileBase, title, columns, rows, subtitle) {
     const bytes = OFFICE.xlsx([{ name: title, title, subtitle, columns, rows }], { title, author: App.user().name });
     const name = `${fileBase}.xlsx`.replace(/[^\w.\-ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+/g, "_");
@@ -716,8 +723,7 @@
         if (res.ok) { Toast.ok(t("Usunięto wersję roboczą")); if (UI.Form.draft && UI.Form.draft.draftId === b.dataset.deldraft) UI.Form.draft.draftId = null; } else Toast.err(t("Nie usunięto"), res.error);
         App.render();
       });
-      $("#ops-csv", page).onclick = () => download(`operacje_${App.today()}.csv`, toCSV([t("Nr"), t("Data"), t("Rodzaj"), t("Status"), t("Magazyn"), t("Produkt"), t("Ilość"), t("Kontrahent"), t("Wartość zł"), t("Wynik zł"), t("Użytkownik"), t("Dokumenty")],
-        this.filtered().map(o => [o.no, o.date, opTypeLabel(o), statusText(o.deleted ? "DELETED" : o.status), App.whName(o.whId), opProduct(o), opQty(o), partnerName(opPartnerId(o)), csvNum(opValue(o)), csvNum(o.totals.result), o.userName, o.documents.map(d => d.no).join(" ")])), "text/csv;charset=utf-8");
+      $("#ops-csv", page).onclick = () => tradeCsv(`ewidencja_operacje_${App.today()}`, { opIds: this.filtered().map(o => o.id) });
     }
   };
 
@@ -798,8 +804,7 @@
         $$("[data-view]", page).forEach(b => b.onclick = () => DocPreview.open(rows[+b.dataset.view]));
         $$("[data-opd]", page).forEach(b => b.onclick = () => OpDetail.open(b.dataset.opd));
         $$("[data-receive]", page).forEach(b => b.onclick = () => ReceiveDialog.open(b.dataset.receive));
-        $("#reg-csv", page).onclick = () => download(`${cfg.id}_${App.today()}.csv`, toCSV([t("Nr dokumentu"), t("Typ"), t("Data"), t("Treść"), t("Ilość"), t("Jednostka"), t("Wartość zł"), t("Kontrahent"), t("Miejsce transportu"), t("Wpływ na stan"), t("Status"), t("Operacja")],
-          rows.map(d => [d.no, d.type, d.date, docContent(d), csvNum(d.qty), d.unit ? Units.label(d.unit) : "", csvNum(d.value), d.partner || "", d.place || "", d.stock, statusText(d.deleted ? "DELETED" : d.status) + (d.mmState && d.twoStage ? " / " + t(R.MM_STATES[d.mmState]) : ""), d.opNo || ""])), "text/csv;charset=utf-8");
+        $("#reg-csv", page).onclick = () => tradeCsv(`ewidencja_${cfg.id}_${App.today()}`, { opIds: [...new Set(this.filtered().map(d => d.opId).filter(Boolean))] });
       }
     };
   }
@@ -1188,7 +1193,7 @@
       const sec = (title, inner, id) => `<div class="card mt4" ${id ? `id="${id}"` : ""}><div class="card-h"><h3>${esc(title)}</h3></div>${inner}</div>`;
       const hBlocks = model.blocks.filter(b => b.type === "h").map(b => b.text);
       return `<div class="page-head"><div class="titles"><h2>${th("Raporty")}</h2><p>${th("Raport okresowy: dzień / tydzień / miesiąc / rok / zakres własny, dla jednego lub wszystkich magazynów. Wartości netto po korektach i anulowaniach. Kliknij wiersz, aby zobaczyć operacje źródłowe. Ekran, wydruk i PDF mają tę samą treść.")}</p></div>
-          <div class="actions">${printButtons("rep")}${officeButtons("rep")}<button class="btn" type="button" id="rep-csv">${ic("dl", 15)} ${th("CSV bilansu")}</button></div></div>
+          <div class="actions">${printButtons("rep")}${officeButtons("rep")}<button class="btn" type="button" id="rep-trade">${ic("dl", 15)} ${th("CSV ewidencji")}</button><button class="btn" type="button" id="rep-csv">${ic("dl", 15)} ${th("CSV bilansu")}</button></div></div>
         <div class="card"><div class="toolbar" id="rep-filters">
           ${periodControls(f, "r")}
           <div class="field"><label for="r-wh">${th("Magazyn")}</label><select class="ctrl" id="r-wh"><option value="all" ${f.wh === "all" ? "selected" : ""}>${th("Wszystkie magazyny")}</option>${S.warehouses.map(w => `<option value="${w.id}" ${f.wh === w.id ? "selected" : ""}>${esc(w.name)}</option>`).join("")}</select></div>
@@ -1222,6 +1227,7 @@
       const ml = $("[data-mail]", page); if (ml) ml.onclick = () => { const x = c(); Printer.mail(Reports.model(x), "RAP", `raport_${x.rg.from}_${x.rg.to}`); };
       $("[data-xlsx]", page).onclick = () => { const x = c(); Printer.office(Reports.model(x), "RAP", "xlsx", `raport_${x.rg.from}_${x.rg.to}`); };
       $("[data-docx]", page).onclick = () => { const x = c(); Printer.office(Reports.model(x), "RAP", "docx", `raport_${x.rg.from}_${x.rg.to}`); };
+      $("#rep-trade", page).onclick = () => { const x = c(), acc = R.whAccess(App.user()); tradeCsv(`ewidencja_${x.rg.from}_${x.rg.to}`, { from: x.rg.from, to: x.rg.to, whIds: x.f.wh === "all" ? acc : [x.f.wh] }); };
       $("#rep-csv", page).onclick = () => { const x = c(); download(`bilans_${x.rg.from}_${x.rg.to}.csv`, toCSV([t("Produkt"), t("Jednostka"), t("Stan pocz."), t("Zakup"), t("Produkcja"), t("Zużycie"), t("Sprzedaż WZ"), t("Bezpośrednia PW-WZ"), "MM", t("Inw./BO"), t("Stan końc."), t("Masa t"), t("Energia GJ"), t("Kontrola")],
         x.rep.recon.map(r => [r.name, Units.label(r.unit), csvNum(r.opening), csvNum(r.ZAKUP), csvNum(r.PRODUKCJA), csvNum(r.ZUZYCIE), csvNum(r.SPRZEDAZ), csvNum(r.BEZP), csvNum(r.MM), csvNum(r.INNE), csvNum(r.closing), csvNum(r.closingT), csvNum(r.closingGJ), r.consistent ? "OK" : t("NIESPÓJNY")])), "text/csv;charset=utf-8"); };
     }
@@ -1441,6 +1447,6 @@
 
   root.OpDetail = OpDetail;
   root.ReceiveDialog = ReceiveDialog;
-  Object.assign(UI, { xlsxTable, pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
+  Object.assign(UI, { xlsxTable, tradeCsv, pName, partnerName, opPartnerId, opTypeLabel, TYPE_BADGE, opProduct, opQty, opValue, qtyByUnit, allDocuments, docContent, Printer, printButtons, docModel, OpDetail, DocPreview, CancelDialog, ReceiveDialog, mmBadge, Tip, sparkline, hbar, opsTable, bindOps, drill, drillAttr, bindDrill, periodControls, bindPeriod, rangeOf, renderTable, auditLine, searchInput, bindSearch });
   root.RIWViews = { allDocuments, docModel, kwitModel, historyModel, Reports, Printer, CancelDialog, DocPreview, OpDetail };
 })(typeof globalThis !== "undefined" ? globalThis : this);

@@ -155,3 +155,68 @@ test("numeracja: administrator przełącza tryb (WZ ↔ osobne serie) — zmiana
   assert.equal(R.Settings.save(s, { docNumbering: "wz" }, c).ok, true);
   assert.match(commit(s, draft({ purchase: Object.assign({}, PURCHASE, { qty: "3" }) })).no, WZ_NO);
 });
+
+/* ============================ ewidencja obrotu (CSV) + dane planera ============================ */
+require("../app/src/planner.js");
+const Trade = require("../app/src/trade.js");
+const col = name => { const i = Trade.COLUMNS.indexOf(name); assert.ok(i >= 0, name); return i; };
+const pick = (row, ...names) => names.map(n => row[col(n)]);
+
+test("ewidencja CSV: kolumny zestawienia firmy w ustalonej kolejności, koszt transportu = raporty, bez anulowanych", () => {
+  const s = fresh(), rows = Trade.rows(s, {});
+  assert.deepEqual(Trade.COLUMNS.slice(0, 6), ["Data załadunku do klienta końcowego", "Miejsce załadunku", "Data operacji", "Dostawca", "Zakup/Sprzedaż", "Nr. WZ"]);
+  assert.ok(["Wolumen_MP", "Wolumen_t", "Wolumen_GJ", "Ruch_magazyn_MP", "Ruch_magazyn_t", "Wartość_zakupu_zł_calc", "Wartość_sprzedaży_zł_calc", "Typ_transportu_heurystyka", "Koszt_rąbania_total", "Miesiąc_tekst", "Rok", "Plan_dnia_MP", "Plan_miesiąca_MP"].every(c => Trade.COLUMNS.includes(c)));
+  assert.ok(rows.length > 0 && rows.every(r => r.length === Trade.COLUMNS.length));
+  const live = s.operations.filter(o => !o.deleted && o.status !== "CANCELLED");
+  const sum = rows.reduce((a, r) => a + (Number(r[col("Koszt transportu")]) || 0), 0);
+  assert.equal(Math.round(sum * 100), Math.round(live.reduce((a, o) => a + (o.totals.transportCost || 0), 0) * 100));
+  const cancelled = s.operations.find(o => o.status === "CANCELLED");
+  assert.ok(cancelled && !rows.some(r => r[col("Nr. WZ")] === cancelled.no), "anulowana transakcja pominięta");
+});
+
+test("ewidencja CSV: zakup z produkcją i sprzedażą bezpośrednią — trzy wiersze jednego WZ, magazynowanie NIE, rąbanie wynajęte", () => {
+  const s = fresh();
+  const op = commit(s, draft({ purchase: PURCHASE, production: Object.assign({}, LESNA, { chipperId: "ch_ext_drwal" }), sale: { enabled: true, direct: true, buyerId: "pa_ec_zab", price: "90", priceUnit: "MP" },
+    transport: { mode: "external", place: "EC Zabrze", external: { companyCount: "2", runCount: "2", runs: [{ company: "ESI Logistics", reg: "ESI 1", km: "10", qty: "60", kwit: "KW 1", kwitM3: "15" }, { company: "DAP Trans", reg: "DAP 2", km: "20", qty: "60", kwit: "KW 2", kwitM3: "15" }] } } }));
+  const rows = Trade.rows(s, { opIds: [op.id] });
+  assert.deepEqual(rows.map(r => r[col("Zakup/Sprzedaż")]), ["Zakup", "Produkcja", "Sprzedaż"]);
+  assert.ok(rows.every(r => r[col("Nr. WZ")] === op.no));
+  assert.deepEqual(rows.map(r => r[col("Czy magazynowane (TAK / NIE)")]), ["NIE", "NIE", "NIE"]);
+  assert.deepEqual(rows.map(r => r[col("Ruch_magazyn_MP")]), [0, 0, 0]);
+  const [zak, prod, sale] = rows;
+  assert.deepEqual(pick(zak, "Dostawca", "Deklaracja/KZR", "Volumen", "Jednostka miary", "Cena zakupu/produkcji (zł/mp;zł/tona)", "Wartość", "Wolumen_MP"), ["Lander Agro", "KZR", 30, "m³", 230, 6900, 120]);
+  assert.match(prod[col("Rąbanie własne/wynajęte (kto)")], /^wynajęte — /);
+  assert.equal(prod[col("Koszt rąbania usługa")], op.production.chippingCost);
+  assert.equal(prod[col("Rodzaj zrębki a/b")], "a");
+  assert.deepEqual(pick(sale, "Volumen", "Cena sprzedaży (zł/mp;zł/tona)", "Wartość_sprzedaży_zł_calc", "Odbiorca"), [120, 90, 10800, s.partners.find(p => p.id === "pa_ec_zab").name]);
+  assert.equal(sale[col("Transport: Firma")], "ESI Logistics, DAP Trans");
+  assert.equal(sale[col("Nr. Rejestracyjny")], "ESI 1, DAP 2");
+  assert.deepEqual(pick(sale, "Odległość km", "Koszt transportu"), [30, 150]);
+  assert.equal(zak[col("Koszt transportu")], "", "transport tylko przy ostatnim ruchu transakcji");
+  assert.match(sale[col("Typ_transportu_heurystyka")], /zewnętrzny \(2 firmy\)/);
+  assert.deepEqual(pick(sale, "Miesiąc_tekst", "Rok", "Data załadunku do klienta końcowego"), ["wrzesień", 2026, TODAY]);
+  assert.equal(sale[col("Miejsce pochodzenia")], "Nadleśnictwo Rudy Raciborskie · Stanica");
+});
+
+test("ewidencja CSV: zakup na magazyn i sprzedaż ze stanu — ruch magazynu w MP i t, ceny z jednostką", () => {
+  const s = fresh();
+  const buy = commit(s, draft({ purchase: { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "50", unit: "MP", price: "55", weightMode: "auto" } }));
+  const [b] = Trade.rows(s, { opIds: [buy.id] });
+  assert.deepEqual(pick(b, "Zakup/Sprzedaż", "Czy magazynowane (TAK / NIE)", "Deklaracja/KZR", "Ruch_magazyn_MP", "Ruch_magazyn_t", "Jednostka_ceny_zakupu"), ["Zakup", "TAK", "Deklaracja", 50, 16.5, "zł/MP"]);
+  const sale = commit(s, draft({ type: "SPRZEDAZ", sale: { productId: "pr_zr_tow", qty: "20", unit: "MP", buyerId: "pa_ec_zab", price: "80", priceUnit: "MP", weightMode: "auto" }, transport: { mode: "none", place: "EC Zabrze" } }));
+  const [x] = Trade.rows(s, { opIds: [sale.id] });
+  assert.deepEqual(pick(x, "Zakup/Sprzedaż", "Czy magazynowane (TAK / NIE)", "Ruch_magazyn_MP", "Wartość", "Miejsce załadunku", "Typ_transportu_heurystyka"), ["Sprzedaż", "TAK", -20, 1600, "RiC Zabrze", "brak transportu"]);
+});
+
+test("ewidencja CSV: kolumny planera — plan dnia magazynu, plan i wykonanie miesiąca, udział transakcji w wykonaniu", () => {
+  const s = fresh();
+  const op = commit(s, draft({ purchase: PURCHASE, production: LESNA }));
+  R.Planner.setPlan(s, { whId: "wh_zab", date: TODAY, planMP: "200", note: "Rudy — Stanica" }, ctx(s));
+  const rows = Trade.rows(s, { opIds: [op.id] });
+  assert.deepEqual(pick(rows[0], "Plan_dnia_MP", "Uwagi_planu", "Wykonanie_planera_MP"), [200, "Rudy — Stanica", 120]);
+  const days = R.Planner.days(s, ["wh_zab"], "2026-09-01", "2026-09-30", "9999-12-31"), tot = R.Planner.totals(days);
+  assert.deepEqual(pick(rows[1], "Plan_miesiąca_MP", "Wykonanie_miesiąca_MP"), [tot.plan, tot.act]);
+  assert.equal(rows[1][col("Plan_dnia_MP")], "", "plan dnia tylko w pierwszym wierszu transakcji");
+  const filtered = Trade.rows(s, { from: TODAY, to: TODAY, whIds: ["wh_bra"] });
+  assert.ok(!filtered.some(r => r[col("Nr. WZ")] === op.no), "filtr magazynu i okresu");
+});

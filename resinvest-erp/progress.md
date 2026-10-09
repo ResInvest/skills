@@ -1,6 +1,11 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-06 · etap: **ResInvest ERP 3.8.0 — kilka firm transportu zewnętrznego, data przyjęcia, jedna seria numeracji WZ**
+Ostatnia aktualizacja: 2026-10-09 · etap: **ResInvest ERP 3.8.1 — ewidencja obrotu CSV z danymi planera**
+
+## Wykonane — 3.8.1
+
+- [x] Ewidencja obrotu CSV (kolumny zestawienia firmy + dane planera) w Operacjach, Dokumentach, Raportach i Planerze
+- [x] Testy: jednostkowe 163, E2E 329 — zaliczone
 
 ## Wykonane — 3.8.0
 

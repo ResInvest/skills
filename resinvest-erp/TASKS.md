@@ -1,5 +1,14 @@
 # TASKS — ResInvest ERP
 
+## 3.8.1 — ewidencja obrotu CSV + dane planera
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| kolumny CSV w kolejności zestawienia firmy (35 kolumn) + jednostki cen, magazyn i 6 kolumn planera | DONE | `features38.test` „ewidencja CSV: kolumny…” |
+| wiersz na ruch towaru (Zakup / Produkcja / Sprzedaż / MM), transport w ostatnim wierszu — suma = raporty | DONE | `features38.test` (4 testy ewidencji) |
+| magazynowanie TAK/NIE i ruch magazynu w MP i t; rąbanie własne/wynajęte; rodzaj zrębki a/b | DONE | `features38.test` |
+| pobieranie z Operacji, Dokumentów, Raportów i Planera (UTF-8 z BOM, średnik, przecinek dziesiętny) | DONE | E2E „3.8 CSV …” (6 sprawdzeń) |
+
 ## 3.8.0 — kilka firm transportu zewnętrznego, data przyjęcia, jedna seria WZ
 
 | Kryterium | Status | Dowód |
