@@ -1,0 +1,8 @@
+cap/
+mp3/
+chk/
+*.wav
+*.mp4
+*.ass
+timing.json
+_*.ass
