@@ -40,7 +40,7 @@ npm run build                                  # ResInvest_ERP.html w katalogu p
 cd tools/tutorial
 mkdir -p mp3                                   # 01_wstep.mp3 … 16_zakonczenie.mp3 (nazwy z pola "file" w script.json)
 python timing.py                               # oś czasu + napisy
-python music.py                                # podkład
+python loop_music.py Epic_Inspiration.mp3      # podkład z pliku (albo: python music.py — synteza)
 node rec.cjs                                   # nagranie wszystkich rozdziałów (albo: node rec.cjs 5 6)
 python compose.py --out ResInvest_ERP_samouczek.mp4
 python compose.py --chapters 5-6 --scale 0.5 --preset veryfast --out podglad.mp4   # szybki podgląd fragmentu
