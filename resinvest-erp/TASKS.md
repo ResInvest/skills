@@ -1,5 +1,15 @@
 # TASKS — ResInvest ERP
 
+## 3.9.0 — pojemność pojazdów, zapełnienie kursów, raporty floty i rębaków
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| zabudowa pojazdu (ruchoma podłoga, kontener, hakowiec — zestaw kontenerów) z wymiarami; pojemność = dł. × szer. × wys. | DONE | `features39.test` (2 testy), E2E „3.9 Hakowiec…”, „3.9 Pojemność liczona na żywo…” |
+| zapełnienie % każdego kursu (flota własna i zewnętrzna), średnia operacji, ostrzeżenie o przeładowaniu | DONE | `features39.test` „kurs floty własnej…”, „kurs zewnętrzny…” |
+| raporty tygodniowe i miesięczne floty: pojazdy, kursy, kierowcy (kursy, MP, tony, km) | DONE | `features39.test` „raport pojazdów i kierowców…”, E2E „3.9 Raport…” |
+| raporty dzienne, tygodniowe, miesięczne rębaków i operatorów (ile zrąbali) | DONE | `features39.test` „raport rębaków i operatorów…”, E2E |
+| eksport raportów floty CSV / XLSX / PDF | DONE | E2E „3.9 Raport floty: eksport CSV” |
+
 ## 3.8.1 — ewidencja obrotu CSV + dane planera
 
 | Kryterium | Status | Dowód |

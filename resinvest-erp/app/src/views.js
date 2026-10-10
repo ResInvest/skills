@@ -289,9 +289,9 @@
     const tk = [[t("Transport"), t(R.TRANSPORT_MODES[x.mode])]];
     const hasKw = P => P.runs.some(r => r.kwit);
     const multiCo = P => !!P && P.kind !== "own" && new Set((P.runs || []).map(r => String(r.company || "").toLowerCase()).filter(Boolean)).size > 1;
-    const runTable = (P, own) => { const kw = hasKw(P), co = !own && multiCo(P); return { type: "table", columns: [{ label: t("Kurs"), w: 0.6 }].concat(co ? [{ label: t("Przewoźnik"), w: 1.8 }] : []).concat([{ label: t("Pojazd"), w: 1.4 }, { label: t("Kierowca"), w: 1.8 }]).concat(kw ? [{ label: t("Kwit wywozowy"), w: 1.8 }, { label: "m³", w: 0.7, align: "right" }] : []).concat([{ label: "km", w: 0.8, align: "right" }, { label: t("Rozliczenie"), w: 1.3, align: "right" }, { label: t("Ilość"), w: 1.2, align: "right" }, { label: kw ? t("Tony") : t("Waga rzecz. [t]"), w: 1.2, align: "right" }, { label: t("Koszt"), w: 1.2, align: "right" }]),
-      rows: P.runs.map(r => [String(r.no)].concat(co ? [r.company || P.company || "—"] : []).concat([r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—"]).concat(kw ? [r.kwit || "—", r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"] : []).concat([fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : t(r.costBasis), `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—", money(r.cost)])),
-      foot: [t("Razem"), "", ""].concat(co ? [""] : []).concat(kw ? ["", fmtQ(P.runs.reduce((a, r) => a + (r.kwitM3 || 0), 0))] : []).concat([fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—", money(P.cost)]), note: own && P.runs.some(r => r.driverOverridden) ? t("* kierowca zmieniony tylko dla tego kursu") : "" }; };
+    const runTable = (P, own) => { const kw = hasKw(P), co = !own && multiCo(P), fl = P.runs.some(r => r.fillPct !== null && r.fillPct !== undefined); return { type: "table", columns: [{ label: t("Kurs"), w: 0.6 }].concat(co ? [{ label: t("Przewoźnik"), w: 1.8 }] : []).concat([{ label: t("Pojazd"), w: 1.4 }, { label: t("Kierowca"), w: 1.8 }]).concat(kw ? [{ label: t("Kwit wywozowy"), w: 1.8 }, { label: "m³", w: 0.7, align: "right" }] : []).concat([{ label: "km", w: 0.8, align: "right" }, { label: t("Rozliczenie"), w: 1.3, align: "right" }, { label: t("Ilość"), w: 1.2, align: "right" }, { label: kw ? t("Tony") : t("Waga rzecz. [t]"), w: 1.2, align: "right" }].concat(fl ? [{ label: t("Zapełnienie"), w: 1.1, align: "right" }] : []).concat([{ label: t("Koszt"), w: 1.2, align: "right" }])),
+      rows: P.runs.map(r => [String(r.no)].concat(co ? [r.company || P.company || "—"] : []).concat([r.reg, (own ? r.driverName + (r.driverOverridden ? " *" : "") : r.driver) || "—"]).concat(kw ? [r.kwit || "—", r.kwitM3 !== null && r.kwitM3 !== undefined ? fmtQ(r.kwitM3) : "—"] : []).concat([fmtQ(r.km), own || r.costBasis === "km × stawka" ? `${fmt(r.rate)} zł/km` : t(r.costBasis), `${fmtQ(r.qty)} ${U}`, r.weightT !== null && r.weightT !== undefined ? fmtQ(r.weightT) : "—"].concat(fl ? [r.fillPct !== null && r.fillPct !== undefined ? `${fmt(r.fillPct, 1)}%` : "—"] : []).concat([money(r.cost)]))),
+      foot: [t("Razem"), "", ""].concat(co ? [""] : []).concat(kw ? ["", fmtQ(P.runs.reduce((a, r) => a + (r.kwitM3 || 0), 0))] : []).concat([fmtQ(P.km), "", `${fmtQ(P.totalQty)} ${U}`, P.totalWeightT !== null && P.totalWeightT !== undefined ? fmtQ(P.totalWeightT) : "—"].concat(fl ? [P.avgFillPct != null ? t("śr. {p}%", { p: fmt(P.avgFillPct, 1) }) : (() => { const f = P.runs.filter(r => r.fillPct != null); return f.length ? t("śr. {p}%", { p: fmt(f.reduce((a, r) => a + r.fillPct, 0) / f.length, 1) }) : "—"; })()] : []).concat([money(P.cost)])), note: own && P.runs.some(r => r.driverOverridden) ? t("* kierowca zmieniony tylko dla tego kursu") : "" }; };
     const ownP = x.mode === "own" ? x : x.mode === "mixed" ? x.own : null, extP = x.mode === "external" ? x : x.mode === "mixed" ? x.external : null;
     if (ownP || extP) tk.push([t("Liczba kursów"), String((x.runs || [x]).length)], [t("Kilometry łącznie"), `${fmtQ(x.km)} km`], [t("Ilość przewieziona"), `${fmtQ(x.totalQty || 0)} ${U}`], [t("Waga rzeczywista łącznie"), x.totalWeightT !== null && x.totalWeightT !== undefined ? `${fmtQ(x.totalWeightT)} t` : "—"]);
     if (x.kwity && x.kwity.length) tk.push([t("Kwity wywozowe"), x.kwity.join(", ")]);
@@ -1323,8 +1323,51 @@
     chippers: { kind: "chippers", label: N_("Rębaki własne"), add: N_("Rębak") },
     operators: { kind: "operators", label: N_("Operatorzy rębaków"), add: N_("Operator rębaka") },
     ext_vehicles: { kind: "vehicles", ext: true, label: N_("Samochody firm zewnętrznych"), add: N_("Pojazd firmy zewnętrznej") },
-    ext_chippers: { kind: "chippers", ext: true, label: N_("Rębaki firm zewnętrznych"), add: N_("Rębak firmy zewnętrznej") }
+    ext_chippers: { kind: "chippers", ext: true, label: N_("Rębaki firm zewnętrznych"), add: N_("Rębak firmy zewnętrznej") },
+    reports: { report: true, label: N_("Raporty floty i rębaków") }
   };
+  /** Raporty floty: widoki, kolumny i wiersze (wspólne dla ekranu, CSV, XLSX i PDF). */
+  const FLEET_REPORT_VIEWS = { vehicles: N_("Pojazdy"), runs: N_("Kursy i zapełnienie"), drivers: N_("Kierowcy"), chippers: N_("Rębaki"), operators: N_("Operatorzy rębaków"), productions: N_("Produkcje (rębanie)") };
+  function fleetReportData(f, whIds) {
+    const FR = R.FleetReports, rg = FR.periodRange(f.period, f.date), q = { from: rg.from, to: rg.to, whIds };
+    const pct = v => v === null || v === undefined ? "" : v;
+    const own = (o, c) => o === "external" ? (c || t("firma zewnętrzna")) : t("własny");
+    let cols = [], rows = [], foot = null, num = [];
+    if (f.view === "vehicles") {
+      const r = FR.vehicles(Store.state, q);
+      cols = [t("Pojazd"), t("Nr rejestracyjny"), t("Właściciel"), t("Pojemność [MP]"), t("Kursy"), t("MP"), t("Tony [t]"), t("km"), t("Śr. zapełnienie [%]"), t("Maks. zapełnienie [%]"), t("Koszt transportu [zł]")];
+      rows = r.rows.map(a => [a.name, a.reg, own(a.owner, a.company), a.capacityMP || "", a.runs, a.qtyMP, a.t, a.km, pct(a.avgFillPct), pct(a.maxFillPct), a.cost]);
+      foot = [t("Razem"), "", "", "", r.total.runs, r.total.qtyMP, r.total.t, r.total.km, "", "", r.total.cost]; num = [3, 4, 5, 6, 7, 8, 9, 10];
+    } else if (f.view === "runs") {
+      const r = FR.vehicles(Store.state, q);
+      cols = [t("Data"), t("Nr WZ"), t("Pojazd"), t("Nr rejestracyjny"), t("Kierowca"), t("Firma"), t("MP w kursie"), t("Pojemność [MP]"), t("Zapełnienie [%]"), t("Tony [t]"), t("km")];
+      rows = r.runs.map(x => [x.date, x.opNo, x.vehicleName || "—", x.reg, x.driver, x.company || t("flota własna"), x.qtyMP, x.capacityMP || "", pct(x.fillPct), x.t, x.km]);
+      const fl = r.runs.filter(x => x.fillPct !== null);
+      foot = [t("Razem"), tp("{n} kurs|{n} kursy|{n} kursów", r.runs.length), "", "", "", "", r.total.qtyMP, "", fl.length ? R.round(fl.reduce((a, x) => a + x.fillPct, 0) / fl.length, 1) : "", r.total.t, r.total.km]; num = [6, 7, 8, 9, 10];
+    } else if (f.view === "drivers") {
+      const r = FR.drivers(Store.state, q);
+      cols = [t("Kierowca"), t("Firma"), t("Pojazdy"), t("Kursy"), t("Dni pracy"), t("MP"), t("Tony [t]"), t("km"), t("Śr. zapełnienie [%]")];
+      rows = r.rows.map(a => [a.name, a.company || t("flota własna"), a.vehicles, a.runs, a.days, a.qtyMP, a.t, a.km, pct(a.avgFillPct)]);
+      foot = [t("Razem"), "", "", r.total.runs, "", r.total.qtyMP, r.total.t, r.total.km, ""]; num = [3, 4, 5, 6, 7, 8];
+    } else if (f.view === "chippers") {
+      const r = FR.chippers(Store.state, q);
+      cols = [t("Rębak"), t("Właściciel"), t("Operatorzy"), t("Produkcje"), t("Dni pracy"), t("Zrębka [MP]"), t("Drewno [m³]"), t("Tony [t]"), t("Średnio MP / dzień"), t("Koszt rąbania [zł]")];
+      rows = r.rows.map(a => [a.name, own(a.owner, a.company), a.operators, a.productions, a.days, a.qtyMP, a.rawM3, a.t, a.perDayMP, a.cost]);
+      foot = [t("Razem"), "", "", r.total.productions, "", r.total.qtyMP, r.total.rawM3, r.total.t, "", r.total.cost]; num = [3, 4, 5, 6, 7, 8, 9];
+    } else if (f.view === "operators") {
+      const r = FR.operators(Store.state, q);
+      cols = [t("Operator"), t("Rębaki"), t("Produkcje"), t("Dni pracy"), t("Zrębka [MP]"), t("Tony [t]"), t("Średnio MP / dzień"), t("Koszt rąbania [zł]")];
+      rows = r.rows.map(a => [a.name, a.chippers, a.productions, a.days, a.qtyMP, a.t, a.perDayMP, a.cost]);
+      foot = [t("Razem"), "", r.total.productions, "", r.total.qtyMP, r.total.t, "", r.total.cost]; num = [2, 3, 4, 5, 6, 7];
+    } else {
+      const r = FR.chippers(Store.state, q);
+      cols = [t("Data"), t("Nr WZ"), t("Rębak"), t("Operator"), t("Miejsce"), t("Zrębka [MP]"), t("Drewno [m³]"), t("Tony [t]"), t("Koszt rąbania [zł]")];
+      rows = r.list.map(p => [p.date, p.opNo, p.chipper, p.operator, p.place, p.qtyMP, p.rawM3, p.t, p.cost]);
+      foot = [t("Razem"), tp("{n} produkcja|{n} produkcje|{n} produkcji", r.list.length), "", "", "", r.total.qtyMP, r.total.rawM3, r.total.t, r.total.cost]; num = [5, 6, 7, 8];
+    }
+    const range = rg.from === rg.to ? Dates.pl(rg.from) : `${Dates.pl(rg.from)} – ${Dates.pl(rg.to)}`;
+    return { rg, range, cols, rows, foot, num, title: t("Raport floty — {v} — {p}", { v: t(FLEET_REPORT_VIEWS[f.view]), p: t(R.FleetReports.PERIODS[f.period]).toLowerCase() }) };
+  }
   Views.flota = {
     html() {
       const S = Store.state;
@@ -1348,13 +1391,15 @@
       const extRuns = [];  // kursy transportu zewnętrznego (numer rejestracyjny wpisany w kursie)
       for (const o of S.operations) if (o.transport && (o.transport.mode === "external" || o.transport.mode === "mixed") && o.status !== "CANCELLED") for (const r of (Array.isArray(o.transport.runs) ? o.transport.runs.filter(x => x.kind === "external") : o.transport.mode === "external" ? [o.transport] : [])) extRuns.push({ op: o, r });
       const regKey = x => String(x || "").replace(/\s+/g, "").toUpperCase();
+      const capCell = v => { const c = R.vehicleCapacityMP(v); return `<td class="r nowrap" data-cap="${c}">${c > 0 ? `<b>${esc(fmtQ(c))} MP</b><br><small class="dim">${esc(t(R.BODY_TYPES[v.body].label))}</small>` : `<span class="dim">—</span>`}</td>`; };
       if (!tab) body = `<div class="empty">${th("Zaznacz flotę własną lub zewnętrzną, aby zobaczyć zasoby.")}</div>`;
-      if (tab === "ext_vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Firma")}</th><th>${th("Pojazd")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th>${th("Status")}</th><th>${th("Kierowca")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.vehicles.filter(isExt).filter(inWh).map(v => `<tr data-vehicle-owner="external"><td><b>${esc(v.company || "—")}</b></td><td>${esc(v.name)}</td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(v.driverName || "—")}</td>${whCell(v)}<td class="r">${extRuns.filter(x => regKey(x.r.reg) === regKey(v.reg)).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("") || `<tr><td colspan="9" class="dim">${th("Brak pojazdów firm zewnętrznych.")}</td></tr>`}</tbody></table>`;
+      if (tab === "reports") body = this.reportsHtml(fwh);
+      if (tab === "ext_vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Firma")}</th><th>${th("Pojazd")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th class="r">${th("Pojemność")}</th><th>${th("Status")}</th><th>${th("Kierowca")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.vehicles.filter(isExt).filter(inWh).map(v => `<tr data-vehicle-owner="external"><td><b>${esc(v.company || "—")}</b></td><td>${esc(v.name)}</td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td>${capCell(v)}<td>${st(v.status)}</td><td>${esc(v.driverName || "—")}</td>${whCell(v)}<td class="r">${extRuns.filter(x => regKey(x.r.reg) === regKey(v.reg)).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("") || `<tr><td colspan="9" class="dim">${th("Brak pojazdów firm zewnętrznych.")}</td></tr>`}</tbody></table>`;
       if (tab === "ext_chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Firma")}</th><th>${th("Rębak")}</th><th>${th("Nr rejestracyjny")}</th><th>${th("Status")}</th><th>${th("Operator")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
         ${S.fleet.chippers.filter(isExt).filter(inWh).map(c => `<tr data-chipper-owner="external"><td><b>${esc(c.company || "—")}</b></td><td>${esc(c.name)}${c.info ? `<br><small class="dim">${esc(c.info)}</small>` : ""}</td><td class="mono">${esc(c.reg || "—")}</td><td>${st(c.status)}</td><td>${esc(c.operatorName || "—")}</td>${whCell(c)}<td class="r">${prods.filter(o => o.production.chipperId === c.id).length}</td><td class="r">${btn("chippers", c.id)}</td></tr>`).join("") || `<tr><td colspan="8" class="dim">${th("Brak rębaków firm zewnętrznych.")}</td></tr>`}</tbody></table>`;
-      if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Nazwa")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th>${th("Status")}</th><th>${th("Kierowca domyślny")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
-        ${S.fleet.vehicles.filter(v => !isExt(v)).filter(inWh).map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td><td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td>${whCell(v)}<td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
+      if (tab === "vehicles") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Nazwa")}</th><th>${th("Rejestracja")}</th><th>${th("Typ")}</th><th class="r">${th("Pojemność")}</th><th>${th("Status")}</th><th>${th("Kierowca domyślny")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
+        ${S.fleet.vehicles.filter(v => !isExt(v)).filter(inWh).map(v => `<tr><td><b>${esc(v.name)}</b></td><td class="mono">${esc(v.reg)}</td><td>${esc(t(R.VEHICLE_TYPES[v.type]))}</td>${capCell(v)}<td>${st(v.status)}</td><td>${esc(drv(v.driverId))}</td>${whCell(v)}<td class="r">${runs.filter(x => x.r.vehicleId === v.id).length}</td><td class="r">${btn("vehicles", v.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "drivers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Imię i nazwisko")}</th><th>${th("Telefon")}</th><th>${th("Domyślny w pojazdach")}</th><th>${th("Magazyn")}</th><th class="r">${th("Kursy")}</th><th></th></tr></thead><tbody>
         ${S.fleet.drivers.filter(inWh).map(d => `<tr><td><b>${esc(d.name)}</b></td><td>${esc(d.phone || "")}</td><td>${esc(S.fleet.vehicles.filter(v => v.driverId === d.id).map(v => v.reg).join(", ") || "—")}</td>${whCell(d)}<td class="r">${runs.filter(x => x.r.driverId === d.id).length}</td><td class="r">${btn("drivers", d.id)}</td></tr>`).join("")}</tbody></table>`;
       if (tab === "chippers") body = `<table class="tbl" id="fleet-table"><thead><tr><th>${th("Rębak")}</th><th>${th("Właściciel")}</th><th>${th("Nr rejestracyjny")}</th><th>${th("Status")}</th><th>${th("Operator")}</th><th>${th("Magazyn")}</th><th class="r">${th("Produkcje")}</th><th></th></tr></thead><tbody>
@@ -1364,7 +1409,7 @@
       const lastRuns = runs.slice().sort((a, b) => a.op.date < b.op.date ? 1 : -1).slice(0, 12);
       const scopeCard = (k, title, text) => `<label class="opt"><input type="checkbox" id="fl-scope-${k}" data-scope="${k}" ${scope[k] ? "checked" : ""}><span class="box">${ic("check", 13)}</span><span class="ct"><b>${esc(title)}</b><span>${esc(text)}</span></span></label>`;
       return `<div class="page-head"><div class="titles"><h2>${th("Flota")}</h2><p>${th("Transport własny w „Nowej operacji” korzysta z floty własnej, transport zewnętrzny podpowiada pojazdy firm zewnętrznych. Kurs zapisuje kierowcę wybranego dla konkretnego kursu — późniejsza zmiana kierowcy domyślnego nie zmienia historii.")}</p></div>
-          <div class="actions">${!tab ? "" : edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} ${esc(t("Dodaj: {k}", { k: t(FLEET_TABS[tab].add).toLowerCase() }))}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`}</div></div>
+          <div class="actions">${!tab || FLEET_TABS[tab].report ? "" : edit ? `<button class="btn primary" type="button" id="fleet-add">${ic("plus", 15)} ${esc(t("Dodaj: {k}", { k: t(FLEET_TABS[tab].add).toLowerCase() }))}</button>` : `<span class="badge">${th("tylko podgląd — edycja: Kierownik / Administrator")}</span>`}</div></div>
         <div class="scope two mb3" role="group" aria-label="${th("Zakres floty")}" id="fleet-scope">
           ${scopeCard("own", t("Flota własna"), t("Samochody, kierowcy, rębaki i operatorzy firmy."))}
           ${scopeCard("ext", t("Flota zewnętrzna"), t("Samochody i rębaki firm zewnętrznych (przewoźnicy, usługi rębania)."))}
@@ -1378,11 +1423,41 @@
     },
     /** Zaznaczone zakresy floty (domyślnie oba); zapamiętane w sesji widoku. */
     scope() { return Object.assign({ own: true, ext: true }, App.tabs.fleetScope || {}); },
-    tabsFor(scope) { return Object.keys(FLEET_TABS).filter(k => FLEET_TABS[k].ext ? scope.ext : scope.own); },
+    tabsFor(scope) { return Object.keys(FLEET_TABS).filter(k => FLEET_TABS[k].report ? (scope.own || scope.ext) : FLEET_TABS[k].ext ? scope.ext : scope.own); },
+    repFilter() { return App.tabs.fleetRep || (App.tabs.fleetRep = { period: "week", date: App.today(), view: "vehicles" }); },
+    repWh(fwh) { const acc = R.whAccess(App.user()); return fwh ? [fwh] : acc === null ? null : acc; },
+    reportsHtml(fwh) {
+      const f = this.repFilter(), d = fleetReportData(f, this.repWh(fwh));
+      const cell = (v, i) => d.num.includes(i) ? `<td class="r nowrap">${v === "" || v === null ? "—" : esc(fmtQ(v))}${String(d.cols[i]).includes("[%]") && v !== "" ? "%" : ""}</td>` : `<td>${esc(i === 0 && Dates.isISO(v) ? Dates.pl(v) : v)}</td>`;
+      const fillCls = (r) => { const i = d.cols.findIndex(c => c === t("Zapełnienie [%]")); return i >= 0 && r[i] !== "" ? (r[i] > 100 ? "neg" : r[i] >= 85 ? "pos" : "") : ""; };
+      return `<div class="toolbar" id="fleet-rep-bar">
+          <div class="field"><label for="fr-period">${th("Okres")}</label><select class="ctrl" id="fr-period">${Object.entries(R.FleetReports.PERIODS).map(([k, l]) => `<option value="${k}" ${f.period === k ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+          <div class="field"><label for="fr-date">${th("Dzień w okresie")}</label><input class="ctrl" type="date" id="fr-date" value="${esc(f.date)}"></div>
+          <div class="field"><label for="fr-view">${th("Raport")}</label><select class="ctrl" id="fr-view">${Object.entries(FLEET_REPORT_VIEWS).map(([k, l]) => `<option value="${k}" ${f.view === k ? "selected" : ""}>${th(l)}</option>`).join("")}</select></div>
+          <div class="row wrap" style="align-self:end"><button class="btn" type="button" id="fr-csv">${ic("dl", 15)} CSV</button><button class="btn" type="button" id="fr-xlsx">${ic("dl", 15)} XLSX</button><button class="btn" type="button" id="fr-pdf">${ic("pdf", 15)} PDF</button></div></div>
+        <p class="help" id="fr-range"><b>${esc(d.title)}</b> · ${esc(d.range)}${f.view === "runs" || f.view === "vehicles" ? " · " + esc(t("zapełnienie = MP w kursie ÷ pojemność pojazdu (długość × szerokość × wysokość)")) : ""}</p>
+        ${d.rows.length ? `<table class="tbl" id="fleet-rep"><thead><tr>${d.cols.map((c, i) => `<th class="${d.num.includes(i) ? "r" : ""}">${esc(c)}</th>`).join("")}</tr></thead><tbody>
+          ${d.rows.map(r => `<tr class="${fillCls(r)}">${r.map(cell).join("")}</tr>`).join("")}</tbody>
+          <tfoot><tr>${d.foot.map(cell).join("")}</tr></tfoot></table>` : `<div class="empty">${th("Brak kursów ani produkcji w wybranym okresie.")}</div>`}`;
+    },
     bind(page) {
       $$("[data-tab]", page).forEach(b => b.onclick = () => { App.tabs.fleet = b.dataset.tab; App.render(); });
       $$("[data-scope]", page).forEach(c => c.onchange = () => { App.tabs.fleetScope = Object.assign(this.scope(), { [c.dataset.scope]: c.checked }); App.render(); });
       const fw = $("#fl-wh", page); if (fw) fw.onchange = e => { App.tabs.fleetWh = e.target.value; App.render(); };
+      // raporty floty i rębaków: okres, dzień, rodzaj raportu, eksport
+      const rf = this.repFilter();
+      for (const [id, k] of [["#fr-period", "period"], ["#fr-date", "date"], ["#fr-view", "view"]]) { const el = $(id, page); if (el) el.onchange = e => { if (e.target.value) rf[k] = e.target.value; App.render(); }; }
+      const fwhNow = App.tabs.fleetWh === undefined ? (R.whAccess(App.user()) === null ? "" : App.user().whId) : App.tabs.fleetWh;
+      const rep = () => fleetReportData(rf, this.repWh(fwhNow));
+      const whTxt = () => fwhNow ? App.whName(fwhNow) : allWh();
+      const base = () => `flota_${rf.view}_${rf.period}_${rep().rg.from}`;
+      const fc = $("#fr-csv", page); if (fc) fc.onclick = () => { const d = rep(); download(`${base()}.csv`, toCSV(d.cols, d.rows.concat([d.foot]).map(r => r.map(v => typeof v === "number" ? csvNum(v) : v == null ? "" : v))), "text/csv;charset=utf-8"); };
+      const fx = $("#fr-xlsx", page); if (fx) fx.onclick = () => { const d = rep(); xlsxTable(base(), d.title, d.cols, d.rows.concat([d.foot]), `${whTxt()} · ${d.range}`); };
+      const fp = $("#fr-pdf", page); if (fp) fp.onclick = () => { const d = rep();
+        Printer.pdf({ title: d.title, subtitle: `${whTxt()} · ${d.range}`, orientation: "landscape", rangeText: d.range, whText: whTxt(), headerRight: whTxt(), meta: [[t("Magazyn"), whTxt()], [t("Okres"), d.range]],
+          blocks: [{ type: "table", size: 7.5, columns: d.cols.map((c, i) => ({ label: c, w: d.num.includes(i) ? 1 : 1.6, align: d.num.includes(i) ? "right" : "left" })),
+            rows: d.rows.map(r => r.map((v, i) => i === 0 && Dates.isISO(v) ? Dates.pl(v) : typeof v === "number" ? fmtQ(v) : v === "" || v == null ? "—" : String(v))),
+            foot: d.foot.map(v => typeof v === "number" ? fmtQ(v) : String(v == null ? "" : v)) }] }, "RAP", base()); };
       const add = $("#fleet-add", page);
       if (add) add.onclick = () => { const tabs = this.tabsFor(this.scope()), tb = tabs.includes(App.tabs.fleet) ? App.tabs.fleet : tabs[0]; const d = FLEET_TABS[tb]; this.edit(d.kind, null, d.ext ? "external" : "own"); };
       $$("[data-edit]", page).forEach(b => b.onclick = () => { const [k, id] = b.dataset.edit.split("|"); this.edit(k, id); });
@@ -1400,7 +1475,7 @@
     edit(kind, id, owner) {
       const S = Store.state;
       const ext0 = owner === "external";
-      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "", operatorId: "", phone: "", owner: owner || "own", company: "", operatorName: "", info: "", whId: ext0 ? "" : (App.tabs.fleetWh || App.user().whId) };
+      const rec = id ? R.clone(R.byId(S.fleet[kind], id)) : { body: "", compartments: [], name: "", reg: "", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "", operatorId: "", phone: "", owner: owner || "own", company: "", operatorName: "", info: "", whId: ext0 ? "" : (App.tabs.fleetWh || App.user().whId) };
       if ((kind === "chippers" || kind === "vehicles") && !rec.owner) rec.owner = "own";
       const o = (arr, v) => arr.map(([k, l]) => `<option value="${esc(k)}" ${k === v ? "selected" : ""}>${esc(l)}</option>`).join("");
       const f = (k, label, ctrl, help) => `<div class="field" data-ff="${k}"><label for="fe-${k}">${esc(label)}</label>${ctrl}<div class="msg hidden" data-fmsg="${k}"></div>${help ? `<div class="help">${esc(help)}</div>` : ""}</div>`;
@@ -1410,6 +1485,8 @@
         body += `<div data-own-only="external">${f("company", t("Firma (właściciel pojazdu)"), `<input class="ctrl" id="fe-company" value="${esc(rec.company || "")}" list="fe-carriers" placeholder="${esc(t("np. {x}", { x: "ESI Logistics" }))}"><datalist id="fe-carriers">${(S.carriers || []).map(c => `<option value="${esc(c)}">`).join("")}</datalist>`)}</div>`;
         body += f("reg", t("Numer rejestracyjny"), `<input class="ctrl" id="fe-reg" value="${esc(rec.reg)}" placeholder="${esc(t("np. {x}", { x: "SGL 4T821" }))}">`);
         body += f("type", t("Typ"), `<select class="ctrl" id="fe-type">${o(Object.entries(R.VEHICLE_TYPES).map(([k, v]) => [k, t(v)]), rec.type)}</select>`);
+        body += f("body", t("Zabudowa do przewozu zrębki"), `<select class="ctrl" id="fe-body"><option value="">${th("brak danych / nie dotyczy")}</option>${o(Object.entries(R.BODY_TYPES).map(([k, v]) => [k, t(v.label)]), rec.body || "")}</select>`, t("Pojemność maksymalna = długość × szerokość × wysokość przestrzeni ładunkowej (m³ = MP). Program liczy z niej zapełnienie każdego kursu."));
+        body += `<div id="fe-comps" class="stack"></div><div class="info-line hidden" id="fe-cap"></div>`;
         body += f("status", t("Status"), `<select class="ctrl" id="fe-status">${o(Object.entries(R.ASSET_STATUS).map(([k, v]) => [k, t(v)]), rec.status)}</select>`, t("Pojazd używany w kursach nie jest usuwany — ustaw „Wycofany” (historia zostaje)."));
         body += `<div data-own-only="own">${f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Zmiana dotyczy przyszłych kursów."))}</div>`;
         body += `<div data-own-only="external">${f("driverName", t("Kierowca (jeśli stały)"), `<input class="ctrl" id="fe-driverName" value="${esc(rec.driverName || "")}" placeholder="${esc(t("imię i nazwisko"))}">`)}</div>`;
@@ -1431,13 +1508,34 @@
       const ow = $("#fe-owner", m.el);
       const syncOwner = () => { if (!ow) return; $$("[data-own-only]", m.el).forEach(x => x.classList.toggle("hidden", x.dataset.ownOnly !== ow.value)); };
       if (ow) { ow.onchange = syncOwner; syncOwner(); }
+      // zabudowa pojazdu: przestrzenie ładunkowe (naczepa / kontener / zestaw kontenerów) z wymiarami w metrach
+      const bodySel = $("#fe-body", m.el), compsBox = $("#fe-comps", m.el), capBox = $("#fe-cap", m.el);
+      const dimVal = (i, d) => { const el = $(`#fe-comp-${i}-${d}`, m.el); return el ? el.value : ""; };
+      const parts = () => bodySel && R.BODY_TYPES[bodySel.value] ? R.BODY_TYPES[bodySel.value].parts : [];
+      const compsNow = () => parts().map((_, i) => ({ l: dimVal(i, "l"), w: dimVal(i, "w"), h: dimVal(i, "h") }));
+      const capText = () => {
+        const list = compsNow().map(c => ({ l: R.NumParse.value(c.l, 0), w: R.NumParse.value(c.w, 0), h: R.NumParse.value(c.h, 0) }));
+        const each = list.map(R.compartmentMP), sum = R.round(each.reduce((a, x) => a + x, 0), 2);
+        parts().forEach((_, i) => { const o2 = $(`[data-comp-mp="${i}"]`, m.el); if (o2) o2.textContent = each[i] > 0 ? `= ${fmtQ(each[i])} MP` : "—"; });
+        capBox.classList.toggle("hidden", !parts().length);
+        capBox.innerHTML = `${ic("layers", 15)}<span>${esc(t("Pojemność maksymalna pojazdu: {q} MP", { q: sum > 0 ? fmtQ(sum) : "—" }))}</span>`;
+      };
+      const renderComps = () => {
+        const prev = compsBox.children.length ? compsNow() : (rec.compartments || []);
+        compsBox.innerHTML = parts().map((part, i) => { const c = prev[i] || {}; const inp = (d, lbl, ph) => `<div class="field"><label for="fe-comp-${i}-${d}">${esc(lbl)}</label><div class="input-wrap"><input class="ctrl num-in" id="fe-comp-${i}-${d}" inputmode="decimal" value="${esc(c[d] == null ? "" : String(c[d]).replace(".", ","))}" placeholder="${esc(ph)}"><span class="suffix">m</span></div></div>`;
+          return `<div class="card" data-comp="${i}"><div class="card-b"><b>${esc(t(part))}</b> <small class="dim" data-comp-mp="${i}">—</small><div class="fgrid three mt2">${inp("l", t("Długość"), "13,4")}${inp("w", t("Szerokość"), "2,45")}${inp("h", t("Wysokość"), "2,8")}</div><div class="msg hidden" data-fmsg="comp.${i}"></div></div></div>`; }).join("");
+        $$("input", compsBox).forEach(x => x.oninput = capText);
+        capText();
+      };
+      if (bodySel) { bodySel.onchange = renderComps; renderComps(); }
       $("[data-yes]", m.el).onclick = async () => {
         const next = Object.assign({}, rec, { id: id || undefined });
         for (const k of R.Fleet.KINDS[kind].fields) { const el = $("#fe-" + k, m.el); if (el) next[k] = el.value; }
+        if (bodySel) next.compartments = compsNow();
         const res = await Store.exec("fleet.save", { kind, rec: next }, N_("Moduł Flota"));
         $$("[data-fmsg]", m.el).forEach(x => x.classList.add("hidden"));
         if (!res.ok) {
-          for (const [k, msg] of Object.entries(res.errors || {})) { const x = $(`[data-fmsg="${k}"]`, m.el); if (x) { x.textContent = msg; x.classList.remove("hidden"); } }
+          for (const [k, msg] of Object.entries(res.errors || {})) { const key = k.startsWith("comp.") ? k.split(".").slice(0, 2).join(".") : k; const x = $(`[data-fmsg="${key}"]`, m.el); if (x && x.classList.contains("hidden")) { x.textContent = msg; x.classList.remove("hidden"); } }
           Toast.err(t("Nie zapisano"), res.error); return;
         }
         m.close(); Toast.ok(t("Zapisano"), res.rec.name); App.render();

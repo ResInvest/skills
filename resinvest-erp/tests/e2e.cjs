@@ -989,9 +989,9 @@ async function fillForestDirect(page) {
     // flota: dwa pola wyboru — własna i zewnętrzna
     await go(page, "flota"); await page.waitForSelector("#fleet-scope");
     const tabs = async () => page.$$eval(".tabs [data-tab]", b => b.map(x => x.dataset.tab));
-    check("3.6 Flota: oba zakresy zaznaczone — 4 zakładki floty własnej + 2 zewnętrznej", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators", "ext_vehicles", "ext_chippers"]), await tabs());
+    check("3.6 Flota: oba zakresy zaznaczone — 4 zakładki floty własnej + 2 zewnętrznej (+ raporty 3.9)", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators", "ext_vehicles", "ext_chippers", "reports"]), await tabs());
     await page.click('label.opt:has(#fl-scope-own)'); await page.waitForTimeout(150);
-    check("3.6 Flota: tylko zewnętrzna — samochody i rębaki firm zewnętrznych", JSON.stringify(await tabs()) === JSON.stringify(["ext_vehicles", "ext_chippers"]), await tabs());
+    check("3.6 Flota: tylko zewnętrzna — samochody i rębaki firm zewnętrznych", JSON.stringify(await tabs()) === JSON.stringify(["ext_vehicles", "ext_chippers", "reports"]), await tabs());
     const extRows = await page.$$eval("#fleet-table tbody tr", r => r.map(x => x.textContent));
     check("3.6 Flota zewnętrzna: pojazdy ESI Logistics, DAP Trans, Transport Kowalski", extRows.length === 5 && extRows.some(x => x.includes("ESI 18734")) && extRows.some(x => x.includes("SPY 92FR")), extRows.length);
     await page.click('[data-tab="ext_chippers"]'); await page.waitForTimeout(120);
@@ -1005,8 +1005,34 @@ async function fillForestDirect(page) {
     await page.click('label.opt:has(#fl-scope-ext)'); await page.waitForTimeout(150);
     check("3.6 Flota: żaden zakres — podpowiedź zamiast tabeli", (await tabs()).length === 0 && nb(await page.textContent("body")).includes("Zaznacz flotę własną lub zewnętrzną"));
     await page.click('label.opt:has(#fl-scope-own)'); await page.waitForTimeout(150);
-    check("3.6 Flota: tylko własna — samochody, kierowcy, rębaki, operatorzy", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators"]));
+    check("3.6 Flota: tylko własna — samochody, kierowcy, rębaki, operatorzy", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators", "reports"]));
     check("3.6 Flota własna: bez pojazdów firm zewnętrznych", !nb(await page.textContent("#fleet-table")).includes("ESI 18734"));
+
+    /* ------------- 3.9: zabudowa i pojemność pojazdu, raporty floty i rębaków ------------- */
+    check("3.9 Flota: kolumna Pojemność (MP) przy samochodach", (await page.$$eval("#fleet-table thead th", t => t.map(x => x.textContent))).includes("Pojemność") && nb(await page.textContent("#fleet-table")).includes("91,92 MP"));
+    await page.click("#fleet-add"); await page.waitForSelector("#fe-body");
+    await page.fill("#fe-name", "MAN TGS — hakowiec"); await page.fill("#fe-reg", "SK 4411H"); await page.selectOption("#fe-driverId", "dr_nowak");
+    await page.selectOption("#fe-body", "hakowiec"); await page.waitForSelector("#fe-comp-1-h");
+    check("3.9 Hakowiec: dwa kontenery z długością, szerokością i wysokością", (await page.$$("[data-comp]")).length === 2 && !!(await page.$("#fe-comp-0-l")) && !!(await page.$("#fe-comp-1-w")));
+    for (const [i, l] of [[0, "6,5"], [1, "7"]]) { await page.fill(`#fe-comp-${i}-l`, l); await page.fill(`#fe-comp-${i}-w`, "2,4"); await page.fill(`#fe-comp-${i}-h`, "2,5"); }
+    check("3.9 Pojemność liczona na żywo: 39 + 42 = 81 MP", nb(await page.textContent("#fe-cap")).includes("81 MP") && nb(await page.textContent('[data-comp-mp="0"]')).includes("39 MP"), nb(await page.textContent("#fe-cap")));
+    await page.click(".modal [data-yes]"); await page.waitForTimeout(250);
+    check("3.9 Zapis pojazdu z zabudową (pojemność 81 MP w kartotece)", await page.evaluate(() => { const v = RIW_DEBUG.store.state.fleet.vehicles.find(x => x.reg === "SK 4411H"); return !!v && v.body === "hakowiec" && v.capacityMP === 81 && v.compartments.length === 2; }));
+    await page.click('[data-tab="reports"]'); await page.waitForSelector("#fr-view");
+    check("3.9 Raporty floty: okres dzień / tydzień / miesiąc i 6 rodzajów raportu", (await page.$$eval("#fr-period option", o => o.map(x => x.value).join(","))) === "day,week,month" && (await page.$$eval("#fr-view option", o => o.length)) === 6);
+    await page.selectOption("#fr-period", "month"); await page.waitForTimeout(150); await page.fill("#fr-date", "2026-09-15"); await page.dispatchEvent("#fr-date", "change"); await page.waitForTimeout(200);
+    check("3.9 Raport pojazdów (miesiąc): kursy, MP, tony, zapełnienie", (await page.$$eval("#fleet-rep thead th", t => t.map(x => x.textContent))).includes("Śr. zapełnienie [%]") && (await page.$$("#fleet-rep tbody tr")).length >= 3 && nb(await page.textContent("#fr-range")).includes("01.09.2026"));
+    await page.selectOption("#fr-view", "runs"); await page.waitForTimeout(200);
+    check("3.9 Kursy i zapełnienie: procent zapełnienia każdego kursu", (await page.$$eval("#fleet-rep thead th", t => t.map(x => x.textContent))).includes("Zapełnienie [%]") && /\d+,\d%/.test(nb(await page.textContent("#fleet-rep tbody"))));
+    await page.selectOption("#fr-view", "drivers"); await page.waitForTimeout(200);
+    check("3.9 Raport kierowców: kursy i MP", nb(await page.textContent("#fleet-rep")).includes("Jan Kowalski"));
+    await page.selectOption("#fr-view", "chippers"); await page.waitForTimeout(200);
+    check("3.9 Raport rębaków: ile który rębak zrąbał (MP)", nb(await page.textContent("#fleet-rep")).includes("Jenz HEM 583") && (await page.$$eval("#fleet-rep thead th", t => t.map(x => x.textContent))).includes("Zrębka [MP]"));
+    await page.selectOption("#fr-view", "operators"); await page.waitForTimeout(200);
+    check("3.9 Raport operatorów rębaków", nb(await page.textContent("#fleet-rep")).includes("Krzysztof Lis"));
+    const [frd] = await Promise.all([page.waitForEvent("download"), page.click("#fr-csv")]);
+    check("3.9 Raport floty: eksport CSV", frd.suggestedFilename().startsWith("flota_operators_month_"), frd.suggestedFilename());
+    await page.click('[data-tab="vehicles"]').catch(() => {}); await page.waitForTimeout(150);
     // transport: flota własna bez pojazdów zewnętrznych; kursy zewnętrzne z podpowiedzią numerów
     await preset(page, "zakup"); await tick(page, "f-mode-own"); await page.waitForSelector("#f-transport-own-runCount");
     await fillTab(page, "#f-transport-own-runCount", "1");

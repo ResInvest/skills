@@ -1,6 +1,13 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-09 · etap: **ResInvest ERP 3.8.1 — ewidencja obrotu CSV z danymi planera**
+Ostatnia aktualizacja: 2026-10-10 · etap: **ResInvest ERP 3.9.0 — pojemność pojazdów, zapełnienie kursów, raporty floty i rębaków**
+
+## Wykonane — 3.9.0
+
+- [x] Zabudowa i pojemność pojazdów (ruchoma podłoga, kontener, hakowiec — zestaw kontenerów)
+- [x] Zapełnienie naczepy / kontenerów w każdym kursie
+- [x] Raporty floty (pojazdy, kursy, kierowcy) i rębaków (rębaki, operatorzy, produkcje): dzień / tydzień / miesiąc
+- [x] Testy: jednostkowe 171, serwer 48, E2E 340, E2E serwera 29 — zaliczone
 
 ## Wykonane — 3.8.1
 

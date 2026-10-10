@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.8.1";
+  const VERSION = "3.9.0";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -331,6 +331,19 @@
   /** Rębak: własny (operator z kartoteki floty) albo firmy zewnętrznej (firma, oznaczenie, nr rej., operator opisowo). */
   const CHIPPER_OWNERS = { own: N_("Rębak własny"), external: N_("Rębak firmy zewnętrznej") };
   /** Pojazd: flota własna (kierowca z kartoteki) albo pojazd firmy zewnętrznej (firma, kierowca opisowo). Brak pola = własny. */
+  /** Zabudowa do przewozu zrębki — przestrzenie ładunkowe pojazdu. Pojemność maksymalna przestrzeni = długość × szerokość ×
+      wysokość [m] = m³ = MP (metr przestrzenny to 1 m³ luźnej zrębki). Hakowiec z przyczepą = dwa kontenery w zestawie. */
+  const BODY_TYPES = {
+    ruchoma_podloga: { label: N_("Naczepa z ruchomą podłogą"), parts: [N_("Naczepa")] },
+    kontener: { label: N_("Solówka z kontenerem"), parts: [N_("Kontener")] },
+    hakowiec: { label: N_("Hakowiec — zestaw kontenerów"), parts: [N_("Kontener na samochodzie"), N_("Kontener na przyczepie")] }
+  };
+  const DIM_LIMITS = { l: 20, w: 3.5, h: 5 };
+  const DIM_LABELS = { l: N_("długość"), w: N_("szerokość"), h: N_("wysokość") };
+  /** Pojemność przestrzeni ładunkowej [MP] = długość × szerokość × wysokość. */
+  const compartmentMP = c => c && c.l > 0 && c.w > 0 && c.h > 0 ? round(c.l * c.w * c.h, 2) : 0;
+  /** Pojemność maksymalna pojazdu [MP] — suma przestrzeni (naczepa albo kontenery zestawu); 0 = nie podano. */
+  const vehicleCapacityMP = v => v && Array.isArray(v.compartments) ? round(v.compartments.reduce((a, c) => a + compartmentMP(c), 0), 2) : 0;
   const VEHICLE_OWNERS = { own: N_("Pojazd własny"), external: N_("Pojazd firmy zewnętrznej") };
   /** Źródło tonażu na dokumencie: przelicznik firmowy (AUTO) albo wartość wpisana z wagi (RĘCZNY) — nigdy nie nadpisywana. */
   const WEIGHT_SOURCES = { auto: N_("AUTO"), manual: N_("RĘCZNY") };
@@ -1098,6 +1111,20 @@
       }
       if (["own", "external", "mixed"].includes(mode)) {
         const sp = shipped(), U = Units.label(sp.unit);
+        // zapełnienie naczepy / kontenerów w kursie: ilość [MP] ÷ pojemność pojazdu z kartoteki [MP]
+        const normReg = x => String(x || "").replace(/\s+/g, "").toUpperCase();
+        const spProd = prodOf(sp.productId);
+        const toMP = q => { if (!(q > 0)) return 0; if (sp.unit === "MP") return q; try { return spProd ? Units.convert(q, sp.unit, "MP", spProd, cfg) : 0; } catch (e) { return 0; } };
+        for (const r of transport.runs) {
+          const veh = (r.vehicleId && byId(state.fleet.vehicles, r.vehicleId)) || state.fleet.vehicles.find(v => r.reg && normReg(v.reg) === normReg(r.reg)) || null;
+          const cap = vehicleCapacityMP(veh), qMP = rq(toMP(r.qty));
+          r.capacityMP = cap > 0 ? cap : null;
+          r.qtyMP = qMP || null;
+          r.fillPct = cap > 0 && qMP > 0 ? round(qMP / cap * 100, 1) : null;
+          if (r.fillPct !== null && r.fillPct > 100 + EPS) warnings.push(t("Kurs {n}: ładunek {q} MP przekracza pojemność pojazdu {c} MP (zapełnienie {p}%)", { n: r.no, q: fmtQ(qMP), c: fmtQ(cap), p: fmt(r.fillPct, 1) }));
+        }
+        const filled = transport.runs.filter(r => r.fillPct !== null);
+        transport.avgFillPct = filled.length ? round(filled.reduce((a, r) => a + r.fillPct, 0) / filled.length, 1) : null;
         const withM3 = transport.runs.filter(r => r.kwitM3 !== null);
         transport.totalM3 = withM3.length ? rq(withM3.reduce((a, r) => a + r.kwitM3, 0)) : null;
         transport.kwity = transport.runs.map(r => r.kwit).filter(Boolean);
@@ -1916,7 +1943,7 @@
   /* ------------------------------------------------------------------ */
   const Fleet = {
     KINDS: {
-      vehicles: { label: N_("Pojazd"), fields: ["name", "owner", "company", "reg", "type", "status", "driverId", "driverName", "whId"] },
+      vehicles: { label: N_("Pojazd"), fields: ["name", "owner", "company", "reg", "type", "status", "driverId", "driverName", "whId", "body"] },
       drivers: { label: N_("Kierowca"), fields: ["name", "phone", "whId"] },
       chippers: { label: N_("Rębak"), fields: ["name", "owner", "company", "reg", "status", "operatorId", "operatorName", "info", "whId"] },
       operators: { label: N_("Operator rębaka"), fields: ["name", "phone", "whId"] }
@@ -1941,6 +1968,17 @@
         if (!VEHICLE_OWNERS[owner]) e.owner = t("Wybierz, czyj jest pojazd");
         if (owner === "own" && !byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Wybierz kierowcę domyślnego");
         if (owner === "external" && str(rec.company).length < 2) e.company = t("Podaj firmę — właściciela pojazdu");
+        // zabudowa (opcjonalna): wymiary każdej przestrzeni ładunkowej w metrach
+        const body = str(rec.body);
+        if (body && !BODY_TYPES[body]) e.body = t("Wybierz rodzaj zabudowy");
+        else if (body) BODY_TYPES[body].parts.forEach((part, i) => {
+          const c = (Array.isArray(rec.compartments) ? rec.compartments[i] : null) || {};
+          for (const d of ["l", "w", "h"]) {
+            const r = NumParse.parse(c[d]);
+            if (!r.ok || !(r.value > 0)) e[`comp.${i}.${d}`] = t("{p}: podaj {d} w metrach", { p: t(part), d: t(DIM_LABELS[d]) });
+            else if (r.value > DIM_LIMITS[d]) e[`comp.${i}.${d}`] = t("{p}: {d} nie może przekraczać {n} m", { p: t(part), d: t(DIM_LABELS[d]), n: DIM_LIMITS[d] });
+          }
+        });
       }
       if (kind === "chippers") {
         const owner = rec.owner || "own";
@@ -1968,6 +2006,11 @@
       if (kind === "vehicles") {
         clean.owner = clean.owner || "own";
         if (clean.owner === "own") { clean.company = ""; clean.driverName = ""; } else clean.driverId = "";
+        clean.compartments = clean.body ? BODY_TYPES[clean.body].parts.map((part, i) => {
+          const c = rec.compartments[i], v = d => rq(NumParse.value(c[d], 0));
+          return { name: part, l: v("l"), w: v("w"), h: v("h") };
+        }) : [];
+        clean.capacityMP = vehicleCapacityMP(clean);
       }
       const idx = list.findIndex(x => x.id === clean.id), before = idx >= 0 ? clone(list[idx]) : null;
       if (idx >= 0) list[idx] = Object.assign({}, list[idx], clean); else list.push(clean);
@@ -2579,7 +2622,7 @@
   const RIW = {
     VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, MAX_EXT_COMPANIES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
-    CHIPPER_OWNERS, VEHICLE_OWNERS, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, DOC_SERIES, WAREHOUSE_DOCS, DOC_NUMBERING, unifiedNumbering, seriesNoOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
+    CHIPPER_OWNERS, VEHICLE_OWNERS, BODY_TYPES, DIM_LIMITS, compartmentMP, vehicleCapacityMP, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, DOC_SERIES, WAREHOUSE_DOCS, DOC_NUMBERING, unifiedNumbering, seriesNoOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,
     normalizeEmail, validateCompanyEmail, Roles, Settings, Lx, EMAIL_RE, companyEmail, nipValid, trReason, auditText, loginFrom, migrate, I18N,
     submitOperation, approvePending, rejectPending, canApprove, planSummary,

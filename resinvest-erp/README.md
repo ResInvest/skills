@@ -45,6 +45,20 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.9.0
+* **Zabudowa i pojemność pojazdu** (Flota → Dodaj / Edytuj pojazd, własny i firmy zewnętrznej): naczepa z ruchomą
+  podłogą, solówka z kontenerem albo **hakowiec — zestaw kontenerów** (kontener na samochodzie + na przyczepie).
+  Dla każdej przestrzeni wpisujesz długość, szerokość i wysokość w metrach; **pojemność maksymalna = długość ×
+  szerokość × wysokość** (m³ = MP), dla zestawu — suma kontenerów. Pojemność liczy się na żywo w formularzu
+  i widać ją w tabeli pojazdów.
+* **Zapełnienie każdego kursu** = MP w kursie ÷ pojemność pojazdu (kursy floty własnej po pojeździe, kursy
+  zewnętrzne po numerze rejestracyjnym z floty zewnętrznej). Kolumna „Zapełnienie” w podsumowaniu kursów i na
+  karcie transportu (PDF), średnia operacji; ładunek ponad pojemność daje ostrzeżenie przed zatwierdzeniem.
+* **Raporty floty i rębaków** (Flota → „Raporty floty i rębaków”), okres **dzień / tydzień / miesiąc**:
+  pojazdy (kursy, MP, tony, km, średnie i maksymalne zapełnienie, koszt), kursy i zapełnienie każdego kursu,
+  kierowcy (kursy, dni pracy, MP, tony, km), **rębaki** i **operatorzy rębaków** (ile zrąbali MP, m³ drewna, tony,
+  dni pracy, średnio MP / dzień, koszt rąbania) oraz lista produkcji. Eksport CSV, XLSX i PDF.
+
 ## Nowe w 3.8.1
 * **Ewidencja obrotu w CSV** — kolumny według zestawienia firmy: data załadunku do klienta końcowego, miejsce
   załadunku, data operacji, dostawca, Zakup/Sprzedaż, Nr. WZ, czy magazynowane, Deklaracja/KZR, volumen i jednostka,

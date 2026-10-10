@@ -81,16 +81,16 @@
         { id: "dr_kaminski", name: "Łukasz Kamiński", phone: "600 900 100", whId: "wh_rok" }
       ],
       vehicles: [
-        { id: "ve_scania", name: "Scania R450 — ruchoma podłoga", reg: "SGL 4T821", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kowalski", whId: "wh_zab" },
-        { id: "ve_volvo", name: "Volvo FH 500 — ruchoma podłoga", reg: "SZA 12345", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_nowak", whId: "wh_zab" },
+        { id: "ve_scania", name: "Scania R450 — ruchoma podłoga", reg: "SGL 4T821", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kowalski", whId: "wh_zab", body: "ruchoma_podloga", compartments: [{ name: "Naczepa", l: 13.4, w: 2.45, h: 2.8 }], capacityMP: 91.92 },
+        { id: "ve_volvo", name: "Volvo FH 500 — ruchoma podłoga", reg: "SZA 12345", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_nowak", whId: "wh_zab", body: "ruchoma_podloga", compartments: [{ name: "Naczepa", l: 13.6, w: 2.48, h: 2.9 }], capacityMP: 97.81 },
         { id: "ve_man", name: "MAN TGX — ciężarowy", reg: "SK 7788X", type: "ciezarowy", status: "serwis", driverId: "dr_zielinski", whId: "wh_bra" },
-        { id: "ve_daf", name: "DAF XF 480 — ruchoma podłoga", reg: "ESR 4R210", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kaminski", whId: "wh_rok" },
+        { id: "ve_daf", name: "DAF XF 480 — ruchoma podłoga", reg: "ESR 4R210", type: "ruchoma_podloga", status: "aktywny", driverId: "dr_kaminski", whId: "wh_rok", body: "ruchoma_podloga", compartments: [{ name: "Naczepa", l: 13.4, w: 2.45, h: 2.8 }], capacityMP: 91.92 },
         // pojazdy firm zewnętrznych (flota zewnętrzna) — podpowiedzi w kursach transportu zewnętrznego, wspólne dla magazynów
-        { id: "ve_ext_esi1", owner: "external", company: "ESI Logistics", name: "Scania — ruchoma podłoga", reg: "ESI 18734", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "Tomasz Lis", whId: "" },
-        { id: "ve_ext_esi2", owner: "external", company: "ESI Logistics", name: "Volvo — ruchoma podłoga", reg: "ESI 20511", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "Robert Kania", whId: "" },
-        { id: "ve_ext_dap1", owner: "external", company: "DAP Trans", name: "MAN — ruchoma podłoga", reg: "SZA 7K901", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "", whId: "" },
+        { id: "ve_ext_esi1", owner: "external", company: "ESI Logistics", name: "Scania — ruchoma podłoga", reg: "ESI 18734", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "Tomasz Lis", whId: "", body: "ruchoma_podloga", compartments: [{ name: "Naczepa", l: 13.4, w: 2.45, h: 2.8 }], capacityMP: 91.92 },
+        { id: "ve_ext_esi2", owner: "external", company: "ESI Logistics", name: "Volvo — ruchoma podłoga", reg: "ESI 20511", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "Robert Kania", whId: "", body: "ruchoma_podloga", compartments: [{ name: "Naczepa", l: 13.4, w: 2.45, h: 3.0 }], capacityMP: 98.49 },
+        { id: "ve_ext_dap1", owner: "external", company: "DAP Trans", name: "MAN — ruchoma podłoga", reg: "SZA 7K901", type: "ruchoma_podloga", status: "aktywny", driverId: "", driverName: "", whId: "", body: "ruchoma_podloga", compartments: [{ name: "Naczepa", l: 13.0, w: 2.45, h: 2.7 }], capacityMP: 86.0 },
         { id: "ve_ext_dap2", owner: "external", company: "DAP Trans", name: "DAF — wywrotka", reg: "SZA 7K902", type: "wywrotka", status: "aktywny", driverId: "", driverName: "", whId: "" },
-        { id: "ve_ext_kow", owner: "external", company: "Transport Kowalski", name: "Mercedes Actros — ciężarowy", reg: "SPY 92FR", type: "ciezarowy", status: "aktywny", driverId: "", driverName: "Marek Kowalski", whId: "" }
+        { id: "ve_ext_kow", owner: "external", company: "Transport Kowalski", name: "Mercedes Actros — ciężarowy", reg: "SPY 92FR", type: "ciezarowy", status: "aktywny", driverId: "", driverName: "Marek Kowalski", whId: "", body: "hakowiec", compartments: [{ name: "Kontener na samochodzie", l: 6.5, w: 2.4, h: 2.5 }, { name: "Kontener na przyczepie", l: 7.0, w: 2.4, h: 2.5 }], capacityMP: 81 }
       ],
       operators: [
         { id: "op_lis", name: "Krzysztof Lis", phone: "601 111 222", whId: "wh_zab" },
