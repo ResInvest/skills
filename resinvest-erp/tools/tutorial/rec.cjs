@@ -20,7 +20,13 @@ class Rec {
     fs.rmSync(this.dir, { recursive: true, force: true }); fs.mkdirSync(this.dir, { recursive: true });
   }
   beatT(i) { const s = this.ch.sentences; return i < s.length ? s[i].t : this.ch.voiceDur; }
-  async beat(i, off = 0) { const t = this.beatT(i) + off; if (this.T < t) this.T = t; }
+  /** Czekanie na zdanie lektora i samoregulacja tempa: spóźnione akcje przyspieszają, zapas je uspokaja. */
+  async beat(i, off = 0) {
+    const t = this.beatT(i) + off, lag = this.T - t;
+    if (lag > 0.4) this.k = Math.max(0.4, this.k * 0.8);
+    else if (lag < -2.5) this.k = Math.min(this.k0 ?? 1, this.k * 1.1);
+    if (this.T < t) this.T = t;
+  }
   wait(s) { this.T += s; }
   async shot() {
     const f = `${String(this.n++).padStart(4, "0")}.jpg`;
@@ -59,7 +65,7 @@ class Rec {
   async scrollTop(dur = 0.6) { const from = await this.p.evaluate(() => { window.__sc = null; return scrollY; }); if (from > 2) await this.scrollAnim(from, 0, dur); }
   async scrollAnim(from, to, dur) {
     this.cutOverlays();
-    const steps = Math.max(6, Math.round(dur * 30 / 2));
+    const steps = Math.max(8, Math.round(dur * 30));
     for (let k = 1; k <= steps; k++) {
       const u = k / steps, e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
       await this.p.evaluate(y => { if (window.__sc) window.__sc.scrollTop = y; else window.scrollTo(0, y); }, from + (to - from) * e);
@@ -125,7 +131,12 @@ class Rec {
   async closeModals() { for (let i = 0; i < 4; i++) { if (!(await this.p.$(".scrim"))) break; await this.p.keyboard.press("Escape"); await this.settle(200); } }
   save() {
     const D = this.ch.contentDur;
-    if (this.T > D) console.log(`  ! rozdział ${this.ch.no}: akcje ${this.T.toFixed(1)} s > czas ${D.toFixed(1)} s`);
+    if (this.T > D - 0.3) {   // akcje dłuższe od lektora: lekkie, równomierne skrócenie osi (bez ucinania końcówki)
+      const f = (D - 0.3) / this.T;
+      for (const e of this.ev) for (const k of ["t", "t0", "t1", "d"]) if (typeof e[k] === "number") e[k] = +(e[k] * f).toFixed(3);
+      console.log(`  · rozdział ${this.ch.no}: oś akcji skrócona o ${((1 - f) * 100).toFixed(1)} % (${this.T.toFixed(1)} → ${(D - 0.3).toFixed(1)} s)`);
+      this.T = D - 0.3;
+    }
     if (this.miss.length) console.log(`  ! brak elementów:`, [...new Set(this.miss)].join(" | "));
     fs.writeFileSync(path.join(this.dir, "events.json"), JSON.stringify({ no: this.ch.no, dur: D, endT: this.T, events: this.ev }, null, 0));
     console.log(`  rozdział ${this.ch.no}: ${this.n} klatek, akcje do ${this.T.toFixed(1)} / ${D.toFixed(1)} s`);
@@ -150,7 +161,7 @@ const SCENES = {
     await R.arrow("#user-btn", "Mój profil: zmiana hasła", { color: C.pink, dur: 4 });
   },
   async 2(R, p) {   // Pulpit i nawigacja
-    R.k = 0.85;
+    R.k = R.k0 = 0.85;
     await R.go("pulpit"); await R.shot();
     await R.beat(1); await R.box("#kpi-wood", { color: C.orange, dur: 3.5, label: "Drewno [m³]" });
     await R.move("#kpi-wood"); await R.wait(0.6);
@@ -177,7 +188,7 @@ const SCENES = {
     await R.beat(10); await R.nav("dodatkowe"); await R.box("#extra-types-table", { color: C.orange, dur: 4, label: "Cennik operacji dodatkowych" });
   },
   async 4(R, p) {   // Flota: pojazd, zabudowa, pojemność
-    R.k = 0.8;
+    R.k = R.k0 = 0.8;
     await R.go("pulpit"); await R.shot();
     await R.beat(0); await R.nav("flota");
     await R.box(".fl-scopes, #fl-scope-own", { color: C.cyan, dur: 2.6, label: "Flota własna / zewnętrzna" });
@@ -196,7 +207,7 @@ const SCENES = {
     await R.beat(14); await R.click('[data-tab="vehicles"]');
   },
   async 5(R, p) {   // Zakup z produkcją w lesie
-    R.k = 0.6;
+    R.k = R.k0 = 0.6;
     await R.go("pulpit"); await R.shot();
     await R.beat(0); await R.click("#top-new", { settle: 700 });
     await R.beat(1); await R.click('label.opt:has(input[value="ZAKUP"]), [data-type="ZAKUP"]', { fx: 0.2 });
@@ -230,7 +241,7 @@ const SCENES = {
     await R.beat(17); await R.closeModals(); await R.shot();
   },
   async 6(R, p) {   // Sprzedaż i transport kilku firm
-    R.k = 0.55;
+    R.k = R.k0 = 0.55;
     await R.go("pulpit"); await R.go("nowa?preset=wz"); await R.shot();
     await R.beat(0); await R.arrow("#f-sale-productId", "Tylko towary na stanie — z ilością", { color: C.orange, dur: 3.5 });
     await R.select("#f-sale-productId", "pr_zr_lesna");
@@ -256,7 +267,7 @@ const SCENES = {
     await R.box('label.opt:has(#f-sale-direct)', { color: C.lime, dur: 4, label: "Sprzedaż bezpośrednia z lasu" });
   },
   async 7(R, p) {   // Produkcja na magazynie i operacje dodatkowe
-    R.k = 0.7;
+    R.k = R.k0 = 0.7;
     await R.go("pulpit"); await R.go("nowa?preset=produkcja"); await R.shot();
     await R.beat(1); await R.arrow("#f-production-rawProductId, [id*=rawProduct]", "Surowiec ze stanu", { color: C.orange, dur: 3 });
     await R.select("#f-production-outProductId", "pr_zr_lesna");

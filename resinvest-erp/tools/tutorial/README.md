@@ -14,6 +14,7 @@ Pełny samouczek programu (16 rozdziałów, ok. 17 min) w MP4 1920×1080, 30 kl.
 |---|---|
 | `script.json` | Tekst lektora: 16 rozdziałów, zdania, opis ekranu. Zapis fonetyczny, np. „Res-Inwest e-er-pe”, „wu-zet”. |
 | `timing.py` | Oś czasu (`timing.json`) i napisy (`subs.ass`). Z nagraniami: czas rozdziału = długość MP3, a początki zdań wyznacza wykrywanie pauz. Bez nagrań: szacunek ok. 15,5 znaku/s. W napisach zapis fonetyczny jest zamieniany na właściwy („ResInvest ERP”, „WZ”, „PDF”). |
+| `loop_music.py` | Podkład z własnego pliku (np. `Epic_Inspiration.mp3`): cisza na początku i końcu jest przycinana, utwór powtarzany z przenikaniem 4 s na całą długość filmu, głośność sprowadzona do −16 LUFS. |
 | `music.py` | Synteza podkładu (`music.wav`): d-moll, 92 BPM; smyczki, ostinato, taiko, blacha, crescendo przed planszami. Bez licencji zewnętrznych. |
 | `rec.cjs` | Nagrywarka Playwright. Okno 1600×900 px przy skali interfejsu (DPI) 120 % daje kadr 1920×1080 bez ucinania stron. Klatki kluczowe i zdarzenia trafiają do `cap/NN/`, a akcje są zsynchronizowane ze zdaniami lektora. |
 | `compose.py` | Montaż wideo (opis niżej). |
@@ -26,7 +27,9 @@ Pełny samouczek programu (16 rozdziałów, ok. 17 min) w MP4 1920×1080, 30 kl.
 - plansze otwarcia, rozdziałów i końcową;
 - plakietkę rozdziału.
 
-Następnie wypala napisy, miksuje lektora (loudnorm −16 LUFS) z podkładem przyciszanym o 13 dB pod głosem i koduje H.264 oraz AAC.
+Zmiany ekranu (kliknięcie, przejście) są płynnie przenikane (0,22 s), a przewijanie ma 30 kl./s. Następnie montaż wypala napisy, miksuje lektora (loudnorm −16 LUFS) z podkładem przyciszanym o 12 dB pod głosem i koduje H.264 oraz AAC.
+
+Nagrywarka sama reguluje tempo: gdy akcje spóźniają się względem zdań lektora, przyspiesza ruchy i wpisywanie. Jeśli mimo to rozdział byłby dłuższy od nagrania, oś akcji jest równomiernie skracana (zwykle o 1–8 %), więc nic nie jest ucinane.
 
 ## Uruchomienie
 

@@ -12,6 +12,7 @@ FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 W, H, FPS, SR = 1920, 1080, 30, 44100
 FB = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+XFADE = 0.22
 GREEN, GREEN_D, INK, CREAM = (31, 107, 69), (16, 63, 41), (22, 30, 25), (246, 248, 243)
 
 
@@ -184,16 +185,26 @@ class Chapter:
         self.clicks = [e["t"] for e in self.events if e["type"] == "click"]
         self.overlays = [e for e in self.events if e["type"] in ("arrow", "box")]
         self.chip = chip_image(ch, total)
-        self._img = (None, None); self._spr = {}
+        self._cache = {}; self._spr = {}
+
+    def load(self, f):
+        if f not in self._cache:
+            if len(self._cache) > 6: self._cache.pop(next(iter(self._cache)))
+            self._cache[f] = Image.open(os.path.join(self.dir, f)).convert("RGBA")
+        return self._cache[f]
 
     def base(self, t):
-        f = self.shots[0][1] if self.shots else None
-        for ts, fn in self.shots:
-            if ts <= t + 1e-6: f = fn
-            else: break
-        if f is None: return Image.new("RGBA", (W, H), CREAM + (255,))
-        if self._img[0] != f: self._img = (f, Image.open(os.path.join(self.dir, f)).convert("RGBA"))
-        return self._img[1]
+        """Klatka programu w chwili t; po zmianie ekranu (klik, przejście) — płynne przenikanie 0,2 s."""
+        if not self.shots: return Image.new("RGBA", (W, H), CREAM + (255,))
+        i = 0
+        while i + 1 < len(self.shots) and self.shots[i + 1][0] <= t + 1e-6: i += 1
+        cur = self.load(self.shots[i][1])
+        if i > 0:
+            t_cur, t_prev = self.shots[i][0], self.shots[i - 1][0]
+            u = (t - t_cur) / XFADE
+            if t_cur - t_prev > 0.1 and 0 <= u < 1:      # nie przy przewijaniu i wpisywaniu (tam klatki są gęste)
+                return Image.blend(self.load(self.shots[i - 1][1]), cur, ease(u))
+        return cur
 
     def first(self):
         return Image.open(os.path.join(self.dir, self.shots[0][1])) if self.shots else None
@@ -250,7 +261,7 @@ def render(args):
     for c in sel:
         a, b = c["voiceAt"] - 0.35, c["voiceAt"] + c["voiceDur"] + 0.25
         g = np.clip(np.minimum((tt - a) / 0.6, (b - tt) / 0.9), 0, 1)
-        env *= 1 - g * (1 - 10 ** (-13 / 20))
+        env *= 1 - g * (1 - 10 ** (-12 / 20))
     mix = mus * env[:, None]
     for c in sel:
         if not c["mp3"]: continue
