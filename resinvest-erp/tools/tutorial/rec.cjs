@@ -444,7 +444,7 @@ const SCENES = {
   async 12(R, p) {  // Raporty i ewidencja CSV (0–5)
     R.k = 0.85;
     await R.go("pulpit"); await R.shot();
-    await R.beat(0); await R.nav("raporty"); await R.tour([["#r-mode", "Miesiąc albo rok", C.orange], ["#r-wh", "Magazyn", C.cyan], ["#r-product", "Produkt", C.lime], ["#r-partner", "Kontrahent", C.pink]], { dur: 1.5, gap: 0.8 });
+    await R.beat(0); await R.nav("raporty"); await R.tour([["#r-mode", "Miesiąc albo rok", C.orange], ["#r-wh", "Magazyn · produkt · kontrahent", C.cyan]], { dur: 1.6, gap: 0.6 });
     await R.beat(1); await R.col("#rep-recon", 3, "Stan pocz.", { color: C.cyan, dur: 1.8, hold: 0.9 });
     await R.col("#rep-recon", 4, "Zakup", { color: C.orange, dur: 1.6, hold: 0.7 }); await R.col("#rep-recon", 7, "Sprzedaż", { color: C.lime, dur: 1.6, hold: 0.7 });
     await R.col("#rep-recon", 11, "Stan końc.", { color: C.pink, dur: 1.8, hold: 0.9 }); await R.col("#rep-recon", 14, "Kontrola = księga ruchów", { color: C.lime, dur: 2.8 });

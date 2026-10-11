@@ -51,6 +51,7 @@ python timing.py                                # 1) oś lektora i granice zdań
 node rec.cjs                                    # 2) nagranie (albo wybrane rozdziały: node rec.cjs 5 6)
 python timing.py --final                        # 3) oś ostateczna + napisy
 python compose2.py --audio                      # 4) lektor + podkład → _mix.wav, music_plan.txt
+#    python compose2.py --audio --no-music         #    (wersja bez podkładu — tylko lektor)
 python compose2.py --video --chapters 1-5 &     # 5) obraz w częściach (równolegle)
 python compose2.py --video --chapters 6-11 &
 python compose2.py --video --chapters 12-16 & wait

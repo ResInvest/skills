@@ -296,6 +296,7 @@ def decode(path, extra=()):
     return np.frombuffer(raw, dtype=np.float32).reshape(-1, 2).copy()
 
 
+NO_MUSIC = False
 TRACKS = [  # (plik, początek [s], koniec dźwięku [s]) — cisza na początku / końcu pominięta
     ("epic1.mp3", 0.94, 189.6), ("epic2.mp3", 0.0, 143.6), ("epic3.mp3", 0.0, 314.8)]
 
@@ -332,11 +333,11 @@ def build_audio(tl):
     total = tl["total"]; n = int(total * SR) + SR
     # ---- podkład
     srcs = []
-    for fn, a, b in TRACKS:
+    for fn, a, b in ([] if NO_MUSIC else TRACKS):
         x = decode(os.path.join(HERE, "music_src", fn), ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11"])
         srcs.append(x[int(a * SR):int(b * SR)])
     mus = np.zeros((n, 2), dtype=np.float32)
-    plan = plan_music(tl)
+    plan = [] if NO_MUSIC else plan_music(tl)
     lines = []
     for (t0, t1, tr, c0, c1) in plan:
         x = srcs[tr]; L = t1 - t0
@@ -386,7 +387,7 @@ def build_audio(tl):
     if pk > 0.97: mix *= 0.97 / pk
     with wave.open(os.path.join(HERE, "_mix.wav"), "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR); w.writeframes((mix * 32767).astype(np.int16).tobytes())
-    open(os.path.join(HERE, "music_plan.txt"), "w").write("\n".join(lines) + "\n")
+    open(os.path.join(HERE, "music_plan.txt"), "w").write(("\n".join(lines) if lines else "bez podkładu — tylko lektor") + "\n")
     print("\n".join(lines)); print(f"dźwięk: {total:.1f} s → _mix.wav")
 
 
@@ -499,7 +500,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--audio", action="store_true"); ap.add_argument("--video", action="store_true"); ap.add_argument("--final", action="store_true")
     ap.add_argument("--chapters", default=None); ap.add_argument("--out", default=None)
+    ap.add_argument("--no-music", action="store_true", help="tylko lektor, bez podkładu")
     a = ap.parse_args()
+    NO_MUSIC = a.no_music
     tl = load_tl()
     if a.audio: build_audio(tl)
     if a.video:
