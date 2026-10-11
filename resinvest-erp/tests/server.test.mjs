@@ -191,3 +191,49 @@ test("Serwer: kopia zapasowa na żądanie i kontrola spójności dziennika", asy
   const again = client();
   assert.equal((await again.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" })).status, 200, "dane przetrwały restart");
 });
+
+test("Serwer: synchronizacja samymi zmianami (3.10) — zmiany od rewizji, izolacja magazynów, pełny stan gdy trzeba", async () => {
+  const a = client();
+  await a.post("/api/auth/login", { login: "magazyn@resinvest.group", password: "Biomasa2026" });
+  const cr = await a.post("/api/users", { rec: { firstName: "Olga", lastName: "Delta", email: "olga.delta@resinvest.group", role: "magazynier", whId: "wh_zab" }, password: "Tymczas2026" });
+  assert.equal(cr.json.res.ok, true, JSON.stringify(cr.json.res));
+  const m = client();
+  await m.post("/api/auth/login", { login: "olga.delta@resinvest.group", password: "Tymczas2026" });
+  assert.equal((await m.post("/api/auth/password", { old: "Tymczas2026", new: "Wlasne2026x" })).status, 200);
+  const full = async () => (await m.get("/api/state")).json;
+  let view = (await full()).state;
+  const rev0 = view.rev;
+  const sale = (wh, qty, place) => R.Seed.draftOf("2026-09-23", { type: "SPRZEDAZ", whId: wh, sale: { productId: "pr_zr_lesna", qty, unit: "MP", buyerId: "pa_ec_zab", price: "90" }, transport: { mode: "none", place } });
+  // zmiany innego użytkownika: jedna w magazynie użytkownika, jedna poza nim
+  const r1 = await a.post("/api/cmd", { cmd: "op.commit", args: { draft: sale("wh_zab", "3", "RiC Zabrze") } });
+  assert.equal(r1.json.res.ok, true, r1.json.res.error);
+  const d = await m.get("/api/state?since=" + rev0);
+  assert.ok(d.json.delta && !d.json.state, "odpowiedź z samymi zmianami");
+  assert.ok(d.json.delta.colls.operations.up.some(([, o]) => o.id === r1.json.res.op.id));
+  assert.ok(Buffer.byteLength(JSON.stringify(d.json)) < Buffer.byteLength(JSON.stringify(await full())) / 3, "zmiany wielokrotnie mniejsze niż pełny stan");
+  view = R.applyDelta(view, d.json.delta);
+  assert.deepEqual(view, (await full()).state, "stan po nałożeniu zmian = pełny widok serwera");
+  // komenda użytkownika z posiadaną rewizją → w odpowiedzi tylko zmiany
+  const r2 = await m.post("/api/cmd", { cmd: "draft.save", args: { draft: sale("wh_zab", "2", "RiC Zabrze") }, haveRev: view.rev });
+  assert.equal(r2.json.res.ok, true, r2.json.res.error);
+  assert.ok(r2.json.delta && !r2.json.state);
+  view = R.applyDelta(view, r2.json.delta);
+  assert.deepEqual(view, (await full()).state);
+  // usunięcie wersji roboczej
+  const r3 = await m.post("/api/cmd", { cmd: "draft.delete", args: { id: r2.json.res.id }, haveRev: view.rev });
+  assert.deepEqual(r3.json.delta.colls.drafts.del, [r2.json.res.id]);
+  view = R.applyDelta(view, r3.json.delta);
+  assert.deepEqual(view, (await full()).state);
+  // nieaktualna rewizja klienta: zmiany nie pasują → null (klient pobiera pełny stan)
+  assert.equal(R.applyDelta(view, r3.json.delta), null, "widok w innej rewizji niż `since`");
+  // zmiana kont / uprawnień → pełny stan
+  const revU = view.rev;
+  const u = (await a.get("/api/state")).json.state.users.find(x => x.login === "olga.delta@resinvest.group");
+  assert.equal((await a.post("/api/cmd", { cmd: "user.save", args: { rec: Object.assign({}, u, { phone: "600 100 200" }) } })).json.res.ok, true);
+  const afterUser = await m.get("/api/state?since=" + revU);
+  assert.ok(afterUser.json.state && !afterUser.json.delta, "po zmianie kont — pełny widok");
+  // rewizja sprzed startu serwera / spoza historii → pełny stan; rewizja nieprawidłowa → pełny stan
+  assert.ok((await m.get("/api/state?since=0")).json.state);
+  assert.ok((await m.get("/api/state?since=abc")).json.state);
+  assert.ok((await m.get("/api/state?since=999999999")).json.state);
+});

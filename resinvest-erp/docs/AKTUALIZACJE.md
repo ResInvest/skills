@@ -21,6 +21,10 @@ Program jest przygotowany do wieloletniej rozbudowy. Każda nowa wersja to nowy 
    - sprawdza sumy kontrolne stanu i łańcuch skrótów dziennika (*Kontrola spójności bazy*).
 5. Stanowiska (przeglądarki) dostają nową wersję automatycznie po odświeżeniu strony — nic nie instaluje się na komputerach pracowników.
 
+**Aktualizacja do 3.10:** przy pierwszym starcie baza jest przenoszona do zapisu przyrostowego (każdy rekord w osobnym
+wierszu z sumą kontrolną). Trwa to chwilę (2 lata pracy, 3000 operacji ≈ 1,5 s; dane po przeniesieniu sprawdzone — identyczne), wpis „system.storage” trafia do dziennika zmian,
+a kopia „przed-aktualizacja-3_9_x” powstaje wcześniej. Powrót do 3.9.x — tylko z tej kopii (punkt niżej).
+
 Kopie „przed-aktualizacja” nie są usuwane automatycznie (czyszczone są tylko kopie dzienne starsze niż `backup.keepDays`).
 
 ## Poprawki („łatki”) i nowe funkcje
@@ -28,7 +32,7 @@ Kopie „przed-aktualizacja” nie są usuwane automatycznie (czyszczone są tyl
 | Rodzaj zmiany | Wersja | Jak dostarczana |
 |---|---|---|
 | Poprawka błędu, drobna zmiana | `3.9.1 → 3.9.2` | instalator aktualizacji, dane bez migracji |
-| Nowa funkcja, nowe pola w danych | `3.9 → 3.10` | instalator aktualizacji + automatyczna migracja schematu (np. 9 → 10) |
+| Nowa funkcja, nowe pola w danych | `3.10 → 3.11` | instalator aktualizacji + automatyczna migracja schematu (np. 9 → 10) |
 | Duża przebudowa | `3.x → 4.0` | instalator + migracja; wcześniej test na kopii bazy |
 
 Dlaczego rozbudowa jest bezpieczna:

@@ -1,6 +1,29 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-11 · etap: **ResInvest ERP 3.9.1 — poczta SMTP, bezpieczne aktualizacje, test obciążeniowy**
+Ostatnia aktualizacja: 2026-10-11 · etap: **ResInvest ERP 3.10.0 — zapis przyrostowy, synchronizacja przeglądarek zmianami**
+
+## Wykonane — 3.10.0
+
+- [x] Zapis przyrostowy: rekordy kolekcji w tabeli `rows` (suma SHA-256 każdego wiersza), zapis tylko zmienionych
+      rekordów + rdzeń + wpis dziennika w jednej transakcji; łańcuch skrótów dziennika z sumą zmian
+- [x] Szybka ścieżka komend: kopia robocza bez kopiowania historii (rekordy zamrożone i współdzielone, kopia przy
+      zapisie `R.own`); komenda zmieniająca rekord w miejscu wykonywana awaryjnie na pełnej kopii (ten sam wynik)
+- [x] Automatyczne przeniesienie bazy 3.9.x do wierszy (kopia „przed-aktualizacja”, wpis `system.storage`)
+- [x] Synchronizacja przeglądarek samymi zmianami (`/api/state?since=`, `haveRev` w komendach, `R.applyDelta`),
+      pełny stan przy zmianie kont / uprawnień, braku historii zmian lub niezgodności
+- [x] Testy: jednostkowe 171, serwer 68 (w tym `storage.test` 7), E2E 340, E2E serwera 32 — zaliczone
+
+### Wyniki testu obciążeniowego 3.10 (`tools/loadtest.mjs`, 4 rdzenie 2,8 GHz)
+
+| Baza | Profil | Zmiany od rewizji p50 / p95 | Zapis p50 / p95 | Otwarcie strony p50 | Spójność |
+|---|---|---|---|---|---|
+| dane przykładowe (11 → 93 operacji) | 25 stanowisk, przerwy 3–10 s | 6 / 15 ms | 13 / 25 ms | 75 ms | OK, 25/25 stanów zgodnych |
+| ok. 2 lata pracy (3011 → 3095 operacji) | 25 stanowisk, przerwy 3–10 s | 8 / 180 ms | 34 / 55 ms | 0,4 s (7 MB) | OK, 25/25 stanów zgodnych |
+| ok. 2 lata pracy (3011 → 3782 operacji) | przeciążenie: 40 stanowisk bez przerw (50–300 ms), 50 żądań/s, fala 60 zapisów | 371 ms / 1,5 s | 390 ms / 1,6 s | 0,9 s | OK, 40/40 stanów zgodnych |
+
+Porównanie z 3.9.1 (ta sama baza 3011 operacji, 25 stanowisk): odczyt 2,5 s → 8 ms, zapis 1,7 s → 34 ms,
+odpowiedź 7–14 MB → 26–39 kB. We wszystkich przebiegach: 0 błędów, 0 utraconych / zdublowanych zapisów,
+kontrola bazy (`--check`) OK, wszystkie komendy na szybkiej ścieżce.
 
 ## Wykonane — 3.9.1
 
@@ -9,7 +32,7 @@ Ostatnia aktualizacja: 2026-10-11 · etap: **ResInvest ERP 3.9.1 — poczta SMTP
 - [x] Test obciążeniowy `tools/loadtest.mjs`; widok stanu zapamiętywany per rewizja
 - [x] Testy: jednostkowe 171, serwer 60, E2E 340, E2E serwera 29 — zaliczone
 
-### Wyniki testu obciążeniowego (do rozwiązania w 3.10)
+### Wyniki testu obciążeniowego 3.9.1 (rozwiązane w 3.10)
 
 | Baza | Profil | Odczyt stanu p50 / p95 | Zapis p50 | Spójność |
 |---|---|---|---|---|

@@ -85,7 +85,11 @@
     if (!me) return { ok: false, error: t("Brak zalogowanego użytkownika") };
     const want = ids === "all" ? null : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
     let n = 0;
-    for (const x of state.notices || []) if (x.userId === me && !x.read && (!want || want.has(x.id))) { x.read = true; x.readAt = nowIso(ctx); n++; }
+    // podmiana rekordów (nie zmiana w miejscu) — na serwerze powiadomienia są zamrożone i współdzielone (3.10)
+    state.notices = (state.notices || []).map(x => {
+      if (x.userId !== me || x.read || (want && !want.has(x.id))) return x;
+      n++; return Object.assign(clone(x), { read: true, readAt: nowIso(ctx) });
+    });
     if (!n) return { ok: true, unchanged: true, count: 0 };
     state.rev += 1;
     return { ok: true, count: n };
@@ -251,6 +255,8 @@
         default: return [];
       }
     } catch (e) {
+      // zapis do zamrożonego rekordu (serwer, zapis przyrostowy) — komenda powtarza się na pełnej kopii, więc błąd idzie wyżej
+      if (e instanceof TypeError && /read[- ]only|not extensible|Cannot (?:assign|add|delete|define|redefine)|frozen/i.test(e.message)) throw e;
       // powiadomienie nigdy nie blokuje operacji — błąd treści zapisuje się w dzienniku konsoli
       if (typeof console !== "undefined") console.error("Powiadomienia:", e);
       return [];

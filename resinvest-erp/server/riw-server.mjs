@@ -20,7 +20,7 @@ import { gzipSync } from "node:zlib";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
-import { ROOT, Store, loadConfig, loadEnv, makeLogger, verifyPassword, I18N, R, AuthLib, Service } from "./core.mjs";
+import { ROOT, Store, ROWS, loadConfig, loadEnv, makeLogger, verifyPassword, I18N, R, AuthLib, Service } from "./core.mjs";
 import { mailConfig, mailInfo, sendMail, compose, sendRaw } from "./mail.mjs";
 
 const [major, minor] = process.versions.node.split(".").map(Number);
@@ -127,23 +127,50 @@ function broadcast(rev, by) {
  */
 /**
  * Widok stanu dla użytkownika (tylko jego magazyny). Wynik jest zapamiętywany dla bieżącej rewizji: wielu pracowników
- * odczytujących ten sam stan nie powoduje ponownego liczenia, zamiany na JSON ani kompresji (test obciążeniowy 3.9.1).
+ * odczytujących ten sam stan nie powoduje ponownego liczenia, zamiany na JSON ani kompresji (test obciążeniowy 3.9.1; od 3.10 — także synchronizacja samymi zmianami).
  * Każda zmiana stanu (nowa rewizja) unieważnia pamięć.
  */
 const viewCache = { rev: -1, today: "", map: new Map() };
-function stateView(userId) {
+function viewEntry(userId) {
   const rev = store.state.rev, today = store.today();
   if (viewCache.rev !== rev || viewCache.today !== today) { R.applyRoles(store.state); viewCache.rev = rev; viewCache.today = today; viewCache.map.clear(); }
   let v = viewCache.map.get(userId);
-  if (!v) {
-    const body = JSON.stringify({ state: Service.project(store.state, { id: userId }), today, rev });
-    v = { body: body.slice(1, -1), gz: null };      // wnętrze obiektu — doklejane do odpowiedzi bez ponownej serializacji
-    viewCache.map.set(userId, v);
-  }
+  if (!v) { v = { proj: Service.project(store.state, { id: userId }), body: null, gz: null }; viewCache.map.set(userId, v); }
   return v;
 }
-/** Znacznik: obiekt odpowiedzi z gotowym (zapamiętanym) fragmentem stanu — patrz send(). */
-const statePayload = userId => ({ [VIEW]: stateView(userId) });
+function stateView(userId) {
+  const v = viewEntry(userId);
+  if (v.body === null) v.body = JSON.stringify({ state: v.proj, today: viewCache.today, rev: viewCache.rev }).slice(1, -1);   // wnętrze obiektu — doklejane bez ponownej serializacji
+  return v;
+}
+/**
+ * Synchronizacja samymi zmianami (3.10): przeglądarka podaje rewizję, którą ma (`since`); serwer odsyła rdzeń widoku
+ * (kartoteki, konfiguracja — kilkanaście kB) i w kolekcjach tylko rekordy nowe / zmienione z ich pozycją w widoku
+ * oraz identyfikatory usuniętych lub już niewidocznych. `n` — liczba rekordów kolekcji (kontrola po stronie klienta).
+ * Brak historii zmian, zmiana kont / uprawnień / kolejności → null (pełny stan).
+ */
+function deltaView(userId, since) {
+  if (!Number.isInteger(since) || since < 0) return null;
+  const ch = store.changesSince(since);
+  if (!ch) return null;
+  const v = viewEntry(userId), P = v.proj;
+  if (!P) return null;
+  const core = {}, colls = {};
+  for (const k of Object.keys(P)) if (!ROWS.includes(k)) core[k] = P[k];
+  for (const k of ROWS) {
+    const up = ch.up[k], del = ch.del[k];
+    if (!(up && up.size) && !(del && del.size)) continue;
+    const arr = P[k] || [], ins = [], seen = new Set();
+    if (up && up.size) for (let i = 0; i < arr.length; i++) { const id = String(arr[i].id); if (up.has(id)) { ins.push([i, arr[i]]); seen.add(id); } }
+    const gone = del ? [...del] : [];
+    if (up) for (const id of up) if (!seen.has(id)) gone.push(id);        // zmieniony, ale poza widokiem użytkownika
+    colls[k] = { up: ins, del: gone, n: arr.length };
+  }
+  return { body: JSON.stringify({ delta: { since, core, colls }, today: viewCache.today, rev: viewCache.rev }).slice(1, -1), gz: null };
+}
+/** Znacznik: obiekt odpowiedzi z gotowym fragmentem stanu (pełny widok albo same zmiany od `since`) — patrz send(). */
+const statePayload = (userId, since) => ({ [VIEW]: (since != null && deltaView(userId, since)) || stateView(userId) });
+const sinceOf = v => { const n = Number(v); return v !== undefined && v !== null && v !== "" && Number.isInteger(n) && n >= 0 ? n : null; };
 const VIEW = Symbol("stateView");
 const metaOf = req => ({ ip: ipOf(req), ua: String(req.headers["user-agent"] || "").slice(0, 200) });
 /** Adres programu w linkach e-mail: APP_URL; bez niego — adres wyznaczony przez serwer (nigdy z nagłówka Host). */
@@ -426,7 +453,7 @@ async function handleApi(req, res, url) {
   }
   if (must) return json(req, res, 403, { ok: false, code: "MUST_CHANGE", error: t("Ustaw nowe hasło przed rozpoczęciem pracy") });
 
-  if (path === "/api/state" && method === "GET") return json(req, res, 200, Object.assign({ ok: true }, statePayload(user.id)));
+  if (path === "/api/state" && method === "GET") return json(req, res, 200, Object.assign({ ok: true }, statePayload(user.id, sinceOf(url.searchParams.get("since")))));
   if (path === "/api/events" && method === "GET") {
     res.writeHead(200, Object.assign({ "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" }, SEC_HEADERS));
     res.write(`event: rev\ndata: ${JSON.stringify({ rev: store.state.rev })}\n\n`);
@@ -448,7 +475,7 @@ async function handleApi(req, res, url) {
     }
     const out = Object.assign({}, r); delete out.before;
     // odmowa z powodu uprawnień / dostępu do magazynu — HTTP 403 (treść jak zwykle w `res`)
-    return json(req, res, out.code === "FORBIDDEN" ? 403 : 200, Object.assign({ ok: true, res: out }, changed ? statePayload(user.id) : { today: store.today() }));
+    return json(req, res, out.code === "FORBIDDEN" ? 403 : 200, Object.assign({ ok: true, res: out }, changed ? statePayload(user.id, sinceOf(b.haveRev)) : { today: store.today() }));
   }
   /* ---- użytkownicy i hasła (administrator) ---- */
   if (path.startsWith("/api/users")) {

@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.9.1";
+  const VERSION = "3.10.0";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -372,6 +372,41 @@
   let uidSeq = 0;
   function uid(prefix) { uidSeq = (uidSeq + 1) % 1e6; return `${prefix}_${Date.now().toString(36)}${uidSeq.toString(36)}${Math.random().toString(36).slice(2, 8)}`; }
   const clone = o => JSON.parse(JSON.stringify(o));
+  /**
+   * Kopia przy zapisie (3.10): rekord kolekcji (operacja, wersja robocza, inwentaryzacja, powiadomienie) przed zmianą
+   * w miejscu. Na serwerze rekordy są zamrożone i współdzielone między wersjami stanu — zmieniana jest własna kopia,
+   * podstawiona w tablicy kopii roboczej. W przeglądarce (rekordy niezamrożone) zwraca ten sam obiekt.
+   */
+  function own(state, coll, el) {
+    if (!el || !Object.isFrozen(el)) return el;
+    const arr = state[coll], i = Array.isArray(arr) ? arr.indexOf(el) : -1, copy = clone(el);
+    if (i >= 0) arr[i] = copy;
+    return copy;
+  }
+  /**
+   * Synchronizacja samymi zmianami (3.10): nałożenie odpowiedzi serwera { since, core, colls } na widok w rewizji `since`.
+   * Rdzeń (kartoteki, konfiguracja) w całości; w kolekcjach: usunięcie zmienionych / usuniętych / niewidocznych rekordów
+   * i wstawienie nowych wersji na ich pozycje w widoku serwera (rosnąco). Kontrola liczby rekordów `n`.
+   * Wynik: nowy obiekt stanu albo null (zmian nie da się nałożyć — potrzebny pełny stan).
+   */
+  function applyDelta(cur, d) {
+    if (!cur || !d || !d.core || cur.rev !== d.since) return null;
+    const next = {}, colls = d.colls || {}, has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+    for (const k of Object.keys(cur)) {                       // kolejność kluczy jak w widoku serwera
+      if (has(d.core, k)) { next[k] = d.core[k]; continue; }
+      const c = colls[k];
+      if (!c) { next[k] = cur[k]; continue; }
+      if (!Array.isArray(cur[k])) return null;
+      const drop = new Set((c.del || []).map(String).concat((c.up || []).map(x => String(x[1].id))));
+      const arr = cur[k].filter(x => !drop.has(String(x.id)));
+      for (const [i, rec] of c.up || []) { if (!(i >= 0 && i <= arr.length)) return null; arr.splice(i, 0, rec); }
+      if (arr.length !== c.n) return null;
+      next[k] = arr;
+    }
+    for (const k of Object.keys(d.core)) if (!has(next, k)) next[k] = d.core[k];
+    for (const k of Object.keys(colls)) if (!has(next, k)) return null;
+    return next;
+  }
   const byId = (list, id) => (list || []).find(x => x.id === id) || null;
   const str = v => String(v == null ? "" : v).trim();
   const nowIso = ctx => (ctx && ctx.now) || new Date().toISOString();
@@ -1489,7 +1524,7 @@
     if (op0 && op0.mm && op0.mm.receipt && rec && rec.key && op0.mm.receipt.key === rec.key) return { ok: true, duplicate: true, op: op0 };
     const p = planReceive(state, opId, rec, ctx);
     if (!p.ok) return Object.assign({ ok: false }, p.errorList ? { plan: p, error: p.error } : p);
-    const op = p.op, key = `${op.toWhId}|${p.product.id}`, before = snap(state, [key]);
+    const op = own(state, "operations", p.op), key = `${op.toWhId}|${p.product.id}`, before = snap(state, [key]);
     if (p.stockQty > EPS) state.ledger.push(ledgerEntry(state, nextLedgerSeq(state), ctx, { opId: op.id, step: 50, date: p.date, whId: op.toWhId, productId: p.product.id, kind: "MM", cat: "MM", qty: p.stockQty, docNo: op.no, receipt: true }));
     op.mm.receipt = { date: p.date, ts: nowIso(ctx), userId: ctx.user.id, userName: ctx.user.name, qty: p.qty, unit: p.unit, stockQty: p.stockQty, diff: p.diff,
       reason: p.reason, reasonLabel: p.reason ? MM_DIFF_REASONS[p.reason] : "", note: p.note, weightMode: p.weightMode, weightT: p.weightT, key: (rec && rec.key) || null };
@@ -1578,10 +1613,12 @@
     return commitOperation(state, draft, c, { author, approver: user, submittedAt: rec.submittedAt });
   }
   function rejectPending(state, id, reason, ctx) {
-    const rec = byId(state.drafts, id), user = ctx && ctx.user;
+    let rec = byId(state.drafts, id);
+    const user = ctx && ctx.user;
     if (!rec || rec.status !== "PENDING") return { ok: false, error: t("Nie znaleziono operacji do zatwierdzenia") };
     if (!canApprove(user, rec.whId)) return { ok: false, error: t("Odrzucić może kierownik magazynu {w} albo administrator", { w: (byId(state.warehouses, rec.whId) || {}).name || "" }), code: "FORBIDDEN" };
     if (!str(reason)) return { ok: false, error: t("Podaj powód odrzucenia") };
+    rec = own(state, "drafts", rec);
     rec.status = "DRAFT"; rec.rejectReason = str(reason).slice(0, 300); rec.rejectedBy = user.name; rec.rejectedAt = nowIso(ctx);
     state.rev += 1;
     audit(state, ctx, { entity: "draft", entityId: id, opNo: "—", event: "reject", act: Lx("Odrzucenie operacji: {type} (wprowadził: {a})", { type: { t: OP_TYPES[rec.type].label }, a: rec.userName }), reason: rec.rejectReason, before: { status: "DO ZATWIERDZENIA" }, after: { status: "ROBOCZY" }, source: (ctx && ctx.source) || N_("Operacje do zatwierdzenia") });
@@ -1647,7 +1684,7 @@
     const pc = planCancel(state, opId, ctx, { del: !!opts.del });
     if (!pc.ok) return pc;
     if (pc.needAck && !opts.ack) return { ok: false, needAck: true, code: "NEED_ACK", dependents: pc.dependents, error: t("Po dokumencie wykonano operacje na tym samym towarze ({list}). Potwierdź, że anulowanie jest zamierzone.", { list: pc.dependents.map(d => d.no).join(", ") }) };
-    const op = pc.op, today = (ctx && ctx.today) || Dates.localToday();
+    const op = own(state, "operations", pc.op), today = (ctx && ctx.today) || Dates.localToday();
     const keys = [...new Set(pc.reversal.map(r => `${r.whId}|${r.productId}`))];
     const before = snap(state, keys);
     const no = nextNo(state, "AN", today);
@@ -1788,7 +1825,7 @@
     }
     const pc = planCorrection(state, opId, newDraft, ctx);
     if (!pc.ok) return pc;
-    const op = pc.op, today = (ctx && ctx.today) || Dates.localToday();
+    const op = own(state, "operations", pc.op), today = (ctx && ctx.today) || Dates.localToday();
     const keys = [...new Set(pc.deltas.map(x => `${x.whId}|${x.productId}`))];
     const before = snap(state, keys);
     const no = nextNo(state, "KOR", today);
@@ -1861,7 +1898,7 @@
     generate(state, ym, ctx) {
       const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
       if (!can(user, "inv.count")) return { ok: false, error: t("Brak uprawnień"), code: "FORBIDDEN" };
-      const p = this.find(state, user.whId, ym);
+      const p = own(state, "inventory", this.find(state, user.whId, ym));
       if (!p) return { ok: false, error: t("Najpierw otwórz okres") };
       if (p.status !== "OTWARTA") return { ok: false, error: t("Okres jest zamknięty — tylko do odczytu") };
       const cut = this.cutoff(ym, today), book = Stock.byProduct(state, user.whId, cut), prev = new Map(p.lines.map(l => [l.productId, l]));
@@ -1879,7 +1916,7 @@
     setCount(state, ym, productId, text, ctx) {
       const user = ctx && ctx.user;
       if (!can(user, "inv.count")) return { ok: false, error: t("Brak uprawnień"), code: "FORBIDDEN" };
-      const p = this.find(state, user.whId, ym);
+      const p = own(state, "inventory", this.find(state, user.whId, ym));
       if (!p) return { ok: false, error: t("Brak okresu") };
       if (p.status !== "OTWARTA") return { ok: false, error: t("Okres jest zamknięty — tylko do odczytu") };
       const line = p.lines.find(l => l.productId === productId);
@@ -1900,7 +1937,7 @@
       const user = ctx && ctx.user, today = (ctx && ctx.today) || Dates.localToday();
       const whId = opts.whId || (user && user.whId);
       if (!opts.auto && !can(user, "inv.close")) return { ok: false, error: t("Zamknięcie okresu wymaga roli Kierownik lub Administrator"), code: "FORBIDDEN" };
-      const p = this.find(state, whId, ym);
+      const p = own(state, "inventory", this.find(state, whId, ym));
       if (!p) return { ok: false, error: t("Brak okresu") };
       if (p.status !== "OTWARTA") return { ok: false, error: t("Okres jest już zamknięty") };
       if (!p.lines.length && !opts.auto) return { ok: false, error: t("Wygeneruj listę spisową przed zamknięciem") };
@@ -2620,7 +2657,7 @@
   };
 
   const RIW = {
-    VERSION, SCHEMA, EPS, Q, NumParse, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
+    VERSION, SCHEMA, EPS, Q, NumParse, own, applyDelta, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, MAX_EXT_COMPANIES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
     CHIPPER_OWNERS, VEHICLE_OWNERS, BODY_TYPES, DIM_LIMITS, compartmentMP, vehicleCapacityMP, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, DOC_SERIES, WAREHOUSE_DOCS, DOC_NUMBERING, unifiedNumbering, seriesNoOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,

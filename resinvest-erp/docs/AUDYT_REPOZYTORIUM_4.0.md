@@ -11,7 +11,7 @@ Podstawa: *RESINVEST ERP — MASTER PROMPT* (§1–§35). Zgodnie z §35 dokumen
 |---|---|---|
 | **Frontend** | `app/src/*.js` (≈ 7 000 wierszy JS, bez TypeScript) → `tools/build.mjs` → **jeden plik `ResInvest_ERP.html` (5,5 MB)** | vanilla JS, własny router hash (`#/…`), szablony w stringach, wbudowany film intro (base64), czcionki PDF, słowniki PL/CS/EN |
 | **Backend** | `server/riw-server.mjs` (HTTP, `node:http`), `server/core.mjs` (baza, sesje, konta), `server/mail.mjs` | Node 22, bez frameworka; jedno wejście zmian: `POST /api/cmd` → `Service.run(state, cmd, args)` |
-| **Baza** | SQLite (`node:sqlite`, WAL, `synchronous=FULL`) | **cały stan biznesowy = jeden dokument JSON** w tabeli `state(id=1)`; osobne tabele: `accounts`, `sessions`, `login_log`, `tokens`, `outbox`, `journal` (łańcuch SHA-256) |
+| **Baza** | SQLite (`node:sqlite`, WAL, `synchronous=FULL`) | **cały stan biznesowy = jeden dokument JSON** w tabeli `state(id=1)` (stan z dnia audytu; od 3.10 rekordy w tabeli `rows`, zapis przyrostowy); osobne tabele: `accounts`, `sessions`, `login_log`, `tokens`, `outbox`, `journal` (łańcuch SHA-256) |
 | **Tryb lokalny (OFFLINE)** | `app/src/core.js` (`LocalBackend`) | **dane biznesowe w `localStorage` przeglądarki** |
 | **Modele / reguły** | `app/src/engine.js` (2 300 wierszy) — wspólny dla przeglądarki i serwera | walidacja, plan operacji, księga (ledger), korekty, anulowania, MM dwuetapowe, inwentaryzacja, raporty, migracje schematu (obecnie **7**) |
 | **API** | `server/riw-server.mjs` | `/api/auth/*` (login, logout, me, password, forgot, reset, token, confirm, register), `/api/invite/accept`, `/api/users/*`, `/api/state`, `/api/cmd`, `/api/events` (SSE), `/api/backups`, `/api/health`, `/api/setup`, `/api/audit/extra` |

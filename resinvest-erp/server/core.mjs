@@ -2,8 +2,14 @@
    ResInvest ERP Serwer — rdzeń: baza SQLite, silnik, komendy, konta, kopie.
    Bez zależności zewnętrznych (Node ≥ 22.13: node:sqlite, node:crypto).
 
-   Trwałość:
-   * tabela `state`   — bieżący stan danych (JSON) + suma SHA-256,
+   Trwałość (od 3.10 — zapis przyrostowy):
+   * tabela `state`   — „rdzeń” stanu (kartoteki, konfiguracja, numeracja; JSON) + suma SHA-256,
+   * tabela `rows`    — rekordy rosnących kolekcji (operacje, księga, audyt, powiadomienia, plany, wersje robocze,
+                        inwentaryzacje): jeden wiersz na rekord, kolejność `ord`, suma SHA-256 każdego wiersza;
+                        zapis komendy dotyczy tylko zmienionych wierszy (czas zapisu nie rośnie z historią),
+   * rekordy kolekcji w pamięci są zamrożone (Object.freeze) i współdzielone między wersjami stanu: kopia robocza
+     komendy to rdzeń + płytkie tablice; zmiana istniejącego rekordu bez kopii jest wykrywana (TypeError)
+     i komenda wykonuje się ponownie na pełnej kopii — wynik zawsze jak przy pełnej kopii,
    * tabela `journal` — dziennik zmian append-only (wyzwalacze blokują UPDATE/DELETE),
                         łańcuch skrótów SHA-256 (wykrycie ręcznej ingerencji),
    * każda komenda: silnik na kopii stanu → jedna transakcja (BEGIN IMMEDIATE)
@@ -47,6 +53,24 @@ const N_ = s => s;
 
 export const sha256 = s => createHash("sha256").update(s).digest("hex");
 const nowIso = () => new Date().toISOString();
+
+/* ---------------- zapis przyrostowy: kolekcje wierszy ---------------- */
+/** Kolekcje stanu przechowywane wiersz po wierszu (rosną z historią). Pozostałe pola = „rdzeń”. */
+export const ROWS = ["operations", "ledger", "audit", "notices", "plans", "drafts", "inventory"];
+const ROWSET = new Set(ROWS);
+/** Błąd zapisu do zamrożonego rekordu (komenda zmienia istniejący rekord bez kopii). */
+export const FROZEN_WRITE = /read[- ]only|not extensible|Cannot (?:assign|add|delete|define|redefine)|frozen/i;
+function deepFreeze(o) {
+  if (o && typeof o === "object" && !Object.isFrozen(o)) { Object.freeze(o); for (const k of Object.keys(o)) deepFreeze(o[k]); }
+  return o;
+}
+/** Rdzeń stanu: wszystkie pola poza kolekcjami wierszy (te jako null — zachowana kolejność kluczy). */
+function coreJsonOf(s) {
+  const c = {};
+  for (const k of Object.keys(s)) c[k] = ROWSET.has(k) ? null : s[k];
+  for (const k of ROWS) if (!(k in c)) c[k] = null;
+  return JSON.stringify(c);
+}
 
 /* ---------------- zmienne środowiskowe (sekrety — tylko serwer) ---------------- */
 /** Plik KLUCZ=wartość (# komentarz). Zmienne procesu mają pierwszeństwo przed plikiem. */
@@ -129,6 +153,8 @@ export class Store {
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS state(id INTEGER PRIMARY KEY CHECK(id=1), rev INTEGER NOT NULL, schema INTEGER NOT NULL, json TEXT NOT NULL, sha256 TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS rows(coll TEXT NOT NULL, id TEXT NOT NULL, ord REAL NOT NULL, json TEXT NOT NULL, sha TEXT NOT NULL, PRIMARY KEY(coll, id)) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS rows_ord ON rows(coll, ord);
       CREATE TABLE IF NOT EXISTS journal(seq INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, user_id TEXT, user_login TEXT, cmd TEXT NOT NULL, args TEXT NOT NULL, rev_before INTEGER, rev_after INTEGER, state_sha TEXT, prev_hash TEXT NOT NULL, hash TEXT NOT NULL);
       CREATE TRIGGER IF NOT EXISTS journal_no_update BEFORE UPDATE ON journal BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END;
       CREATE TRIGGER IF NOT EXISTS journal_no_delete BEFORE DELETE ON journal BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END;
@@ -166,8 +192,17 @@ export class Store {
     this.log("INFO", `Aktualizacja ${prev || "(wersja sprzed 3.9.1)"} → ${R.VERSION}: kopia bazy przed zmianami: ${r.name}`);
     return Object.assign({ from: prev || "", to: R.VERSION }, r);
   }
-  /** Kopia robocza bieżącego stanu do wykonania komendy „wszystko albo nic” — z JSON ostatniego zapisu (identyczna z R.clone). */
-  workCopy() { return this.stateJson ? JSON.parse(this.stateJson) : R.clone(this.state); }
+  /**
+   * Kopia robocza dla komendy „wszystko albo nic”: rdzeń odtworzony z JSON (mały) + płytkie kopie tablic kolekcji
+   * (rekordy współdzielone i zamrożone). Dopisanie / usunięcie / podmiana rekordu działa bez kopiowania historii.
+   */
+  workCopy() {
+    const w = JSON.parse(this.coreJson);
+    for (const k of ROWS) w[k] = Array.isArray(this.state[k]) ? this.state[k].slice() : [];
+    return w;
+  }
+  /** Pełna, zmienialna kopia stanu (ścieżka zapasowa dla komend zmieniających istniejące rekordy w miejscu). */
+  fullCopy() { return R.clone(this.state); }
   today() { return R.Dates.isISO(this.cfg.todayOverride) ? this.cfg.todayOverride : R.Dates.localToday(); }
   tx(fn) {
     this.db.exec("BEGIN IMMEDIATE");
@@ -175,13 +210,36 @@ export class Store {
   }
   load() {
     const row = this.db.prepare("SELECT rev, json, sha256 FROM state WHERE id = 1").get();
-    if (!row) { this.state = null; this.stateJson = null; return; }
+    this.idx = {}; this.ord = {}; this.deltas = []; this.deltaBase = 0; this.stateSha = "";
+    for (const k of ROWS) { this.idx[k] = new Map(); this.ord[k] = new Map(); }
+    if (!row) { this.state = null; this.coreJson = null; return; }
     if (sha256(row.json) !== row.sha256) { this.integrity.ok = false; this.integrity.notes.push("state checksum mismatch"); this.log("ERROR", "Suma kontrolna stanu nie zgadza się — sprawdź bazę / przywróć kopię."); }
-    const m = R.migrate(JSON.parse(row.json));
+    const storage = (this.db.prepare("SELECT value FROM meta WHERE key = 'storage'").get() || {}).value || "";
+    let full = JSON.parse(row.json), bad = 0;
+    if (storage === "rows-1") {
+      for (const k of ROWS) full[k] = [];
+      for (const r of this.db.prepare("SELECT coll, id, ord, json, sha FROM rows ORDER BY coll, ord").iterate()) {
+        if (!ROWSET.has(r.coll)) continue;
+        if (sha256(r.json) !== r.sha) { bad++; if (bad <= 5) this.integrity.notes.push(`row checksum mismatch ${r.coll}/${r.id}`); }
+        full[r.coll].push(JSON.parse(r.json)); this.ord[r.coll].set(r.id, r.ord);
+      }
+      if (bad) { this.integrity.ok = false; this.log("ERROR", `Suma kontrolna ${bad} rekordów nie zgadza się — sprawdź bazę / przywróć kopię.`); }
+      this.stateSha = (this.db.prepare("SELECT value FROM meta WHERE key = 'state_sha'").get() || {}).value || "";
+    }
+    const m = R.migrate(full);
     if (m.error) throw new Error("Nie można wczytać danych: " + m.error);
-    this.state = m.state; this.stateJson = m.from === m.to ? row.json : null;
-    if (m.from !== m.to) { this.saveState(this.state, { id: null, login: "system" }, "system.migrate", { from: m.from, to: m.to }); this.log("INFO", `Migracja danych ${m.from} → ${m.to}`); }
     this.verifyJournal();
+    if (storage !== "rows-1" || m.from !== m.to) {
+      // baza sprzed 3.10 (jeden dokument JSON) albo migracja schematu → pełny zapis wierszy;
+      // kopia „przed-aktualizacja” powstała przy otwarciu bazy
+      this.state = null; this.coreJson = null;
+      this.saveState(m.state, { id: null, login: "system" }, m.from !== m.to ? "system.migrate" : "system.storage", { from: m.from, to: m.to, zapis: "przyrostowy (wiersze)", rekordy: ROWS.reduce((n, k) => n + (m.state[k] || []).length, 0) }, m.state.rev);
+      this.log("INFO", storage !== "rows-1" ? `Zapis przyrostowy: dane przeniesione do wierszy (${ROWS.map(k => `${k} ${(m.state[k] || []).length}`).join(", ")})` : `Migracja danych ${m.from} → ${m.to}`);
+      return;
+    }
+    this.state = m.state;
+    for (const k of ROWS) { this.state[k] = this.state[k] || []; for (const el of this.state[k]) { this.idx[k].set(el.id, el); deepFreeze(el); } }
+    this.coreJson = coreJsonOf(this.state); this.deltaBase = this.state.rev;
   }
   /** Łańcuch skrótów dziennika — każdy wpis zawiera skrót poprzedniego. */
   verifyJournal() {
@@ -194,23 +252,114 @@ export class Store {
     this.journalHead = prev; this.journalCount = n;
     return true;
   }
-  /** Zapis stanu + wpis dziennika w JEDNEJ transakcji. */
+  /**
+   * Zapis stanu + wpis dziennika w JEDNEJ transakcji — tylko zmienione rekordy kolekcji (porównanie tożsamości:
+   * rekord niezmieniony to ten sam, zamrożony obiekt) i rdzeń. `state_sha` w dzienniku = skrót łańcuchowy zmian.
+   */
   saveState(next, user, cmd, argsForJournal, revBefore) {
-    const json = JSON.stringify(next), sh = sha256(json), ts = nowIso();
+    const prev = this.state, full = !prev, ts = nowIso();
     const argsTxt = JSON.stringify(argsForJournal == null ? {} : argsForJournal).slice(0, 200000);
+    const coreJson = coreJsonOf(next), coreSha = sha256(coreJson);
+    const plan = [], digest = [coreSha];
+    const delta = { rev: next.rev, up: {}, del: {}, order: false, access: !prev || this.accessKey(prev) !== this.accessKey(next) };
+    for (const k of ROWS) {
+      const arr = Array.isArray(next[k]) ? next[k] : (next[k] = []);
+      if (!full && prev[k] === arr) continue;
+      const old = this.idx[k], ordOld = this.ord[k];
+      const seen = new Set(), up = [];
+      for (let i = 0; i < arr.length; i++) {
+        const el = arr[i];
+        if (!el || el.id == null) throw new Error(`Rekord bez identyfikatora w kolekcji ${k}`);
+        if (seen.has(el.id)) throw new Error(`Powtórzony identyfikator ${el.id} w kolekcji ${k}`);
+        seen.add(el.id);
+        if (full || old.get(el.id) !== el) up.push(i);
+      }
+      const del = full ? [] : [...old.keys()].filter(id => !seen.has(id));
+      // kolejność: niezmienione rekordy zachowują `ord`; nowe dostają wartość między sąsiadami; inaczej renumeracja
+      const ords = new Array(arr.length); let renumber = full, last = -Infinity;
+      for (let i = 0; i < arr.length && !renumber; i++) {
+        const o = ordOld.get(arr[i].id);
+        if (o !== undefined && o > last) { ords[i] = o; last = o; continue; }
+        if (o !== undefined) { renumber = true; break; }
+        let nextKnown = Infinity;
+        for (let j = i + 1; j < arr.length; j++) { const q = ordOld.get(arr[j].id); if (q !== undefined) { nextKnown = q; break; } }
+        const v = nextKnown === Infinity ? (last === -Infinity ? 0 : Math.floor(last) + 1) : (last === -Infinity ? nextKnown - 1 : (last + nextKnown) / 2);
+        if (!(v > last) || !(v < nextKnown) || nextKnown - last < 1e-6) { renumber = true; break; }
+        ords[i] = v; last = v;
+      }
+      if (renumber) for (let i = 0; i < arr.length; i++) ords[i] = i;
+      const upRows = up.map(i => { const json = JSON.stringify(arr[i]); return { i, id: String(arr[i].id), json, sha: sha256(json) }; });
+      for (const r of upRows) digest.push(r.sha);
+      for (const id of del) digest.push("-" + k + "/" + id);
+      plan.push({ k, arr, upRows, del, ords, renumber });
+      delta.up[k] = upRows.map(r => r.id); delta.del[k] = del.map(String);
+      if (renumber && !full) delta.order = true;
+      // nowy rekord przed rekordem już istniejącym (nie dopisany na końcu) zmienia kolejność u klientów
+      if (!full && !renumber) {
+        let lastOld = -1; for (let i = arr.length - 1; i >= 0; i--) if (ordOld.has(String(arr[i].id))) { lastOld = i; break; }
+        if (upRows.some(r => !ordOld.has(r.id) && r.i < lastOld)) delta.order = true;
+      }
+    }
+    const sh = sha256([this.stateSha || "", ...digest].join("|"));
     this.tx(() => {
+      const upsert = this.db.prepare("INSERT INTO rows(coll, id, ord, json, sha) VALUES (?, ?, ?, ?, ?) ON CONFLICT(coll, id) DO UPDATE SET ord = excluded.ord, json = excluded.json, sha = excluded.sha");
+      const delStmt = this.db.prepare("DELETE FROM rows WHERE coll = ? AND id = ?");
+      const ordStmt = this.db.prepare("UPDATE rows SET ord = ? WHERE coll = ? AND id = ?");
+      if (full) this.db.exec("DELETE FROM rows");
+      for (const p of plan) {
+        const upSet = new Set(p.upRows.map(r => r.i));
+        for (const r of p.upRows) upsert.run(p.k, r.id, p.ords[r.i], r.json, r.sha);
+        for (const id of p.del) delStmt.run(p.k, String(id));
+        if (p.renumber && !full) for (let i = 0; i < p.arr.length; i++) if (!upSet.has(i)) ordStmt.run(p.ords[i], p.k, String(p.arr[i].id));
+      }
       this.db.prepare("INSERT INTO state(id, rev, schema, json, sha256, updated_at) VALUES (1, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET rev = excluded.rev, schema = excluded.schema, json = excluded.json, sha256 = excluded.sha256, updated_at = excluded.updated_at")
-        .run(next.rev, next.schema, json, sh, ts);
-      const prev = this.journalHead || "0".repeat(64);
+        .run(next.rev, next.schema, coreJson, coreSha, ts);
+      const meta = this.db.prepare("INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+      meta.run("storage", "rows-1"); meta.run("state_sha", sh);
+      const prevHash = this.journalHead || "0".repeat(64);
       const rb = revBefore == null ? null : revBefore;
-      const hash = sha256([prev, ts, (user && user.id) || "", cmd, argsTxt, rb, next.rev, sh].join("|"));
+      const hash = sha256([prevHash, ts, (user && user.id) || "", cmd, argsTxt, rb, next.rev, sh].join("|"));
       this.db.prepare("INSERT INTO journal(ts, user_id, user_login, cmd, args, rev_before, rev_after, state_sha, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(ts, (user && user.id) || null, (user && user.login) || null, cmd, argsTxt, rb, next.rev, sh, prev, hash);
+        .run(ts, (user && user.id) || null, (user && user.login) || null, cmd, argsTxt, rb, next.rev, sh, prevHash, hash);
       this.pendingHead = hash;
     });
+    // dopiero po udanej transakcji: indeksy, kolejność, zamrożenie nowych rekordów, stan w pamięci
+    for (const p of plan) {
+      const idx = full ? new Map() : this.idx[p.k], ord = this.ord[p.k];
+      if (full || p.renumber) ord.clear();
+      for (const id of p.del) { idx.delete(id); ord.delete(id); }
+      for (const r of p.upRows) { const el = p.arr[r.i]; idx.set(el.id, el); deepFreeze(el); }
+      for (let i = 0; i < p.arr.length; i++) ord.set(String(p.arr[i].id), p.ords[i]);
+      this.idx[p.k] = idx;
+    }
     this.journalHead = this.pendingHead; this.journalCount = (this.journalCount || 0) + 1;
-    this.state = next; this.stateJson = json;
+    this.state = next; this.coreJson = coreJson; this.stateSha = sh;
+    if (!full) {
+      this.deltas.push(delta);
+      if (this.deltas.length > 500) { const cut = this.deltas.splice(0, this.deltas.length - 500); this.deltaBase = cut[cut.length - 1].rev; }
+    } else { this.deltas = []; this.deltaBase = next.rev; }
   }
+  /** Dane decydujące o widoczności (konta, role, magazyny): ich zmiana wymaga u klientów pełnego odświeżenia. */
+  accessKey(s) { return JSON.stringify([s.users, s.rolePerms, s.warehouses]); }
+  /**
+   * Zmiany od rewizji `since` (dla synchronizacji przeglądarek): { up: {kolekcja: Set id}, del: {…} } albo null,
+   * gdy potrzebny pełny stan (brak historii zmian, zmiana uprawnień / kolejności).
+   */
+  changesSince(since) {
+    const cur = this.state && this.state.rev;
+    if (!Number.isInteger(since) || since < 0 || since > cur) return null;
+    if (since === cur) return { up: {}, del: {} };
+    if (since < this.deltaBase) return null;                 // zmiany sprzed startu serwera / przyciętej historii
+    const up = {}, del = {};
+    for (const d of this.deltas) {
+      if (d.rev <= since) continue;
+      if (d.access || d.order) return null;
+      for (const k of Object.keys(d.up)) for (const id of d.up[k]) { (up[k] = up[k] || new Set()).add(id); if (del[k]) del[k].delete(id); }
+      for (const k of Object.keys(d.del)) for (const id of d.del[k]) { (del[k] = del[k] || new Set()).add(id); if (up[k]) up[k].delete(id); }
+    }
+    return { up, del };
+  }
+
 
   /** Komenda usługi: silnik na kopii → zapis atomowy → stan w pamięci. */
   execute(userId, cmd, args, lang, meta) {
@@ -218,7 +367,7 @@ export class Store {
     I18N.setLang(lang || "pl");
     const ctx = Object.assign({ user: { id: userId }, today: this.today() }, meta && { ip: meta.ip || "", ua: String(meta.ua || "").slice(0, 200) });
     const rev0 = this.state.rev;
-    const { res, state } = Service.run(this.state, cmd, args, ctx, this.workCopy());
+    const { res, state } = this.runFast(cmd, work => Service.run(this.state, cmd, args, ctx, work));
     if (state) {
       const u = R.byId(state.users, userId) || R.byId(this.state.users, userId);
       const journalArgs = cmd === "data.import" ? { operacje: (args.state && args.state.operations || []).length, rewizja: args.state && args.state.rev } : args;
@@ -228,10 +377,38 @@ export class Store {
     }
     return res;
   }
+  /**
+   * Szybka ścieżka komendy: kopia robocza bez kopiowania historii. Gdy kod silnika zmienia istniejący (zamrożony)
+   * rekord w miejscu, zapis się nie udaje (TypeError) — komenda jest wtedy powtarzana na pełnej kopii stanu;
+   * wynik jest ten sam, różni się tylko czas. Licznik `fallbacks` i dziennik wskazują miejsca do optymalizacji.
+   */
+  runFast(label, run) {
+    let out;
+    try { out = run(this.workCopy()); }
+    catch (e) { if (!FROZEN_WRITE.test(String(e && e.message))) throw e; out = { res: { ok: false, code: "INTERNAL", error: e.message }, state: null }; }
+    if (!out.state && out.res && out.res.code === "INTERNAL" && FROZEN_WRITE.test(String(out.res.error))) {
+      this.fallbacks = (this.fallbacks || 0) + 1;
+      this.log("INFO", `Komenda ${label}: zmiana istniejącego rekordu — wykonanie na pełnej kopii (${String(out.res.error).slice(0, 160)})`);
+      out = run(this.fullCopy());
+      if (out.state) this.reuseUnchanged(out.state);
+    }
+    return out;
+  }
+  /** Po pełnej kopii: rekordy identyczne z dotychczasowymi zastępuje oryginałami (zapis tylko faktycznie zmienionych). */
+  reuseUnchanged(next) {
+    for (const k of ROWS) {
+      const arr = next[k], idx = this.idx[k];
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const o = arr[i] && idx.get(arr[i].id);
+        if (o && JSON.stringify(o) === JSON.stringify(arr[i])) arr[i] = o;
+      }
+    }
+  }
   /** Zmiana stanu przez hosta (bez komendy użytkownika): aktywacja, wpis audytu. Zapis atomowy jak execute. */
   applyChange(label, fn, journalArgs, actor) {
     const rev0 = this.state.rev;
-    const { res, state } = Service.apply(this.state, fn, this.workCopy());
+    const { res, state } = this.runFast(label, work => Service.apply(this.state, fn, work));
     if (state) {
       try { this.saveState(state, actor || null, label, journalArgs || {}, rev0); }
       catch (e) { this.log("ERROR", `Zapis nieudany (${label}): ${e.message}`); return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }), code: "DB" }; }
@@ -326,6 +503,7 @@ export class Store {
     const s = R.Seed.minimal({ email: L, name: String(init.name || "Administrator").trim(), today: this.today(), allowSelfRegistration: init.allowSelfRegistration !== false });
     if (!R.companyEmail(s, L)) return { ok: false, error: "initialAdmin.email: adres spoza domen firmowych" };
     s.rev = (s.rev || 0) + 1;
+    this.state = null;   // pierwsze uruchomienie: zapis pełny (bez porównania z poprzednim stanem)
     this.saveState(s, { id: "u_admin", login: L }, "system.setup", { sample: false, bootstrap: true }, 0);
     this.setPassword("u_admin", init.password, true);
     this.log("INFO", `Pierwsze uruchomienie: administrator ${L} (hasło startowe z konfiguracji — zmiana wymagana przy pierwszym logowaniu)`);
@@ -347,6 +525,7 @@ export class Store {
     } else s = R.Seed.minimal({ email: L, name: String(name).trim(), lang, today: this.today() });
     if (!R.companyEmail(s, L)) return { ok: false, error: t("Wymagany e-mail firmowy ({d})", { d: s.config.companyDomains.map(d => "@" + d).join(", ") }) };
     s.rev = (s.rev || 0) + 1;
+    this.state = null;   // pierwsze uruchomienie: zapis pełny (bez porównania z poprzednim stanem)
     this.saveState(s, { id: "u_admin", login: L }, "system.setup", { sample: !!sample }, 0);
     this.setPassword("u_admin", password, false);
     if (sample) for (const u of s.users) if (u.id !== "u_admin" && R.statusOf(u) === "ACTIVE") this.setPassword(u.id, AuthLib.DEMO_PASSWORD, true);
@@ -360,7 +539,7 @@ export class Store {
     const pe = AuthLib.passwordError(password, rec && rec.email); if (pe) return { ok: false, errors: { password: pe }, error: pe };
     const rev0 = this.state.rev;
     // adres potwierdza się linkiem z e-maila; administratorzy dostają powiadomienie po potwierdzeniu
-    const { res, state } = Service.register(this.state, rec, this.today(), meta, { emailUnverified: true }, this.workCopy());
+    const { res, state } = this.runFast("auth.register", work => Service.register(this.state, rec, this.today(), meta, { emailUnverified: true }, work));
     if (!state) return res;
     try { this.saveState(state, null, "auth.register", { email: res.rec.login }, rev0); }
     catch (e) { return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }) }; }

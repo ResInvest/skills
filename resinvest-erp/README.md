@@ -45,6 +45,17 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.10.0
+* **Zapis przyrostowy bazy** — każdy rekord (operacja, wpis księgi, dziennika, powiadomienie, plan, wersja robocza,
+  inwentaryzacja) w osobnym wierszu z własną sumą kontrolną SHA-256; komenda zapisuje tylko to, co zmieniła,
+  jedną transakcją z wpisem dziennika. Czas zapisu nie rośnie z historią (baza 2 lata pracy: ok. 35 ms zamiast 1,7 s).
+  Baza z poprzedniej wersji jest przenoszona automatycznie przy pierwszym starcie (wcześniej kopia „przed-aktualizacja”).
+* **Synchronizacja przeglądarek samymi zmianami** — po zmianie innego użytkownika i po własnej komendzie przeglądarka
+  pobiera tylko nowe / zmienione rekordy (kilkadziesiąt kB zamiast kilku MB); pełny stan tylko przy otwarciu strony,
+  po zmianie kont / uprawnień albo gdy zmian nie da się nałożyć. Izolacja magazynów bez zmian (widok liczony na serwerze).
+* **Test obciążeniowy** w trybie przeglądarki (pełny stan + zmiany) z kontrolą, że stan każdego stanowiska jest
+  identyczny z widokiem serwera. Wyniki: [progress.md](progress.md).
+
 ## Nowe w 3.9.1
 * **Poczta firmowa przez SMTP** — dowolny serwer poczty firmy (Microsoft 365, Google Workspace, home.pl, OVH, własny):
   SSL (port 465) albo STARTTLS (port 587), logowanie AUTH PLAIN / LOGIN, weryfikacja certyfikatu, TLS 1.2+.

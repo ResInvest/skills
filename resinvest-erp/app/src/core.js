@@ -391,7 +391,8 @@
 
   /** Tryb serwerowy: API programu ResInvest ERP Serwer (sesja w ciasteczku HttpOnly). */
   const ServerBackend = {
-    mode: "server", online: true, info: null, es: null,
+    mode: "server", online: true, info: null, es: null, base: null,
+    sync: { full: 0, delta: 0, refetch: 0 },     // diagnostyka synchronizacji: pełne widoki, same zmiany, ponowne pełne pobrania
     async api(method, path, body) {
       const opt = { method, headers: { "X-RIW": "1", "Accept-Language": I18N.lang }, credentials: "same-origin" };
       if (body !== undefined) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
@@ -409,14 +410,43 @@
       try { const r = await fetch("/api/health", { headers: { "X-RIW": "1" } }); const j = await r.json(); return j && j.app === "resinvest-erp" ? j : null; } catch (e) { return null; }
     },
     async boot(info) { this.info = info; return { problem: null, setup: !!info.setup }; },
-    async loadState() {
-      const r = await this.api("GET", "/api/state");
+    /** Rewizja posiadanego widoku — tylko gdy stan w pamięci należy do zalogowanego użytkownika (podstawa „samych zmian”). */
+    haveRev() {
+      const b = this.base;
+      return b && Store.state && b.userId === Store.userId && Store.state.rev === b.rev ? b.rev : null;
+    },
+    /**
+     * Stan z odpowiedzi serwera: pełny widok (`state`) albo same zmiany od posiadanej rewizji (`delta`, 3.10).
+     * Wynik: true — zastosowano, false — odpowiedź bez stanu, null — zmian nie da się nałożyć (potrzebny pełny stan).
+     */
+    applyPayload(r) {
+      if (!r) return false;
+      // odpowiedź starsza niż posiadany stan (np. zmiany z SSE dotarły przed odpowiedzią komendy) — stan już aktualny
+      const have = this.haveRev(), inRev = r.state ? r.state.rev : r.delta ? r.rev : null;
+      if (have !== null && inRev != null && (inRev < have || (r.delta && inRev === have))) return true;
+      let next = null;
+      if (r.state) { next = r.state; this.sync.full++; }
+      else if (r.delta) { next = this.merge(Store.state, r.delta, r.rev); if (!next) { this.sync.refetch++; return null; } this.sync.delta++; }
+      else return false;
+      Store.state = next; this.base = { userId: Store.userId, rev: next.rev };
+      return true;
+    },
+    /** Nałożenie zmian (wspólny silnik R.applyDelta); tylko na widok tego samego użytkownika w rewizji `since`. */
+    merge(cur, d, rev) {
+      if (this.haveRev() !== d.since || !d.core || d.core.rev !== rev) return null;
+      return R.applyDelta(cur, d);
+    },
+    async loadState(full) {
+      const since = full ? null : this.haveRev();
+      const r = await this.api("GET", "/api/state" + (since !== null ? "?since=" + since : ""));
       if (!r || !r.ok) return r;
-      Store.state = r.state; Store.serverToday = r.today; return r;
+      if (this.applyPayload(r) === null) return this.loadState(true);
+      Store.serverToday = r.today; return r;
     },
     async exec(cmd, args, source) {
-      const r = await this.api("POST", "/api/cmd", { cmd, args: Object.assign({}, args, { source }) });
-      if (r && r.state) Store.state = r.state;
+      const haveRev = this.haveRev();
+      const r = await this.api("POST", "/api/cmd", Object.assign({ cmd, args: Object.assign({}, args, { source }) }, haveRev !== null && { haveRev }));
+      if (r && this.applyPayload(r) === null) await this.loadState(true);
       if (r && r.today) Store.serverToday = r.today;
       return r && r.res ? r.res : (r || { ok: false, error: t("Nieprawidłowa odpowiedź serwera") });
     },
@@ -425,7 +455,7 @@
     async login(login, pw) { const r = await this.api("POST", "/api/auth/login", { login, password: pw }); if (r.ok) await this.enter(r); return r; },
     async resume() { const r = await this.api("GET", "/api/auth/me"); if (r && r.ok) { await this.enter(r); return { ok: true, mustChange: r.mustChange }; } return { ok: false }; },
     async afterPasswordChange() { await this.loadState(); this.listen(); },
-    async logout() { await this.api("POST", "/api/auth/logout", {}); if (this.es) { this.es.close(); this.es = null; } Store.userId = null; Store.state = null; },
+    async logout() { await this.api("POST", "/api/auth/logout", {}); if (this.es) { this.es.close(); this.es = null; } Store.userId = null; Store.state = null; this.base = null; },
     touch() {},
     alive() { return !!Store.userId; },
     changePassword(oldPw, newPw) { return this.api("POST", "/api/auth/password", { old: oldPw, new: newPw }); },
@@ -434,12 +464,12 @@
     async accountInfo(userId) { const r = await this.api("GET", "/api/users/accounts"); return r && r.ok ? (r.accounts[userId] || { hasPassword: false }) : { hasPassword: false }; },
     async accounts() { const r = await this.api("GET", "/api/users/accounts"); return r && r.ok ? r.accounts : {}; },
     async loginLog() { const r = await this.api("GET", "/api/auth/log"); return r && r.ok ? r.log : []; },
-    async createUser(rec, pw) { const r = await this.api("POST", "/api/users", { rec, password: pw }); if (r && r.state) Store.state = r.state; return r && r.res ? r.res : r; },
+    async createUser(rec, pw) { const r = await this.api("POST", "/api/users", { rec, password: pw }); this.applyPayload(r); return r && r.res ? r.res : r; },
     async register(rec, pw) { const r = await this.api("POST", "/api/auth/register", { rec, password: pw }); return r || { ok: false, error: t("Nieprawidłowa odpowiedź serwera") }; },
     /** Zaproszenie e-mail (konto INVITED); wynik: { res, mail }. */
-    async invite(rec) { const r = await this.api("POST", "/api/users/invite", { rec }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
-    async resendInvite(userId) { const r = await this.api("POST", "/api/users/resend", { userId }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
-    async sendResetLink(userId) { const r = await this.api("POST", "/api/users/reset-link", { userId }); if (r && r.state) Store.state = r.state; return r || { ok: false }; },
+    async invite(rec) { const r = await this.api("POST", "/api/users/invite", { rec }); this.applyPayload(r); return r || { ok: false }; },
+    async resendInvite(userId) { const r = await this.api("POST", "/api/users/resend", { userId }); this.applyPayload(r); return r || { ok: false }; },
+    async sendResetLink(userId) { const r = await this.api("POST", "/api/users/reset-link", { userId }); this.applyPayload(r); return r || { ok: false }; },
     auditExtra() { return this.api("GET", "/api/audit/extra"); },
     removeUser(id) { return this.exec("user.remove", { id }, N_("Administracja — użytkownicy")); },
     backups() { return this.api("GET", "/api/backups"); },

@@ -1,5 +1,15 @@
 # TASKS — ResInvest ERP
 
+## 3.10.0 — zapis przyrostowy, synchronizacja przeglądarek zmianami
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| zapis tylko zmienionych rekordów, suma kontrolna każdego wiersza, jedna transakcja z wpisem dziennika | DONE | `storage.test` „zapis przyrostowy…”, „sumy kontrolne wierszy…”, „nieudana komenda…” |
+| wszystkie komendy na szybkiej ścieżce; stan po ponownym otwarciu identyczny (z kolejnością) | DONE | `storage.test` „pełny scenariusz pracy…” (20 rodzajów komend), E2E serwera „komendy na szybkiej ścieżce” |
+| przeniesienie bazy 3.9.x bez utraty danych, kopia przed aktualizacją | DONE | `storage.test` „baza sprzed 3.10…”; 3000 operacji: 1,5 s, stan identyczny |
+| przeglądarki pobierają tylko zmiany; izolacja magazynów; pełny stan przy zmianie uprawnień | DONE | `server.test` „synchronizacja samymi zmianami…”, E2E serwera „3.10: …” (2 sprawdzenia) |
+| obciążenie: baza 2 lata pracy, 25 i 40 stanowisk, stan każdego stanowiska = widok serwera | DONE | `tools/loadtest.mjs` — wyniki w progress.md |
+
 ## 3.9.1 — poczta SMTP firmowa, bezpieczne aktualizacje, test obciążeniowy
 
 | Kryterium | Status | Dowód |

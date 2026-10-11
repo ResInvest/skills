@@ -142,6 +142,16 @@ function parseEml(raw) {
     check("3.6 FIRMOWY: załącznik to poprawny PDF wygenerowany w przeglądarce", !!pdfPart && Buffer.from(pdfPart[1].replace(/\s+/g, ""), "base64").subarray(0, 5).toString("latin1") === "%PDF-");
     await page.evaluate(() => { location.hash = "#/admin/audit"; }); await page.waitForSelector('[data-autab="events"]'); await page.click('[data-autab="events"]'); await page.waitForSelector("#audit-admin-table");
     check("3.6 FIRMOWY: wysyłka w dzienniku audytu (MAIL_DOCUMENT)", nb(await page.textContent("#audit-admin-table")).includes("MAIL_DOCUMENT"));
+    // 3.10: synchronizacja samymi zmianami — odpowiedź komendy bez pełnego stanu; stan w przeglądarce = pełny widok serwera
+    const cmdResp = page.waitForResponse(r => r.url().endsWith("/api/cmd"));
+    const pr = await page.evaluate(() => RIW_DEBUG.store.exec("print.register", { kind: "report", title: "Test synchronizacji", range: "2026-09", format: "pdf" }, "Test"));
+    const cmdJson = await (await cmdResp).json();
+    const sync = await page.evaluate(async () => {
+      const r = await (await fetch("/api/state", { headers: { "X-RIW": "1" }, credentials: "same-origin" })).json();
+      return { same: JSON.stringify(RIW_DEBUG.store.state) === JSON.stringify(r.state), rev: r.rev, mine: RIW_DEBUG.store.state.rev, sync: Object.assign({}, RIW_DEBUG.store.backend.sync) };
+    });
+    check("3.10: komenda — w odpowiedzi tylko zmiany (bez pełnego stanu)", pr && pr.ok && !!cmdJson.delta && !cmdJson.state, Object.keys(cmdJson));
+    check("3.10: stan w przeglądarce po nałożeniu zmian = pełny widok serwera (bez ponownego pełnego pobrania)", sync.same && sync.rev === sync.mine && sync.sync.delta > 0 && sync.sync.refetch === 0, sync);
     // wylogowanie → #/login, stan wyczyszczony
     await logout();
     check("Wylogowanie: #/login i brak danych w pamięci", await page.evaluate(() => location.hash === "#/login" && !RIW_DEBUG.store.state && !RIW_DEBUG.store.userId));
@@ -149,6 +159,7 @@ function parseEml(raw) {
     console.error(e); check("Przebieg bez wyjątków", false, e.message);
   } finally {
     check("Konsola przeglądarki bez wyjątków", consoleErrors.length === 0, consoleErrors);
+    check("Serwer: komendy na szybkiej ścieżce zapisu (bez pełnej kopii bazy)", !/pełnej kopii/.test(log), (log.match(/.*pełnej kopii.*/g) || []).slice(0, 5));
     await browser.close();
     await new Promise(res => { proc.once("exit", res); proc.kill("SIGTERM"); });
     fs.rmSync(dir, { recursive: true, force: true });

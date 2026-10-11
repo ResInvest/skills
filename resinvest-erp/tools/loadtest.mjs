@@ -2,9 +2,12 @@
    ResInvest ERP Serwer — test obciążeniowy (wielu użytkowników jednocześnie)
 
    Uruchamia serwer na kopii danych przykładowych w katalogu tymczasowym i przez określony czas symuluje
-   równoczesną pracę wielu stanowisk: odczyt stanu, zakupy, sprzedaż, sprawdzenie sesji. Potem:
+   równoczesną pracę wielu stanowisk tak jak przeglądarka: pełny stan przy otwarciu / odświeżeniu strony, potem
+   synchronizacja samymi zmianami (od posiadanej rewizji), zakupy i sprzedaż z odpowiedzią „tylko zmiany”,
+   sprawdzenie sesji. Potem:
      · fala jednoczesnych zapisów (wszyscy zatwierdzają w tej samej chwili),
      · weryfikacja spójności: liczba operacji = liczba udanych zapisów, rewizja, dziennik skrótów (--check),
+     stan każdego stanowiska po nałożeniu zmian = pełny widok serwera,
      · raport: przepustowość, czasy odpowiedzi p50/p95/p99/max, błędy, rozmiar bazy.
    Nie dotyka danych produkcyjnych.
 
@@ -98,7 +101,15 @@ async function main() {
       vus.push({ login, c });
     }
     const st0 = await vus[0].c.get("/api/state"), ops0 = st0.json.state.operations.length, rev0 = st0.json.rev;
-    let committed = 0, pending = 0;
+    let committed = 0, pending = 0, fullFallbacks = 0;
+    // przeglądarka: pełny widok przy otwarciu strony, potem tylko zmiany (R.applyDelta — ten sam kod co w aplikacji)
+    const fullLoad = async (vu, name) => { const r = await vu.c.get("/api/state"); rec(name, r, r.status === 200 && !!r.json.state); if (r.json && r.json.state) vu.view = r.json.state; };
+    const applyResp = async (vu, r) => {
+      if (!r.json) return;
+      if (r.json.state) { vu.view = r.json.state; return; }
+      if (r.json.delta) { const next = R.applyDelta(vu.view, r.json.delta); if (next) vu.view = next; else { fullFallbacks++; await fullLoad(vu, "GET /api/state (pełny stan — zmiany nie pasowały)"); } }
+    };
+    await Promise.all(vus.map(vu => fullLoad(vu, "GET /api/state (pełny stan — otwarcie strony)")));
 
     // 1) praca ciągła
     const end = Date.now() + SECONDS * 1000;
@@ -107,16 +118,17 @@ async function main() {
       await sleep(i * Math.min(250, THINK_MIN / 4 + 15));
       while (Date.now() < end) {
         const x = Math.random();
-        if (x < 0.55) { const r = await vu.c.get("/api/state"); rec("GET /api/state (pełny stan)", r, r.status === 200); }
+        if (x < 0.03) await fullLoad(vu, "GET /api/state (pełny stan — odświeżenie strony)");
+        else if (x < 0.55) { const r = await vu.c.get("/api/state?since=" + vu.view.rev); rec("GET /api/state?since (zmiany od rewizji)", r, r.status === 200); await applyResp(vu, r); }
         else if (x < 0.65) { const r = await vu.c.get("/api/auth/me"); rec("GET /api/auth/me", r, r.status === 200); }
         else if (x < 0.90) {
-          const r = await vu.c.post("/api/cmd", { cmd: "op.commit", args: { draft: purchase(vu.login) } });
+          const r = await vu.c.post("/api/cmd", { cmd: "op.commit", args: { draft: purchase(vu.login) }, haveRev: vu.view.rev });
           const ok = r.status === 200 && r.json && r.json.res && r.json.res.ok; rec("POST op.commit — zakup", r, ok);
-          if (ok) { committed++; if (r.json.res.op && r.json.res.op.status === "PENDING") pending++; }
+          if (ok) { committed++; if (r.json.res.op && r.json.res.op.status === "PENDING") pending++; await applyResp(vu, r); }
         } else if (WH[vu.login] === "RiC Zabrze") {            // sprzedaż tylko tam, gdzie jest zrębka na stanie
-          const r = await vu.c.post("/api/cmd", { cmd: "op.commit", args: { draft: sale(vu.login) } });
+          const r = await vu.c.post("/api/cmd", { cmd: "op.commit", args: { draft: sale(vu.login) }, haveRev: vu.view.rev });
           const ok = r.status === 200 && r.json && r.json.res && r.json.res.ok; rec("POST op.commit — sprzedaż", r, ok);
-          if (ok) committed++;
+          if (ok) { committed++; await applyResp(vu, r); }
         }
         await sleep(THINK_MIN + Math.random() * (THINK_MAX - THINK_MIN));       // „czas myślenia” użytkownika
       }
@@ -125,12 +137,19 @@ async function main() {
 
     // 2) fala: wszyscy zatwierdzają w tej samej chwili
     const tb = performance.now();
-    const burst = await Promise.all(Array.from({ length: BURST }, (_, i) => vus[i % vus.length]).map(vu => vu.c.post("/api/cmd", { cmd: "op.commit", args: { draft: purchase(vu.login) } })));
+    const burst = await Promise.all(Array.from({ length: BURST }, (_, i) => vus[i % vus.length]).map(vu => vu.c.post("/api/cmd", { cmd: "op.commit", args: { draft: purchase(vu.login) }, haveRev: vu.view.rev })));
     const burstMs = performance.now() - tb;
     let burstOk = 0;
     for (const r of burst) { const ok = r.status === 200 && r.json && r.json.res && r.json.res.ok; rec("FALA — jednoczesny zapis", r, ok); if (ok) { burstOk++; committed++; } }
 
-    // 3) spójność
+    // 3) spójność: każde stanowisko dociąga zmiany i porównuje swój stan z pełnym widokiem serwera
+    let viewsOk = 0;
+    for (const vu of vus) {
+      const r = await vu.c.get("/api/state?since=" + vu.view.rev); await applyResp(vu, r);
+      const f = await vu.c.get("/api/state");
+      if (f.json && JSON.stringify(f.json.state) === JSON.stringify(vu.view)) viewsOk++;
+      else if (process.env.RIW_LOAD_DEBUG && f.json) { const a = f.json.state, b = vu.view; console.error("RÓŻNICE", vu.login, Object.keys(a).join(","), "|", Object.keys(b).join(","), Object.keys(a).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => k + (Array.isArray(a[k]) ? `(${a[k].length}/${(b[k] || []).length})` : ""))); }
+    }
     const st1 = await vus[0].c.get("/api/state");
     const ops1 = st1.json.state.operations.length, rev1 = st1.json.rev;
     const lostOrDup = ops1 - ops0 - committed;
@@ -142,7 +161,8 @@ async function main() {
 
     const total = Object.values(stats).reduce((s, x) => s + x.n, 0), errs = Object.values(stats).reduce((s, x) => s + x.err, 0);
     const rows = Object.entries(stats).map(([k, s]) => `| ${k} | ${s.n} | ${s.err} | ${pct(s.ms, 50).toFixed(0)} | ${pct(s.ms, 95).toFixed(0)} | ${pct(s.ms, 99).toFixed(0)} | ${Math.max(...s.ms).toFixed(0)} | ${(s.bytes / s.n / 1024).toFixed(0)} |`);
-    const ok = errs === 0 && lostOrDup === 0 && check && check.ok;
+    const fastPath = !/pełnej kopii/.test(srvOut);
+    const ok = errs === 0 && lostOrDup === 0 && check && check.ok && viewsOk === vus.length && fastPath;
     const md = [
       `# Test obciążeniowy ResInvest ERP Serwer ${R.VERSION}`, "",
       `Środowisko: ${cpus().length} × ${cpus()[0].model.trim()}, RAM ${(totalmem() / 1073741824).toFixed(1)} GB, Node ${process.version}. Dane przykładowe (3 magazyny), dziennik zmian włączony, zapis bazy z \`synchronous=FULL\`.`, "",
@@ -153,6 +173,8 @@ async function main() {
       `* Zapisane operacje: **${committed}** (w tym ${pending} czekających na zatwierdzenie), rewizja ${rev0} → ${rev1}.`,
       `* Fala ${BURST} jednoczesnych zapisów: ${burstOk}/${BURST} zapisanych w ${burstMs.toFixed(0)} ms (zapisy kolejkowane — żaden nie nadpisał drugiego).`,
       `* Spójność: operacji w stanie ${ops0} → ${ops1}, różnica względem udanych zapisów: **${lostOrDup}** (0 = nic nie zginęło i nic się nie zdublowało).`,
+      `* Synchronizacja przeglądarek samymi zmianami: stan **${viewsOk}/${vus.length}** stanowisk identyczny z pełnym widokiem serwera; pełne pobranie z powodu niepasujących zmian: ${fullFallbacks}.`,
+      `* Zapis przyrostowy: ${fastPath ? "wszystkie komendy na szybkiej ścieżce (bez kopiowania całej bazy)" : "UWAGA: część komend na pełnej kopii — patrz dziennik serwera"}.`,
       `* Kontrola bazy (\`--check\`): **${check && check.ok ? "OK" : "BŁĄD"}** — sumy kontrolne stanu i łańcuch skrótów dziennika (${check && check.journal} wpisów).`,
       `* Rozmiar bazy po teście: ${dbMb.toFixed(1)} MB (${walFiles.join(", ")}).`, "",
       `**Wynik: ${ok ? "ZALICZONY" : "NIEZALICZONY"}**`

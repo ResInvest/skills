@@ -18,7 +18,7 @@ if ($LASTEXITCODE -ne 0) { throw "Niekompletne tłumaczenia (tools/i18n-extract.
 
 if (-not $SkipTests) {
   Write-Host "== 2/4 Testy jednostkowe i integracyjne"
-  node --test tests/engine.test.mjs tests/features34.test.mjs tests/features35.test.mjs tests/features36.test.mjs tests/features38.test.mjs tests/features39.test.mjs tests/pdf.test.mjs tests/platform.test.mjs tests/server.test.mjs tests/auth.test.mjs tests/mail35.test.mjs tests/mail36.test.mjs tests/reg37.test.mjs tests/smtp.test.mjs tests/update.test.mjs
+  node --test tests/engine.test.mjs tests/features34.test.mjs tests/features35.test.mjs tests/features36.test.mjs tests/features38.test.mjs tests/features39.test.mjs tests/pdf.test.mjs tests/platform.test.mjs tests/server.test.mjs tests/auth.test.mjs tests/mail35.test.mjs tests/mail36.test.mjs tests/reg37.test.mjs tests/smtp.test.mjs tests/update.test.mjs tests/storage.test.mjs
   if ($LASTEXITCODE -ne 0) { throw "Testy nie przeszły — instalator nie zostanie zbudowany" }
 }
 
@@ -67,4 +67,4 @@ if (-not $iscc) { throw "Nie znaleziono ISCC.exe (Inno Setup 7 lub 6). Pobierz: 
 Write-Host "Kompilator: $iscc"
 & $iscc "installer\ResInvestERP.iss"
 if ($LASTEXITCODE -ne 0) { throw "Kompilacja instalatora nieudana" }
-Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.9.1.exe"
+Write-Host "Gotowe: installer\Output\ResInvestERP_Setup_3.10.0.exe"
