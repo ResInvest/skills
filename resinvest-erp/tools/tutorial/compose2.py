@@ -425,7 +425,7 @@ def render_video(tl, chapters_sel, out):
     first_img = {no: C.first() for no, C in chs.items()}
     for k in range(f0, f1):
         t = k / FPS
-        c = next((x for x in sel if x["start"] <= t < x["end"]), sel[-1])
+        c = sel[0] if t < sel[0]["start"] else next((x for x in sel if x["start"] <= t < x["end"]), sel[-1])   # plansza otwarcia → rozdział 1
         C = chs[c["no"]]; ct = t - c["voiceAt"]
         if c["no"] == 1 and t < tl["open"]:
             bgk = ("open",); bg = card_bg(first_img.get(1), bgk)
