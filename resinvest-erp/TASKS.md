@@ -9,6 +9,7 @@
 | przeniesienie bazy 3.9.x bez utraty danych, kopia przed aktualizacją | DONE | `storage.test` „baza sprzed 3.10…”; 3000 operacji: 1,5 s, stan identyczny |
 | przeglądarki pobierają tylko zmiany; izolacja magazynów; pełny stan przy zmianie uprawnień | DONE | `server.test` „synchronizacja samymi zmianami…”, E2E serwera „3.10: …” (2 sprawdzenia) |
 | obciążenie: baza 2 lata pracy, 25 i 40 stanowisk, stan każdego stanowiska = widok serwera | DONE | `tools/loadtest.mjs` — wyniki w progress.md |
+| aktualizacja instalatorem 3.9.1 → 3.10.0 na istniejącej instalacji | DONE | Wine: kopia przed podmianą plików, kopia „przed-aktualizacja-3_9_1”, przeniesienie do wierszy, `--check` OK, ponowny start bez kopii, instalator 3.9.1 na 3.10.0 zablokowany |
 
 ## 3.9.1 — poczta SMTP firmowa, bezpieczne aktualizacje, test obciążeniowy
 
