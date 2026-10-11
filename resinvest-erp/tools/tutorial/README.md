@@ -6,47 +6,58 @@ Pełny samouczek programu (16 rozdziałów, ok. 17 min) w MP4 1920×1080, 30 kl.
 - płynny kursor, podświetlenie kliknięć i jaskrawe strzałki z podpisami;
 - plansze rozdziałów i polskie napisy;
 - lektora (głos Joniu z ElevenLabs);
-- epicki podkład instrumentalny.
+- podkład z trzech utworów dopasowany do rozdziałów;
+- wirtualną kamerę ze zbliżeniami i przygaszaniem tła (spotlight), animowane plansze.
 
 ## Pliki
 
 | Plik | Rola |
 |---|---|
 | `script.json` | Tekst lektora: 16 rozdziałów, zdania, opis ekranu. Zapis fonetyczny, np. „Res-Inwest e-er-pe”, „wu-zet”. |
-| `timing.py` | Oś czasu (`timing.json`) i napisy (`subs.ass`). Z nagraniami: czas rozdziału = długość MP3, a początki zdań wyznacza wykrywanie pauz. Bez nagrań: szacunek ok. 15,5 znaku/s. W napisach zapis fonetyczny jest zamieniany na właściwy („ResInvest ERP”, „WZ”, „PDF”). |
-| `loop_music.py` | Podkład z własnego pliku (np. `Epic_Inspiration.mp3`): cisza na początku i końcu jest przycinana, utwór powtarzany z przenikaniem 4 s na całą długość filmu, głośność sprowadzona do −16 LUFS. |
-| `music.py` | Synteza podkładu (`music.wav`): d-moll, 92 BPM; smyczki, ostinato, taiko, blacha, crescendo przed planszami. Bez licencji zewnętrznych. |
-| `rec.cjs` | Nagrywarka Playwright. Okno 1600×900 px przy skali interfejsu (DPI) 120 % daje kadr 1920×1080 bez ucinania stron. Klatki kluczowe i zdarzenia trafiają do `cap/NN/`, a akcje są zsynchronizowane ze zdaniami lektora. |
-| `compose.py` | Montaż wideo (opis niżej). |
+| `timing.py` | Etap 1: oś lektora (`timing.json`) — czas rozdziału = długość MP3, granice zdań z obwiedni głośności (pauza / oddech najbliższy szacunkowi). Etap 2 (`--final`): oś ostateczna (`timing_final.json`) i napisy (`subs.ass`) z przesunięć zdań zapisanych przez nagrywarkę. |
+| `rec.cjs` | Nagrywarka Playwright. Okno 1600×900 px, zrzuty w skali 1,8 (2880×1620 — zapas ostrości dla kamery), współrzędne w kadrze 1920×1080. Każda akcja przypięta do zdania lektora (`beat(i)`): strzałki na polach, zakładkach i przyciskach, ramki na kolumnach tabel (`col`), wycieczki po paskach narzędzi (`tour`). |
+| `compose2.py` | Montaż premium (opis niżej). |
+| `compose.py` | Biblioteka sprite'ów (kursor, dymki, strzałki, ramki, tła plansz) i poprzednia wersja montażu. |
+| `music.py` | Zapasowa synteza podkładu (gdy brak własnych utworów). |
 
-`compose.py` dorysowuje:
+## Tempo — bez przyspieszania obrazu
 
-- kursor;
-- żółtą aureolę i pierścień kliknięcia;
-- strzałki i ramki;
-- plansze otwarcia, rozdziałów i końcową;
-- plakietkę rozdziału.
+Gdy akcje na ekranie trwają dłużej niż zdanie lektora, **lektor czeka**: przed kolejnym zdaniem wstawiana jest pauza
+(tylko na granicy zdań, w miejscu pauzy w nagraniu). Obraz nigdy nie jest przyspieszany ani ucinany; rozdział trwa
+tyle, ile dłuższy z dwóch: lektor albo akcje. W wersji 2 pauzy wynoszą 0–1,7 s na rozdział.
 
-Zmiany ekranu (kliknięcie, przejście) są płynnie przenikane (0,22 s), a przewijanie ma 30 kl./s. Następnie montaż wypala napisy, miksuje lektora (loudnorm −16 LUFS) z podkładem przyciszanym o 12 dB pod głosem i koduje H.264 oraz AAC.
+## Montaż (`compose2.py`)
 
-Nagrywarka sama reguluje tempo: gdy akcje spóźniają się względem zdań lektora, przyspiesza ruchy i wpisywanie. Jeśli mimo to rozdział byłby dłuższy od nagrania, oś akcji jest równomiernie skracana (zwykle o 1–8 %), więc nic nie jest ucinane.
+- **Wirtualna kamera**: płynne zbliżenie (do 1,38×) na omawiany element — pole, kolumnę, przycisk — i powrót do
+  pełnego kadru; ognisko zawsze nad pasem napisów.
+- **Spotlight**: w czasie zbliżenia reszta ekranu jest przygaszona, omawiany element zostaje jasny.
+- Strzałki z podpisami, ramki kolumn, kursor z łukiem ruchu, aureola i pierścień kliknięcia, przenikanie ekranów.
+- **Animowane plansze**: otwarcie, numer i tytuł rozdziału, pasek postępu, plansza końcowa.
+- **Podkład z 3 utworów** (`music_src/epic1.mp3`, `epic2.mp3`, `epic3.mp3`): utwór zmienia się tylko na planszy
+  rozdziału; każdy fragment kończy się naturalnym zakończeniem utworu dokładnie na granicy rozdziałów (otwarcie —
+  od początku utworu z wyciszeniem na planszy). Plan zapisany w `music_plan.txt`. Ducking −12 dB pod lektorem.
+- Lektor: zdania rozdzielone w pauzach nagrania i ułożone według osi ostatecznej; loudnorm −16 LUFS.
+- Render w częściach (równolegle), potem sklejenie z dźwiękiem: H.264 CRF 19 + AAC 192 kb/s.
 
 ## Uruchomienie
 
-Wymagania: Node 22 z Playwright i Chromium, Python 3 z `numpy`, `scipy`, `Pillow`, ffmpeg z libass i libx264 (ścieżka w zmiennej `FFMPEG`).
+Wymagania: Node 22 z Playwright i Chromium, Python 3 z `numpy` i `Pillow`, ffmpeg z libass i libx264 (zmienna `FFMPEG`).
 
 ```bash
-npm run build                                  # ResInvest_ERP.html w katalogu projektu
+npm run build                                   # ResInvest_ERP.html w katalogu projektu
 cd tools/tutorial
-mkdir -p mp3                                   # 01_wstep.mp3 … 16_zakonczenie.mp3 (nazwy z pola "file" w script.json)
-python timing.py                               # oś czasu + napisy
-python loop_music.py Epic_Inspiration.mp3      # podkład z pliku (albo: python music.py — synteza)
-node rec.cjs                                   # nagranie wszystkich rozdziałów (albo: node rec.cjs 5 6)
-python compose.py --out ResInvest_ERP_samouczek.mp4
-python compose.py --chapters 5-6 --scale 0.5 --preset veryfast --out podglad.mp4   # szybki podgląd fragmentu
+mkdir -p mp3 music_src                          # mp3/01_wstep.mp3 … 16_zakonczenie.mp3; music_src/epic1-3.mp3
+python timing.py                                # 1) oś lektora i granice zdań
+node rec.cjs                                    # 2) nagranie (albo wybrane rozdziały: node rec.cjs 5 6)
+python timing.py --final                        # 3) oś ostateczna + napisy
+python compose2.py --audio                      # 4) lektor + podkład → _mix.wav, music_plan.txt
+python compose2.py --video --chapters 1-5 &     # 5) obraz w częściach (równolegle)
+python compose2.py --video --chapters 6-11 &
+python compose2.py --video --chapters 12-16 & wait
+python compose2.py --final --out ResInvest_ERP_samouczek_1080p.mp4
 ```
 
-Po podmianie nagrań uruchom ponownie `timing.py` i `rec.cjs`, bo akcje dopasowują się do nowych czasów zdań. Potem uruchom `music.py` (natężenie zależy od osi czasu) i `compose.py`.
+Po podmianie nagrań lektora powtórz kroki 1–5 (akcje dopasowują się do nowych czasów zdań).
 
 ## Ustawienia lektora (ElevenLabs)
 

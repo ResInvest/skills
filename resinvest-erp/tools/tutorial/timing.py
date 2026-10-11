@@ -1,9 +1,10 @@
 """Oś czasu samouczka: rozdziały, plansze, zdania lektora i napisy.
 
-Jeśli w mp3/ jest plik lektora (np. mp3/05_zakup.mp3), czas rozdziału = długość nagrania,
-a początki zdań wyznacza wykrywanie ciszy (pauzy między zdaniami). Bez nagrania — szacunek
-z liczby znaków (tempo zmierzone na głosie Joniu ≈ 15,5 znaku/s).
-Wynik: timing.json (czytany przez nagrywarkę i montaż) i subs.ass (polskie napisy).
+Etap 1 (python timing.py): czas rozdziału = długość nagrania lektora (mp3/), początki zdań z wykrywania ciszy;
+  `snap` = początek zdania leży na pauzie w nagraniu (tam wolno wstawić przerwę). Wynik: timing.json dla nagrywarki.
+Etap 2 (python timing.py --final): po nagraniu (cap/NN/events.json) — lektor czeka na akcje: zdanie i zaczyna się
+  o `shifts[i]` s później, rozdział trwa do końca lektora albo akcji. Wynik: timing_final.json + subs.ass (napisy
+  zgodne z przesuniętymi zdaniami). Obraz nigdy nie jest przyspieszany.
 """
 import json, os, re, subprocess, sys
 
@@ -25,32 +26,59 @@ def display(s):
     return s
 
 
+FINAL = "--final" in sys.argv
+
+
+def load_events(no):
+    f = os.path.join(HERE, "cap", f"{no:02d}", "events.json")
+    if not os.path.exists(f): raise SystemExit(f"brak nagrania rozdziału {no}: {f}")
+    return json.load(open(f, encoding="utf-8"))
+
+
 def duration(path):
     r = subprocess.run([FFMPEG, "-hide_banner", "-i", path], capture_output=True, text=True)
     m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", r.stderr)
     return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
 
 
-def silences(path):
-    r = subprocess.run([FFMPEG, "-hide_banner", "-i", path, "-af", "silencedetect=n=-35dB:d=0.22", "-f", "null", "-"], capture_output=True, text=True)
-    st = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", r.stderr)]
-    en = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", r.stderr)]
-    return list(zip(st, en))
+def envelope(path, hop=0.02):
+    """Głośność nagrania [dB] w ramkach 20 ms."""
+    import numpy as np
+    raw = subprocess.run([FFMPEG, "-v", "error", "-i", path, "-ac", "1", "-ar", "16000", "-f", "s16le", "-"], capture_output=True).stdout
+    x = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768
+    h = int(16000 * hop); n = len(x) // h
+    e = np.sqrt((x[:n * h].reshape(n, h) ** 2).mean(1)) + 1e-9
+    return 20 * np.log10(e)
 
 
-def sentence_starts(sents, total, sil):
-    """Początki zdań: proporcjonalnie do długości, potem przyciągnięte do najbliższej pauzy w nagraniu."""
+def sentence_starts(sents, total, db, hop=0.02):
+    """Początki zdań: szacunek z liczby znaków (tempo dopasowane do długości nagrania), potem dolina głośności
+    (pauza / oddech, < −19 dB) najbliższa szacunkowi. Zwraca (początki mowy, punkty cięcia w dolinie, snap)."""
     w = [len(s) / RATE + GAP for s in sents]
     k = total / sum(w)
-    est, t = [], 0.0
-    for x in w: est.append(t); t += x * k
-    if not sil: return [round(x, 2) for x in est]
-    out = [0.0]
-    for e in est[1:]:
-        ends = [b for a, b in sil if b > out[-1] + 0.6]
-        best = min(ends, key=lambda b: abs(b - e)) if ends else e
-        out.append(best if abs(best - e) < 2.5 else e)
-    return [round(x, 2) for x in out]
+    starts, cuts, snap = [0.0], [0.0], [True]
+    if db is None:
+        t = 0.0
+        for x in w[:-1]: t += x * k; starts.append(round(t, 2)); cuts.append(round(t, 2)); snap.append(False)
+        return starts, cuts, snap
+    low = db < -19
+    runs, i, n = [], 0, len(db)
+    while i < n:                                    # ciągłe odcinki ciszy / oddechu ≥ 60 ms
+        if low[i]:
+            j = i
+            while j < n and low[j]: j += 1
+            if j - i >= 3: runs.append((i * hop, j * hop, float(db[i:j].min())))
+            i = j
+        else: i += 1
+    for idx in range(1, len(sents)):
+        est = starts[-1] + w[idx - 1] * k
+        cand = [(a, b, m) for a, b, m in runs if b > starts[-1] + 0.8 and abs((a + b) / 2 - est) < 1.4]
+        if cand:
+            a, b, m = max(cand, key=lambda r: min(4.0, -r[2] / 10) + 0.6 * min(0.5, r[1] - r[0]) - 1.6 * abs((r[0] + r[1]) / 2 - est))
+            starts.append(round(b, 2)); cuts.append(round((a + b) / 2, 3)); snap.append(True)
+        else:
+            starts.append(round(est, 2)); cuts.append(round(est, 3)); snap.append(False)
+    return starts, cuts, snap
 
 
 def cues(sent, t0, t1):
@@ -97,21 +125,26 @@ def main():
         has = os.path.exists(mp3)
         sents = c["text"]
         if has:
-            dur = duration(mp3); starts = sentence_starts(sents, dur, silences(mp3))
+            dur = duration(mp3); starts, cutp, snaps = sentence_starts(sents, dur, envelope(mp3))
         else:
-            dur = sum(len(s) / RATE + GAP for s in sents) - GAP; starts = sentence_starts(sents, dur, None)
+            dur = sum(len(s) / RATE + GAP for s in sents) - GAP; starts, cutp, snaps = sentence_starts(sents, dur, None)
+        rec = load_events(c["no"]) if FINAL else None
+        shifts = (rec or {}).get("shifts") or [0.0] * len(sents)
         tail = OUTRO if c is script[-1] else TAIL
+        voice_end = dur + (shifts[-1] if shifts else 0)
+        content = voice_end + tail
+        if rec: content = max(content, rec["endT"] + (OUTRO if c is script[-1] else 0.9))
         ch = {"no": c["no"], "file": c["file"], "title": c["title"], "start": round(t, 2), "card": CARD,
-              "voiceAt": round(t + CARD, 2), "voiceDur": round(dur, 2), "mp3": mp3 if has else None,
-              "contentDur": round(dur + tail, 2), "end": round(t + CARD + dur + tail, 2),
-              "sentences": [{"t": s, "text": x} for s, x in zip(starts, sents)]}
+              "voiceAt": round(t + CARD, 2), "voiceDur": round(dur, 2), "voiceEnd": round(voice_end, 2), "mp3": mp3 if has else None,
+              "contentDur": round(content, 2), "end": round(t + CARD + content, 2),
+              "sentences": [{"t": s, "cut": cu, "snap": sn, "shift": round(sh, 3), "text": x} for s, cu, sn, sh, x in zip(starts, cutp, snaps, shifts, sents)]}
         for i, s in enumerate(ch["sentences"]):
-            e = ch["sentences"][i + 1]["t"] - 0.15 if i + 1 < len(sents) else dur
-            for a, b, p in cues(display(s["text"]), ch["voiceAt"] + s["t"], ch["voiceAt"] + e):
+            e = ch["sentences"][i + 1]["t"] - 0.15 if i + 1 < len(sents) else dur      # koniec mowy w nagraniu
+            for a, b, p in cues(display(s["text"]), ch["voiceAt"] + s["t"] + s["shift"], ch["voiceAt"] + e + s["shift"]):
                 events.append((a, b, p))
         chapters.append(ch); t = ch["end"]
-    tl = {"fps": 30, "open": OPEN, "total": round(t, 2), "chapters": chapters, "estimated": not all(c["mp3"] for c in chapters)}
-    json.dump(tl, open(os.path.join(HERE, "timing.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    tl = {"fps": 30, "open": OPEN, "total": round(t, 2), "final": FINAL, "chapters": chapters, "estimated": not all(c["mp3"] for c in chapters)}
+    json.dump(tl, open(os.path.join(HERE, "timing_final.json" if FINAL else "timing.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     head = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1920
@@ -130,7 +163,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(head)
         for a, b, p in events:
             f.write(f"Dialogue: 0,{ts(a)},{ts(b)},Sub,,0,0,0,,{{\\fad(120,120)}}{wrap2(p)}\n")
-    print(f"razem {t/60:.1f} min, rozdziałów {len(chapters)}, napisów {len(events)}, z nagrań: {sum(1 for c in chapters if c['mp3'])}")
+    print(f"{'oś ostateczna' if FINAL else 'oś lektora'}: razem {t/60:.2f} min, rozdziałów {len(chapters)}, napisów {len(events)}, z nagrań: {sum(1 for c in chapters if c['mp3'])}")
+    if FINAL:
+        for c in chapters: print(f"  {c['no']:2d} {c['title'][:44]:44s} lektor {c['voiceDur']:6.1f} + pauzy {c['voiceEnd'] - c['voiceDur']:4.1f} s → treść {c['contentDur']:6.1f} s")
 
 
 if __name__ == "__main__":
