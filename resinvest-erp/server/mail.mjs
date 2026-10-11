@@ -3,7 +3,8 @@
 
    Transport (EMAIL_TRANSPORT):
      resend — API HTTPS Resend (https://api.resend.com/emails), klucz RESEND_API_KEY,
-     smtp   — SMTP z TLS (domyślnie smtp.resend.com:465, użytkownik „resend”, hasło = klucz API),
+     smtp   — dowolny serwer SMTP firmy (Microsoft 365, Google Workspace, home.pl, własny): SSL 465 albo STARTTLS 587,
+              logowanie AUTH PLAIN/LOGIN; domyślnie smtp.resend.com:465 (użytkownik „resend”, hasło = klucz API),
      agentmail — API HTTPS AgentMail (https://api.agentmail.to), klucz AGENTMAIL_API_KEY, nadawca = skrzynka AGENTMAIL_INBOX,
      file   — zapis wiadomości .eml do katalogu danych (instalacja bez poczty, testy).
    Brak konfiguracji → „file” (wiadomości trafiają do <dataDir>/mail-outbox; administrator
@@ -11,6 +12,8 @@
    (zmienne środowiskowe lub plik server.env) i nigdy nie trafiają do przeglądarki.
    ========================================================================= */
 import { connect as tlsConnect } from "node:tls";
+import { connect as netConnect } from "node:net";
+import { hostname } from "node:os";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -91,19 +94,42 @@ export function mailConfig(env, dataDir) {
   if (!["resend", "smtp", "agentmail", "file"].includes(transport)) transport = "file";
   const key = transport === "agentmail" ? amKey : resendKey;
   const amInbox = String(env.AGENTMAIL_INBOX || "").trim().toLowerCase();
+  const smtpHost = String(env.SMTP_HOST || "smtp.resend.com").trim(), smtpPort = Number(env.SMTP_PORT || 465) || 465;
+  const isResend = /(^|\.)resend\.com$/i.test(smtpHost);
+  let secure = String(env.SMTP_SECURE || "").trim().toLowerCase();
+  if (!["ssl", "starttls", "none"].includes(secure)) secure = smtpPort === 465 ? "ssl" : "starttls";
   return {
     transport, key,
     agentmail: { inbox: amInbox, apiUrl: String(env.AGENTMAIL_API_URL || "https://api.agentmail.to").replace(/\/+$/, "") },
     from: String(env.EMAIL_FROM || "ResInvest ERP <no-reply@resinvest.group>").trim(),
     replyTo: String(env.EMAIL_REPLY_TO || "").trim(),
-    smtp: { host: String(env.SMTP_HOST || "smtp.resend.com"), port: Number(env.SMTP_PORT || 465), user: String(env.SMTP_USER || "resend"), pass: String(env.SMTP_PASS || key) },
+    smtp: {
+      host: smtpHost, port: smtpPort, secure,
+      user: String(env.SMTP_USER || (isResend ? "resend" : "")).trim(),
+      pass: String(env.SMTP_PASS || (isResend ? resendKey : "")),
+      ehlo: String(env.SMTP_EHLO || hostname() || "resinvest-erp").trim().replace(/[^A-Za-z0-9.-]/g, "") || "resinvest-erp",
+      envelopeFrom: String(env.SMTP_ENVELOPE_FROM || "").trim(),
+      rejectUnauthorized: String(env.SMTP_TLS_REJECT_UNAUTHORIZED || "true").trim().toLowerCase() !== "false",
+      timeoutMs: Math.max(1000, Number(env.SMTP_TIMEOUT_MS || 30000) || 30000)
+    },
     outDir: join(dataDir, "mail-outbox"),
     apiUrl: String(env.RESEND_API_URL || "https://api.resend.com/emails")
   };
 }
+/** Brak czego w konfiguracji kanału (pusty napis = kanał gotowy do wysyłki). */
+export function mailProblem(c) {
+  if (c.transport === "file") return "";
+  if (c.transport === "agentmail") return !c.key ? "brak klucza AGENTMAIL_API_KEY" : !c.agentmail.inbox ? "brak AGENTMAIL_INBOX (adres skrzynki nadawcy)" : "";
+  if (c.transport === "resend") return c.key ? "" : "brak klucza RESEND_API_KEY";
+  if (!c.smtp.host) return "brak SMTP_HOST";
+  if (c.smtp.user && !c.smtp.pass) return "brak hasła SMTP_PASS";
+  if (!c.smtp.user && c.smtp.secure !== "none") return "brak SMTP_USER (logowanie do serwera poczty)";
+  return "";
+}
 /** Opis konfiguracji bez sekretów (panel administratora, raport startowy). */
-export const mailInfo = c => ({ transport: c.transport, from: c.transport === "agentmail" ? c.agentmail.inbox : c.from,
-  configured: c.transport === "file" || (c.transport === "agentmail" ? !!c.key && !!c.agentmail.inbox : !!c.key || (c.transport === "smtp" && !!c.smtp.pass)), outDir: c.transport === "file" ? c.outDir : "" });
+export const mailInfo = c => Object.assign({ transport: c.transport, from: c.transport === "agentmail" ? c.agentmail.inbox : c.from,
+  configured: !mailProblem(c), problem: mailProblem(c), outDir: c.transport === "file" ? c.outDir : "" },
+  c.transport === "smtp" ? { smtp: { host: c.smtp.host, port: c.smtp.port, secure: c.smtp.secure, user: c.smtp.user, auth: !!c.smtp.user } } : {});
 
 /* ---------------- wysyłka ---------------- */
 const b64 = s => Buffer.from(String(s), "utf8").toString("base64");
@@ -154,32 +180,93 @@ async function viaAgentMail(c, msg) {
     return { providerId: res.message_id || "" };
   } finally { clearTimeout(timer); }
 }
-function viaSmtp(c, msg) {
-  return new Promise((resolve, reject) => {
-    const { id, data } = mime(c, msg);
-    const steps = [
-      [null, 220], [`EHLO resinvest-erp`, 250], [`AUTH LOGIN`, 334], [b64(c.smtp.user), 334], [b64(c.smtp.pass), 235],
-      [`MAIL FROM:<${addr(c.from)}>`, 250], [`RCPT TO:<${addr(msg.to)}>`, 250], [`DATA`, 354],
-      [data.replace(/\r\n\./g, "\r\n..") + "\r\n.", 250], [`QUIT`, 221]
-    ];
-    let i = 0, buf = "", done = false;
-    const sock = tlsConnect({ host: c.smtp.host, port: c.smtp.port, servername: c.smtp.host });
-    const fail = e => { if (done) return; done = true; sock.destroy(); reject(e instanceof Error ? e : new Error(String(e))); };
-    sock.setTimeout(20000, () => fail(new Error("SMTP: przekroczony czas")));
-    sock.on("error", fail);
-    sock.on("data", chunk => {
-      buf += chunk.toString("utf8");
-      const lines = buf.split("\r\n"); buf = lines.pop();
-      for (const line of lines) {
-        if (/^\d{3}-/.test(line)) continue;              // odpowiedź wieloliniowa
-        const code = Number(line.slice(0, 3));
-        if (code !== steps[i][1]) return fail(new Error(`SMTP ${line.slice(0, 200)}`));
-        i++;
-        if (i >= steps.length) { done = true; sock.end(); return resolve({ providerId: id }); }
-        sock.write(steps[i][0] + "\r\n");
+/**
+ * Klient SMTP (RFC 5321) dla dowolnej poczty firmowej: Microsoft 365 / Exchange, Google Workspace, home.pl, OVH,
+ * nazwa.pl, własny serwer. Tryby (SMTP_SECURE): „ssl” — TLS od początku połączenia (port 465), „starttls” — połączenie
+ * jawne i obowiązkowe przejście na TLS komendą STARTTLS (port 587), „none” — bez szyfrowania (tylko lokalny przekaźnik
+ * poczty w sieci firmy, bez logowania hasłem). Logowanie AUTH PLAIN albo AUTH LOGIN — wg możliwości serwera (EHLO).
+ * Certyfikat serwera jest zawsze weryfikowany (wyjątek tylko jawnie: SMTP_TLS_REJECT_UNAUTHORIZED=false).
+ */
+function smtpSession(c, onTimeout) {
+  let sock, buf = "", waiter = null, lines = [], closed = null;
+  const flush = () => {
+    // odpowiedź = linie „250-…” zakończone linią „250 …”
+    const idx = lines.findIndex(l => /^\d{3}(?: |$)/.test(l));
+    if (idx < 0 || !waiter) return;
+    const reply = lines.splice(0, idx + 1), w = waiter; waiter = null;
+    w.resolve({ code: Number(reply[idx].slice(0, 3)), lines: reply.map(l => l.slice(4)), text: reply.join(" | ").slice(0, 300) });
+  };
+  const attach = s => {
+    sock = s; sock.setTimeout(c.smtp.timeoutMs, onTimeout);
+    sock.on("data", chunk => { buf += chunk.toString("utf8"); const parts = buf.split(/\r?\n/); buf = parts.pop(); lines.push(...parts); flush(); });
+    sock.on("error", e => { closed = e; if (waiter) { const w = waiter; waiter = null; w.reject(e); } });
+    sock.on("close", () => { if (!closed) closed = new Error("SMTP: serwer zamknął połączenie"); if (waiter) { const w = waiter; waiter = null; w.reject(closed); } });
+  };
+  const read = () => new Promise((resolve, reject) => { if (closed && !lines.length) return reject(closed); waiter = { resolve, reject }; flush(); });
+  const tlsOpts = { servername: c.smtp.host, rejectUnauthorized: c.smtp.rejectUnauthorized, minVersion: "TLSv1.2" };
+  return {
+    open: () => new Promise((resolve, reject) => {
+      const s = c.smtp.secure === "ssl" ? tlsConnect(Object.assign({ host: c.smtp.host, port: c.smtp.port }, tlsOpts)) : netConnect({ host: c.smtp.host, port: c.smtp.port });
+      s.once(c.smtp.secure === "ssl" ? "secureConnect" : "connect", () => { s.removeListener("error", reject); resolve(); });
+      s.once("error", reject); attach(s);
+    }),
+    upgrade: () => new Promise((resolve, reject) => {
+      const plain = sock; plain.removeAllListeners("data"); plain.removeAllListeners("close"); plain.removeAllListeners("error"); plain.setTimeout(0);
+      const s = tlsConnect(Object.assign({ socket: plain }, tlsOpts));
+      s.once("secureConnect", () => { s.removeListener("error", reject); resolve(); });
+      s.once("error", reject); buf = ""; lines = []; attach(s);
+    }),
+    cmd: async (line, expect, hide) => {
+      if (line !== null) sock.write(line + "\r\n");
+      const r = await read();
+      if (!expect.includes(r.code)) throw new Error(`SMTP ${hide ? hide : (line || "powitanie").split(" ")[0]}: ${r.text}`);
+      return r;
+    },
+    raw: s => sock.write(s),
+    close: () => { try { sock.end(); } catch (e) { /* połączenie już zamknięte */ } },
+    destroy: () => { try { sock.destroy(); } catch (e) { /* połączenie już zamknięte */ } },
+    get encrypted() { return !!(sock && sock.encrypted); }
+  };
+}
+const caps = r => r.lines.map(l => l.toUpperCase());
+
+async function viaSmtp(c, msg) {
+  const { id, data } = mime(c, msg);
+  let timer = null;
+  const s = smtpSession(c, () => s.destroy());
+  const deadline = new Promise((_, reject) => { timer = setTimeout(() => { s.destroy(); reject(new Error("SMTP: przekroczony czas")); }, c.smtp.timeoutMs); });
+  const run = async () => {
+    await s.open();
+    await s.cmd(null, [220]);
+    let ehlo = await s.cmd(`EHLO ${c.smtp.ehlo}`, [250]);
+    if (c.smtp.secure === "starttls") {
+      if (!caps(ehlo).some(l => l.startsWith("STARTTLS"))) throw new Error("SMTP: serwer nie oferuje STARTTLS (sprawdź port i SMTP_SECURE)");
+      await s.cmd("STARTTLS", [220]); await s.upgrade();
+      ehlo = await s.cmd(`EHLO ${c.smtp.ehlo}`, [250]);               // po TLS — ponowne przedstawienie się (RFC 3207)
+    }
+    if (c.smtp.user) {
+      if (!s.encrypted) throw new Error("SMTP: logowanie hasłem bez szyfrowania jest zablokowane (ustaw SMTP_SECURE=ssl albo starttls)");
+      const auth = caps(ehlo).find(l => l.startsWith("AUTH")) || "";
+      if (/\bPLAIN\b/.test(auth) || !/\bLOGIN\b/.test(auth)) {
+        await s.cmd(`AUTH PLAIN ${b64("\0" + c.smtp.user + "\0" + c.smtp.pass)}`, [235], "AUTH (logowanie)");
+      } else {
+        await s.cmd("AUTH LOGIN", [334]); await s.cmd(b64(c.smtp.user), [334], "AUTH (użytkownik)"); await s.cmd(b64(c.smtp.pass), [235], "AUTH (logowanie)");
       }
-    });
-  });
+    }
+    await s.cmd(`MAIL FROM:<${addr(c.smtp.envelopeFrom || c.from)}>`, [250]);
+    await s.cmd(`RCPT TO:<${addr(msg.to)}>`, [250, 251]);
+    await s.cmd("DATA", [354]);
+    // „dot-stuffing” (RFC 5321 §4.5.2): linia zaczynająca się kropką dostaje drugą kropkę
+    const body = data.replace(/\r\n\./g, "\r\n..").replace(/^\./, "..");
+    s.raw(body + (body.endsWith("\r\n") ? "" : "\r\n"));
+    await s.cmd(".", [250], "DATA (treść)");
+    await s.cmd("QUIT", [221]).catch(() => {});
+    s.close();
+    return { providerId: id };
+  };
+  try { return await Promise.race([run(), deadline]); }
+  catch (e) { s.destroy(); throw e; }
+  finally { clearTimeout(timer); }
 }
 function viaFile(c, msg) {
   mkdirSync(c.outDir, { recursive: true });
@@ -194,11 +281,16 @@ export function compose(template, to, data) {
   const tpl = TEMPLATES[template];
   return tpl ? Object.assign({ to, template }, tpl(data || {})) : null;
 }
+async function deliver(c, msg) {
+  const problem = mailProblem(c);
+  if (problem) throw new Error(problem);
+  return c.transport === "resend" ? viaResend(c, msg) : c.transport === "agentmail" ? viaAgentMail(c, msg) : c.transport === "smtp" ? viaSmtp(c, msg) : viaFile(c, msg);
+}
+
 /** Wysyłka gotowej wiadomości (kolejka). Nigdy nie rzuca — zwraca { ok, error?, providerId?, file? }. */
 export async function sendRaw(c, msg, log) {
   try {
-    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error(c.transport === "agentmail" ? "brak klucza AGENTMAIL_API_KEY" : "brak klucza RESEND_API_KEY / SMTP_PASS");
-    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "agentmail" ? await viaAgentMail(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
+    const r = await deliver(c, msg);
     if (log) log("INFO", `E-mail „${msg.template}” → ${msg.to} (${c.transport}${r.file ? ": " + r.file : ""})`);
     return Object.assign({ ok: true, subject: msg.subject }, r);
   } catch (e) {
@@ -212,16 +304,7 @@ export async function sendRaw(c, msg, log) {
  * Szczegóły błędu trafiają do dziennika serwera; użytkownik widzi komunikat ogólny.
  */
 export async function sendMail(c, template, to, data, log) {
-  const tpl = TEMPLATES[template];
-  if (!tpl) return { ok: false, error: "unknown template" };
-  const msg = Object.assign({ to, template }, tpl(data || {}));
-  try {
-    if (c.transport !== "file" && !(c.key || (c.transport === "smtp" && c.smtp.pass))) throw new Error(c.transport === "agentmail" ? "brak klucza AGENTMAIL_API_KEY" : "brak klucza RESEND_API_KEY / SMTP_PASS");
-    const r = c.transport === "resend" ? await viaResend(c, msg) : c.transport === "agentmail" ? await viaAgentMail(c, msg) : c.transport === "smtp" ? await viaSmtp(c, msg) : viaFile(c, msg);
-    if (log) log("INFO", `E-mail „${template}” → ${to} (${c.transport}${r.file ? ": " + r.file : ""})`);
-    return Object.assign({ ok: true, subject: msg.subject }, r);
-  } catch (e) {
-    if (log) log("ERROR", `E-mail „${template}” → ${to} nieudany (${c.transport}): ${e.message}`);
-    return { ok: false, error: e.message, subject: msg.subject };
-  }
+  const msg = compose(template, to, data);
+  if (!msg) return { ok: false, error: "unknown template" };
+  return sendRaw(c, msg, log);
 }

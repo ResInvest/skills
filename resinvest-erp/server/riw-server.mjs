@@ -82,9 +82,19 @@ const clients = new Set();   // SSE
 const ipHits = new Map();
 
 function send(req, res, status, body, type = "application/json; charset=utf-8", extra = {}) {
-  let data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+  const view = body && typeof body === "object" && !Buffer.isBuffer(body) ? body[VIEW] : null;
+  const wantGz = /\bgzip\b/.test(req.headers["accept-encoding"] || "");
+  let data;
+  if (view) {
+    const rest = JSON.stringify(Object.assign({}, body)).slice(1, -1);          // pola odpowiedzi poza stanem (ok, res, mail…)
+    if (rest === '"ok":true' && wantGz) {                                          // odczyt stanu — gotowa, zapamiętana kompresja
+      if (!view.gz) view.gz = gzipSync("{" + rest + "," + view.body + "}", { level: 1 });
+      data = view.gz;
+    } else data = "{" + (rest ? rest + "," : "") + view.body + "}";
+  } else data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
   const headers = Object.assign({ "Content-Type": type, "Cache-Control": "no-store" }, SEC_HEADERS, extra);
-  if (data.length > 2048 && /\bgzip\b/.test(req.headers["accept-encoding"] || "")) { data = gzipSync(data); headers["Content-Encoding"] = "gzip"; }
+  if (data === (view && view.gz)) headers["Content-Encoding"] = "gzip";
+  else if (data.length > 2048 && wantGz) { data = gzipSync(data, { level: 1 }); headers["Content-Encoding"] = "gzip"; }
   headers["Content-Length"] = Buffer.byteLength(data);
   res.writeHead(status, headers); res.end(data);
 }
@@ -115,7 +125,26 @@ function broadcast(rev, by) {
  * Stan wysyłany do przeglądarki — WYŁĄCZNIE widok użytkownika (izolacja magazynów, Service.project).
  * Konta i hasła nie są częścią stanu.
  */
-const statePayload = userId => { R.applyRoles(store.state); return { state: Service.project(store.state, { id: userId }), today: store.today(), rev: store.state.rev }; };
+/**
+ * Widok stanu dla użytkownika (tylko jego magazyny). Wynik jest zapamiętywany dla bieżącej rewizji: wielu pracowników
+ * odczytujących ten sam stan nie powoduje ponownego liczenia, zamiany na JSON ani kompresji (test obciążeniowy 3.9.1).
+ * Każda zmiana stanu (nowa rewizja) unieważnia pamięć.
+ */
+const viewCache = { rev: -1, today: "", map: new Map() };
+function stateView(userId) {
+  const rev = store.state.rev, today = store.today();
+  if (viewCache.rev !== rev || viewCache.today !== today) { R.applyRoles(store.state); viewCache.rev = rev; viewCache.today = today; viewCache.map.clear(); }
+  let v = viewCache.map.get(userId);
+  if (!v) {
+    const body = JSON.stringify({ state: Service.project(store.state, { id: userId }), today, rev });
+    v = { body: body.slice(1, -1), gz: null };      // wnętrze obiektu — doklejane do odpowiedzi bez ponownej serializacji
+    viewCache.map.set(userId, v);
+  }
+  return v;
+}
+/** Znacznik: obiekt odpowiedzi z gotowym (zapamiętanym) fragmentem stanu — patrz send(). */
+const statePayload = userId => ({ [VIEW]: stateView(userId) });
+const VIEW = Symbol("stateView");
 const metaOf = req => ({ ip: ipOf(req), ua: String(req.headers["user-agent"] || "").slice(0, 200) });
 /** Adres programu w linkach e-mail: APP_URL; bez niego — adres wyznaczony przez serwer (nigdy z nagłówka Host). */
 const appUrl = () => {
@@ -604,7 +633,7 @@ server.listen(cfg.port, cfg.host, () => {
   log("INFO", `ResInvest ERP Serwer ${VERSION} — ${proto}://localhost:${cfg.port}` + (cfg.host === "0.0.0.0" && ips.length ? ` · w sieci: ${ips.map(ip => `${proto}://${ip}:${cfg.port}`).join(", ")}` : ""));
   log("INFO", `Dane: ${cfg.dataDir} · kopie: ${cfg.backupDir} · spójność: ${store.integrity.ok ? "OK" : store.integrity.notes.join("; ")}`);
   const mi = mailInfo(mailCfg);
-  log("INFO", `Poczta: ${mi.transport}${mi.configured ? "" : " (BRAK KLUCZA — wysyłka nie zadziała)"} · nadawca: ${mi.from} · linki: ${appUrl()}${env.APP_URL ? "" : " (ustaw APP_URL)"}${mi.outDir ? " · wiadomości zapisywane w: " + mi.outDir : ""}${envFiles.length ? " · środowisko: " + envFiles.join(", ") : ""}`);
+  log("INFO", `Poczta: ${mi.transport}${mi.smtp ? ` ${mi.smtp.host}:${mi.smtp.port} (${mi.smtp.secure})` : ""}${mi.configured ? "" : ` (NIEPEŁNA KONFIGURACJA: ${mi.problem} — wysyłka nie zadziała)`} · nadawca: ${mi.from} · linki: ${appUrl()}${env.APP_URL ? "" : " (ustaw APP_URL)"}${mi.outDir ? " · wiadomości zapisywane w: " + mi.outDir : ""}${envFiles.length ? " · środowisko: " + envFiles.join(", ") : ""}`);
   if (!store.hasAccounts()) log("INFO", "Pierwsze uruchomienie — otwórz adres serwera w przeglądarce i utwórz konto administratora.");
   // Windows: okno aplikacji Edge/Chrome z polityką autoodtwarzania (intro z dźwiękiem od pierwszej klatki), gdy jest skrypt instalatora
   const launcher = join(ROOT, "ResInvestERP-Otworz.cmd");

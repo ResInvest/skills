@@ -168,16 +168,17 @@
      * Wykonanie „wszystko albo nic”: komenda pracuje na kopii; przy sukcesie zwraca nowy stan.
      * { res, state: nowy|null } — host utrwala `state` jedną transakcją.
      */
-    run(state, cmd, args, ctx) {
-      const work = R.clone(state), rev0 = work.rev;
+    run(state, cmd, args, ctx, preCloned) {
+      // preCloned: gotowa kopia robocza (serwer odtwarza ją z zapisanego JSON — bez drugiej serializacji)
+      const work = preCloned || R.clone(state), rev0 = work.rev;
       const res = this.exec(work, cmd, args, ctx);
       if (!res || !res.ok || work.rev === rev0) return { res, state: null };
       return { res, state: work };
     },
     replaceState,
     /** Rejestracja z ekranu logowania (bez sesji) — tylko gdy włączona w konfiguracji; konto czeka na administratora. */
-    register(state, rec, today, meta, opts = {}) {
-      const work = R.clone(state), rev0 = work.rev;
+    register(state, rec, today, meta, opts = {}, preCloned) {
+      const work = preCloned || R.clone(state), rev0 = work.rev;
       const ctx = Object.assign({ today, source: N_("Rejestracja"), emailUnverified: !!opts.emailUnverified }, meta || {});
       const res = R.Users.register(work, rec || {}, ctx);
       // administratorzy dostają powiadomienie od razu (OFFLINE) albo po potwierdzeniu adresu (FIRMOWY — robi to serwer)
@@ -185,8 +186,8 @@
       return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };
     },
     /** Zmiana stanu wykonywana przez hosta poza sesją (aktywacja zaproszenia, wpis audytu). */
-    apply(state, fn) {
-      const work = R.clone(state), rev0 = work.rev;
+    apply(state, fn, preCloned) {
+      const work = preCloned || R.clone(state), rev0 = work.rev;
       R.applyRoles(work);
       const res = fn(work) || { ok: false };
       return res.ok && work.rev !== rev0 ? { res, state: work } : { res, state: null };

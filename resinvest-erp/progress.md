@@ -1,6 +1,23 @@
 # ResInvest ERP — stan prac
 
-Ostatnia aktualizacja: 2026-10-10 · etap: **ResInvest ERP 3.9.0 — pojemność pojazdów, zapełnienie kursów, raporty floty i rębaków**
+Ostatnia aktualizacja: 2026-10-11 · etap: **ResInvest ERP 3.9.1 — poczta SMTP, bezpieczne aktualizacje, test obciążeniowy**
+
+## Wykonane — 3.9.1
+
+- [x] Klient SMTP dla poczty firmowej (SSL / STARTTLS, AUTH PLAIN / LOGIN), opis w panelu i w docs/EMAIL_SETUP.md
+- [x] Kopia bazy przed aktualizacją (serwer + instalator), blokada instalacji starszej wersji, docs/AKTUALIZACJE.md
+- [x] Test obciążeniowy `tools/loadtest.mjs`; widok stanu zapamiętywany per rewizja
+- [x] Testy: jednostkowe 171, serwer 60, E2E 340, E2E serwera 29 — zaliczone
+
+### Wyniki testu obciążeniowego (do rozwiązania w 3.10)
+
+| Baza | Profil | Odczyt stanu p50 / p95 | Zapis p50 | Spójność |
+|---|---|---|---|---|
+| dane przykładowe (11 → 107 operacji) | 25 stanowisk, przerwy 3–10 s | 11 / 27 ms | 30 ms | OK |
+| ok. 2 lata pracy (3011 operacji) | 25 stanowisk, przerwy 3–10 s | 2,5 / 8,2 s | 1,7 s | OK |
+
+Przyczyna: cały stan zapisywany i przesyłany jako jeden dokument (koszt rośnie z historią). Plan 3.10: zapis
+przyrostowy (tylko zmienione rekordy), szybka ścieżka komend bez kopiowania historii, synchronizacja przeglądarek zmianami.
 
 ## Wykonane — 3.9.0
 

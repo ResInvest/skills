@@ -1,5 +1,14 @@
 # TASKS — ResInvest ERP
 
+## 3.9.1 — poczta SMTP firmowa, bezpieczne aktualizacje, test obciążeniowy
+
+| Kryterium | Status | Dowód |
+|---|---|---|
+| SMTP dowolnego dostawcy: SSL 465 / STARTTLS 587, AUTH PLAIN/LOGIN, weryfikacja certyfikatu, brak hasła bez szyfrowania | DONE | `smtp.test` (8 testów na lokalnym serwerze SMTP) |
+| opis konfiguracji SMTP w panelu administratora bez haseł | DONE | `smtp.test` „domyślne ustawienia…”, `admin.js` |
+| kopia bazy przed aktualizacją (serwer) i przed podmianą plików (instalator), blokada instalacji starszej wersji | DONE | `update.test` (4 testy); instalator 3.9.1 → 3.9.2 i 3.9.0 na 3.9.1 sprawdzone w Wine |
+| test obciążeniowy: wiele stanowisk, fala zapisów, spójność, kontrola dziennika | DONE | `tools/loadtest.mjs` — 0 utraconych / zdublowanych zapisów; czasy odpowiedzi — patrz progress.md |
+
 ## 3.9.0 — pojemność pojazdów, zapełnienie kursów, raporty floty i rębaków
 
 | Kryterium | Status | Dowód |

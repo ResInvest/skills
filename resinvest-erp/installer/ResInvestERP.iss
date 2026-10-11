@@ -7,7 +7,7 @@
 ;    powershell -ExecutionPolicy Bypass -File installer\build-installer.ps1
 ;  Skrypt: buduje ResInvest_ERP.html, generuje dane przykładowe, pobiera
 ;  środowisko Node.js (node.exe, weryfikacja SHA-256) do installer\runtime
-;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.9.0.exe
+;  i kompiluje ten plik.  Wynik: installer\Output\ResInvestERP_Setup_3.9.1.exe
 ;
 ;  Składniki:
 ;   * Program (tryb lokalny)   — samodzielny plik HTML; dane w przeglądarce,
@@ -22,7 +22,7 @@
 ; =========================================================================
 
 #define AppName "ResInvest ERP"
-#define AppVersion "3.9.0"
+#define AppVersion "3.9.1"
 #define AppPublisher "ResInvest Commodities"
 #define AppURL "http://localhost:8080/"
 #define ServerPort "8080"
@@ -118,6 +118,12 @@ english.RunLocal=Start ResInvest ERP (local mode)
 polish.RunServer=Uruchom serwer i otwórz program
 czech.RunServer=Spustit server a otevřít program
 english.RunServer=Start the server and open the program
+polish.Downgrade=Zainstalowana jest nowsza wersja ResInvest ERP (%1). Ten instalator zawiera wersję %2.%n%nInstalacja starszej wersji na nowszej bazie danych jest zablokowana. Aby wrócić do starszej wersji, przywróć kopię bazy „przed-aktualizacja” (instrukcja: docs\AKTUALIZACJE.md) i uruchom instalator z parametrem /ALLOWDOWNGRADE=1.
+czech.Downgrade=Je nainstalována novější verze ResInvest ERP (%1). Tento instalátor obsahuje verzi %2.%n%nInstalace starší verze na novější databázi je zablokována. Pro návrat obnovte zálohu „przed-aktualizacja” (návod: docs\AKTUALIZACJE.md) a spusťte instalátor s parametrem /ALLOWDOWNGRADE=1.
+english.Downgrade=A newer version of ResInvest ERP is installed (%1). This installer contains version %2.%n%nInstalling an older version over a newer database is blocked. To go back, restore the "przed-aktualizacja" database backup (see docs\AKTUALIZACJE.md) and run the installer with /ALLOWDOWNGRADE=1.
+polish.Upgrading=Aktualizacja %1 → %2: zatrzymanie serwera i kopia bazy danych przed zmianą plików…
+czech.Upgrading=Aktualizace %1 → %2: zastavení serveru a záloha databáze před změnou souborů…
+english.Upgrading=Upgrade %1 → %2: stopping the server and backing up the database before replacing files…
 
 [Types]
 Name: "full"; Description: "{cm:TypeFull}"
@@ -186,3 +192,64 @@ Filename: "{sys}\taskkill.exe"; Parameters: "/F /FI ""WINDOWTITLE eq ResInvest E
 
 [UninstallDelete]
 Type: files; Name: "{app}\ResInvest ERP (serwer).url"
+
+[Code]
+{ Aktualizacja w miejscu (ten sam AppId): dane C:\ProgramData\ResInvestERP, server.env i config\server.config.json
+  zostają bez zmian. Przed podmianą plików: blokada instalacji starszej wersji, zatrzymanie serwera, kopia bazy.
+  Po pierwszym uruchomieniu nowej wersji serwer sam robi drugą kopię „przed-aktualizacja-<wersja>” i migruje dane. }
+const
+  UninstKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8C1B7E52-3E0B-4B7A-9E0D-5B2D6A1F4C10}_is1';
+
+function InstalledVersion(): String;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM, UninstKey, 'DisplayVersion', Result) then
+    if not RegQueryStringValue(HKCU, UninstKey, 'DisplayVersion', Result) then Result := '';
+end;
+
+{ Porównanie wersji „a.b.c”: wynik < 0, 0, > 0 }
+function VersionPart(var S: String): Integer;
+var P: Integer;
+begin
+  P := Pos('.', S);
+  if P = 0 then begin Result := StrToIntDef(S, 0); S := ''; end
+  else begin Result := StrToIntDef(Copy(S, 1, P - 1), 0); Delete(S, 1, P); end;
+end;
+
+function CompareVersions(A, B: String): Integer;
+var I, X, Y: Integer;
+begin
+  Result := 0;
+  for I := 1 to 4 do begin
+    X := VersionPart(A); Y := VersionPart(B);
+    if X <> Y then begin Result := X - Y; Exit; end;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var Old: String;
+begin
+  Result := True;
+  Old := InstalledVersion();
+  if (Old <> '') and (CompareVersions(Old, '{#AppVersion}') > 0) and (ExpandConstant('{param:ALLOWDOWNGRADE|0}') <> '1') then begin
+    SuppressibleMsgBox(FmtMessage(CustomMessage('Downgrade'), [Old, '{#AppVersion}']), mbCriticalError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var Old, Node, Srv, Data: String; Code: Integer;
+begin
+  Result := '';
+  Old := InstalledVersion();
+  if Old = '' then Exit;
+  WizardForm.PreparingLabel.Caption := FmtMessage(CustomMessage('Upgrading'), [Old, '{#AppVersion}']);
+  { serwer uruchomiony skrótem ma tytuł okna „ResInvest ERP Serwer” }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /FI "WINDOWTITLE eq ResInvest ERP Serwer*"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Sleep(1500);
+  Node := ExpandConstant('{app}\runtime\node.exe');
+  Srv := ExpandConstant('{app}\server\riw-server.mjs');
+  Data := ExpandConstant('{commonappdata}\ResInvestERP');
+  if FileExists(Node) and FileExists(Srv) and FileExists(Data + '\resinvest.sqlite') then
+    Exec(Node, '--disable-warning=ExperimentalWarning "' + Srv + '" --data "' + Data + '" --backup-now', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
+end;

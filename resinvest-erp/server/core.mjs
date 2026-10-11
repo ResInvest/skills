@@ -125,6 +125,7 @@ export class Store {
     mkdirSync(cfg.backupDir, { recursive: true });
     this.file = join(cfg.dataDir, "resinvest.sqlite");
     this.db = new DatabaseSync(this.file);
+    this.updateBackup = this.preUpdateBackup();
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS state(id INTEGER PRIMARY KEY CHECK(id=1), rev INTEGER NOT NULL, schema INTEGER NOT NULL, json TEXT NOT NULL, sha256 TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -146,9 +147,27 @@ export class Store {
     // wysyłka przerwana zatrzymaniem serwera wraca do kolejki
     this.db.prepare("UPDATE outbox SET status = 'QUEUED' WHERE status = 'SENDING'").run();
     this.db.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES ('created_at', ?)").run(nowIso());
+    this.db.prepare("INSERT INTO meta(key, value) VALUES ('app_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(R.VERSION);
     this.state = null; this.integrity = { ok: true, notes: [] };
     this.load();
   }
+  /**
+   * Aktualizacja programu (nowa wersja na istniejącej bazie): przed jakąkolwiek zmianą tabel lub migracją danych
+   * zapisuje pełną kopię bazy „resinvest-…-przed-aktualizacja-<stara wersja>.sqlite”. Bez kopii serwer nie startuje.
+   */
+  preUpdateBackup() {
+    const has = n => !!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(n);
+    if (!has("state") || !this.db.prepare("SELECT 1 FROM state WHERE id = 1").get()) return null;   // nowa, pusta baza
+    const prev = has("meta") ? ((this.db.prepare("SELECT value FROM meta WHERE key = 'app_version'").get() || {}).value || "") : "";
+    if (prev === R.VERSION) return null;
+    const cmp = (a, b) => { const x = String(a).split(".").map(Number), y = String(b).split(".").map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
+    if (prev && cmp(prev, R.VERSION) > 0) this.log("WARN", `Baza była używana przez nowszą wersję ${prev} (uruchomiona: ${R.VERSION}). Zalecany powrót do wersji ${prev}.`);
+    const r = this.backup(`przed-aktualizacja-${(prev || "starsza").replace(/[^\w]/g, "_")}`);
+    this.log("INFO", `Aktualizacja ${prev || "(wersja sprzed 3.9.1)"} → ${R.VERSION}: kopia bazy przed zmianami: ${r.name}`);
+    return Object.assign({ from: prev || "", to: R.VERSION }, r);
+  }
+  /** Kopia robocza bieżącego stanu do wykonania komendy „wszystko albo nic” — z JSON ostatniego zapisu (identyczna z R.clone). */
+  workCopy() { return this.stateJson ? JSON.parse(this.stateJson) : R.clone(this.state); }
   today() { return R.Dates.isISO(this.cfg.todayOverride) ? this.cfg.todayOverride : R.Dates.localToday(); }
   tx(fn) {
     this.db.exec("BEGIN IMMEDIATE");
@@ -156,11 +175,11 @@ export class Store {
   }
   load() {
     const row = this.db.prepare("SELECT rev, json, sha256 FROM state WHERE id = 1").get();
-    if (!row) { this.state = null; return; }
+    if (!row) { this.state = null; this.stateJson = null; return; }
     if (sha256(row.json) !== row.sha256) { this.integrity.ok = false; this.integrity.notes.push("state checksum mismatch"); this.log("ERROR", "Suma kontrolna stanu nie zgadza się — sprawdź bazę / przywróć kopię."); }
     const m = R.migrate(JSON.parse(row.json));
     if (m.error) throw new Error("Nie można wczytać danych: " + m.error);
-    this.state = m.state;
+    this.state = m.state; this.stateJson = m.from === m.to ? row.json : null;
     if (m.from !== m.to) { this.saveState(this.state, { id: null, login: "system" }, "system.migrate", { from: m.from, to: m.to }); this.log("INFO", `Migracja danych ${m.from} → ${m.to}`); }
     this.verifyJournal();
   }
@@ -190,7 +209,7 @@ export class Store {
       this.pendingHead = hash;
     });
     this.journalHead = this.pendingHead; this.journalCount = (this.journalCount || 0) + 1;
-    this.state = next;
+    this.state = next; this.stateJson = json;
   }
 
   /** Komenda usługi: silnik na kopii → zapis atomowy → stan w pamięci. */
@@ -199,7 +218,7 @@ export class Store {
     I18N.setLang(lang || "pl");
     const ctx = Object.assign({ user: { id: userId }, today: this.today() }, meta && { ip: meta.ip || "", ua: String(meta.ua || "").slice(0, 200) });
     const rev0 = this.state.rev;
-    const { res, state } = Service.run(this.state, cmd, args, ctx);
+    const { res, state } = Service.run(this.state, cmd, args, ctx, this.workCopy());
     if (state) {
       const u = R.byId(state.users, userId) || R.byId(this.state.users, userId);
       const journalArgs = cmd === "data.import" ? { operacje: (args.state && args.state.operations || []).length, rewizja: args.state && args.state.rev } : args;
@@ -212,7 +231,7 @@ export class Store {
   /** Zmiana stanu przez hosta (bez komendy użytkownika): aktywacja, wpis audytu. Zapis atomowy jak execute. */
   applyChange(label, fn, journalArgs, actor) {
     const rev0 = this.state.rev;
-    const { res, state } = Service.apply(this.state, fn);
+    const { res, state } = Service.apply(this.state, fn, this.workCopy());
     if (state) {
       try { this.saveState(state, actor || null, label, journalArgs || {}, rev0); }
       catch (e) { this.log("ERROR", `Zapis nieudany (${label}): ${e.message}`); return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }), code: "DB" }; }
@@ -341,7 +360,7 @@ export class Store {
     const pe = AuthLib.passwordError(password, rec && rec.email); if (pe) return { ok: false, errors: { password: pe }, error: pe };
     const rev0 = this.state.rev;
     // adres potwierdza się linkiem z e-maila; administratorzy dostają powiadomienie po potwierdzeniu
-    const { res, state } = Service.register(this.state, rec, this.today(), meta, { emailUnverified: true });
+    const { res, state } = Service.register(this.state, rec, this.today(), meta, { emailUnverified: true }, this.workCopy());
     if (!state) return res;
     try { this.saveState(state, null, "auth.register", { email: res.rec.login }, rev0); }
     catch (e) { return { ok: false, error: t("Zapis w bazie nieudany — nic nie zapisano: {m}", { m: e.message }) }; }
@@ -439,7 +458,7 @@ export class Store {
     const name = `resinvest-${stamp}-${reason}.sqlite`, file = join(this.cfg.backupDir, name);
     if (existsSync(file)) return { ok: true, name, file };
     this.db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
-    this.db.prepare("INSERT INTO meta(key, value) VALUES ('last_backup', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(nowIso());
+    try { this.db.prepare("INSERT INTO meta(key, value) VALUES ('last_backup', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(nowIso()); } catch (e) { /* baza sprzed tabeli meta */ }
     this.pruneBackups();
     this.log("INFO", `Kopia zapasowa: ${name}`);
     return { ok: true, name, file };

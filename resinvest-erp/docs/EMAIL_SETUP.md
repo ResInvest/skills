@@ -61,11 +61,50 @@ icacls "C:\ProgramData\ResInvestERP\server.env" /inheritance:r /grant:r Administ
 |---|---|
 | `resend` (domyślny przy kluczu) | `POST https://api.resend.com/emails`, nagłówek `Authorization: Bearer <klucz>`, limit czasu 15 s |
 | `agentmail` (domyślny przy samym `AGENTMAIL_API_KEY`) | `POST https://api.agentmail.to/v0/inboxes/<AGENTMAIL_INBOX>/messages/send`, nagłówek `Authorization: Bearer <klucz>`, limit czasu 20 s — patrz punkt 4a |
-| `smtp` | TLS `smtp.resend.com:465`, użytkownik `resend`, hasło = klucz API (`SMTP_HOST/PORT/USER/PASS` do zmiany) |
+| `smtp` | dowolny serwer SMTP firmy: SSL (465) albo STARTTLS (587), logowanie AUTH PLAIN/LOGIN — punkt 3a; domyślnie `smtp.resend.com:465` (użytkownik `resend`, hasło = klucz API) |
 | `file` (domyślny bez klucza) | wiadomość `.eml` zapisana w `<dataDir>\mail-outbox` — **bez wysyłki**; administrator może otworzyć plik i przekazać link ręcznie |
 
 Każda wysyłka jest zapisywana w tabeli `outbox` (czas, szablon, adresat, wynik, błąd) — widok:
 *Dziennik audytu → Wiadomości e-mail*. Treść linków nie jest przechowywana.
+
+## 3a. Poczta firmowa przez SMTP (od 3.9.1) — co jest potrzebne
+
+Program **tylko wysyła** wiadomości (zaproszenia, reset hasła, potwierdzenia, powiadomienia, dokumenty PDF).
+Do wysyłki wystarczy **SMTP**. **IMAP nie jest potrzebny** — służy do odbierania poczty, a program nie czyta skrzynki
+(odpowiedzi na dokumenty trafiają do nadawcy dzięki nagłówkowi `Reply-To`).
+
+Od administratora poczty / dostawcy potrzebujesz:
+
+| Dane | Przykład | Gdzie wpisać (`server.env`) |
+|---|---|---|
+| Serwer SMTP | `smtp.office365.com` | `SMTP_HOST` |
+| Port i szyfrowanie | `587` + STARTTLS albo `465` + SSL | `SMTP_PORT`, `SMTP_SECURE` |
+| Skrzynka nadawcy (login) | `magazyn@resinvest.group` | `SMTP_USER` |
+| Hasło (albo hasło aplikacji) | — | `SMTP_PASS` |
+| Adres i nazwa nadawcy | `ResInvest ERP <magazyn@resinvest.group>` | `EMAIL_FROM` |
+| Adres programu w linkach | `http://192.168.1.20:8080` | `APP_URL` |
+
+Ustaw też `EMAIL_TRANSPORT=smtp`. Zalecana osobna skrzynka techniczna (np. `magazyn@` albo `erp@`), nie konto pracownika.
+
+| Dostawca | `SMTP_HOST` | Port / `SMTP_SECURE` | Uwagi |
+|---|---|---|---|
+| Microsoft 365 / Exchange Online | `smtp.office365.com` | 587 / `starttls` | Administrator M365 musi włączyć dla skrzynki **Authenticated SMTP** (Centrum administracyjne → Użytkownicy → skrzynka → Poczta → Zarządzaj aplikacjami poczty e-mail). Przy MFA — hasło aplikacji albo wyjątek dla skrzynki technicznej. |
+| Google Workspace | `smtp.gmail.com` | 465 / `ssl` (albo 587 / `starttls`) | Wymagana weryfikacja dwuetapowa i **hasło aplikacji** (16 znaków) jako `SMTP_PASS`. |
+| home.pl | `<nazwa-serwera>.home.pl` | 465 / `ssl` | Nazwa serwera w panelu home.pl → Poczta → Konfiguracja programu pocztowego. |
+| OVH, nazwa.pl, cyber_Folks, inne | z panelu dostawcy | zwykle 465 / `ssl` | Login = pełny adres e-mail. |
+| Serwer w sieci firmy (przekaźnik) | adres IP / nazwa | 25 / `none` | Tylko gdy przekaźnik przyjmuje pocztę z IP serwera bez hasła; hasła bez szyfrowania program nie wysyła. |
+
+Bezpieczeństwo:
+
+- Certyfikat serwera poczty jest zawsze sprawdzany (TLS 1.2 lub nowszy). `SMTP_TLS_REJECT_UNAUTHORIZED=false` tylko dla
+  własnego serwera z certyfikatem wewnętrznym.
+- Przy STARTTLS program przerywa połączenie, jeśli serwer nie oferuje szyfrowania, zanim wyśle login i hasło.
+- Hasło jest tylko w `server.env` na serwerze. Panel administratora i dziennik pokazują serwer, port, tryb i login — nigdy hasło.
+- Aby wiadomości nie trafiały do SPAM-u, domena nadawcy powinna mieć rekordy SPF, DKIM i DMARC. Przy Microsoft 365 i Google
+  Workspace zwykle są już ustawione przez dostawcę poczty.
+
+Sprawdzenie: *Administracja → Wiadomość testowa* albo z konsoli `--mail-test adres@firma.pl` (punkt 5).
+Panel *Dziennik audytu → Wiadomości e-mail* pokazuje serwer SMTP, tryb szyfrowania i ewentualne braki w konfiguracji.
 
 ## 4. APP_URL
 
@@ -143,8 +182,12 @@ Pusta lista = dowolny poprawny adres. Domena nadawcy (`EMAIL_FROM`) musi być zw
 | `Resend HTTP 401` / `403` | błędny lub cofnięty klucz, klucz bez uprawnienia do domeny nadawcy albo domena niezweryfikowana (punkt 1.4) — treść błędu Resend jest w dzienniku |
 | `Resend HTTP 422` | niepoprawne dane wiadomości (np. format `EMAIL_FROM`) |
 | `Resend HTTP 429` | przekroczony limit wysyłki konta |
-| `SMTP 535` | złe hasło SMTP (klucz API) |
-| `SMTP: przekroczony czas` | zapora blokuje port 465 |
+| `SMTP AUTH (logowanie): 535` | złe hasło / login; Microsoft 365: wyłączony *Authenticated SMTP* albo MFA bez hasła aplikacji; Google: brak hasła aplikacji |
+| `SMTP: serwer nie oferuje STARTTLS` | zły port (np. 465 z `SMTP_SECURE=starttls`) — ustaw 587/`starttls` albo 465/`ssl` |
+| `self-signed certificate` / `unable to verify` | serwer poczty ma certyfikat wewnętrzny — popraw certyfikat albo `SMTP_TLS_REJECT_UNAUTHORIZED=false` |
+| `SMTP MAIL: 550` / `RCPT: 550` | adres `EMAIL_FROM` inny niż skrzynka `SMTP_USER` (brak prawa „Wyślij jako”) albo odrzucony adresat |
+| `brak hasła SMTP_PASS` / `brak SMTP_USER` | niepełna konfiguracja w `server.env` (widoczne też w panelu administratora) |
+| `SMTP: przekroczony czas` | zapora blokuje port 465/587 albo zły `SMTP_HOST` |
 
 Przy błędzie wysyłki zaproszenia konto pozostaje INVITED, a administrator widzi komunikat i może wysłać ponownie.
 Użytkownik nigdy nie widzi szczegółów technicznych.

@@ -45,6 +45,18 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.9.1
+* **Poczta firmowa przez SMTP** — dowolny serwer poczty firmy (Microsoft 365, Google Workspace, home.pl, OVH, własny):
+  SSL (port 465) albo STARTTLS (port 587), logowanie AUTH PLAIN / LOGIN, weryfikacja certyfikatu, TLS 1.2+.
+  Hasło nigdy nie idzie bez szyfrowania. Konfiguracja w `server.env` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
+  `SMTP_USER`, `SMTP_PASS`), szczegóły i tabela dostawców: [docs/EMAIL_SETUP.md](docs/EMAIL_SETUP.md) punkt 3a.
+  IMAP nie jest potrzebny — program tylko wysyła wiadomości.
+* **Bezpieczne aktualizacje** ([docs/AKTUALIZACJE.md](docs/AKTUALIZACJE.md)): instalator nowej wersji zatrzymuje
+  serwer i robi kopię bazy przed podmianą plików, blokuje instalację starszej wersji na nowszej bazie; serwer przy
+  pierwszym starcie nowej wersji robi drugą kopię „przed-aktualizacja-<wersja>” i dopiero potem migruje dane.
+* **Test obciążeniowy** (`node tools/loadtest.mjs`) — wiele stanowisk jednocześnie, fala równoczesnych zapisów,
+  kontrola spójności i dziennika; widok stanu zapamiętywany dla każdej rewizji (mniej obliczeń przy wielu użytkownikach).
+
 ## Nowe w 3.9.0
 * **Zabudowa i pojemność pojazdu** (Flota → Dodaj / Edytuj pojazd, własny i firmy zewnętrznej): naczepa z ruchomą
   podłogą, solówka z kontenerem albo **hakowiec — zestaw kontenerów** (kontener na samochodzie + na przyczepie).
