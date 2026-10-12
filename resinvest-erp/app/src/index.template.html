@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl" data-theme="pearl">
+<html lang="pl" data-theme="@@DEFAULT_THEME@@" data-edition="@@EDITION@@">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -15,7 +15,7 @@
 (function () {
   var d = document.documentElement, th = null, intro = true;
   try { th = localStorage.getItem("riw.theme"); intro = localStorage.getItem("riw.intro") !== "0"; } catch (e) {}
-  if (/^(pearl|graphite|azure|ultra|premium)$/.test(th || "")) d.setAttribute("data-theme", th);
+  if (/^(pearl|graphite|azure|ultra|premium|glass|aurum)$/.test(th || "")) d.setAttribute("data-theme", th);
   if (intro && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) d.className += " intro-boot";
 })();
 </script>
@@ -32,6 +32,8 @@
 /* Film intro (H.264 + AAC) osadzony przez tools/build.mjs — nie edytować ręcznie. */
 var INTRO_SRC = "@@INTRO_MEDIA@@";
 var INTRO_POSTER = "@@INTRO_POSTER@@";
+/* Edycja Premium: zdjęcie ekranu startowego (pusty napis w edycji standardowej). */
+var RIW_HERO = "@@HERO@@";
 </script>
 <script>
 /* Konfiguracja z config/app.config.json */

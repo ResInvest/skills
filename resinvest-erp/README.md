@@ -45,6 +45,18 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Edycja Premium (od 3.10.0)
+Druga odmiana programu w jednym pliku — **`ResInvest_ERP_Premium.html`** (`npm run build:premium`). Silnik, dane,
+logowanie i kopie są te same co w edycji standardowej (oba pliki działają na tych samych danych w przeglądarce).
+Różnice:
+* **Intro** — film ResInvest Commodities „clean energy straight from nature” (10 s, z dźwiękiem; `app/assets/premium/intro.mp4`).
+* **Ekran startowy** — zdjęcie produkcji i logistyki biomasy, hasło „Produkcja i logistyka biomasy”, panel logowania
+  z logo, polami E-mail / Hasło, „Zapamiętaj mnie” (zapamiętuje tylko adres e-mail, nigdy hasła), „Nie pamiętasz hasła?”,
+  przyciskiem „Zaloguj się do systemu”, rejestracją (gdy administrator ją włączył) i stopką praw autorskich.
+  Informacje o trybie pracy pokazują stan rzeczywisty (OFFLINE / serwer firmowy / HTTPS).
+* **Motyw „Złota biomasa”** (granat i złoto, kość słoniowa, nagłówki szeryfowe, granatowe menu ze złotym zaznaczeniem) —
+  domyślny w edycji Premium, dostępny też w edycji standardowej (Mój profil → Motyw, Ctrl+D).
+
 ## Nowe w 3.10.0
 * **Zapis przyrostowy bazy** — każdy rekord (operacja, wpis księgi, dziennika, powiadomienie, plan, wersja robocza,
   inwentaryzacja) w osobnym wierszu z własną sumą kontrolną SHA-256; komenda zapisuje tylko to, co zmieniła,

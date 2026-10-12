@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 /* Składa aplikację w jeden plik: ResInvest_ERP.html
    (ten sam plik działa samodzielnie — tryb lokalny — i jest serwowany przez ResInvest ERP Serwer).
-   Użycie:  node tools/build.mjs            (z katalogu resinvest-erp)
-            node tools/build.mjs --no-video (bez filmu intro — tylko muzyka syntezowana) */
+   Użycie:  node tools/build.mjs                     (z katalogu resinvest-erp)
+            node tools/build.mjs --no-video          (bez filmu intro — tylko muzyka syntezowana)
+            node tools/build.mjs --edition premium   (edycja Premium: film intro i zdjęcie ekranu startowego
+                                                      z app/assets/premium, motyw „Złota biomasa” domyślnie
+                                                      → ResInvest_ERP_Premium.html; silnik i dane bez zmian) */
 import { readFileSync, writeFileSync, statSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,8 +14,12 @@ import { loadPdfFonts } from "./pdf-fonts.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "app", "src");
-const OUT = join(ROOT, "ResInvest_ERP.html");
 const noVideo = process.argv.includes("--no-video");
+const edArg = process.argv.indexOf("--edition");
+export const EDITION = edArg >= 0 ? String(process.argv[edArg + 1] || "") : "standard";
+if (!["standard", "premium"].includes(EDITION)) throw new Error(`Nieznana edycja: ${EDITION} (standard | premium)`);
+const OUT = join(ROOT, EDITION === "premium" ? "ResInvest_ERP_Premium.html" : "ResInvest_ERP.html");
+const ASSETS = join(ROOT, "app", "assets", EDITION === "premium" ? "premium" : "");
 
 /** Kolejność ładowania warstw (zależności: i18n + słowniki → silnik → usługa → interfejs). */
 export const DICTS = readdirSync(SRC).filter(f => /^i18n\.d\d+\.js$/.test(f)).sort();
@@ -37,9 +44,9 @@ const { VERSION } = require(join(SRC, "engine.js"));
 
 let media = "", poster = "";
 if (!noVideo) {
-  const jpg = join(ROOT, "app", "assets", "intro-poster.jpg");
+  const jpg = join(ASSETS, "intro-poster.jpg");
   if (existsSync(jpg)) poster = "data:image/jpeg;base64," + readFileSync(jpg).toString("base64");
-  const mp4 = join(ROOT, "app", "assets", "intro.mp4");
+  const mp4 = join(ASSETS, "intro.mp4");
   media = "data:video/mp4;base64," + readFileSync(mp4).toString("base64");
   console.log(`intro.mp4: ${(statSync(mp4).size / 1024).toFixed(0)} kB`);
 }
@@ -63,6 +70,8 @@ export function loadConfig() {
     cfg.startup.testAdmin = { email: String(ta.email).trim().toLowerCase(), name: String(ta.name || "Administrator testowy"), password: String(ta.password) };
   }
   cfg.sampleData = raw.sampleData === true;
+  cfg.edition = EDITION;
+  cfg.defaultTheme = EDITION === "premium" ? "aurum" : "pearl";
   return cfg;
 }
 const cfg = loadConfig();
@@ -81,6 +90,10 @@ put("@@ICON_SVG@@", "data:image/svg+xml;base64," + readFileSync(join(ROOT, "app"
 put("@@ICON_PNG@@", "data:image/png;base64," + readFileSync(join(ROOT, "app", "assets", "icons", "ric-180.png")).toString("base64"));
 put("@@CONFIG@@", JSON.stringify(cfg));
 put("@@VERSION@@", VERSION);
+put("@@EDITION@@", EDITION);
+put("@@DEFAULT_THEME@@", cfg.defaultTheme);
+const hero = join(ROOT, "app", "assets", "premium", "hero.jpg");
+put("@@HERO@@", EDITION === "premium" && existsSync(hero) ? "data:image/jpeg;base64," + readFileSync(hero).toString("base64") : "");
 put("@@BUILT@@", new Date().toISOString().slice(0, 10));
 
 writeFileSync(OUT, html, "utf8");

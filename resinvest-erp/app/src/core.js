@@ -170,7 +170,7 @@
    */
   const THEME_LIST = R.THEME_REGISTRY;
   const Prefs = {
-    theme: "pearl",
+    theme: (root.RIW_CONFIG && root.RIW_CONFIG.defaultTheme) || "pearl",
     listeners: new Set(),
     /** Subskrypcja zmian motywu (np. wykresy, które przeliczają kolory). Zwraca funkcję wypisania. */
     onTheme(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
@@ -192,7 +192,7 @@
     },
     /** Preferencje zalogowanego użytkownika mają pierwszeństwo przed zapisanymi w przeglądarce. */
     fromUser(u) {
-      this.applyTheme((u && u.theme) || lsGet("riw.theme", "pearl"));
+      this.applyTheme((u && u.theme) || lsGet("riw.theme", (root.RIW_CONFIG && root.RIW_CONFIG.defaultTheme) || "pearl"));
       this.applyLang((u && u.lang) || I18N.detect(lsGet("riw.lang", ""), root.navigator && navigator.language));
     },
     async setTheme(id) {
@@ -946,6 +946,26 @@
         <div><h2>${esc(t("Biomasa pod pełną kontrolą"))}</h2><p>${esc(t("Zakupy, produkcja zrębki, sprzedaż, transport i inwentaryzacja w jednym systemie — z historią każdej zmiany, raportami miesięcznymi i rocznymi oraz kopiami zapasowymi."))}</p></div>
         <div class="auth-facts"><div><b>3</b><span>${esc(t("języki: PL · CS · EN"))}</span></div><div><b>${THEME_LIST.length}</b><span>${esc(t("motywy kolorystyczne"))}</span></div><div><b>100%</b><span>${esc(t("operacji w dzienniku audytu"))}</span></div></div></section>`;
     },
+    /** Edycja Premium (build --edition premium): ekran startowy ze zdjęciem i panelem logowania. */
+    premium() { return !!(root.RIW_CONFIG && root.RIW_CONFIG.edition === "premium"); },
+    premiumLogo() {
+      return `<div class="prem-logo" aria-label="ResInvest ERP"><svg viewBox="0 0 68 78" aria-hidden="true"><defs><linearGradient id="prem-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F1DFA8"/><stop offset=".45" stop-color="#C2A15A"/><stop offset="1" stop-color="#7A5A12"/></linearGradient></defs>
+        <path d="M17 70C6 56 4 36 13 14c3 15 3 30-1 44 6-12 9-26 8-42 7 18 6 37-3 54z" fill="url(#prem-gold)" opacity=".9"/>
+        <path d="M15 16c-3 16-2 33 2 48" stroke="#5E440D" stroke-width="1.2" fill="none" opacity=".55"/>
+        <text x="42" y="66" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-weight="700" font-size="70" fill="url(#prem-gold)" stroke="#5E440D" stroke-width=".8">R</text></svg>
+        <div><b>Res<i>Invest</i> ERP</b><span>${esc(t("Premium Enterprise System"))}</span></div></div>`;
+    },
+    premiumHero(local) {
+      const https = location.protocol === "https:";
+      return `<section class="prem-hero" aria-hidden="true">
+          <div><h2>${esc(t("Produkcja i logistyka biomasy"))}</h2>
+          <p>${esc(t("Od lasu do energii — ResInvest ERP prowadzi każdy etap: zakup drewna, rozdrabnianie na zrębkę, transport naczepami z ruchomą podłogą i magazynowanie. Pełna kontrola nad łańcuchem dostaw w jednym systemie."))}</p></div>
+          <div class="prem-status"><span>[ ${esc(t("TRYB"))}: <b>${esc(local ? "OFFLINE" : t("FIRMOWY"))}</b> ]</span><span>[ ${esc(t("DANE"))}: <b>${esc(local ? t("W TEJ PRZEGLĄDARCE") : https ? "HTTPS" : t("SERWER FIRMY"))}</b> ]</span><span>[ ${esc(t("WERSJA"))}: <b>${esc(R.VERSION)}</b> ]</span></div>
+        </section>`;
+    },
+    premiumFoot() {
+      return `<footer class="prem-foot">Copyright © 2026 Mateusz Roesner. All rights reserved. ResInvestERP™ is a registered trademark used in connection with the business activities of ResInvest Commodities. All software, source code, and related documentation constitute the exclusive intellectual property of Mateusz Roesner. Any unauthorized copying, distribution, disclosure, or modification of this software is strictly prohibited.</footer>`;
+    },
     /** Stopka autorska — ekran logowania i program. */
     credit() { return `<p class="credit">${esc(t("Program stworzony przez Roesner Mateusz dla ResInvest Commodities"))} · © 2026</p>`; },
     loginScreen(opts = {}) {
@@ -961,7 +981,21 @@
       const firstAdmin = local && Store.state ? Store.state.users.find(u => u.role === "admin" && AuthLib.LocalAuth.info(u.id).startup) : null;
       if (firstAdmin && !opts.info && !reg && !testAdm) { opts = Object.assign({}, opts, { info: t("Pierwsze uruchomienie: zaloguj się kontem administratora {e} hasłem startowym z instrukcji instalacji — program poprosi o ustawienie własnego hasła.", { e: firstAdmin.login }), login: opts.login || firstAdmin.login }); }
       const tabs = !this.selfRegistration() ? "" : `<div class="seg auth-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Logowanie"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
-      const loginForm = `<form id="login-form" novalidate autocomplete="on">
+      const prem = this.premium();
+      const tabsP = !this.selfRegistration() ? "" : `<div class="prem-tabs" role="tablist"><button type="button" role="tab" data-auth-tab="login" aria-pressed="${!reg}">${esc(t("Zaloguj się"))}</button><button type="button" role="tab" data-auth-tab="register" aria-pressed="${reg}">${esc(t("Rejestracja"))}</button></div>`;
+      const remembered = lsGet("riw.lastLogin", "");
+      const loginFormP = `<form id="login-form" novalidate autocomplete="on">
+              <div class="field"><label for="lg-login">${esc(t("E-mail"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("uzytkownik@resinvest.group"))}" value="${esc(opts.login || remembered)}"></div>
+              ${pwField("lg-pass", t("Hasło"), "current-password")}
+              <div class="caps hidden" id="lg-caps">${esc(t("Włączony Caps Lock"))}</div>
+              <div class="prem-row"><label><input type="checkbox" id="lg-remember" ${remembered || !lsGet("riw.rememberOff", "") ? "checked" : ""}> ${esc(t("Zapamiętaj mnie"))}</label>
+                ${local ? `<button type="button" class="linkish" id="lg-forgot-local">${esc(t("Nie pamiętasz hasła?"))}</button>` : `<a href="#/forgot-password" id="lg-forgot">${esc(t("Nie pamiętasz hasła?"))}</a>`}</div>
+              <div class="help hidden" id="lg-forgot-help">${esc(t("Nie pamiętasz hasła? W trybie OFFLINE nowe hasło tymczasowe nadaje administrator ({e}).", { e: R.Seed ? R.Seed.ADMIN_EMAIL : "" }))}</div>
+              <div class="auth-err hidden" id="lg-err" role="alert"></div>
+              <button class="btn primary lg block" type="submit" id="lg-submit">${esc(t("Zaloguj się do systemu"))}</button>
+              ${this.selfRegistration() ? `<button type="button" class="prem-reg" id="lg-register">${esc(t("Zarejestruj nowe konto"))}</button>` : ""}
+            </form>`;
+      const loginForm = prem ? loginFormP : `<form id="login-form" novalidate autocomplete="on">
               <div class="field"><label for="lg-login">${esc(t("E-mail służbowy"))}</label><input class="ctrl" id="lg-login" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${esc(t("imie.nazwisko@resinvest.group"))}" value="${esc(opts.login || lsGet("riw.lastLogin", ""))}"></div>
               ${pwField("lg-pass", t("Hasło"), "current-password")}
               <div class="caps hidden" id="lg-caps">${esc(t("Włączony Caps Lock"))}</div>
@@ -980,23 +1014,26 @@
               <div class="auth-err hidden" id="rg-err" role="alert"></div>
               <button class="btn primary lg block" type="submit" id="rg-submit">${ic("user", 16)} ${esc(t("Zarejestruj konto"))}</button>
             </form>`;
-      document.getElementById("app").innerHTML = `<div class="auth" id="auth-screen">${this.side()}
-        <section class="auth-form">${this.tools()}
-          <div class="auth-box">
-            <h3>${esc(reg ? t("Załóż konto") : t("Zaloguj się"))}</h3>
+      const hero = typeof root.RIW_HERO === "string" && root.RIW_HERO ? ` style="--hero-img:url('${root.RIW_HERO}')"` : "";
+      document.getElementById("app").innerHTML = `<div class="auth${prem ? " prem" : ""}" id="auth-screen"${prem ? hero : ""}>${prem ? this.premiumHero(local) : this.side()}
+        <section class="${prem ? "prem-panel" : "auth-form"}">${this.tools()}
+          <div class="auth-box${prem ? " prem-card" : ""}">
+            ${prem ? this.premiumLogo() : `<h3>${esc(reg ? t("Załóż konto") : t("Zaloguj się"))}</h3>`}
             <p class="lead"><b class="mode-tag">${esc(App.modeLabel())}</b> ${esc(local ? t("Tryb lokalny — dane zapisywane w tej przeglądarce.") : t("Serwer ResInvest ERP — praca wielostanowiskowa."))}</p>
-            ${tabs}
+            ${prem ? tabsP : tabs}
             ${opts.info ? `<div class="info-line mt4 ${opts.ok ? "ok" : ""}">${ic(opts.ok ? "check" : "alert", 15)}<span id="auth-info">${esc(opts.info)}</span></div>` : ""}
             ${reg ? regForm : loginForm}
+            ${prem && !reg && (testAdm || demo.length) ? `<details class="prem-more"><summary>${esc(t("Konta demonstracyjne"))}${testAdm ? " · " + esc(t("Konto testowe administratora")) : ""}</summary>` : ""}
             ${!reg && testAdm ? `<div class="auth-divider">${esc(t("Konto testowe administratora"))}</div>
               <div class="auth-users"><button class="auth-user" type="button" id="test-admin" data-tlogin="${esc(testAdm.email)}" data-tpass="${esc(testAdm.password)}"><span class="avatar">${esc(initials(testAdm.name || "AT"))}</span><div><b>${esc(testAdm.name || t("Administrator testowy"))} · ${esc(t("Administrator"))}</b><small>${esc(testAdm.email)} · ${esc(t("hasło"))}: ${esc(testAdm.password)}</small></div></button></div>
               <p class="help mt2">${esc(t("Kliknij, aby wpisać dane konta testowego, i zaloguj się. Konto działa niezależnie od danych zapisanych w tej przeglądarce (okres testów)."))}</p>` : ""}
             ${!reg && demo.length ? `<div class="auth-divider">${esc(t("Konta demonstracyjne"))}</div>
               <div class="auth-users" id="demo-users">${demo.map(u => `<button class="auth-user" type="button" data-demo="${esc(u.login)}"><span class="avatar">${esc(initials(u.name))}</span><div><b>${esc(u.name)} · ${esc(App.roleLabel(u.role))}</b><small>${esc(u.login)} · ${esc(App.whName(u.whId))}</small></div></button>`).join("")}</div>
               <p class="help mt2">${esc(t("Hasło kont demonstracyjnych: {p} — zmień je w „Mój profil” przed pracą na prawdziwych danych.", { p: AuthLib.DEMO_PASSWORD }))}</p>` : ""}
+            ${prem && !reg && (testAdm || demo.length) ? "</details>" : ""}
             <p class="auth-foot">ResInvest ERP ${esc(R.VERSION)} · ${esc(t("Konto blokuje się na {m} min po {n} nieudanych próbach.", { m: AuthLib.POLICY.lockMinutes, n: AuthLib.POLICY.maxFailed }))}</p>
-            ${this.credit()}
-          </div></section></div>`;
+            ${prem ? "" : this.credit()}
+          </div>${prem ? `<div class="prem-meta"><span>${esc(t("Dostęp tylko dla uprawnionych użytkowników"))}</span><span>${ic("lock", 13)} ${esc(local ? t("Dane lokalne — kopia zapasowa w Administracji") : location.protocol === "https:" ? t("Połączenie szyfrowane (HTTPS)") : t("Sieć firmowa"))}</span></div>` : ""}</section>${prem ? this.premiumFoot() : ""}</div>`;
       const scope = $("#auth-screen");
       this.bindTools(scope); bindEyes(scope);
       $$("[data-auth-tab]", scope).forEach(b => b.onclick = () => this.loginScreen({ tab: b.dataset.authTab }));
@@ -1005,6 +1042,8 @@
       pass.addEventListener("keyup", e => $("#lg-caps").classList.toggle("hidden", !(e.getModifierState && e.getModifierState("CapsLock"))));
       $$("[data-demo]", scope).forEach(b => b.onclick = () => { login.value = b.dataset.demo; pass.value = AuthLib.DEMO_PASSWORD; pass.focus(); });
       const tb = $("#test-admin", scope); if (tb) tb.onclick = () => { login.value = tb.dataset.tlogin; pass.value = tb.dataset.tpass; $("#lg-submit").focus(); };
+      const fl = $("#lg-forgot-local", scope); if (fl) fl.onclick = () => $("#lg-forgot-help").classList.toggle("hidden");
+      const rb = $("#lg-register", scope); if (rb) rb.onclick = () => this.loginScreen({ tab: "register" });
       $("#login-form").onsubmit = async e => {
         e.preventDefault();
         const btn = $("#lg-submit");
@@ -1018,7 +1057,9 @@
         catch (x) { res = { ok: false, error: t("Nie udało się zalogować: {m}", { m: x.message }) }; }
         btn.disabled = false;
         if (!res.ok) { err.innerHTML = ic("alert", 15) + `<span>${esc(res.error)}</span>`; err.classList.remove("hidden"); pass.select(); return; }
-        lsSet("riw.lastLogin", login.value.trim().toLowerCase());
+        const rem = $("#lg-remember");
+        if (rem && !rem.checked) { lsSet("riw.lastLogin", ""); lsSet("riw.rememberOff", "1"); }    // „Zapamiętaj mnie” — tylko adres e-mail, nigdy hasło
+        else { lsSet("riw.lastLogin", login.value.trim().toLowerCase()); if (rem) lsSet("riw.rememberOff", ""); }
         pass.value = "";
         this.screen = null;
         try { await App.afterLogin(res); }

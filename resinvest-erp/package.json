@@ -19,7 +19,10 @@
     "test:server": "node --test tests/server.test.mjs tests/auth.test.mjs tests/mail35.test.mjs tests/mail36.test.mjs tests/reg37.test.mjs tests/smtp.test.mjs tests/update.test.mjs tests/storage.test.mjs",
     "test:auth": "node --test tests/auth.test.mjs",
     "test:e2e": "node tests/e2e.cjs && node tests/e2e-server.cjs",
-    "test": "npm run check && npm run i18n && npm run themes && npm run build && npm run test:unit && npm run test:server && npm run test:e2e"
+    "test": "npm run check && npm run i18n && npm run themes && npm run build && npm run test:unit && npm run test:server && npm run test:e2e",
+    "build:premium": "node tools/build.mjs --edition premium"
   },
-  "engines": { "node": ">=22.13" }
+  "engines": {
+    "node": ">=22.13"
+  }
 }

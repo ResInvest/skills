@@ -2218,7 +2218,8 @@
     { id: "azure", label: N_("Graphite Azure"), scheme: "dark", icon: "drop", sw: ["#111823", "#090C11", "#3E8EF7"] },
     { id: "ultra", label: N_("Ultra Dark (OLED)"), scheme: "dark", icon: "eclipse", sw: ["#0A0C0B", "#000000", "#4CC38A"] },
     { id: "premium", label: N_("Light Premium"), scheme: "light", icon: "gem", sw: ["#FFFFFF", "#F7F4EE", "#1B2A4A", "#B8912E"] },
-    { id: "glass", label: N_("Szkło (pastelowy)"), scheme: "light", icon: "layers", sw: ["#FFFFFF", "#E4E2FB", "#DDF4E8", "#1F7F45"] }
+    { id: "glass", label: N_("Szkło (pastelowy)"), scheme: "light", icon: "layers", sw: ["#FFFFFF", "#E4E2FB", "#DDF4E8", "#1F7F45"] },
+    { id: "aurum", label: N_("Złota biomasa (granat i złoto)"), scheme: "light", icon: "gem", sw: ["#FBF8F1", "#14213A", "#B8913A"] }
   ];
   const THEMES = Object.fromEntries(THEME_REGISTRY.map(x => [x.id, x.label]));
   const Users = {

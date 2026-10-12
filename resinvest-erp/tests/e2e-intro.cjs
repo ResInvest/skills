@@ -10,7 +10,7 @@ if (!process.env.FFMPEG) { console.log("POMINIĘTO: ustaw FFMPEG=<ścieżka do f
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "riw-intro-"));
 execFileSync(process.env.FFMPEG, ["-v", "error", "-y", "-i", path.join(ROOT, "app/assets/intro.mp4"), "-c:v", "libvpx-vp9", "-b:v", "1M", "-deadline", "realtime", "-cpu-used", "8", "-c:a", "libopus", "-b:a", "96k", path.join(TMP, "intro.webm")]);
 {
-  let h = fs.readFileSync(path.join(ROOT, "ResInvest_ERP.html"), "utf8");
+  let h = fs.readFileSync(path.join(ROOT, process.env.RIW_HTML || "ResInvest_ERP.html"), "utf8");
   const w = "data:video/webm;base64," + fs.readFileSync(path.join(TMP, "intro.webm")).toString("base64");
   const i = h.indexOf('var INTRO_SRC = "') + 'var INTRO_SRC = "'.length, j = h.indexOf('"', i);
   fs.writeFileSync(path.join(TMP, "app.html"), h.slice(0, i) + w + h.slice(j));

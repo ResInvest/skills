@@ -10,7 +10,8 @@ const os = require("os");
 const { execFileSync } = require("child_process");
 const { chromium } = require("playwright");
 
-const FILE = "file://" + path.resolve(__dirname, "..", "ResInvest_ERP.html");
+const PREMIUM = /Premium/.test(process.env.RIW_HTML || "");
+const FILE = "file://" + path.resolve(__dirname, "..", process.env.RIW_HTML || "ResInvest_ERP.html");   // RIW_HTML=ResInvest_ERP_Premium.html — edycja Premium
 const SHOTS = process.env.SHOTS || "";
 const TODAY = "2026-09-23";
 const results = [], consoleErrors = [];
@@ -25,6 +26,8 @@ function watch(page, label) {
 async function newCtx(browser, opts = {}) {
   const { sample, ...ctxOpts } = opts;    // sample: false → czysta baza (pierwsze uruchomienie)
   const ctx = await browser.newContext(Object.assign({ viewport: { width: 1440, height: 900 }, acceptDownloads: true, locale: "pl-PL" }, ctxOpts));
+  // edycja Premium: konta demonstracyjne / testowe są w zwijanej sekcji — w testach rozwinięta
+  if (PREMIUM) await ctx.addInitScript(() => { new MutationObserver(() => document.querySelectorAll("details.prem-more:not([open])").forEach(d => { d.open = true; })).observe(document, { childList: true, subtree: true }); });
   await ctx.addInitScript(([d, sample]) => { try { if (!sessionStorage.getItem("riw.today")) sessionStorage.setItem("riw.today", d); if (!localStorage.getItem("riw.lang")) localStorage.setItem("riw.lang", "pl"); if (sample) localStorage.setItem("riw.sample", "1"); } catch (e) {} }, [TODAY, sample !== false]);
   return ctx;
 }
@@ -106,17 +109,18 @@ async function fillForestDirect(page) {
     const lum = c => { const [r, g, b] = c.match(/\d+/g).map(Number); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
     const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const card = await page.evaluate(() => getComputedStyle(document.querySelector(".card, .kpi")).backgroundColor);
-    check("§19 Jasny motyw: jasne tło, białe karty", lum(bg) > 0.85 && card === "rgb(255, 255, 255)", { bg, card });
+    // edycja Premium startuje w motywie „Złota biomasa” (karty w kolorze kości słoniowej)
+    check(PREMIUM ? "Premium: motyw „Złota biomasa” domyślnie — jasne tło, karty kość słoniowa" : "§19 Jasny motyw: jasne tło, białe karty", lum(bg) > 0.85 && card === (PREMIUM ? "rgb(255, 253, 248)" : "rgb(255, 255, 255)") && (!PREMIUM || await page.evaluate(() => document.documentElement.dataset.theme === "aurum")), { bg, card });
     // 3.2: pięć motywów — przełączanie z profilu, zapis w profilu użytkownika, Ctrl+D przez całą piątkę
     await go(page, "profil"); await page.waitForSelector(".theme-cards");
-    check("3.2 Motywy: 6 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium, Szkło)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium,glass");
+    check("3.2 Motywy: 7 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium, Szkło, Złota biomasa)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium,glass,aurum");
     const themeLook = async id => { await page.click(`[data-ptheme="${id}"]`); await page.waitForTimeout(200); return page.evaluate(() => ({ th: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, cs: document.documentElement.style.colorScheme, saved: RIW_DEBUG.store.state.users.find(u => u.id === RIW_DEBUG.store.userId).theme })); };
     const ul = await themeLook("ultra");
     check("3.2 Ultra Dark: czarne tło (OLED), schemat ciemny, zapis w profilu", ul.th === "ultra" && ul.bg === "rgb(0, 0, 0)" && ul.cs === "dark" && ul.saved === "ultra", ul);
     const pr = await themeLook("premium");
     check("3.2 Light Premium: tło kość słoniowa, schemat jasny, granat marki", pr.th === "premium" && pr.bg === "rgb(247, 244, 238)" && pr.cs === "light" && (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--brand").trim())) === "#1B2A4A", pr);
-    const cyc = []; for (let i = 0; i < 6; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
-    check("3.2 Ctrl+D przełącza przez sześć motywów", cyc.join(",") === "glass,pearl,graphite,azure,ultra,premium", cyc);
+    const cyc = []; for (let i = 0; i < 7; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
+    check("3.2 Ctrl+D przełącza przez siedem motywów", cyc.join(",") === "glass,aurum,pearl,graphite,azure,ultra,premium", cyc);
     const gl = await themeLook("glass");
     check("3.7 Szkło: pastelowe tło z gradientem, szklane karty z rozmyciem, zielona marka, zapis w profilu", gl.th === "glass" && gl.cs === "light" && gl.saved === "glass" && await page.evaluate(() => { const c = getComputedStyle(document.querySelector(".card, .theme-cards") || document.body); return getComputedStyle(document.body).backgroundImage.includes("radial-gradient") && getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() === "#1F7F45"; }) && await page.evaluate(() => /blur/.test(getComputedStyle(document.querySelector(".sidebar")).backdropFilter)), gl);
     await themeLook("pearl"); await go(page, "pulpit"); await page.waitForSelector("#kpi-wood");
@@ -568,7 +572,7 @@ async function fillForestDirect(page) {
     check("3.1 Trzy magazyny RiC", (await page.evaluate(() => RIW_DEBUG.store.state.warehouses.map(w => w.name).join("|"))) === "RiC Zabrze|RiC Brąszewice|RiC Rokitki");
     // 3.2: rejestracja domyślnie wyłączona — konta zakłada administrator
     await page.evaluate(() => RIW_DEBUG.app.logout()); await page.waitForSelector("#login-form");
-    check("3.2 Logowanie: pole „E-mail służbowy”, tryb OFFLINE, bez zakładki rejestracji", nb(await page.textContent('label[for="lg-login"]')) === "E-mail służbowy" && nb(await page.textContent(".auth-box .lead")).startsWith("OFFLINE") && !(await page.$('[data-auth-tab="register"]')));
+    check("3.2 Logowanie: pole „E-mail służbowy”, tryb OFFLINE, bez zakładki rejestracji", nb(await page.textContent('label[for="lg-login"]')) === (PREMIUM ? "E-mail" : "E-mail służbowy") && nb(await page.textContent(".auth-box .lead")).startsWith("OFFLINE") && !(await page.$('[data-auth-tab="register"]')));
     check("3.2 Wylogowanie: adres #/login", await page.evaluate(() => location.hash === "#/login"));
     await page.fill("#lg-login", "jan@gmail.com"); await page.fill("#lg-pass", "Cokolwiek2026"); await page.click("#lg-submit"); await page.waitForTimeout(200);
     check("3.2 Logowanie: domena spoza firmy odrzucona", nb(await page.textContent("#lg-err")).includes("Wymagany e-mail firmowy"));
@@ -1122,7 +1126,7 @@ async function fillForestDirect(page) {
     fs.writeFileSync(wrap, `<!doctype html><body style="margin:0"><iframe sandbox="allow-scripts allow-forms allow-popups allow-modals" src="${FILE}" style="width:1400px;height:880px;border:0"></iframe></body>`);
     const ctx = await newCtx(browser); const page = await ctx.newPage(); watch(page, "sandbox");
     await page.goto("file://" + wrap); await page.waitForTimeout(1500);
-    const f = page.frames().find(x => x.url().endsWith("ResInvest_ERP.html"));
+    const f = page.frames().find(x => x.url().endsWith(process.env.RIW_HTML || "ResInvest_ERP.html"));
     await f.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))).catch(() => {});
     await f.waitForSelector("#login-form", { timeout: 8000 });
     // ramka bez pamięci przeglądarki = czysta baza: konto startowe administratora (hasło z konfiguracji, wymuszona zmiana)
