@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.10.0";
+  const VERSION = "3.10.1";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -2003,7 +2003,8 @@
         if (!ASSET_STATUS[rec.status]) e.status = t("Wybierz status");
         const owner = rec.owner || "own";
         if (!VEHICLE_OWNERS[owner]) e.owner = t("Wybierz, czyj jest pojazd");
-        if (owner === "own" && !byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Wybierz kierowcę domyślnego");
+        // kierowca domyślny jest opcjonalny („—”): bez niego kierowcę wybiera się w każdym kursie
+        if (owner === "own" && str(rec.driverId) && !byId(state.fleet.drivers, rec.driverId)) e.driverId = t("Nieznany kierowca");
         if (owner === "external" && str(rec.company).length < 2) e.company = t("Podaj firmę — właściciela pojazdu");
         // zabudowa (opcjonalna): wymiary każdej przestrzeni ładunkowej w metrach
         const body = str(rec.body);

@@ -83,15 +83,17 @@ test("zakup: sprzedaż bez produkcji jest odrzucana", () => {
 });
 
 /* ================================ flota własna / zewnętrzna ================================ */
-test("flota: pojazd firmy zewnętrznej — wymagana firma, bez kierowcy z kartoteki; pojazd własny wymaga kierowcy", () => {
+test("flota: pojazd firmy zewnętrznej — wymagana firma, bez kierowcy z kartoteki; pojazd własny — kierowca opcjonalny (3.10.1), ale z kartoteki", () => {
   const s = fresh(), c = ctx(s);
   const bad = R.Fleet.save(s, "vehicles", { name: "Iveco", owner: "external", reg: "WX 1234A", type: "ciezarowy", status: "aktywny" }, c);
   assert.equal(bad.ok, false); assert.ok(bad.errors.company);
   const ok = R.Fleet.save(s, "vehicles", { name: "Iveco", owner: "external", company: "Trans-Bud", reg: "wx 1234a", type: "ciezarowy", status: "aktywny", driverId: "dr_nowak", driverName: "Jan Wiśniewski" }, c);
   assert.equal(ok.ok, true, ok.error);
   assert.deepEqual([ok.rec.owner, ok.rec.company, ok.rec.driverId, ok.rec.driverName, ok.rec.reg], ["external", "Trans-Bud", "", "Jan Wiśniewski", "WX 1234A"]);
-  const own = R.Fleet.save(s, "vehicles", { name: "Scania", reg: "SGL 1111", type: "ciezarowy", status: "aktywny", company: "x" }, c);
-  assert.equal(own.ok, false); assert.ok(own.errors.driverId);
+  const own = R.Fleet.save(s, "vehicles", { name: "Scania", reg: "SGL 1111", type: "ciezarowy", status: "aktywny", company: "x", driverId: "dr_brak" }, c);
+  assert.equal(own.ok, false); assert.ok(own.errors.driverId, "kierowca spoza kartoteki odrzucony");
+  const own0 = R.Fleet.save(s, "vehicles", { name: "Scania", reg: "SGL 1110", type: "ciezarowy", status: "aktywny", company: "x" }, c);
+  assert.equal(own0.ok, true, "bez kierowcy domyślnego („—”)"); assert.equal(own0.rec.driverId, "");
   const own2 = R.Fleet.save(s, "vehicles", { name: "Scania", reg: "SGL 1111", type: "ciezarowy", status: "aktywny", driverId: "dr_nowak", company: "x", driverName: "y" }, c);
   assert.equal(own2.ok, true); assert.deepEqual([own2.rec.owner, own2.rec.company, own2.rec.driverName], ["own", "", ""]);
 });

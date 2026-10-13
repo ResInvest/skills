@@ -45,6 +45,18 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
 
+## Nowe w 3.10.1
+* **Zwijany panel boczny** — przycisk w nagłówku menu albo **Ctrl+B**: same ikony (więcej miejsca na tabele),
+  nazwa zakładki w podpowiedzi, liczniki zostają; ustawienie zapamiętywane w tej przeglądarce.
+* **Pojazd bez kierowcy domyślnego** — w polu „Kierowca domyślny” opcja **„—”**. Auto zapisuje się bez kierowcy,
+  a kierowcę wybiera się w każdym kursie (program tego pilnuje).
+* **Szybki wpis operacji:**
+  * **„Powtórz ostatnią”** (Nowa operacja) i **„Powtórz”** (szczegóły dowolnej operacji) — kopia na dziś: te same
+    strony, produkty, ilości, ceny, pojazdy, km i stawki; bez numerów dokumentów (numeracja automatyczna), kwitów,
+    wag rzeczywistych i uwag. Kolejne auto z tego samego lasu = numer kwitu + Ctrl+Enter.
+  * wybór auta w kursie podpowiada kierowcę domyślnego oraz **km i stawkę z ostatniego kursu tego auta**;
+  * **Ctrl+Enter** (i Ctrl+S) — zatwierdzenie z podsumowaniem; m³ z kwitu × 4 = MP na aucie liczone od razu.
+
 ## Edycja Premium (od 3.10.0)
 Druga odmiana programu w jednym pliku — **`ResInvest_ERP_Premium.html`** (`npm run build:premium`). Silnik, dane,
 logowanie i kopie są te same co w edycji standardowej (oba pliki działają na tych samych danych w przeglądarce).

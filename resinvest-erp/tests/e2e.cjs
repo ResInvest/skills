@@ -1012,6 +1012,36 @@ async function fillForestDirect(page) {
     check("3.6 Flota: tylko własna — samochody, kierowcy, rębaki, operatorzy", JSON.stringify(await tabs()) === JSON.stringify(["vehicles", "drivers", "chippers", "operators", "reports"]));
     check("3.6 Flota własna: bez pojazdów firm zewnętrznych", !nb(await page.textContent("#fleet-table")).includes("ESI 18734"));
 
+    /* ------------- 3.10.1: zwijany panel boczny (Ctrl+B), szybki wpis „Powtórz ostatnią” ------------- */
+    {
+      const w0 = await page.$eval(".sidebar", e => e.getBoundingClientRect().width);
+      await page.click("#sb-toggle"); await page.waitForTimeout(350);
+      const mini = await page.evaluate(() => ({ cls: document.body.classList.contains("sb-mini"), w: document.querySelector(".sidebar").getBoundingClientRect().width, lbl: getComputedStyle(document.querySelector("#nav .nav-item .nl")).display, title: document.querySelector('#nav [data-nav="operacje"]').title, saved: localStorage.getItem("riw.sbMini") }));
+      check("3.10.1 Panel boczny zwinięty: same ikony (72 px), podpowiedzi z nazwą, zapamiętany", mini.cls && mini.w < 90 && w0 > 200 && mini.lbl === "none" && mini.title === "Operacje" && mini.saved === "1", mini);
+      await page.click('#nav [data-nav="operacje"]'); await page.waitForTimeout(250);
+      check("3.10.1 Zwinięty panel: nawigacja działa", await page.evaluate(() => location.hash === "#/operacje"));
+      await page.keyboard.press("Control+b"); await page.waitForTimeout(350);
+      check("3.10.1 Ctrl+B rozwija panel", await page.evaluate(() => !document.body.classList.contains("sb-mini") && localStorage.getItem("riw.sbMini") === "" && document.querySelector(".sidebar").getBoundingClientRect().width > 200));
+      await go(page, "nowa"); await page.waitForSelector("#opf");
+      const rl = await page.$("#repeat-last");
+      check("3.10.1 Nowa operacja: przycisk „Powtórz ostatnią” z numerem dokumentu", !!rl && /Powtórz ostatnią/.test(nb(await rl.textContent())));
+      if (rl) {
+        const src = await page.evaluate(id => { const o = RIW_DEBUG.store.state.operations.find(x => x.id === id); return { type: o.type, input: o.input }; }, await rl.getAttribute("data-op"));
+        await rl.click(); await page.waitForSelector("#repeat-info");
+        const d = await page.evaluate(() => RIW_DEBUG.app && window.RIWForm && RIWForm.draft);
+        const runs = (d.transport.own && d.transport.own.runs) || [];
+        check("3.10.1 Powtórz: kopia na dziś — ten sam rodzaj, dzisiejsza data, nowy klucz, bez numerów kwitów i dokumentów", d.type === src.type && d.date === TODAY && d.idemKey !== (src.input.idemKey || "") && runs.every(r => !r.kwit && !r.weightT) && Object.values(d.docNos).every(v => !v) && JSON.stringify(d.purchase.productId) === JSON.stringify(src.input.purchase.productId), { type: d.type, date: d.date });
+        await page.click("#form-reset").catch(() => {}); await page.click(".modal [data-yes]").catch(() => {}); await page.waitForTimeout(200);
+      }
+      await go(page, "operacje"); await page.waitForSelector("#ops-table tbody tr");
+      await page.click("#ops-table tbody tr:first-child"); await page.waitForSelector("#op-detail");
+      const rep = await page.$("#op-detail [data-repeat]");
+      check("3.10.1 Szczegóły operacji: przycisk „Powtórz”", !!rep);
+      if (rep) { await rep.click(); await page.waitForSelector("#repeat-info", { timeout: 4000 }).catch(() => {}); check("3.10.1 „Powtórz” z rejestru otwiera kopię w Nowej operacji", await page.evaluate(() => location.hash === "#/nowa" && !!document.querySelector("#repeat-info"))); await page.click("#form-reset").catch(() => {}); await page.click(".modal [data-yes]").catch(() => {}); await page.waitForTimeout(200); }
+      await page.keyboard.press("Escape").catch(() => {});
+      await go(page, "flota"); await page.waitForSelector("#fleet-table"); await page.waitForTimeout(150);
+    }
+
     /* ------------- 3.9: zabudowa i pojemność pojazdu, raporty floty i rębaków ------------- */
     check("3.9 Flota: kolumna Pojemność (MP) przy samochodach", (await page.$$eval("#fleet-table thead th", t => t.map(x => x.textContent))).includes("Pojemność") && nb(await page.textContent("#fleet-table")).includes("91,92 MP"));
     await page.click("#fleet-add"); await page.waitForSelector("#fe-body");
@@ -1022,6 +1052,13 @@ async function fillForestDirect(page) {
     check("3.9 Pojemność liczona na żywo: 39 + 42 = 81 MP", nb(await page.textContent("#fe-cap")).includes("81 MP") && nb(await page.textContent('[data-comp-mp="0"]')).includes("39 MP"), nb(await page.textContent("#fe-cap")));
     await page.click(".modal [data-yes]"); await page.waitForTimeout(250);
     check("3.9 Zapis pojazdu z zabudową (pojemność 81 MP w kartotece)", await page.evaluate(() => { const v = RIW_DEBUG.store.state.fleet.vehicles.find(x => x.reg === "SK 4411H"); return !!v && v.body === "hakowiec" && v.capacityMP === 81 && v.compartments.length === 2; }));
+    // 3.10.1: pojazd bez kierowcy domyślnego — opcja „—”
+    await page.click('[data-tab="vehicles"]').catch(() => {}); await page.waitForTimeout(150);
+    await page.click("#fleet-add"); await page.waitForSelector("#fe-driverId");
+    check("3.10.1 Pojazd: kierowca domyślny opcjonalny — pierwsza opcja „—”", (await page.$eval("#fe-driverId option", o => o.value === "" && o.textContent.trim() === "—")));
+    await page.fill("#fe-name", "Volvo FH — bez kierowcy"); await page.fill("#fe-reg", "SK 5500N"); await page.selectOption("#fe-driverId", "");
+    await page.click(".modal [data-yes]"); await page.waitForTimeout(250);
+    check("3.10.1 Zapis pojazdu bez kierowcy domyślnego", await page.evaluate(() => { const v = RIW_DEBUG.store.state.fleet.vehicles.find(x => x.reg === "SK 5500N"); return !!v && v.driverId === ""; }) && !(await page.$(".modal [data-yes]")));
     await page.click('[data-tab="reports"]'); await page.waitForSelector("#fr-view");
     check("3.9 Raporty floty: okres dzień / tydzień / miesiąc i 6 rodzajów raportu", (await page.$$eval("#fr-period option", o => o.map(x => x.value).join(","))) === "day,week,month" && (await page.$$eval("#fr-view option", o => o.length)) === 6);
     await page.selectOption("#fr-period", "month"); await page.waitForTimeout(150); await page.fill("#fr-date", "2026-09-15"); await page.dispatchEvent("#fr-date", "change"); await page.waitForTimeout(200);

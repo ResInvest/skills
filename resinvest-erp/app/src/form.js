@@ -157,6 +157,41 @@
       if (this.draft && (Store.state.operations.some(o => o.idemKey === this.draft.idemKey) || this.draft._user !== Store.userId)) this.draft = null;
       if (!this.draft || preset) this.reset(preset);
     },
+    /**
+     * Szybki wpis: kopia zatwierdzonej operacji na dziś — te same strony, produkty, ilości, ceny, pojazdy, km i stawki;
+     * bez numerów dokumentów (numeracja automatyczna), kwitów, wag rzeczywistych, uwag i przyczyn różnic.
+     */
+    repeatFrom(opId) {
+      const op = R.byId(Store.state.operations, opId);
+      if (!op || !op.input) return false;
+      const d = Object.assign(R.blankDraft({ today: App.today() }), R.clone(op.input));
+      Object.assign(d, { idemKey: R.uid("idem"), draftId: null, date: App.today(), docDate: "", notes: "", extDoc: "", _user: Store.userId, _repeatOf: op.no });
+      d.docNos = { PZ: "", WZ: "", MM: "" }; d.docNoMode = { PZ: "auto", WZ: "auto", MM: "auto" };
+      if (d.production) Object.assign(d.production, { kwit: "", diffReason: "", consumeQty: "" });
+      for (const m of ["own", "external"]) for (const r of ((d.transport && d.transport[m] && d.transport[m].runs) || [])) Object.assign(r, { kwit: "", kwitM3: "", weightT: "" });
+      for (const k of ["purchase", "sale", "mm"]) if (d[k] && "weightManual" in d[k]) { d[k].weightManual = ""; d[k].weightMode = "auto"; }
+      this.mode = "new"; this.op = null; this.corr = null; this.review = null;
+      this.draft = d; this.touched = new Set(); this.showAll = false; this.persist();
+      return true;
+    },
+    /** „Powtórz ostatnią”: ostatnia operacja użytkownika w bieżącym magazynie, a gdy brak — ostatnia w magazynie. */
+    lastOwnOp() {
+      const ops = Store.state.operations, wh = App.wh() && App.wh().id;
+      const ok = o => o.input && !o.deleted && o.status !== "CANCELLED" && (!wh || o.whId === wh);
+      let any = null;
+      for (let i = ops.length - 1; i >= 0; i--) { const o = ops[i]; if (!ok(o)) continue; if (o.userId === Store.userId) return o; if (!any) any = o; }
+      return any;
+    },
+    /** Ostatni kurs pojazdu (km, stawka) — podpowiedź przy wyborze auta. */
+    lastRunOf(vehicleId) {
+      const ops = Store.state.operations;
+      for (let i = ops.length - 1; i >= 0; i--) {
+        const o = ops[i], own = o.input && o.input.transport && o.input.transport.own;
+        if (o.deleted || !own || !Array.isArray(own.runs)) continue;
+        for (let j = own.runs.length - 1; j >= 0; j--) if (own.runs[j].vehicleId === vehicleId && (own.runs[j].km || own.runs[j].rate)) return own.runs[j];
+      }
+      return null;
+    },
     startCorrection(opId) {
       const op = R.byId(Store.state.operations, opId);
       this.mode = "correct"; this.op = op;
@@ -690,9 +725,11 @@
           <div class="actions"><button class="btn ghost" type="button" id="review-close">${ic("x", 15)} ${esc(t("Zamknij przegląd"))}</button></div></div>` + this.layout(false);
       return `<div class="page-head"><div class="titles"><h2>${esc(t("Nowa operacja"))}${this.draft.draftId ? ` <span class="badge st-DRAFT">${esc(t("wersja robocza"))}</span>` : ""}</h2>
           ${rec && rec.rejectReason ? `<div class="info-line err mt2" id="reject-info">${ic("alert", 15)}<span>${esc(t("Odrzucona przez {u} ({d}): {r}. Popraw i przekaż ponownie.", { u: rec.rejectedBy, d: Dates.ts(rec.rejectedAt), r: rec.rejectReason }))}</span></div>` : ""}
+          ${this.draft._repeatOf ? `<div class="info-line ok mt2" id="repeat-info">${ic("undo", 15)}<span>${esc(t("Kopia operacji {n} na dziś. Uzupełnij numery kwitów i wagi — Ctrl+Enter zatwierdza.", { n: this.draft._repeatOf }))}</span></div>` : ""}
           ${rec && rec.status === "PENDING" ? `<div class="info-line mt2">${ic("clock", 15)}<span>${esc(t("Operacja czeka na zatwierdzenie. Zmiana i zapis wycofa ją do wersji roboczej."))}</span></div>` : ""}
           <p>${t("Zakup, sprzedaż z magazynu, produkcja na magazynie, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.")}</p></div>
           <div class="actions">
+            ${(() => { const lo = this.lastOwnOp(); return lo ? `<button class="btn" type="button" id="repeat-last" data-op="${esc(lo.id)}" data-no="${esc(lo.no)}" title="${esc(t("Kopia na dziś: te same strony, produkty, ilości, pojazdy i stawki — bez numerów kwitów"))}">${ic("undo", 15)} ${esc(t("Powtórz ostatnią"))} <small class="dim">${esc(lo.no)}</small></button>` : ""; })()}
             <label class="inline-opt"><input type="checkbox" id="tut-toggle" ${lsGet("riw.tutorial", "1") !== "0" ? "checked" : ""}> ${esc(t("Samouczek pod polami"))}</label>
             <button class="btn ghost" type="button" id="form-reset">${ic("x", 15)} ${esc(t("Wyczyść"))}</button>
           </div></div>` + this.layout(false);
@@ -758,7 +795,9 @@
         if (b.dataset.useNo) { this.draft.docNos[b.dataset.useNo] = b.dataset.no; (this.draft.docNoMode || (this.draft.docNoMode = {}))[b.dataset.useNo] = "manual"; this.touched.add(`docNos.${b.dataset.useNo}`); this.persist(); this.rerender(); }
       });
       form.addEventListener("submit", e => { e.preventDefault(); this.save(); });
-      form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); this.save(); } });
+      // Ctrl+S / Ctrl+Enter — zatwierdzenie (podsumowanie przed zapisem)
+      form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "s" || e.key === "Enter")) { e.preventDefault(); this.save(); } });
+      const rp = $("#repeat-last", page); if (rp) rp.onclick = () => { if (this.repeatFrom(rp.dataset.op)) { App.render(); Toast.ok(t("Kopia operacji {n} na dziś", { n: rp.dataset.no }), t("Sprawdź ilości i dopisz numery kwitów — reszta jest uzupełniona.")); } };
       $$("[data-save]", page).forEach(b => b.onclick = () => this.save());
       $$("[data-draft]", page).forEach(b => b.onclick = () => this.saveDraft());
       $$("[data-reject]", page).forEach(b => b.onclick = () => this.reject());
@@ -863,7 +902,13 @@
       if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c && c.owner !== "external" ? c.operatorId : ""; d.production.operatorName = ""; }
       if (key === "extras.enabled" && v) this.extras();
       const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
-      if (runKey) { const veh = R.byId(S.fleet.vehicles, v); d.transport.own.runs[+runKey[1]].driverId = veh ? veh.driverId : ""; }
+      if (runKey) {
+        const veh = R.byId(S.fleet.vehicles, v), run = d.transport.own.runs[+runKey[1]];
+        run.driverId = veh ? veh.driverId : "";
+        // szybki wpis: km i stawka z ostatniego kursu tego auta (tylko puste pola)
+        const last = veh ? this.lastRunOf(veh.id) : null;
+        if (last) for (const f of ["km", "rate"]) if (!String(run[f] || "").trim() && last[f]) { run[f] = last[f]; const el = document.getElementById(fid(`transport.own.runs.${runKey[1]}.${f}`)); if (el) el.value = run[f]; }
+      }
       const xregKey = key.match(/^transport\.external\.runs\.(\d+)\.reg$/);
       if (xregKey) {
         // numer z floty zewnętrznej → kierowca i firma podpowiadane z kartoteki (wpisane ręcznie nie są nadpisywane)
@@ -1341,6 +1386,7 @@
   Views.nowa = {
     html(params) {
       if (Form.mode !== "new") Form.draft = null;
+      if (params.repeat && Form.repeatFrom(params.repeat)) { history.replaceState(null, "", "#/nowa"); return Form.html(params); }
       Form.ensureDraft(params.preset, params.draft);
       if (params.preset || params.draft) history.replaceState(null, "", "#/nowa");
       return Form.html(params);

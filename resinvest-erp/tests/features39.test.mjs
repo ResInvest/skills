@@ -126,3 +126,18 @@ test("zapis pojazdu z zabudową przez Service (na kopii stanu; magazynier bez fl
   assert.equal(R.byId(ok.state.fleet.vehicles, "ve_daf").capacityMP, 97.81);
   assert.equal(R.byId(s.fleet.vehicles, "ve_daf").capacityMP, 91.92, "stan źródłowy bez zmian (zmiana na kopii)");
 });
+
+/* ============================== 3.10.1: pojazd bez kierowcy domyślnego ============================== */
+test("pojazd własny bez kierowcy domyślnego („—”) zapisuje się; w kursie trzeba wtedy wybrać kierowcę", () => {
+  const s = fresh();
+  const r = R.Fleet.save(s, "vehicles", Object.assign({}, VEH, { reg: "SK 5500N", driverId: "" }), ctx(s));
+  assert.equal(r.ok, true, JSON.stringify(r.errors || r.error));
+  const v = s.fleet.vehicles.find(x => x.reg === "SK 5500N");
+  assert.equal(v.driverId, "");
+  assert.equal(R.Fleet.save(s, "vehicles", Object.assign({}, VEH, { reg: "SK 5501N", driverId: "dr_nieistniejacy" }), ctx(s)).ok, false, "nieznany kierowca odrzucony");
+  const PURCHASE = { supplierId: "pa_drwal", basis: "DEKL", productId: "pr_zr_tow", qty: "5", unit: "MP", price: "50" };
+  const bad = R.planOperation(s, draft({ purchase: PURCHASE, transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "1", runs: [{ vehicleId: v.id, driverId: "", km: "10" }] } } }), ctx(s));
+  assert.ok(Object.keys(bad.errors || {}).some(k => /driverId/.test(k)), "kurs bez kierowcy — błąd przy polu kierowcy");
+  const ok = R.planOperation(s, draft({ purchase: PURCHASE, transport: { mode: "own", place: "RiC Zabrze", own: { runCount: "1", runs: [{ vehicleId: v.id, driverId: "dr_kowalski", km: "10" }] } } }), ctx(s));
+  assert.ok(!Object.keys(ok.errors || {}).some(k => /driverId/.test(k)), JSON.stringify(ok.errors));
+});

@@ -381,11 +381,13 @@
         title: `${op.no} — ${opTypeLabel(op)}`, sub: `${opStatusBadge(op)} ${mmBadge(op)} ${esc(App.whName(op.whId))} · ${esc(Dates.pl(op.date))}`, xwide: true, id: "op-detail", body,
         footer: `${canReceive(op) ? `<button class="btn primary" type="button" data-receive id="mm-receive-btn">${ic("inbox", 15)} ${th("Przyjmij MM…")}</button>` : ""}${canCancel ? `<button class="btn danger" type="button" data-cancel>${ic("ban", 15)} ${th("Anuluj dokument…")}</button>` : ""}${canDelete ? `<button class="btn danger ghost" type="button" data-delete id="op-delete-btn">${ic("trash", 15)} ${th("Usuń…")}</button>` : ""}
           ${canCorr ? `<a class="btn" href="#/korekta?op=${esc(op.id)}" data-correct>${ic("edit", 15)} ${th("Koryguj…")}</a>` : ""}
+          ${App.can("op.create") && op.input && !op.deleted ? `<a class="btn" href="#/nowa?repeat=${esc(op.id)}" data-repeat title="${esc(t("Kopia na dziś: te same strony, produkty, ilości, pojazdy i stawki — bez numerów kwitów"))}">${ic("undo", 15)} ${th("Powtórz")}</a>` : ""}
           <span class="spacer"></span>
           <button class="btn primary" type="button" data-close>${th("Zamknij")}</button>`
       });
       $("[data-close]", m.el).onclick = () => m.close();
       const cc = $("[data-correct]", m.el); if (cc) cc.addEventListener("click", () => m.close());
+      const rr = $("[data-repeat]", m.el); if (rr) rr.addEventListener("click", () => m.close());
       const cb = $("[data-cancel]", m.el); if (cb) cb.onclick = () => { m.close(); CancelDialog.open(op.id); };
       const db = $("[data-delete]", m.el); if (db) db.onclick = () => { m.close(); DeleteDialog.open(op.id); };
       const rb = $("[data-receive]", m.el); if (rb) rb.onclick = () => { m.close(); ReceiveDialog.open(op.id); };
@@ -1488,7 +1490,7 @@
         body += f("body", t("Zabudowa do przewozu zrębki"), `<select class="ctrl" id="fe-body"><option value="">${th("brak danych / nie dotyczy")}</option>${o(Object.entries(R.BODY_TYPES).map(([k, v]) => [k, t(v.label)]), rec.body || "")}</select>`, t("Pojemność maksymalna = długość × szerokość × wysokość przestrzeni ładunkowej (m³ = MP). Program liczy z niej zapełnienie każdego kursu."));
         body += `<div id="fe-comps" class="stack"></div><div class="info-line hidden" id="fe-cap"></div>`;
         body += f("status", t("Status"), `<select class="ctrl" id="fe-status">${o(Object.entries(R.ASSET_STATUS).map(([k, v]) => [k, t(v)]), rec.status)}</select>`, t("Pojazd używany w kursach nie jest usuwany — ustaw „Wycofany” (historia zostaje)."));
-        body += `<div data-own-only="own">${f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">— ${th("wybierz")} —</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Zmiana dotyczy przyszłych kursów."))}</div>`;
+        body += `<div data-own-only="own">${f("driverId", t("Kierowca domyślny"), `<select class="ctrl" id="fe-driverId"><option value="">—</option>${o(S.fleet.drivers.map(d => [d.id, d.name]), rec.driverId)}</select>`, t("Opcjonalnie: „—” = bez kierowcy domyślnego (kierowcę wybierasz w każdym kursie). Zmiana dotyczy przyszłych kursów."))}</div>`;
         body += `<div data-own-only="external">${f("driverName", t("Kierowca (jeśli stały)"), `<input class="ctrl" id="fe-driverName" value="${esc(rec.driverName || "")}" placeholder="${esc(t("imię i nazwisko"))}">`)}</div>`;
       }
       if (kind === "chippers") {

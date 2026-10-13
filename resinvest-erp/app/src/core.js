@@ -39,7 +39,7 @@
     truck: "M3 6h11v10H3zM14 10h4l3 3v3h-7M7 17.5a1.5 1.5 0 1 0 0 .01M17 17.5a1.5 1.5 0 1 0 0 .01",
     clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
     db: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
-    menu: "M4 6h16M4 12h16M4 18h16", chevDown: "M6 9l6 6 6-6", mail: "M3 6h18v12H3zM3 7l9 6 9-6", shieldCheck: "M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6zM9 12l2 2 4-4", play: "M7 4v16l13-8z", check: "M5 12l5 5L20 7", x: "M6 6l12 12M18 6 6 18",
+    menu: "M4 6h16M4 12h16M4 18h16", sbCollapse: "M4 4h16v16H4zM9 4v16M16 9l-3 3 3 3", sbExpand: "M4 4h16v16H4zM9 4v16M13 9l3 3-3 3", chevDown: "M6 9l6 6 6-6", mail: "M3 6h18v12H3zM3 7l9 6 9-6", shieldCheck: "M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6zM9 12l2 2 4-4", play: "M7 4v16l13-8z", check: "M5 12l5 5L20 7", x: "M6 6l12 12M18 6 6 18",
     alert: "M12 3 2 21h20zM12 10v5M12 18h.01", dl: "M12 4v12M7 11l5 5 5-5M5 20h14",
     print: "M7 8V3h10v5M7 17H4v-7h16v7h-3M7 14h10v7H7z", edit: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
     trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13", up: "M12 19V5M5 12l7-7 7 7",
@@ -660,11 +660,20 @@
     },
 
     /* ---------- powłoka ---------- */
+    /** Zwinięty panel boczny (same ikony, podpisy w podpowiedziach) — zapamiętywany w tej przeglądarce; Ctrl+B. */
+    setSidebarMini(on, silent) {
+      document.body.classList.toggle("sb-mini", !!on);
+      if (!silent) lsSet("riw.sbMini", on ? "1" : "");
+      const b = $("#sb-toggle"); if (!b) return;
+      const lbl = on ? t("Rozwiń panel boczny") : t("Zwiń panel boczny");
+      b.innerHTML = ic(on ? "sbExpand" : "sbCollapse", 18); b.title = lbl + " (Ctrl+B)"; b.setAttribute("aria-label", lbl); b.setAttribute("aria-expanded", String(!on));
+    },
     shell() {
       document.getElementById("app").innerHTML = `
         <div class="shell">
           <aside class="sidebar" aria-label="${esc(t("Nawigacja"))}">
-            <div class="sb-head"><div class="mark" aria-label="RiC — ResInvest Commodities">RiC</div><div class="sb-brand"><b>ResInvest ERP</b><span>${esc(t("Wersja {v}", { v: R.VERSION }))}</span></div></div>
+            <div class="sb-head"><div class="mark" aria-label="RiC — ResInvest Commodities">RiC</div><div class="sb-brand"><b>ResInvest ERP</b><span>${esc(t("Wersja {v}", { v: R.VERSION }))}</span></div>
+              <button class="icon-btn sb-toggle" id="sb-toggle" type="button"></button></div>
             <nav class="sb-nav" id="nav"></nav>
             <div class="sb-foot" id="sb-foot"></div>
           </aside>
@@ -689,6 +698,8 @@
         <div class="toasts" id="toasts" aria-live="polite"></div>
         <div class="chart-tip hidden" id="chart-tip" role="tooltip"></div>`;
       $("#menu-btn").onclick = () => document.body.classList.toggle("nav-open");
+      this.setSidebarMini(lsGet("riw.sbMini", "") === "1", true);
+      $("#sb-toggle").onclick = () => this.setSidebarMini(!document.body.classList.contains("sb-mini"));
       $("#scrim-nav").onclick = () => document.body.classList.remove("nav-open");
       $("#intro-btn").onclick = () => root.Intro && root.Intro.play({ force: true });
       $("#user-btn").onclick = e => this.userMenu(e.currentTarget);
@@ -698,6 +709,7 @@
       $("#wh-chip").onclick = e => this.whMenu(e.currentTarget);
       document.addEventListener("keydown", this._keys || (this._keys = e => {
         if (!Store.userId) return;
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b" && !e.shiftKey && !e.altKey) { e.preventDefault(); this.setSidebarMini(!document.body.classList.contains("sb-mini")); return; }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && !e.shiftKey) { e.preventDefault(); const i = THEME_LIST.findIndex(x => x.id === Prefs.theme); Prefs.setTheme(THEME_LIST[(i + 1) % THEME_LIST.length].id); }
       }));
       this.started = true;
@@ -784,7 +796,7 @@
       document.body.classList.remove("nav-open");
       const active = HIDDEN_ROUTES[route] ? HIDDEN_ROUTES[route].parent : route;
       $("#nav").innerHTML = NAV.filter(n => !n.perm || this.can(n.perm)).map(n => n.group ? `<div class="sb-group">${esc(t(n.group))}</div>` :
-        `<a class="nav-item" href="#/${n.id}" data-nav="${n.id}" ${n.id === active ? 'aria-current="page"' : ""}><span class="ic">${ic(n.icon, 17)}</span><span>${esc(t(n.label))}</span>${this.navBadge(n.id)}</a>`).join("");
+        `<a class="nav-item" href="#/${n.id}" data-nav="${n.id}" title="${esc(t(n.label))}" ${n.id === active ? 'aria-current="page"' : ""}><span class="ic">${ic(n.icon, 17)}</span><span class="nl">${esc(t(n.label))}</span>${this.navBadge(n.id)}</a>`).join("");
       this.refreshChrome();
       $("#top-new").classList.toggle("hidden", !this.can("op.create") || route === "nowa");
       const item = NAV.find(n => n.id === route) || HIDDEN_ROUTES[route];

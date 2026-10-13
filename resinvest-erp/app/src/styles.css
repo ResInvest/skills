@@ -894,3 +894,25 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
   .auth.prem .auth-tools{position:static;display:flex;flex-wrap:wrap;justify-content:center;margin:0 0 14px}
   .prem-panel{padding-top:20px}
 }
+
+/* ---------------- Zwinięty panel boczny (same ikony; Ctrl+B) — tylko komputer ---------------- */
+.sb-toggle{margin-left:auto;width:32px;height:32px;color:var(--text-3)}
+[data-theme="aurum"] .sb-toggle{color:#C9B98F} [data-theme="aurum"] .sb-toggle:hover{background:rgba(255,255,255,.08);color:#FFFFFF}
+@media (min-width:901px){
+  .shell{transition:grid-template-columns .2s var(--ease)}
+  body.sb-mini{--sidebar-w:72px}
+  body.sb-mini .sb-head{padding:0;justify-content:center;flex-direction:column;gap:6px;height:auto;padding:10px 0}
+  body.sb-mini .sb-brand,body.sb-mini .sb-head .mark{display:none}
+  body.sb-mini .sb-toggle{margin:0}
+  body.sb-mini .sb-nav{padding:var(--s2) 10px}
+  body.sb-mini .sb-group{font-size:0;padding:10px 0 6px;margin:0 6px;border-top:1px solid var(--border)}
+  [data-theme="aurum"] body.sb-mini .sb-group{border-top-color:rgba(194,161,90,.28)}
+  body.sb-mini .sb-group:first-child{border-top:0;padding-top:0}
+  body.sb-mini .nav-item{justify-content:center;padding:9px 0;gap:0}
+  body.sb-mini .nav-item .nl{display:none}
+  body.sb-mini .nav-item .cnt{position:absolute;top:2px;right:2px;margin:0;padding:0 5px;font-size:10px;line-height:15px}
+  body.sb-mini .nav-item[aria-current="page"]::before{left:-10px}
+  body.sb-mini .sb-foot{justify-content:center;padding:var(--s3) 0}
+  body.sb-mini .sb-foot > span:not(.conn-dot){display:none}
+}
+@media (max-width:900px){ .sb-toggle{display:none} }

@@ -60,7 +60,6 @@
   "Taki numer rejestracyjny już istnieje": ["Tato SPZ již existuje", "This registration number already exists"],
   "Wybierz typ pojazdu": ["Vyberte typ vozidla", "Select the vehicle type"],
   "Wybierz status": ["Vyberte stav", "Select a status"],
-  "Wybierz kierowcę domyślnego": ["Vyberte výchozího řidiče", "Select the default driver"],
   "Wybierz operatora domyślnego": ["Vyberte výchozí obsluhu", "Select the default operator"],
   "Taka osoba już istnieje": ["Tato osoba již existuje", "This person already exists"],
   "Nieznana kartoteka": ["Neznámý číselník", "Unknown master data type"],
