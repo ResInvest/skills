@@ -1,0 +1,60 @@
+# ResInvest ERP 4 — aplikacja Windows (Tauri 2): testy Rust, clippy i instalator NSIS „ResInvest ERP_<wersja>_x64-setup.exe”
+# budowany na runnerze windows-latest (decyzja z audytu 4.0, §7). Instalator jest artefaktem przebiegu (30 dni).
+name: ResInvest ERP 4 — aplikacja Windows
+
+on:
+  push:
+    paths: ["resinvest-erp-4/apps/desktop/**", ".github/workflows/resinvest-erp-4-desktop.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: riw4-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: resinvest-erp-4
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: resinvest-erp-4/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: resinvest-erp-4/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: resinvest-erp-4/apps/desktop/src-tauri
+      - run: pnpm install --frozen-lockfile --filter @resinvest/desktop
+      - name: Testy i clippy (Rust)
+        run: |
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+          cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Instalator NSIS
+        run: pnpm --filter @resinvest/desktop run build:installer
+      - name: Suma kontrolna instalatora
+        shell: pwsh
+        run: |
+          $f = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
+          $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+          "$h  $($f.Name)" | Out-File -Encoding ascii "$($f.FullName).sha256"
+          "Instalator: $($f.Name) ($([math]::Round($f.Length / 1MB, 1)) MB), SHA-256 $h" >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resinvest-erp-windows-instalator
+          path: |
+            resinvest-erp-4/apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            resinvest-erp-4/apps/desktop/src-tauri/target/release/bundle/nsis/*.sha256
+          retention-days: 30

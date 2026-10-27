@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+generated/
+apps/desktop/src-tauri/target/
+test-results/
+playwright-report/
+data/
+e2e/.state/
+e2e/test-results/
+e2e/playwright-report/
+apps/desktop/src-tauri/gen/
+
+# wersja demonstracyjna (generowana: apps/web/demo/build.mjs)
+apps/web/dist-demo/
+apps/web/demo/snapshot.json
+apps/web/demo/.mail/

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ResInvest ERP",
+  "version": "4.0.0",
+  "identifier": "group.resinvest.erp",
+  "build": { "frontendDist": "../setup" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https: http://localhost:* http://127.0.0.1:*"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "ResInvest Commodities",
+    "copyright": "© 2026 Roesner Mateusz dla ResInvest Commodities",
+    "category": "Business",
+    "shortDescription": "ResInvest ERP — system magazynowy",
+    "longDescription": "Aplikacja Windows systemu ResInvest ERP: okno natywne na serwer firmowy (dane pozostają na serwerze).",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": { "languages": ["Polish"], "installMode": "both", "displayLanguageSelector": false, "installerIcon": "icons/icon.ico" }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@resinvest/domain",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "description": "ResInvest ERP 4 — reguły domenowe (przeliczniki, tonaż, walidacja) wspólne dla API i frontendu",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  }
+}

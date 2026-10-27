@@ -1,0 +1,54 @@
+# ResInvest ERP 4 — środowisko testowe / serwer Linux (produkcja docelowo: Windows Server, patrz docs/WDROZENIE.md).
+# Sekrety w pliku .env obok tego pliku (nie w repozytorium):  POSTGRES_PASSWORD, DATABASE_URL, APP_URL, ALLOWED_NETWORKS …
+name: resinvest-erp
+
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: resinvest
+      POSTGRES_USER: resinvest
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Ustaw POSTGRES_PASSWORD w .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resinvest -d resinvest"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # baza NIE jest wystawiona poza sieć kontenerów
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: migrate }
+    environment:
+      DATABASE_URL: postgresql://resinvest:${POSTGRES_PASSWORD}@db:5432/resinvest?schema=public
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile, target: runtime }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://resinvest:${POSTGRES_PASSWORD}@db:5432/resinvest?schema=public
+      TRUSTED_PROXIES: 172.16.0.0/12
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/tls:/etc/nginx/tls:ro
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  db-data:

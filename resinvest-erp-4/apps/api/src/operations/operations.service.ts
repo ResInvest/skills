@@ -1,0 +1,478 @@
+import { HttpStatus, Injectable } from "@nestjs/common";
+import { autoNumber, eventsForDocuments, normalizeDocNumber, planOperation, planReceipt, simulate, balanceKey, shortageMessage, MM_DIFF_REASONS, PRODUCTION_DIFF_REASONS, KM_RATE_DEFAULT, type OperationInput, type TransportFleet, type OperationPlan, type PlanContext, type ReceiptInput, type Unit } from "@resinvest/domain";
+import { Prisma } from "../generated/prisma/client.js";
+import type { DocumentType } from "../generated/prisma/enums.js";
+import { AppError, badRequest, conflict, forbidden, notFound } from "../common/errors.js";
+import type { RequestMeta } from "../common/request-meta.js";
+import { AuditService } from "../audit/audit.service.js";
+import { PrismaService } from "../prisma/prisma.service.js";
+import type { Db } from "../prisma/tx.js";
+import { can, canAccessWarehouse, displayName, type AuthUser } from "../auth/auth-user.js";
+import { LedgerService, isNegativeStockViolation } from "../stock/ledger.service.js";
+import { companyRates, materialUnits } from "../stock/materials.js";
+import { todayWarsaw } from "../opening/opening.service.js";
+import { SettingsService } from "../settings/settings.service.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
+
+const PERM: Record<OperationInput["type"], string> = { PURCHASE: "receipts.create", SALE: "issues.create", PRODUCTION: "production.create", TRANSFER: "mm.create", DIRECT_SALE: "issues.create" };
+/** Rodzaj operacji w bazie: sprzedaż bezpośrednia to sprzedaż z produkcją w trybie DIRECT. */
+const DB_TYPE = (k: OperationPlan["type"]) => (k === "DIRECT_SALE" ? "SALE" : k);
+const asDate = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const invalid = (errors: Array<{ field: string; message: string }>) => badRequest("VALIDATION", errors[0]!.message, errors);
+
+/**
+ * Operacje z dokumentami: zakup (PZ), sprzedaż z magazynu (WZ), produkcja na magazynie (RW + PW).
+ * Reguły danych — pakiet domeny (planOperation, ten sam kod co podgląd w formularzu); tutaj: uprawnienia, izolacja
+ * magazynów, kartoteki (aktywne, właściwa rola kontrahenta), zamknięte okresy, numeracja i JEDNA transakcja:
+ * operacja + dokumenty + pozycje + ruchy (LedgerService, blokada sald) + produkcja + operacje dodatkowe + audyt.
+ */
+@Injectable()
+export class OperationsService {
+  constructor(private readonly db: PrismaService, private readonly ledger: LedgerService, private readonly audit: AuditService, private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService) {}
+
+  /** Podgląd przed zatwierdzeniem: plan + numery + stan przed / po (bez zapisu, bez blokad). */
+  async preview(actor: AuthUser, input: OperationInput) {
+    const { plan } = await this.prepare(this.db, actor, input);
+    const balances = new Map<string, string>();
+    for (const m of plan.movements) {
+      const b = await this.db.stockBalance.findUnique({ where: { warehouseId_materialId: { warehouseId: m.warehouseId, materialId: m.materialId } } });
+      balances.set(balanceKey(m.warehouseId, m.materialId), b?.qty.toString() ?? "0");
+    }
+    const sim = simulate(balances, plan.movements);
+    if (plan.numbering.mode === "MANUAL" && plan.numbering.number) {
+      // wczesna informacja przy polu; ostateczne sprawdzenie i tak następuje pod blokadą przy zapisie
+      const year = Number(plan.documentDate.slice(0, 4));
+      const type = plan.documents[this.mainIndex(plan)]!.type;
+      if (await this.numberTaken(this.db, type, plan.warehouseId, year, plan.numbering.number)) {
+        const wh = await this.db.warehouse.findUnique({ where: { id: plan.warehouseId }, select: { name: true } });
+        throw invalid([{ field: "numbering.number", message: `Numer ${plan.numbering.number} jest już użyty w magazynie ${wh?.name ?? ""} w roku ${year}` }]);
+      }
+    }
+    const numbers = await Promise.all(plan.documents.map(async (d, i) => (i === this.mainIndex(plan) && plan.numbering.mode === "MANUAL" ? plan.numbering.number : this.nextNumber(this.db, d.type, plan.warehouseId, plan.date, Number(plan.documentDate.slice(0, 4))))));
+    const shortages = await Promise.all(sim.shortages.map(async s => {
+      const m = await this.db.material.findUnique({ where: { id: s.materialId }, select: { name: true, stockUnit: true } });
+      return { ...s, message: shortageMessage(s, m?.name ?? "materiał", (m?.stockUnit ?? "T") as Unit) };
+    }));
+    return { plan, numbers, steps: sim.steps, shortages };
+  }
+
+  async create(actor: AuthUser, input: OperationInput, idempotencyKey: string, meta: RequestMeta) {
+    const existing = await this.db.operation.findUnique({ where: { idempotencyKey } });
+    if (existing) {
+      // powtórzone wysłanie formularza (podwójne kliknięcie, ponowienie po zerwaniu połączenia) — ta sama operacja
+      if (existing.createdById !== actor.id) throw conflict("IDEMPOTENCY_KEY", "Ten identyfikator żądania został już użyty.");
+      return this.get(actor, existing.id);
+    }
+    let opId: string;
+    try {
+      opId = await this.db.$transaction(async tx => {
+        // równoczesne żądania z tym samym kluczem czekają na siebie — drugie zwraca operację utworzoną przez pierwsze
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`idem:${idempotencyKey}`}))`;
+        const dup = await tx.operation.findUnique({ where: { idempotencyKey }, select: { id: true, createdById: true } });
+        if (dup) { if (dup.createdById !== actor.id) throw conflict("IDEMPOTENCY_KEY", "Ten identyfikator żądania został już użyty."); return dup.id; }
+        const { plan } = await this.prepare(tx, actor, input);
+        const main = this.mainIndex(plan);
+        const numbers: string[] = [];
+        for (const [i, d] of plan.documents.entries()) {
+          // numeracja szeregowana blokadą doradczą (typ + magazyn + rok) — dwa równoczesne zapisy nie dostaną tego samego numeru
+          const year = Number(plan.documentDate.slice(0, 4));
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`docno:${d.type}:${plan.warehouseId}:${year}`}))`;
+          if (i === main && plan.numbering.mode === "MANUAL") {
+            const n = plan.numbering.number!;
+            if (await this.numberTaken(tx, d.type, plan.warehouseId, year, n)) {
+              const wh = await tx.warehouse.findUnique({ where: { id: plan.warehouseId }, select: { name: true } });
+              throw invalid([{ field: "numbering.number", message: `Numer ${n} jest już użyty w magazynie ${wh?.name ?? ""} w roku ${year}` }]);
+            }
+            numbers.push(n);
+          } else numbers.push(await this.nextNumber(tx, d.type, plan.warehouseId, plan.date, year));
+        }
+        const now = new Date();
+        const op = await tx.operation.create({ data: {
+          type: DB_TYPE(plan.type), status: "POSTED", warehouseId: plan.warehouseId, operationDate: asDate(plan.date), idempotencyKey,
+          targetWarehouseId: plan.transfer?.targetWarehouseId ?? null, transferState: plan.transfer ? (plan.transfer.twoStage ? "IN_TRANSIT" : "RECEIVED") : null,
+          notes: input.notes?.trim() || null, purchaseCost: plan.totals.purchaseCost, revenue: plan.totals.revenue, chippingCost: plan.totals.chippingCost,
+          additionalCost: plan.totals.additionalCost, transportCost: plan.totals.transportCost, transportMode: plan.transport?.mode ?? "NONE", place: plan.transport?.place ?? null,
+          input: input as unknown as Prisma.InputJsonValue, createdById: actor.id, postedAt: now, postedById: actor.id,
+        } });
+        const docs: Array<{ doc: { id: string }; lines: Array<{ id: string }> }> = [];
+        for (const [i, d] of plan.documents.entries()) {
+          const doc = await tx.document.create({ data: {
+            operationId: op.id, type: d.type, number: numbers[i]!, year: Number(plan.documentDate.slice(0, 4)), warehouseId: plan.warehouseId,
+            documentDate: asDate(plan.documentDate), movementDate: asDate(plan.date), partnerId: d.partnerId, externalNumber: input.externalNumber?.trim() || null, createdById: actor.id,
+          } });
+          const lines: Array<{ id: string }> = [];
+          for (const [j, l] of d.lines.entries()) {
+            lines.push(await tx.documentLine.create({ data: {
+              documentId: doc.id, lineNo: j + 1, materialId: l.materialId, qtySource: l.qtySource, unitSource: l.unitSource, qtyStock: l.qtyStock, unitStock: l.unitStock,
+              conversionFactor: l.factor, conversionSource: l.source, weightT: l.weightT, weightSource: l.weightSource, unitPrice: l.unitPrice, priceUnit: l.priceUnit, value: l.value,
+            } }));
+          }
+          docs.push({ doc, lines });
+        }
+        await this.ledger.post(tx, { operationId: op.id, movementDate: asDate(plan.date), createdById: actor.id, movements: plan.movements.map(m => ({
+          warehouseId: m.warehouseId, materialId: m.materialId, qty: m.qty, kind: m.kind, documentId: docs[m.doc]!.doc.id, documentLineId: docs[m.doc]!.lines[m.line]!.id,
+        })) });
+        if (plan.production) {
+          const pr = plan.production, who = chipperOf(input);
+          await tx.productionRun.create({ data: {
+            operationId: op.id, mode: pr.mode, rawMaterialId: pr.rawMaterialId || null, outMaterialId: pr.outMaterialId, consumeQty: pr.consumeQty,
+            outQty: pr.outQty, factor: pr.factor, chipRate: pr.chipRate, chippingCost: pr.chippingCost, chipperId: who.chipperId, operatorId: who.operatorId,
+            diffReason: pr.diffReason, forestDistrict: pr.forestDistrict, forestry: pr.forestry, waybill: pr.waybill, investSite: pr.investSite, sourceDoc: pr.sourceDoc,
+          } });
+        }
+        for (const r of plan.transport?.runs ?? []) {
+          await tx.transportRun.create({ data: {
+            operationId: op.id, runNo: r.runNo, ownership: r.ownership, vehicleId: r.vehicleId, driverId: r.driverId, externalCompanyId: r.externalCompanyId,
+            registration: r.registration, driverName: r.driverName, km: r.km, ratePerKm: r.ratePerKm, freight: r.freight, cost: r.cost,
+            qty: r.qty, unit: r.unit, weightT: r.weightT, waybillNo: r.waybillNo, waybillM3: r.waybillM3,
+            train: r.train ? (r.train as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+          } });
+        }
+        for (const x of plan.extras) {
+          await tx.additionalOperation.create({ data: { operationId: op.id, typeId: x.typeId, warehouseId: plan.warehouseId, vehicleId: x.vehicleId, performedOn: asDate(plan.date),
+            quantity: x.quantity, cost: x.cost, description: x.description, createdById: actor.id } });
+        }
+        await this.audit.log(tx, actor, meta, { action: "OPERATION_CREATED", entity: "operation", entityId: op.id, warehouseId: plan.warehouseId,
+          after: { rodzaj: plan.type, dokumenty: numbers, data: plan.date, kwoty: plan.totals, operacjeDodatkowe: plan.extras.length,
+            ...(plan.transfer ? { magazynDocelowy: plan.transfer.targetWarehouseId, mm: plan.transfer.twoStage ? "dwuetapowe — w drodze" : "jednoetapowe — przyjęte" } : {}) } });
+        // powiadomienia — do kolejki poczty w tej samej transakcji (błąd poczty nie cofa operacji)
+        const whs = await tx.warehouse.findMany({ where: { id: { in: [plan.warehouseId, ...(plan.transfer ? [plan.transfer.targetWarehouseId] : [])] } }, select: { id: true, name: true } });
+        const whName = (id: string) => whs.find(w => w.id === id)?.name ?? "";
+        await this.notifications.notify(tx, actor, {
+          events: eventsForDocuments(plan.documents.map(d => d.type), plan.extras.length), warehouseIds: whs.map(w => w.id), numbers, path: "/dokumenty", ref: `operation:${op.id}`,
+          lines: [`Magazyn: ${whName(plan.warehouseId)}${plan.transfer ? ` → ${whName(plan.transfer.targetWarehouseId)}` : ""}`, `Data operacji: ${plan.date}`, `Dokumenty: ${numbers.join(", ")}`,
+            ...plan.summary, ...moneyLines(plan.totals), ...plan.extras.map(x => `Operacja dodatkowa: ${x.typeName} — ${x.cost} zł`)],
+        });
+        return op.id;
+      }, { timeout: 20_000 });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const op = await this.db.operation.findUnique({ where: { idempotencyKey } });
+        if (op && op.createdById === actor.id) return this.get(actor, op.id);
+        throw invalid([{ field: "numbering.number", message: "Ten numer dokumentu jest już użyty w tym magazynie i roku" }]);
+      }
+      if (isNegativeStockViolation(e)) throw new AppError(HttpStatus.CONFLICT, "STOCK_INSUFFICIENT", "Operacja zmniejszyłaby stan poniżej zera.");
+      throw e;
+    }
+    return this.get(actor, opId);
+  }
+
+  async get(actor: AuthUser, id: string) {
+    const op = await this.db.operation.findUnique({ where: { id }, include: {
+      warehouse: true, documents: { include: { lines: { include: { material: true } }, partner: true }, orderBy: { createdAt: "asc" } },
+      movements: { orderBy: { seq: "asc" } }, productionRun: { include: { chipper: true, operator: true } }, additionalOperations: { where: { deletedAt: null }, include: { type: true, vehicle: true } },
+      transportRuns: { include: { vehicle: true, driver: true, externalCompany: true }, orderBy: { runNo: "asc" } },
+      targetWarehouse: true, transferReceipt: true, _count: { select: { corrections: true } },
+    } });
+    // MM widzi także magazyn docelowy (przyjęcie); pozostałe operacje — tylko magazyn operacji
+    if (!op || !(canAccessWarehouse(actor, op.warehouseId) || (op.targetWarehouseId && canAccessWarehouse(actor, op.targetWarehouseId)))) throw notFound("Nie znaleziono operacji.");
+    const userIds = [op.createdById, ...(op.transferReceipt ? [op.transferReceipt.createdById] : [])];
+    const users = new Map((await this.db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, firstName: true, lastName: true } })).map(u => [u.id, displayName(u)]));
+    const rc = op.transferReceipt;
+    const S = (v: Prisma.Decimal | null | undefined) => (v === null || v === undefined ? null : v.toString());
+    return {
+      id: op.id, type: op.type, status: op.status, warehouse: { id: op.warehouse.id, code: op.warehouse.code, name: op.warehouse.name }, operationDate: isoDay(op.operationDate),
+      notes: op.notes, createdAt: op.createdAt, createdBy: users.get(op.createdById) ?? null, version: op.version,
+      // migawka formularza — korekta otwiera formularz z tymi danymi; liczba korekt i usunięcie — do oznaczeń w widoku
+      input: op.input, corrections: op._count.corrections,
+      deleted: op.status === "DELETED" ? { at: op.deletedAt, reason: op.deleteReason } : null,
+      totals: { purchaseCost: S(op.purchaseCost), revenue: S(op.revenue), chippingCost: S(op.chippingCost), additionalCost: S(op.additionalCost), transportCost: S(op.transportCost) },
+      documents: op.documents.map(d => ({ id: d.id, type: d.type, number: d.number, documentDate: isoDay(d.documentDate), movementDate: isoDay(d.movementDate), externalNumber: d.externalNumber,
+        partner: d.partner ? { id: d.partner.id, name: d.partner.name } : null,
+        lines: d.lines.map(l => ({ lineNo: l.lineNo, material: { id: l.material.id, code: l.material.code, name: l.material.name }, qtySource: S(l.qtySource), unitSource: l.unitSource,
+          qtyStock: S(l.qtyStock), unitStock: l.unitStock, factor: S(l.conversionFactor), source: l.conversionSource, weightT: S(l.weightT), weightSource: l.weightSource,
+          unitPrice: S(l.unitPrice), priceUnit: l.priceUnit, value: S(l.value) })) })),
+      production: op.productionRun ? { mode: op.productionRun.mode, diffReason: op.productionRun.diffReason,
+        diffReasonLabel: op.productionRun.diffReason ? (PRODUCTION_DIFF_REASONS as Record<string, string>)[op.productionRun.diffReason] ?? op.productionRun.diffReason : null,
+        forestDistrict: op.productionRun.forestDistrict, forestry: op.productionRun.forestry, waybill: op.productionRun.waybill, investSite: op.productionRun.investSite, sourceDoc: op.productionRun.sourceDoc,
+        consumeQty: S(op.productionRun.consumeQty), outQty: S(op.productionRun.outQty), factor: S(op.productionRun.factor), chipRate: S(op.productionRun.chipRate),
+        chippingCost: S(op.productionRun.chippingCost), chipper: op.productionRun.chipper?.name ?? null, operator: op.productionRun.operator?.name ?? op.productionRun.chipper?.externalOperator ?? null } : null,
+      extras: op.additionalOperations.map(x => ({ id: x.id, type: x.type.name, vehicle: x.vehicle ? `${x.vehicle.registration} · ${x.vehicle.name}` : null, quantity: S(x.quantity), cost: S(x.cost), description: x.description })),
+      movements: op.movements.map(m => ({ warehouseId: m.warehouseId, materialId: m.materialId, kind: m.kind, qty: m.qty.toString(), movementDate: isoDay(m.movementDate) })),
+      transport: op.transportMode === "NONE" ? null : {
+        mode: op.transportMode, place: op.place, cost: S(op.transportCost),
+        runs: op.transportRuns.map(r => ({ runNo: r.runNo, ownership: r.ownership, vehicle: r.vehicle ? `${r.vehicle.registration} · ${r.vehicle.name}` : null, registration: r.registration,
+          driver: r.driver?.name ?? r.driverName ?? null, company: r.externalCompany?.name ?? null, km: S(r.km), ratePerKm: S(r.ratePerKm), freight: S(r.freight), cost: S(r.cost),
+          qty: S(r.qty), unit: r.unit, weightT: S(r.weightT), waybillNo: r.waybillNo, waybillM3: S(r.waybillM3), train: r.train })),
+      },
+      transfer: op.type === "TRANSFER" && op.targetWarehouse ? {
+        target: { id: op.targetWarehouse.id, code: op.targetWarehouse.code, name: op.targetWarehouse.name }, state: op.transferState,
+        twoStage: !!rc || op.transferState === "IN_TRANSIT",
+        receipt: rc ? { date: isoDay(rc.receivedDate), qty: S(rc.qty), unit: rc.unit, qtyStock: S(rc.qtyStock), diffStock: S(rc.diffStock), reason: rc.reason,
+          reasonLabel: rc.reason ? (MM_DIFF_REASONS as Record<string, string>)[rc.reason] ?? rc.reason : null, note: rc.note, weightT: S(rc.weightT), weightSource: rc.weightSource,
+          createdAt: rc.createdAt, createdBy: users.get(rc.createdById) ?? null } : null,
+      } : null,
+    };
+  }
+
+  /** Rejestr dokumentów: domyślnie PZ / WZ / MM (dokumenty pomocnicze RW, PW, BO — na żądanie). */
+  async register(actor: AuthUser, q: { warehouseId: string; type?: string; from?: string; to?: string; q?: string; aux?: boolean; page: number; pageSize: number }) {
+    if (!canAccessWarehouse(actor, q.warehouseId)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
+    const MAIN = ["PZ", "WZ", "MM"] as const;
+    const types = q.type ? [q.type] : q.aux ? undefined : [...MAIN];
+    const where: Prisma.DocumentWhereInput = {
+      // usunięte są w zakładce „Usunięte”, nie w rejestrze
+      operation: { status: { not: "DELETED" } },
+      // MM jest w rejestrze magazynu źródłowego i docelowego
+      OR: [{ warehouseId: q.warehouseId }, { type: "MM", operation: { targetWarehouseId: q.warehouseId } }],
+      ...(types ? { type: { in: types as DocumentType[] } } : {}),
+      ...(q.from || q.to ? { movementDate: { ...(q.from ? { gte: asDate(q.from) } : {}), ...(q.to ? { lte: asDate(q.to) } : {}) } } : {}),
+      ...(q.q?.trim() ? { AND: [{ OR: [{ number: { contains: q.q.trim(), mode: "insensitive" } }, { partner: { name: { contains: q.q.trim(), mode: "insensitive" } } }, { externalNumber: { contains: q.q.trim(), mode: "insensitive" } }] }] } : {}),
+    };
+    const [total, rows] = await Promise.all([
+      this.db.document.count({ where }),
+      this.db.document.findMany({ where, include: { partner: true, lines: { include: { material: true } }, operation: { select: { id: true, type: true, status: true, transferState: true, _count: { select: { corrections: true } }, transportCost: true, transportMode: true, place: true, warehouse: { select: { id: true, name: true } }, targetWarehouse: { select: { id: true, name: true } } } } },
+        orderBy: [{ movementDate: "desc" }, { createdAt: "desc" }], skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
+    ]);
+    return { total, rows: rows.map(d => ({
+      id: d.id, type: d.type, number: d.number, documentDate: isoDay(d.documentDate), movementDate: isoDay(d.movementDate), createdAt: d.createdAt,
+      partner: d.partner?.name ?? null, operationId: d.operationId, operationType: d.operation.type, status: d.operation.status, externalNumber: d.externalNumber,
+      transfer: d.type === "MM" && d.operation.targetWarehouse ? { from: d.operation.warehouse.name, to: d.operation.targetWarehouse.name, state: d.operation.transferState,
+        direction: d.operation.targetWarehouse.id === q.warehouseId ? "IN" : "OUT" } : null,
+      lines: d.lines.map(l => ({ material: l.material.name, qtySource: l.qtySource.toString(), unitSource: l.unitSource, qtyStock: l.qtyStock.toString(), unitStock: l.unitStock,
+        weightT: l.weightT?.toString() ?? null, weightSource: l.weightSource, value: l.value?.toString() ?? null })),
+      // TR nie ma pozycji towarowych — wartością dokumentu jest koszt transportu operacji
+      value: d.type === "TR" ? d.operation.transportCost.toString() : d.lines.reduce((a, l) => a.plus(l.value ?? 0), new Prisma.Decimal(0)).toString(),
+      place: d.operation.place, corrections: d.operation._count.corrections,
+    })) };
+  }
+
+  /** Dane formularza: kontrahenci, materiały, rodzaje operacji dodatkowych, pojazdy i rębaki magazynu, operatorzy, stany. */
+  async formData(actor: AuthUser, warehouseId: string) {
+    if (!canAccessWarehouse(actor, warehouseId)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
+    const fleetWh = { OR: [{ warehouseId: null }, { warehouseId }] };
+    const [partners, materials, extraTypes, vehicles, chippers, operators, balances, drivers, companies] = await Promise.all([
+      this.db.partner.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true, kind: true, forestries: true } }),
+      this.db.material.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+      this.db.additionalOperationType.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
+      this.db.vehicle.findMany({ where: { status: { not: "RETIRED" }, ...fleetWh }, orderBy: { registration: "asc" },
+        select: { id: true, name: true, registration: true, status: true, ownership: true, defaultDriverId: true, warehouseId: true } }),
+      this.db.chipper.findMany({ where: { status: { not: "RETIRED" }, ...fleetWh }, orderBy: { name: "asc" }, include: { externalCompany: true } }),
+      this.db.operator.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      this.db.stockBalance.findMany({ where: { warehouseId } }),
+      this.db.driver.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, active: true } }),
+      this.db.externalCompany.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, kind: true, active: true } }),
+    ]);
+    return {
+      partners, operators, vehicles, drivers, companies, kmRateDefault: KM_RATE_DEFAULT,
+      materials: materials.map(m => ({ ...materialUnits(m), code: m.code, category: m.category })),
+      extraTypes: extraTypes.map(t => ({ id: t.id, name: t.name, active: t.active, unit: t.unit, defaultRate: t.defaultRate?.toString() ?? null })),
+      chippers: chippers.map(c => ({ id: c.id, name: c.name, ownership: c.ownership, company: c.externalCompany?.name ?? null, operatorId: c.operatorId, externalOperator: c.externalOperator })),
+      balances: Object.fromEntries(balances.map(b => [b.materialId, b.qty.toString()])),
+      rates: await companyRates(this.db, asDate(todayWarsaw())),
+      today: todayWarsaw(),
+      // MM: cel może być dowolnym aktywnym magazynem firmy (przyjmuje go użytkownik magazynu docelowego)
+      warehouses: await this.db.warehouse.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, code: true, name: true } }),
+      mmTwoStage: (await this.settings.get("mm.mode")) !== "one",
+    };
+  }
+
+  /**
+   * Przyjęcie MM dwuetapowego w magazynie docelowym: blokada wiersza operacji (dwa równoczesne przyjęcia — drugie
+   * widzi stan „przyjęte”), reguły domeny (planReceipt), ruch TRANSFER_IN w księdze, zapis przyjęcia, stan RECEIVED, audyt.
+   * Powtórzenie z tym samym kluczem idempotencji zwraca operację bez drugiego ruchu.
+   */
+  async receive(actor: AuthUser, id: string, input: ReceiptInput, idempotencyKey: string, meta: RequestMeta) {
+    const done = await this.db.transferReceipt.findUnique({ where: { idempotencyKey } });
+    if (done) {
+      if (done.operationId !== id || done.createdById !== actor.id) throw conflict("IDEMPOTENCY_KEY", "Ten identyfikator żądania został już użyty.");
+      return this.get(actor, id);
+    }
+    if (!can(actor, "mm.receive")) throw forbidden("Nie masz uprawnień do przyjmowania MM.");
+    try {
+      await this.db.$transaction(async tx => {
+        const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "operations" WHERE "id" = ${id}::uuid FOR UPDATE`;
+        if (!locked.length) throw notFound("Nie znaleziono dokumentu MM.");
+        const dup = await tx.transferReceipt.findUnique({ where: { idempotencyKey } });
+        if (dup) return;
+        const op = await tx.operation.findUnique({ where: { id }, include: { documents: { where: { type: "MM" }, include: { lines: { include: { material: true } } } }, targetWarehouse: true } });
+        if (!op || op.type !== "TRANSFER" || !op.targetWarehouse) throw notFound("Nie znaleziono dokumentu MM.");
+        const doc = op.documents[0], line = doc?.lines[0];
+        if (!doc || !line) throw notFound("Nie znaleziono dokumentu MM.");
+        if (!canAccessWarehouse(actor, op.targetWarehouse.id)) throw forbidden(`MM przyjmuje użytkownik magazynu docelowego (${op.targetWarehouse.name}) albo Administrator.`, "WAREHOUSE_FORBIDDEN");
+        if (op.status !== "POSTED") throw conflict("MM_NOT_POSTED", `Dokument ${doc.number} nie jest zatwierdzony — nie można go przyjąć.`);
+        if (op.transferState === "RECEIVED") {
+          const prev = await tx.transferReceipt.findUnique({ where: { operationId: op.id } });
+          throw conflict("MM_RECEIVED", prev ? `Dokument ${doc.number} został już przyjęty (${isoDay(prev.receivedDate)}).` : `Dokument ${doc.number} został przyjęty automatycznie (MM jednoetapowe).`);
+        }
+        const rates = await companyRates(tx, asDate(todayWarsaw()));
+        const r = planReceipt(input, { material: { ...materialUnits(line.material), name: line.material.name }, sentQtyStock: line.qtyStock.toString(), sentDate: isoDay(op.operationDate),
+          sentUnit: line.unitSource, today: todayWarsaw(), rates });
+        if (!r.ok) throw invalid(r.errors);
+        const closed = await tx.inventoryPeriod.findFirst({ where: { warehouseId: op.targetWarehouse.id, period: r.plan.date.slice(0, 7), status: "CLOSED" } });
+        if (closed) throw invalid([{ field: "date", message: `W magazynie ${op.targetWarehouse.name} okres ${closed.period} jest zamknięty` }]);
+        if (Number(r.plan.qtyStock) > 0) {
+          await this.ledger.post(tx, { operationId: op.id, movementDate: asDate(r.plan.date), createdById: actor.id, movements: [
+            { warehouseId: op.targetWarehouse.id, materialId: line.materialId, qty: r.plan.qtyStock, kind: "TRANSFER_IN", documentId: doc.id, documentLineId: line.id },
+          ] });
+        }
+        await tx.transferReceipt.create({ data: {
+          operationId: op.id, receivedDate: asDate(r.plan.date), qty: r.plan.qtySource, unit: r.plan.unitSource, qtyStock: r.plan.qtyStock, diffStock: r.plan.diffStock,
+          reason: r.plan.reason, note: r.plan.note, weightT: r.plan.weightT, weightSource: r.plan.weightSource, idempotencyKey, createdById: actor.id,
+        } });
+        await tx.operation.update({ where: { id: op.id }, data: { transferState: "RECEIVED", version: { increment: 1 } } });
+        await this.notifications.notify(tx, actor, { events: ["STOCK_OPERATION"], warehouseIds: [op.warehouseId, op.targetWarehouse.id], numbers: [doc.number], path: "/dokumenty", ref: `operation:${op.id}`,
+          lines: [`Przyjęcie MM ${doc.number} w magazynie ${op.targetWarehouse.name}`, `Przyjęto: ${r.plan.qtyStock} (wysłano ${line.qtyStock.toString()})`, `Data przyjęcia: ${r.plan.date}`,
+            ...(r.plan.reason ? [`Różnica: ${r.plan.diffStock} — ${MM_DIFF_REASONS[r.plan.reason]}`] : [])] });
+        await this.audit.log(tx, actor, meta, { action: "MM_RECEIVED", entity: "operation", entityId: op.id, warehouseId: op.targetWarehouse.id,
+          before: { mm: "w drodze", wyslano: line.qtyStock.toString() },
+          after: { mm: "przyjęte", dokument: doc.number, przyjeto: r.plan.qtyStock, roznica: r.plan.diffStock, przyczyna: r.plan.reason ? MM_DIFF_REASONS[r.plan.reason] : null, opis: r.plan.note, data: r.plan.date, tonaz: r.plan.weightT } });
+      }, { timeout: 20_000 });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const rc = await this.db.transferReceipt.findUnique({ where: { idempotencyKey } });
+        if (rc && rc.operationId === id && rc.createdById === actor.id) return this.get(actor, id);
+        throw conflict("MM_RECEIVED", "Dokument MM został już przyjęty.");
+      }
+      throw e;
+    }
+    return this.get(actor, id);
+  }
+
+  /** MM w drodze (dwuetapowe, nieprzyjęte) dla magazynu: IN — do przyjęcia, OUT — wysłane. */
+  async inTransit(actor: AuthUser, warehouseId: string) {
+    if (!canAccessWarehouse(actor, warehouseId)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
+    const ops = await this.db.operation.findMany({
+      where: { type: "TRANSFER", status: "POSTED", transferState: "IN_TRANSIT", OR: [{ warehouseId }, { targetWarehouseId: warehouseId }] },
+      include: { warehouse: true, targetWarehouse: true, documents: { where: { type: "MM" }, include: { lines: { include: { material: true } } } } },
+      orderBy: [{ operationDate: "asc" }, { createdAt: "asc" }],
+    });
+    return ops.map(op => {
+      const d = op.documents[0], l = d?.lines[0];
+      return { operationId: op.id, number: d?.number ?? "", date: isoDay(op.operationDate), direction: op.targetWarehouseId === warehouseId ? "IN" as const : "OUT" as const,
+        from: { id: op.warehouse.id, name: op.warehouse.name }, to: { id: op.targetWarehouse?.id ?? "", name: op.targetWarehouse?.name ?? "" },
+        material: l ? materialUnits(l.material) : null,
+        qtySource: l?.qtySource.toString() ?? "0", unitSource: l?.unitSource ?? "T", qtyStock: l?.qtyStock.toString() ?? "0", weightT: l?.weightT?.toString() ?? null };
+    });
+  }
+
+  /** Kolejny numer automatyczny (podgląd albo rezerwacja w transakcji pod blokadą). */
+  async nextNumber(db: Db, type: string, warehouseId: string, date: string, year = Number(date.slice(0, 4))): Promise<string> {
+    const month = await db.document.count({ where: { type: type as never, warehouseId, movementDate: { gte: asDate(`${date.slice(0, 7)}-01`), lt: asDate(nextMonth(date)) } } });
+    for (let seq = month + 1; seq < month + 1000; seq++) {
+      const n = autoNumber(type, seq, date);
+      if (!(await this.numberTaken(db, type, warehouseId, year, n))) return n;
+    }
+    throw conflict("NUMBERING", "Nie można nadać numeru dokumentu.");
+  }
+
+  private async numberTaken(db: Db, type: string, warehouseId: string, year: number, n: string): Promise<boolean> {
+    const rows = await db.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM "documents" WHERE "type"::text = ${type} AND "warehouse_id" = ${warehouseId}::uuid AND "year" = ${year}
+      AND upper(regexp_replace("number", '\\s', '', 'g')) = ${normalizeDocNumber(n)}`;
+    return Number(rows[0]?.n ?? 0) > 0;
+  }
+
+  private mainIndex(plan: OperationPlan) { return Math.max(0, plan.documents.findIndex(d => d.main)); }
+
+  /**
+   * Uprawnienia, magazyn, okres, kartoteki — i plan z reguł domeny.
+   * Korekta (`correction`): prawa do wprowadzania zastępuje prawo do korekty (sprawdza ChangesService), a tryb MM
+   * jest ten, w którym dokument powstał (zmiana ustawienia nie zmienia starych dokumentów).
+   */
+  async prepare(db: Db, actor: AuthUser, input: OperationInput, opts: { correction?: boolean; twoStage?: boolean } = {}): Promise<{ plan: OperationPlan }> {
+    if (!PERM[input.type]) throw badRequest("VALIDATION", "Nieznany rodzaj operacji");
+    // zakup z produkcją / sprzedaż bezpośrednia: także prawo do produkcji; sprzedaż wyniku zakupu — prawo do wydań
+    const withProduction = input.type === "DIRECT_SALE" || (input.type === "PURCHASE" && !!input.production?.enabled);
+    if (!opts.correction) {
+      if (!can(actor, PERM[input.type]!)) throw forbidden("Nie masz uprawnień do tego rodzaju operacji.");
+      if (withProduction && !can(actor, "production.create")) throw forbidden("Nie masz uprawnień do produkcji.");
+      if (input.type === "PURCHASE" && input.sale && !can(actor, "issues.create")) throw forbidden("Nie masz uprawnień do sprzedaży.");
+      if ((input.extras ?? []).length && !can(actor, "additional.create")) throw forbidden("Nie masz uprawnień do operacji dodatkowych.");
+    }
+    const wh = await db.warehouse.findUnique({ where: { id: input.warehouseId } });
+    if (!wh || !canAccessWarehouse(actor, wh.id)) throw forbidden("Nie masz dostępu do tego magazynu.", "WAREHOUSE_FORBIDDEN");
+    if (!wh.active) throw badRequest("WAREHOUSE_INACTIVE", `Magazyn ${wh.name} jest nieaktywny.`);
+    const today = todayWarsaw();
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(input.date ?? "") ? input.date : today;
+    const closed = await db.inventoryPeriod.findFirst({ where: { warehouseId: wh.id, period: day.slice(0, 7), status: "CLOSED" } });
+    if (closed) throw invalid([{ field: "date", message: `Okres ${closed.period} jest zamknięty — zmiany tylko przez korektę z bieżącą datą` }]);
+
+    const [materials, extraTypes, rates, mmMode] = await Promise.all([
+      db.material.findMany(), db.additionalOperationType.findMany(), companyRates(db, asDate(day)), this.settings.get("mm.mode"),
+    ]);
+    const fleet = input.transport && input.transport.mode !== "NONE" ? await loadFleet(db) : undefined;
+    const twoStage = opts.twoStage ?? mmMode !== "one";
+    const targetErrors: Array<{ field: string; message: string }> = [];
+    if (input.type === "TRANSFER" && input.targetWarehouseId && input.targetWarehouseId !== wh.id) {
+      const tw = isUuid(input.targetWarehouseId) ? await db.warehouse.findUnique({ where: { id: input.targetWarehouseId } }) : null;
+      if (!tw) targetErrors.push({ field: "targetWarehouseId", message: "Nieznany magazyn docelowy" });
+      else if (!tw.active) targetErrors.push({ field: "targetWarehouseId", message: `Magazyn docelowy ${tw.name} jest nieaktywny` });
+      else if (!twoStage) {
+        // jednoetapowe: przychód w celu z datą operacji — okres celu musi być otwarty
+        const tc = await db.inventoryPeriod.findFirst({ where: { warehouseId: tw.id, period: day.slice(0, 7), status: "CLOSED" } });
+        if (tc) targetErrors.push({ field: "date", message: `W magazynie ${tw.name} okres ${tc.period} jest zamknięty` });
+      }
+    }
+    const ctx: PlanContext = {
+      materials: new Map(materials.map(m => [m.id, { ...materialUnits(m), category: m.category }])),
+      extraTypes: new Map(extraTypes.map(t => [t.id, { id: t.id, name: t.name, active: t.active, unit: t.unit, defaultRate: t.defaultRate?.toString() ?? null }])),
+      rates, today, transferTwoStage: twoStage, kmRateDefault: KM_RATE_DEFAULT, ...(fleet ? { fleet } : {}),
+    };
+    const r = planOperation(input, ctx);
+    const errors = [...(r.ok ? [] : r.errors), ...targetErrors];
+    // kartoteki: kontrahent we właściwej roli, pojazdy operacji dodatkowych i rębak z dostępnych magazynów
+    if (input.type === "PURCHASE" || input.type === "SALE") {
+      const p = input.partnerId ? await db.partner.findUnique({ where: { id: isUuid(input.partnerId) ? input.partnerId : "00000000-0000-0000-0000-000000000000" } }) : null;
+      const okRole = input.type === "PURCHASE" ? ["SUPPLIER", "BOTH"] : ["BUYER", "BOTH"];
+      if (input.partnerId && (!p || !p.active)) errors.push({ field: "partnerId", message: "Wybierz aktywnego kontrahenta z kartoteki" });
+      else if (p && !okRole.includes(p.role)) errors.push({ field: "partnerId", message: input.type === "PURCHASE" ? `„${p.name}” nie jest dostawcą` : `„${p.name}” nie jest odbiorcą` });
+    }
+    for (const [i, x] of (input.extras ?? []).entries()) {
+      if (!x.vehicleId) continue;
+      const v = isUuid(x.vehicleId) ? await db.vehicle.findUnique({ where: { id: x.vehicleId } }) : null;
+      if (!v || v.status === "RETIRED" || (v.warehouseId && !canAccessWarehouse(actor, v.warehouseId))) errors.push({ field: `extras.${i}.vehicleId`, message: "Wybierz pojazd z floty tego magazynu" });
+    }
+    if (input.type === "PRODUCTION" || withProduction) {
+      const who = chipperOf(input), pre = input.type === "PRODUCTION" ? "" : "production.";
+      if (who.chipperId) {
+        const c = isUuid(who.chipperId) ? await db.chipper.findUnique({ where: { id: who.chipperId } }) : null;
+        if (!c || c.status === "RETIRED" || (c.warehouseId && c.warehouseId !== wh.id)) errors.push({ field: `${pre}chipperId`, message: "Wybierz rębak tego magazynu (własny albo firmy zewnętrznej)" });
+      }
+      if (who.operatorId && !(isUuid(who.operatorId) && await db.operator.findUnique({ where: { id: who.operatorId } }))) errors.push({ field: `${pre}operatorId`, message: "Nie znaleziono operatora" });
+    }
+    // odbiorca wyniku produkcji (zakup ze sprzedażą, sprzedaż bezpośrednia) — aktywny, w roli odbiorcy
+    const sale = input.type === "DIRECT_SALE" ? input.sale : input.type === "PURCHASE" ? input.sale : null;
+    if (sale?.buyerId) {
+      const b = isUuid(sale.buyerId) ? await db.partner.findUnique({ where: { id: sale.buyerId } }) : null;
+      if (!b || !b.active) errors.push({ field: "sale.buyerId", message: "Wybierz aktywnego odbiorcę z kartoteki" });
+      else if (!["BUYER", "BOTH"].includes(b.role)) errors.push({ field: "sale.buyerId", message: `„${b.name}” nie jest odbiorcą` });
+    }
+    if (errors.length || !r.ok) throw invalid(errors);
+    return { plan: r.plan };
+  }
+}
+
+/** Kwoty operacji do treści powiadomienia (tylko niezerowe). */
+function moneyLines(t: OperationPlan["totals"]): string[] {
+  const z = (v: string) => Number(v) !== 0;
+  return [z(t.purchaseCost) && `Wartość zakupu: ${t.purchaseCost} zł`, z(t.revenue) && `Przychód: ${t.revenue} zł`, z(t.chippingCost) && `Rąbanie: ${t.chippingCost} zł`,
+    z(t.transportCost) && `Transport: ${t.transportCost} zł`, z(t.additionalCost) && `Operacje dodatkowe: ${t.additionalCost} zł`].filter((x): x is string => !!x);
+}
+
+/** Rębak i operator produkcji — z pól produkcji na magazynie albo z sekcji produkcji zakupu / sprzedaży bezpośredniej. */
+export function chipperOf(input: OperationInput): { chipperId: string | null; operatorId: string | null } {
+  if (input.type === "PRODUCTION") return { chipperId: input.chipperId || null, operatorId: input.operatorId || null };
+  if (input.type === "PURCHASE" || input.type === "DIRECT_SALE") return { chipperId: input.production?.chipperId || null, operatorId: input.production?.operatorId || null };
+  return { chipperId: null, operatorId: null };
+}
+
+/** Flota, kierowcy i firmy przewozowe do sprawdzenia kursów transportu (reguły w domenie: planTransport). */
+async function loadFleet(db: Db): Promise<TransportFleet> {
+  const [vehicles, drivers, companies, whs] = await Promise.all([
+    db.vehicle.findMany(), db.driver.findMany(), db.externalCompany.findMany(), db.warehouse.findMany({ select: { id: true, name: true } }),
+  ]);
+  return {
+    vehicles: new Map(vehicles.map(v => [v.id, { id: v.id, registration: v.registration, status: v.status, warehouseId: v.warehouseId, defaultDriverId: v.defaultDriverId, ownership: v.ownership }])),
+    drivers: new Map(drivers.map(d => [d.id, { id: d.id, name: d.name, active: d.active }])),
+    companies: new Map(companies.map(c => [c.id, { id: c.id, name: c.name, active: c.active }])),
+    warehouseNames: new Map(whs.map(w => [w.id, w.name])),
+  };
+}
+
+const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+function nextMonth(date: string): string {
+  const y = Number(date.slice(0, 4)), m = Number(date.slice(5, 7));
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+}
