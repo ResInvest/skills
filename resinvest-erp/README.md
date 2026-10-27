@@ -64,7 +64,7 @@ serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się ja
   kod QR / kod kreskowy z **czytnika USB / Bluetooth** (działa jak klawiatura), **zdjęcie kodu QR** albo **aparat**
   (telefon). Numer kwitu, waga netto i nr rejestracyjny wpisują się do kursów (dopasowanie po numerze rejestracyjnym,
   potem kolejno), brakujące kursy są dopisywane; ostrzeżenie, gdy kwit był już użyty w innej operacji.
-  Format kodu QR: `KWIT=7096;NETTO=7780;REJ=SGL 4T821` (także JSON). Pole „Nr kwitu wagowego” jest teraz w każdym kursie.
+  Format kodu QR: `KWIT=7096;NETTO=7780;REJ=SGL 4T821` (także JSON). Przykładowy plik z wagi: `data/kwity_waga_przyklad.csv`. Pole „Nr kwitu wagowego” jest teraz w każdym kursie.
 * **Szybki kurs (telefon)** — menu „Szybki kurs”: kierowca przy załadunku wybiera wzorzec (szablon albo poprzednia
   operacja), auto, kwit (skan), waga (wyświetlacz LED) → **Zapisz kurs**. Waga z kwitu = tonaż dokumentu. Po zapisie
   formularz czeka na kolejny kurs tego samego auta.
