@@ -25,7 +25,7 @@
   /** Tekst do zapisania w danych: struktura {k, p} (tłumaczona przy wyświetlaniu). */
   const Lx = (k, p) => ({ k, p: p || {} });
 
-  const VERSION = "3.10.1";
+  const VERSION = "3.11.0";
   const SCHEMA = 9;
   const Q = 6;                 // precyzja wewnętrzna ilości
   const EPS = 1e-6;
@@ -330,6 +330,62 @@
   const ASSET_STATUS = { aktywny: N_("Aktywny"), serwis: N_("W serwisie"), wycofany: N_("Wycofany") };
   /** Rębak: własny (operator z kartoteki floty) albo firmy zewnętrznej (firma, oznaczenie, nr rej., operator opisowo). */
   const CHIPPER_OWNERS = { own: N_("Rębak własny"), external: N_("Rębak firmy zewnętrznej") };
+  /**
+   * 3.11: pozycje floty wpisane w formularzu operacji (pojazd, kierowca, rębak, operator) — tak jak firmy zewnętrzne:
+   * wybór z kartoteki (także pozycji wycofanych) albo nowa pozycja dopisywana do Floty przy zatwierdzeniu operacji.
+   * Klucze porównania: numer rejestracyjny bez spacji i znaków, nazwy bez wielkości liter i podwójnych spacji.
+   */
+  const FleetPick = {
+    regKey: s => String(s == null ? "" : s).toUpperCase().replace(/[^A-Z0-9]/g, ""),
+    nameKey: s => String(s == null ? "" : s).trim().replace(/\s+/g, " ").toLowerCase(),
+    /** Etykieta listy „WGM 12345 · Scania R450” → { head: „WGM 12345”, tail: „Scania R450” }; dopiski „— wycofany” / „(domyślny)” są pomijane. */
+    split(text) {
+      const s = String(text == null ? "" : text).trim().replace(/\s+[—–-]\s+(wycofany|w serwisie|withdrawn|in service|vyřazen|v servisu).*$/i, "").replace(/\s*\((domyślny|default|výchozí)\)\s*$/i, "");
+      const i = s.indexOf("·");
+      return { head: (i < 0 ? s : s.slice(0, i)).trim().replace(/\s+/g, " "), tail: i < 0 ? "" : s.slice(i + 1).trim().replace(/\s+/g, " ") };
+    },
+    REG_RE: /^[A-Z0-9 ]{4,10}$/,
+    PERSON_RE: /^[\p{L}][\p{L} .'\-]{2,59}$/u,
+    /** Pojazd po numerze rejestracyjnym: { rec } (istniejący) albo { fresh: { reg, name } } (nowy) albo null (pusto). */
+    vehicle(state, text) {
+      const p = this.split(text), k = this.regKey(p.head);
+      if (!k) return null;
+      const rec = state.fleet.vehicles.find(v => this.regKey(v.reg) === k);
+      if (rec) return { rec };
+      const reg = p.head.toUpperCase();
+      return { fresh: { reg, name: p.tail || reg } };
+    },
+    /** Osoba (kierowca / operator) po imieniu i nazwisku. */
+    person(list, text) {
+      const name = this.split(text).head, k = this.nameKey(name);
+      if (!k) return null;
+      const rec = list.find(x => this.nameKey(x.name) === k);
+      return rec ? { rec } : { fresh: { name } };
+    },
+    /**
+     * Wpisane teksty (szablon / kopia sprzed dopisania pozycji) → identyfikatory z kartoteki, gdy pozycja już istnieje.
+     * Pozycje nieznane zostają tekstem (dopisane przy zatwierdzeniu). Zmienia d w miejscu.
+     */
+    resolveDraft(state, d) {
+      const O = d && d.transport && d.transport.own;
+      for (const r of (O && Array.isArray(O.runs) ? O.runs : [])) {
+        if (!r.vehicleId && str(r.vehicleReg)) { const p = this.vehicle(state, r.vehicleReg); if (p && p.rec && p.rec.owner !== "external") { r.vehicleId = p.rec.id; r.vehicleReg = ""; } }
+        if (!r.driverId && str(r.driverName)) { const p = this.person(state.fleet.drivers, r.driverName); if (p && p.rec) { r.driverId = p.rec.id; r.driverName = ""; } }
+      }
+      const P = d && d.production;
+      if (P && !P.chipperId && str(P.chipperName)) { const p = this.chipper(state, P.chipperName); if (p && p.rec) { P.chipperId = p.rec.id; P.chipperName = ""; } }
+      const ch = P && byId(state.fleet.chippers, P.chipperId);
+      if (P && !P.operatorId && str(P.operatorName) && !(ch && ch.owner === "external")) { const p = this.person(state.fleet.operators, P.operatorName); if (p && p.rec) { P.operatorId = p.rec.id; P.operatorName = ""; } }
+      return d;
+    },
+    /** Rębak po nazwie (dla rębaka firmy zewnętrznej etykieta „nazwa — firma (rej.)”). */
+    chipper(state, text) {
+      const raw = String(text == null ? "" : text).trim(), name = raw.split(/\s+[—–]\s+/)[0].trim().replace(/\s+/g, " "), k = this.nameKey(name);
+      if (!k) return null;
+      const rec = state.fleet.chippers.find(c => this.nameKey(c.name) === k);
+      return rec ? { rec } : { fresh: { name } };
+    }
+  };
   /** Pojazd: flota własna (kierowca z kartoteki) albo pojazd firmy zewnętrznej (firma, kierowca opisowo). Brak pola = własny. */
   /** Zabudowa do przewozu zrębki — przestrzenie ładunkowe pojazdu. Pojemność maksymalna przestrzeni = długość × szerokość ×
       wysokość [m] = m³ = MP (metr przestrzenny to 1 m³ luźnej zrębki). Hakowiec z przyczepą = dwa kontenery w zestawie. */
@@ -435,7 +491,7 @@
       config: Object.assign({ m3_mp: 4, mp_t: 0.33, woodTPerM3: 0.952, t_gj: 8.5, currency: "zł", kmRateDefault: 5, chipRateDefault: 10, wagonMPDefault: 120, maxWagons: 60, companyDomains: ["resinvest.group"], requireApproval: false, allowSelfRegistration: false, mmMode: "two", docNumbering: "wz" }, config || {}),
       warehouses: [], users: [], products: [], partners: [], carriers: [], extraTypes: [],
       fleet: { vehicles: [], drivers: [], chippers: [], operators: [] },
-      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {}, plans: [], notices: [],
+      operations: [], drafts: [], ledger: [], inventory: [], audit: [], seq: {}, rolePerms: {}, plans: [], notices: [], templates: [],
       meta: { lastMonthCheck: null, createdAt: null }
     };
   }
@@ -539,6 +595,8 @@
       notes.push(t("Schemat 8 → 9: planer zakupów (plan dnia) i powiadomienia — skrzynka w programie, zgody, e-mail"));
     }
     if (s.schema !== SCHEMA) return { error: t("Nieobsługiwana wersja schematu: {a} (oczekiwano {b})", { a: from, b: SCHEMA }) };
+    // 3.11: szablony operacji — kolekcja opcjonalna (bez zmiany schematu; starsze dane i kopie zapasowe — pusta lista)
+    if (!Array.isArray(s.templates)) s.templates = [];
     return { state: s, from, to: SCHEMA, notes };
   }
 
@@ -599,13 +657,13 @@
   /* Szkic operacji                                                      */
   /* ------------------------------------------------------------------ */
   function blankExtRun() { return { company: "", reg: "", driver: "", km: "", rate: "", freight: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
-  function blankRun() { return { vehicleId: "", driverId: "", km: "", rate: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
+  function blankRun() { return { vehicleId: "", vehicleReg: "", driverId: "", driverName: "", km: "", rate: "", kwit: "", kwitM3: "", qty: "", weightT: "" }; }
   function blankDraft(ctx) {
     return {
       idemKey: uid("idem"), draftId: null, type: "ZAKUP",
       date: ctx && ctx.today ? ctx.today : Dates.localToday(),
       purchase: { supplierKind: "firma", supplierId: "", supplierName: "", lesnictwo: "", basis: "KZR", productId: "", qty: "", unit: "m3", priceUnit: "", price: "", weightMode: "auto", weightManual: "" },
-      production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", operatorId: "", operatorName: "", chipRate: "" },
+      production: { enabled: false, type: "lesna", rawProductId: "", outProductId: "", outQty: "", consumeQty: "", diffReason: "", rawCost: "", ndl: "", lesnictwo: "", kwit: "", investSite: "", sourceDoc: "", chipperId: "", chipperName: "", operatorId: "", operatorName: "", chipRate: "" },
       sale: { enabled: false, direct: false, productId: "", qty: "", unit: "MP", buyerId: "", qtyMP: "", price: "", priceUnit: "MP", weightMode: "auto", weightManual: "" },
       mm: { fromWhId: "", productId: "", qty: "", unit: "MP", toWhId: "", weightMode: "auto", weightManual: "" },
       transport: {
@@ -706,14 +764,32 @@
           if (!str(R_.lesnictwo)) err("production.lesnictwo", t("Podaj leśnictwo"));
         } else if (R_.type === "inwestycyjna" && !str(R_.investSite)) err("production.investSite", t("Podaj miejsce wycinki / inwestycję"));
       }
-      const ch = byId(state.fleet.chippers, R_.chipperId);
+      // rębak: z kartoteki (id) albo wpisany (nazwa) — istniejący po nazwie lub nowy rębak własny
+      let ch = byId(state.fleet.chippers, R_.chipperId), newChipper = null, reactivateChipper = false;
+      if (!R_.chipperId && str(R_.chipperName)) {
+        const p = FleetPick.chipper(state, R_.chipperName);
+        if (p && p.rec) ch = p.rec; else if (p) newChipper = p.fresh;
+        if (newChipper && newChipper.name.length < 2) err("production.chipperId", t("Nazwa rębaka musi mieć co najmniej 2 znaki"));
+      }
       const chExt = !!(ch && ch.owner === "external");
-      if (R_.chipperId) {
-        if (!ch) err("production.chipperId", t("Nieznany rębak"));
-        else if (ch.status !== "aktywny" && !(ctx && ctx.correction)) err("production.chipperId", t("Rębak ma status „{s}”", { s: t(ASSET_STATUS[ch.status] || ch.status) }));
-        else if (ch.whId && whId && ch.whId !== whId) err("production.chipperId", t("Rębak jest przypisany do magazynu {w}", { w: (byId(state.warehouses, ch.whId) || {}).name || "" }));
-        // rębak własny — operator z kartoteki floty; rębak firmy zewnętrznej — operator opisowo (opcjonalnie)
-        if (!chExt && !byId(state.fleet.operators, R_.operatorId || (ch && ch.operatorId))) err("production.operatorId", t("Wybierz operatora rębaka"));
+      const chipperGiven = !!(R_.chipperId || ch || newChipper);
+      if (R_.chipperId && !ch) err("production.chipperId", t("Nieznany rębak"));
+      else if (ch && ch.status !== "aktywny" && !(ctx && ctx.correction)) {
+        reactivateChipper = true;
+        warnings.push(t("Rębak „{n}” ma status „{s}” — przy zatwierdzeniu wróci do pracy (status „Aktywny”).", { n: ch.name, s: t(ASSET_STATUS[ch.status] || ch.status) }));
+      }
+      if (ch && ch.whId && whId && ch.whId !== whId) err("production.chipperId", t("Rębak jest przypisany do magazynu {w}", { w: (byId(state.warehouses, ch.whId) || {}).name || "" }));
+      // operator: rębak własny — z kartoteki albo wpisany (nowy operator); rębak firmy zewnętrznej — opisowo (opcjonalnie)
+      let opRec = null, newOperator = null;
+      if (chipperGiven && !chExt) {
+        opRec = byId(state.fleet.operators, R_.operatorId) || null;
+        if (!opRec && !R_.operatorId && str(R_.operatorName)) {
+          const p = FleetPick.person(state.fleet.operators, R_.operatorName);
+          if (p && p.rec) opRec = p.rec; else if (p) newOperator = p.fresh;
+          if (newOperator && !FleetPick.PERSON_RE.test(newOperator.name)) err("production.operatorId", t("Imię i nazwisko operatora: co najmniej 3 litery"));
+        }
+        if (!opRec && !newOperator && !R_.operatorId && ch) opRec = byId(state.fleet.operators, ch.operatorId) || null;
+        if (!opRec && !newOperator) err("production.operatorId", R_.operatorId ? t("Nieznany operator") : t("Wybierz operatora rębaka albo wpisz nowego"));
       }
       let chipRate = 0, chippingCost = 0;
       if (outProduct && outProduct.unit === "MP") {
@@ -721,8 +797,8 @@
         chippingCost = chipRate !== null ? round(outQty * chipRate, 2) : 0;
       }
       totals.chippingCost = chippingCost;
-      const op = chExt ? null : byId(state.fleet.operators, R_.chipperId ? (R_.operatorId || (ch && ch.operatorId)) : "");
-      const extOperator = chExt ? (str(R_.operatorName) || str(ch.operatorName)) : "";
+      const op = chExt ? null : opRec;
+      const extOperator = chExt ? (str(R_.operatorName) || str(ch.operatorName)) : newOperator ? newOperator.name : "";
       norm.production = {
         mode, type: R_.type || "", typeLabel: pt ? pt.label : "", outProductId: outProduct ? outProduct.id : "", outUnit: outProduct ? outProduct.unit : null,
         rawProductId: rawProduct ? rawProduct.id : "", consumeQty: consume, consumeUnit: rawProduct ? rawProduct.unit : null,
@@ -730,9 +806,13 @@
         ndl: str(R_.ndl), lesnictwo: str(R_.lesnictwo), kwit: str(R_.kwit),
         sourceType: R_.type === "inwestycyjna" && mode !== "stock" ? PROD_TYPES.inwestycyjna.sourceType : "",
         investSite: str(R_.investSite), sourceDoc: str(R_.sourceDoc),
-        chipperId: R_.chipperId || "", chipperName: ch ? ch.name : "", chipperOwner: ch ? (ch.owner || "own") : "", chipperCompany: chExt ? str(ch.company) : "", chipperReg: ch ? str(ch.reg) : "",
+        chipperId: ch ? ch.id : "", chipperName: ch ? ch.name : newChipper ? newChipper.name : "", chipperOwner: ch ? (ch.owner || "own") : newChipper ? "own" : "", chipperCompany: chExt ? str(ch.company) : "", chipperReg: ch ? str(ch.reg) : "",
         operatorId: op ? op.id : "", operatorName: op ? op.name : extOperator
       };
+      // nowe / przywracane pozycje floty — dopisywane do kartoteki dopiero przy zatwierdzeniu (materializeFleet)
+      if (newChipper) norm.production.newChipper = newChipper;
+      if (newOperator) norm.production.newOperator = newOperator;
+      if (reactivateChipper) norm.production.reactivateChipper = true;
       return { outProduct, outQty, consume };
     }
     const prodMeta = () => {
@@ -1022,16 +1102,30 @@
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = src[i] || {};
-          const v = byId(state.fleet.vehicles, r.vehicleId);
-          if (!r.vehicleId) err(K(i, "vehicleId"), t("Wybierz pojazd z floty"));
-          else if (!v) err(K(i, "vehicleId"), t("Nieznany pojazd"));
-          else if (v.owner === "external") err(K(i, "vehicleId"), t("Pojazd należy do firmy zewnętrznej — wybierz transport zewnętrzny"));
-          else if (v.status !== "aktywny") err(K(i, "vehicleId"), t("Pojazd ma status „{s}” — wybierz aktywny", { s: t(ASSET_STATUS[v.status] || v.status) }));
-          else if (v.whId && whId && v.whId !== whId) err(K(i, "vehicleId"), t("Pojazd jest przypisany do magazynu {w}", { w: (byId(state.warehouses, v.whId) || {}).name || "" }));
-          const driverId = r.driverId || (v && v.driverId) || "";
-          const d = byId(state.fleet.drivers, driverId);
-          if (!driverId) err(K(i, "driverId"), t("Pojazd nie ma kierowcy domyślnego — wybierz kierowcę"));
-          else if (!d) err(K(i, "driverId"), t("Nieznany kierowca"));
+          // pojazd: z kartoteki (id) albo wpisany numer rejestracyjny — istniejący (także wycofany) lub nowy pojazd floty własnej
+          let v = byId(state.fleet.vehicles, r.vehicleId), newVehicle = null, reactivate = false;
+          if (!r.vehicleId && str(r.vehicleReg)) {
+            const p = FleetPick.vehicle(state, r.vehicleReg);
+            if (p && p.rec) v = p.rec; else if (p) newVehicle = p.fresh;
+            if (newVehicle && !FleetPick.REG_RE.test(newVehicle.reg)) err(K(i, "vehicleId"), t("Numer rejestracyjny: litery i cyfry, 4–10 znaków (np. SGL 4T821)"));
+          }
+          if (!v && !newVehicle) err(K(i, "vehicleId"), r.vehicleId ? t("Nieznany pojazd") : t("Wybierz pojazd z floty albo wpisz numer rejestracyjny nowego"));
+          else if (v && v.owner === "external") err(K(i, "vehicleId"), t("Pojazd należy do firmy zewnętrznej — wybierz transport zewnętrzny"));
+          else if (v && v.whId && whId && v.whId !== whId) err(K(i, "vehicleId"), t("Pojazd jest przypisany do magazynu {w}", { w: (byId(state.warehouses, v.whId) || {}).name || "" }));
+          else if (v && v.status !== "aktywny" && !(ctx && ctx.correction)) {
+            reactivate = true;
+            warnings.push(t("Pojazd {r} ma status „{s}” — przy zatwierdzeniu wróci do pracy (status „Aktywny”).", { r: v.reg, s: t(ASSET_STATUS[v.status] || v.status) }));
+          }
+          // kierowca: wybrany, wpisany (istniejący lub nowy) albo domyślny pojazdu
+          let d = byId(state.fleet.drivers, r.driverId) || null, newDriver = null;
+          if (!d && !r.driverId && str(r.driverName)) {
+            const p = FleetPick.person(state.fleet.drivers, r.driverName);
+            if (p && p.rec) d = p.rec; else if (p) newDriver = p.fresh;
+            if (newDriver && !FleetPick.PERSON_RE.test(newDriver.name)) err(K(i, "driverId"), t("Imię i nazwisko kierowcy: co najmniej 3 litery"));
+          }
+          if (!d && !newDriver && !r.driverId && v) d = byId(state.fleet.drivers, v.driverId) || null;
+          const driverId = d ? d.id : (r.driverId || "");
+          if (!d && !newDriver) err(K(i, "driverId"), r.driverId ? t("Nieznany kierowca") : (v || newVehicle) && !(v && v.driverId) ? t("Pojazd nie ma kierowcy domyślnego — wybierz kierowcę albo wpisz nowego") : t("Wybierz kierowcę albo wpisz nowego"));
           const km = num(K(i, "km"), r.km, { gt: 0, label: N_("liczbę km") });
           const rate = str(r.rate) === "" ? cfg.kmRateDefault : num(K(i, "rate"), r.rate, { gt: 0, label: N_("stawkę za km") });
           // ilość w kursie: przy jednym kursie domyślnie cała ilość operacji, przy wielu — wymagana
@@ -1042,8 +1136,11 @@
           else if (count > 1) err(K(i, "qty"), sp.unit ? t("Podaj ilość przewożoną w kursie {n} ({u})", { n: i + 1, u: Units.label(sp.unit) }) : t("Podaj ilość przewożoną w kursie {n}", { n: i + 1 }));
           else q = sp.qty || null;
           const w = str(r.weightT) === "" ? null : num(K(i, "weightT"), r.weightT, { gt: 0, label: N_("wagę rzeczywistą") });
-          runs.push({ no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : "", reg: v ? v.reg : "", driverId, driverName: d ? d.name : "", defaultDriverId: v ? v.driverId : "",
-            driverOverridden: !!(v && d && v.driverId !== d.id), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 });
+          const run = { no: i + 1, vehicleId: v ? v.id : "", vehicleName: v ? v.name : newVehicle ? newVehicle.name : "", reg: v ? v.reg : newVehicle ? newVehicle.reg : "", driverId, driverName: d ? d.name : newDriver ? newDriver.name : "", defaultDriverId: v ? v.driverId : "",
+            driverOverridden: !!(v && v.driverId && (newDriver || (d && v.driverId !== d.id))), km: km || 0, rate: rate || 0, cost: km !== null && rate !== null ? round(km * rate, 2) : 0, qty: q === null ? 0 : rq(q), weightT: w, kwit: kw.no, kwitM3: kw.m3 };
+          // nowe / przywracane pozycje floty — dopisywane do kartoteki dopiero przy zatwierdzeniu (materializeFleet)
+          if (newVehicle || newDriver || reactivate) Object.assign(run, { inputIx: i }, newVehicle ? { newVehicle } : {}, newDriver ? { newDriver } : {}, reactivate ? { reactivate: true } : {});
+          runs.push(run);
         }
         const totalQty = rq(runs.reduce((a, r) => a + r.qty, 0));
         const weighed = runs.filter(r => r.weightT !== null);
@@ -1397,6 +1494,73 @@
     return Object.assign({ id: uid("l"), seq, ts: nowIso(ctx), userName: ctx.user ? ctx.user.name : "System", unit: pr.unit, t: Units.mass(e.qty, pr, state.config), direct: !!e.direct }, e, { qty: rq(e.qty) });
   }
 
+  /**
+   * 3.11: pozycje floty wpisane w operacji → kartoteka Floty (w tej samej, atomowej zmianie co operacja / korekta).
+   * Ta sama nowa pozycja w kilku kursach jest dopisywana raz; pozycje wycofane / w serwisie wracają do pracy.
+   * Uzupełnia identyfikatory w danych znormalizowanych (n) i w danych wejściowych operacji (input). Każda zmiana — wpis audytu.
+   */
+  function materializeFleet(state, n, input, ctx, refNo) {
+    const made = { vehicles: new Map(), drivers: new Map(), chippers: new Map(), operators: new Map() };
+    const src = (ctx && ctx.source) || N_("Formularz „Nowa operacja”"), at = nowIso(ctx), by = ctx && ctx.user ? ctx.user.name : "System";
+    const LABEL = { vehicles: N_("Pojazd"), drivers: N_("Kierowca"), chippers: N_("Rębak"), operators: N_("Operator rębaka") };
+    const add = (kind, key, rec) => {
+      if (made[kind].has(key)) return made[kind].get(key);
+      const clean = Object.assign({ id: uid(kind.slice(0, 2)) }, rec, { createdAt: at, createdBy: by, createdFrom: refNo || "" });
+      state.fleet[kind].push(clean); made[kind].set(key, clean);
+      audit(state, ctx, { entity: "fleet", entityId: clean.id, opNo: clean.name, relatedNo: refNo || null, event: "fleet", act: Lx("{k} „{n}” — dodany przy operacji {no}", { k: { t: LABEL[kind] }, n: kind === "vehicles" ? clean.reg : clean.name, no: refNo || "—" }), before: null, after: clone(clean), source: src });
+      return clean;
+    };
+    const revive = (kind, id) => {
+      const list = state.fleet[kind], i = list.findIndex(x => x.id === id);
+      if (i < 0 || list[i].status === "aktywny") return;
+      const before = clone(list[i]);
+      list[i] = Object.assign({}, list[i], { status: "aktywny" });
+      audit(state, ctx, { entity: "fleet", entityId: id, opNo: before.name, relatedNo: refNo || null, event: "fleet", act: Lx("{k} „{n}” — przywrócony do pracy przy operacji {no}", { k: { t: LABEL[kind] }, n: kind === "vehicles" ? before.reg : before.name, no: refNo || "—" }), before: { status: ASSET_STATUS[before.status] }, after: { status: ASSET_STATUS.aktywny }, source: src });
+    };
+    const T = n.transport, inOwn = input && input.transport && input.transport.own;
+    const ownRuns = T && Array.isArray(T.runs) ? T.runs.filter(r => (r.kind || "own") === "own" && r.inputIx !== undefined) : [];
+    for (const r of ownRuns) {
+      const inRun = inOwn ? (Array.isArray(inOwn.runs) ? inOwn.runs[r.inputIx] : inOwn) : null;
+      let driver = null;
+      if (r.newDriver) {
+        driver = add("drivers", FleetPick.nameKey(r.newDriver.name), { name: r.newDriver.name, phone: "", whId: "" });
+        r.driverId = driver.id; r.driverName = driver.name;
+        if (inRun) { inRun.driverId = driver.id; inRun.driverName = ""; }
+      }
+      if (r.newVehicle) {
+        const veh = add("vehicles", FleetPick.regKey(r.newVehicle.reg), { name: r.newVehicle.name, reg: r.newVehicle.reg, type: "ruchoma_podloga", status: "aktywny", driverId: r.driverId || "", driverName: "", whId: "", owner: "own", company: "", body: "" });
+        r.vehicleId = veh.id; r.vehicleName = veh.name; r.reg = veh.reg; r.defaultDriverId = veh.driverId;
+        if (inRun) { inRun.vehicleId = veh.id; inRun.vehicleReg = ""; }
+      } else if (r.reactivate) revive("vehicles", r.vehicleId);
+      if (inRun && r.vehicleId && !inRun.vehicleId) { inRun.vehicleId = r.vehicleId; inRun.vehicleReg = ""; }
+      if (inRun && r.driverId && !inRun.driverId) { inRun.driverId = r.driverId; inRun.driverName = ""; }
+      delete r.newVehicle; delete r.newDriver; delete r.reactivate; delete r.inputIx;
+    }
+    // podsumowanie transportu własnego (pierwszy kurs) — identyfikatory po dopisaniu
+    for (const part of [T, T && T.own]) {
+      if (!part || !Array.isArray(part.runs) || part.vehicleId === undefined) continue;
+      const f = part.runs.find(r => (r.kind || "own") === "own");
+      if (f) { part.vehicleId = f.vehicleId; part.driverId = f.driverId; part.defaultDriverId = f.defaultDriverId || ""; }
+    }
+    const P = n.production, inP = input && input.production;
+    if (P) {
+      if (P.newOperator) {
+        const o = add("operators", FleetPick.nameKey(P.newOperator.name), { name: P.newOperator.name, phone: "", whId: "" });
+        P.operatorId = o.id; P.operatorName = o.name;
+        if (inP) { inP.operatorId = o.id; inP.operatorName = ""; }
+      }
+      if (P.newChipper) {
+        const c = add("chippers", FleetPick.nameKey(P.newChipper.name), { name: P.newChipper.name, owner: "own", company: "", reg: "", status: "aktywny", operatorId: P.operatorId || "", operatorName: "", info: "", whId: "" });
+        P.chipperId = c.id; P.chipperName = c.name; P.chipperOwner = "own";
+        if (inP) { inP.chipperId = c.id; inP.chipperName = ""; }
+      } else if (P.reactivateChipper) revive("chippers", P.chipperId);
+      if (inP && P.chipperId && !inP.chipperId) { inP.chipperId = P.chipperId; inP.chipperName = ""; }
+      if (inP && P.operatorId && !inP.operatorId && P.chipperOwner !== "external") { inP.operatorId = P.operatorId; inP.operatorName = ""; }
+      delete P.newChipper; delete P.newOperator; delete P.reactivateChipper;
+    }
+    return Object.values(made).reduce((a, m) => a + m.size, 0);
+  }
+
   /* ------------------------------------------------------------------ */
   /* Zapis operacji — atomowo                                            */
   /* ------------------------------------------------------------------ */
@@ -1426,6 +1590,7 @@
     const main = plan.type === "PRODUKCJA" ? docs.find(d => d.type === "PW") : docs[0];
     const mainNo = main ? main.no : null;
     const input = clone(draft); delete input.idemKey; delete input.draftId;
+    materializeFleet(state, n, input, ctx, mainNo);
     // nowy dostawca wpisany ręcznie → kartoteka kontrahentów (w tej samej, atomowej zmianie)
     if (n.purchase && n.purchase.newSupplier) {
       const ns = { id: uid("pa"), name: n.purchase.newSupplier.name, role: "supplier", kind: n.purchase.newSupplier.kind, city: "", active: true, createdAt: nowIso(ctx), createdBy: ctx.user.name };
@@ -1837,6 +2002,7 @@
     const prevStatus = op.status;
     op.input = Object.assign(clone(newDraft), { date: op.date }); delete op.input.idemKey; delete op.input.draftId;
     Object.assign(op, pc.nextOp, { place: pc.nextOp.transport.place, totals: pc.plan.totals, status: "CORRECTED" });
+    materializeFleet(state, op, op.input, ctx, no);
     rememberCarriers(state, op.transport);
     op.documents.forEach(dc => { if (dc.type === "PZ" || dc.type === "WZ") dc.docDate = op.docDate; if (dc.type === "WZ" && op.sale) { dc.weightT = op.sale.weightT; dc.weightMode = op.sale.weightMode; } });
     if (pc.valueChanged) op.valueEvents.push(Object.assign({ date: today, ts: nowIso(ctx), kind: "correct", no }, pc.valueDelta));
@@ -2071,6 +2237,225 @@
   };
 
   /* ------------------------------------------------------------------ */
+  /* 3.11: Szablony operacji — „Las X → Magazyn Y, auto Z, kierowca W”    */
+  /*   wybierane jednym kliknięciem; wspólne dla magazynu albo prywatne. */
+  /* ------------------------------------------------------------------ */
+  const Templates = {
+    MAX: 300,
+    NAME_MAX: 60,
+    list(state) { if (!Array.isArray(state.templates)) state.templates = []; return state.templates; },
+    /** Dane wzorca: kopia formularza bez danych jednorazowych (data, numery dokumentów, kwity, wagi, uwagi, przyczyny różnic). */
+    clean(draft) {
+      const d = clone(draft || {});
+      for (const k of ["idemKey", "draftId", "date", "docDate", "notes", "extDoc", "_user", "_repeatOf", "_corrOf", "_corrRev", "_tpl"]) delete d[k];
+      d.docNos = { PZ: "", WZ: "", MM: "" }; d.docNoMode = { PZ: "auto", WZ: "auto", MM: "auto" };
+      if (d.production) Object.assign(d.production, { kwit: "", diffReason: "", consumeQty: "" });
+      for (const m of ["own", "external"]) for (const r of ((d.transport && d.transport[m] && d.transport[m].runs) || [])) Object.assign(r, { kwit: "", kwitM3: "", weightT: "" });
+      for (const k of ["purchase", "sale", "mm"]) if (d[k] && "weightManual" in d[k]) { d[k].weightManual = ""; d[k].weightMode = "auto"; }
+      return d;
+    },
+    /** Nowy formularz z wzorca (szablon albo dane operacji) na wskazany dzień — nowy klucz idempotencji. */
+    instantiate(src, ctx) {
+      const today = (ctx && ctx.today) || Dates.localToday();
+      return Object.assign(blankDraft({ today }), this.clean(src), { idemKey: uid("idem"), draftId: null, date: today });
+    },
+    /** Szablony widoczne dla użytkownika: wspólne (magazyn dostępny lub wszystkie magazyny) i własne prywatne. */
+    visible(state, user, whId) {
+      return this.list(state).filter(x => (x.shared || x.userId === (user && user.id)) && (!x.whId || canAccessWh(user, x.whId)) && (!whId || !x.whId || x.whId === whId));
+    },
+    /** Krótki opis: rodzaj, strona, produkt, pojazdy i kierowcy (do listy szablonów). */
+    describe(state, d) {
+      const p = id => (byId(state.products, id) || {}).name || "", pa = id => (byId(state.partners, id) || {}).name || "";
+      const parts = [t((OP_TYPES[d.type] || {}).label || "")];
+      if (d.type === "ZAKUP") parts.push(str(d.purchase && d.purchase.supplierName) || pa(d.purchase && d.purchase.supplierId), p(d.purchase && d.purchase.productId));
+      if (d.type === "SPRZEDAZ") parts.push(pa(d.sale && d.sale.buyerId), p(d.sale && d.sale.productId));
+      if (d.type === "PRODUKCJA") parts.push(p(d.production && d.production.outProductId));
+      if (d.type === "MM") parts.push(`→ ${(byId(state.warehouses, d.mm && d.mm.toWhId) || {}).name || ""}`);
+      const own = d.transport && d.transport.own && Array.isArray(d.transport.own.runs) && ["own", "mixed"].includes(d.transport.mode) ? d.transport.own.runs : [];
+      const regs = [...new Set(own.map(r => (byId(state.fleet.vehicles, r.vehicleId) || {}).reg || FleetPick.split(r.vehicleReg).head).filter(Boolean))];
+      const drivers = [...new Set(own.map(r => (byId(state.fleet.drivers, r.driverId) || {}).name || str(r.driverName)).filter(Boolean))];
+      if (regs.length) parts.push(regs.join(", "));
+      if (drivers.length) parts.push(drivers.join(", "));
+      if (d.transport && d.transport.place) parts.push(`→ ${d.transport.place}`);
+      return parts.filter(Boolean).join(" · ");
+    },
+    validate(state, rec, user) {
+      const e = {}, name = str(rec.name).replace(/\s+/g, " ");
+      if (name.length < 3) e.name = t("Nazwa szablonu: co najmniej 3 znaki");
+      else if (name.length > this.NAME_MAX) e.name = t("Nazwa szablonu: najwyżej {n} znaków", { n: this.NAME_MAX });
+      else if (this.list(state).some(x => x.id !== rec.id && x.name.toLowerCase() === name.toLowerCase() && (x.shared || x.userId === user.id) && (x.whId || "") === (rec.whId || ""))) e.name = t("Szablon o tej nazwie już istnieje");
+      if (!rec.draft || !OP_TYPES[rec.draft.type]) e.draft = t("Szablon nie zawiera danych operacji");
+      if (rec.whId && !byId(state.warehouses, rec.whId)) e.whId = t("Nieznany magazyn");
+      else if (rec.whId && !canAccessWh(user, rec.whId)) e.whId = t("Brak dostępu do magazynu");
+      return e;
+    },
+    /** Zapis (nowy albo zmiana). Zmienia lub usuwa autor albo osoba z prawem edycji kartotek. */
+    save(state, rec, ctx) {
+      const user = ctx && ctx.user;
+      if (!can(user, "op.create")) return { ok: false, error: t("Twoja rola nie pozwala tworzyć operacji"), code: "FORBIDDEN" };
+      const list = this.list(state), prev = rec.id ? byId(list, rec.id) : null;
+      if (rec.id && !prev) return { ok: false, error: t("Nie znaleziono szablonu") };
+      if (prev && prev.userId !== user.id && !can(user, "master.edit")) return { ok: false, error: t("Szablon zmienia jego autor albo kierownik"), code: "FORBIDDEN" };
+      if (!prev && list.length >= this.MAX) return { ok: false, error: t("Osiągnięto limit {n} szablonów — usuń nieużywane", { n: this.MAX }) };
+      const draft = rec.draft ? this.clean(rec.draft) : prev ? prev.draft : null;
+      const r = { id: prev ? prev.id : null, name: str(rec.name).replace(/\s+/g, " "), whId: str(rec.whId), shared: rec.shared !== false && rec.shared !== "false", draft };
+      const e = this.validate(state, r, user);
+      if (Object.keys(e).length) return { ok: false, errors: e, error: Object.values(e)[0] };
+      const clean = Object.assign({}, prev || {}, r, { id: prev ? prev.id : uid("tp"), type: draft.type, summary: this.describe(state, draft),
+        userId: prev ? prev.userId : user.id, userName: prev ? prev.userName : user.name, createdAt: prev ? prev.createdAt : nowIso(ctx), updatedAt: nowIso(ctx) });
+      const i = list.findIndex(x => x.id === clean.id);
+      if (i >= 0) list[i] = clean; else list.push(clean);
+      state.rev += 1;
+      audit(state, ctx, { entity: "template", entityId: clean.id, opNo: clean.name, event: "template", ...(clean.whId ? { whId: clean.whId } : {}),
+        act: Lx(prev ? N_("Zmiana szablonu operacji „{n}”") : N_("Nowy szablon operacji „{n}”"), { n: clean.name }),
+        before: prev ? { nazwa: prev.name, opis: prev.summary, wspolny: prev.shared } : null, after: { nazwa: clean.name, opis: clean.summary, wspolny: clean.shared, magazyn: clean.whId || "wszystkie" }, source: (ctx && ctx.source) || N_("Szablony operacji") });
+      return { ok: true, rec: clean };
+    },
+    remove(state, id, ctx) {
+      const user = ctx && ctx.user, list = this.list(state), rec = byId(list, id);
+      if (!rec) return { ok: false, error: t("Nie znaleziono szablonu") };
+      if (rec.userId !== (user && user.id) && !can(user, "master.edit")) return { ok: false, error: t("Szablon usuwa jego autor albo kierownik"), code: "FORBIDDEN" };
+      state.templates = list.filter(x => x.id !== id); state.rev += 1;
+      audit(state, ctx, { entity: "template", entityId: id, opNo: rec.name, event: "template", ...(rec.whId ? { whId: rec.whId } : {}), act: Lx("Usunięcie szablonu operacji „{n}”", { n: rec.name }), before: { nazwa: rec.name, opis: rec.summary }, after: null, source: (ctx && ctx.source) || N_("Szablony operacji") });
+      return { ok: true };
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* 3.11: Kwity z wagi — odczyt z pliku programu wagowego (CSV / TXT /   */
+  /*   JSON), z kodu QR / kodu kreskowego (czytnik działa jak klawiatura) */
+  /*   i dopasowanie do kursów (po numerze rejestracyjnym, potem kolejno).*/
+  /* ------------------------------------------------------------------ */
+  const Scale = {
+    /** Rozpoznawane nazwy pól (bez wielkości liter, polskich znaków, spacji i znaków interpunkcyjnych). */
+    KEYS: {
+      no: ["kwit", "nrkwitu", "numerkwitu", "kwitnr", "ticket", "ticketno", "ticketnumber", "nr", "numer", "no", "number", "dokument", "nrdokumentu", "id", "lp"],
+      net: ["netto", "net", "netweight", "waganetto", "masanetto", "nettokg", "nettot", "netkg", "nett", "weight", "waga", "masa", "wagat", "wagakg"],
+      gross: ["brutto", "gross", "grossweight", "wagabrutto", "masabrutto", "bruttokg", "bruttot", "grosskg"],
+      tare: ["tara", "tare", "tareweight", "taratkg", "tarakg", "tarat", "tarekg"],
+      reg: ["rej", "nrrej", "nrrejestracyjny", "rejestracja", "reg", "registration", "vehicle", "vehicleno", "pojazd", "auto", "samochod", "truck", "plate", "ciagnik"],
+      date: ["data", "date", "datawazenia", "grossdate", "dzien"],
+      time: ["czas", "godzina", "time", "grosstime"],
+      driver: ["kierowca", "driver", "drivername"],
+      product: ["towar", "produkt", "product", "item", "itemname", "asortyment", "material"],
+      unit: ["jednostka", "unit", "jm", "uom"]
+    },
+    keyOf(k) {
+      const n = String(k == null ? "" : k).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ł/g, "l").replace(/[^a-z0-9]/g, "");
+      for (const [f, list] of Object.entries(this.KEYS)) if (list.includes(n)) return { f, kg: /kg$/.test(n), t: /t$/.test(n) && f !== "no" && !/net$|^net$/.test(n) };
+      return null;
+    },
+    /** Liczba z wagi: „7 780”, „7780,5”, „13.560 kg” → number | null. */
+    number(v) {
+      if (typeof v === "number") return Number.isFinite(v) ? v : null;
+      let s = String(v == null ? "" : v).trim().toLowerCase().replace(/\s*(kg|t|ton[ay]?)\s*$/, "").replace(/[\s ]/g, "");
+      if (!s) return null;
+      if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");   // 13.560 kg / 1.234,5
+      else s = s.replace(",", ".");
+      return /^-?\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+    },
+    /** Rekord pól → kwit { no, netT, grossT, tareT, reg, date, time, driver, product }; masa w tonach (kg → t automatycznie). */
+    ticketOf(rec) {
+      const x = {}; let unit = "", unitKg = null;
+      for (const [k, v] of Object.entries(rec)) {
+        const m = this.keyOf(k); if (!m || v === undefined || v === null || String(v).trim() === "") continue;
+        if (m.f === "unit") { unit = String(v).trim().toLowerCase(); continue; }
+        if (x[m.f] !== undefined) continue;
+        x[m.f] = v;
+        if (["net", "gross", "tare"].includes(m.f) && (m.kg || /kg\s*$/i.test(String(v)))) unitKg = true;
+        else if (["net", "gross", "tare"].includes(m.f) && (m.t || /\bt\s*$/i.test(String(v))) && unitKg === null) unitKg = false;
+      }
+      const w = f => this.number(x[f]);
+      let net = w("net"), gross = w("gross"), tare = w("tare");
+      if (net === null && gross !== null && tare !== null) net = gross - tare;
+      // jednostka: jawna (kg / t), z nazwy pola / dopisku; bez wskazania — wartości > 100 to kilogramy (ciężarówka 7780 = 7,78 t)
+      const kg = unit ? /^kg|kilogram/.test(unit) : unitKg !== null ? unitKg : [net, gross, tare].some(v => v !== null && v > 100);
+      const toT = v => v === null ? null : rq(kg ? v / 1000 : v);
+      const t_ = { no: str(x.no), netT: toT(net), grossT: toT(gross), tareT: toT(tare), reg: str(x.reg).toUpperCase().replace(/\s+/g, " "), date: str(x.date), time: str(x.time), driver: str(x.driver), product: str(x.product) };
+      return t_;
+    },
+    /** Podział linii CSV (cudzysłowy, separator ; , lub tabulator). */
+    splitCsv(line, sep) {
+      const out = []; let cur = "", q = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (q) { if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+        else if (c === '"') q = true; else if (c === sep) { out.push(cur); cur = ""; } else cur += c;
+      }
+      out.push(cur);
+      return out.map(s => s.trim());
+    },
+    /** Pary „KWIT=7096;NETTO=7780” albo „Kwit: 7096” (jedna linia lub wiele linii). */
+    pairs(text) {
+      const rec = {}; let any = false;
+      for (const part of String(text).split(/[;|&\n\r]+/)) {
+        const m = /^\s*([^=:]{1,40}?)\s*[=:]\s*(.*?)\s*$/.exec(part);
+        if (m && this.keyOf(m[1])) { rec[m[1]] = m[2]; any = true; }
+      }
+      return any ? rec : null;
+    },
+    /**
+     * Odczyt kwitów z tekstu (plik lub zeskanowany kod): JSON (obiekt / tablica / { kwity | tickets }), CSV z nagłówkiem,
+     * pary klucz=wartość (jedna linia = jeden kwit, albo cały tekst = jeden kwit). Wynik: { tickets, errors }.
+     */
+    parse(text) {
+      const src = String(text == null ? "" : text).replace(/^﻿/, "").trim(), errors = [];
+      if (!src) return { tickets: [], errors: [t("Brak danych do odczytu")] };
+      let recs = null;
+      if (/^[[{]/.test(src)) {
+        try {
+          const j = JSON.parse(src);
+          recs = Array.isArray(j) ? j : Array.isArray(j.kwity) ? j.kwity : Array.isArray(j.tickets) ? j.tickets : [j];
+        } catch (e) { errors.push(t("Nieprawidłowy JSON: {e}", { e: e.message })); recs = []; }
+      }
+      const lines = src.split(/\r?\n/).filter(l => l.trim());
+      if (!recs && lines.length >= 2) {
+        const sep = [";", "\t", ","].map(s => [s, this.splitCsv(lines[0], s)]).filter(([, h]) => h.length >= 2).sort((a, b) => b[1].filter(h => this.keyOf(h)).length - a[1].filter(h => this.keyOf(h)).length)[0];
+        if (sep && sep[1].filter(h => this.keyOf(h)).length >= 2) {
+          const [s, head] = sep;
+          recs = lines.slice(1).map(l => { const v = this.splitCsv(l, s), o = {}; head.forEach((h, i) => { o[h] = v[i]; }); return o; });
+        }
+      }
+      if (!recs) {
+        const perLine = lines.map(l => this.pairs(l));
+        if (lines.length > 1 && perLine.every(r => r && Object.keys(r).length >= 2)) recs = perLine;
+        else { const one = this.pairs(src); recs = one ? [one] : []; }
+      }
+      const tickets = [];
+      recs.forEach((r, i) => {
+        if (!r || typeof r !== "object") return;
+        const tk = this.ticketOf(r);
+        if (!tk.no && tk.netT === null) { errors.push(t("Pozycja {n}: brak numeru kwitu i wagi netto", { n: i + 1 })); return; }
+        if (tk.netT !== null && !(tk.netT > 0 && tk.netT <= 80)) { errors.push(t("Kwit {k}: waga netto {w} t poza zakresem 0–80 t", { k: tk.no || i + 1, w: fmtQ(tk.netT) })); return; }
+        tickets.push(tk);
+      });
+      if (!tickets.length && !errors.length) errors.push(t("Nie rozpoznano kwitu — oczekiwane pola: numer kwitu, netto (lub brutto i tara), opcjonalnie nr rejestracyjny"));
+      return { tickets, errors };
+    },
+    /**
+     * Dopasowanie kwitów do kursów: najpierw po numerze rejestracyjnym (kurs bez wagi), potem kolejno do kursów bez wagi i kwitu.
+     * runs: [{ reg, kwit, weightT }] → [{ ticket, run: indeks | null, by: "reg" | "order" | null }]
+     */
+    match(tickets, runs) {
+      const used = new Set(), key = FleetPick.regKey;
+      const empty = (r, i) => !used.has(i) && str(r.weightT) === "";
+      return tickets.map(tk => {
+        let i = tk.reg ? runs.findIndex((r, j) => empty(r, j) && key(r.reg) && key(r.reg) === key(tk.reg)) : -1, by = "reg";
+        if (i < 0) { i = runs.findIndex((r, j) => empty(r, j) && !str(r.kwit) && !(tk.reg && key(r.reg) && key(r.reg) !== key(tk.reg))); by = "order"; }
+        if (i < 0) return { ticket: tk, run: null, by: null };
+        used.add(i);
+        return { ticket: tk, run: i, by };
+      });
+    },
+    /** Numery kwitów już użyte w zapisanych operacjach (ostrzeżenie przed podwójnym wpisem). */
+    usedKwity(state) {
+      const m = new Map();
+      for (const o of state.operations) if (!o.deleted && o.status !== "CANCELLED") for (const r of ((o.transport && o.transport.runs) || [])) if (r.kwit) m.set(str(r.kwit).toUpperCase(), o.no);
+      return m;
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Kartoteki: produkty, kontrahenci, magazyny                          */
   /*   Rekordów użytych w dokumentach nie usuwa się — tylko dezaktywacja. */
   /* ------------------------------------------------------------------ */
@@ -2220,7 +2605,8 @@
     { id: "ultra", label: N_("Ultra Dark (OLED)"), scheme: "dark", icon: "eclipse", sw: ["#0A0C0B", "#000000", "#4CC38A"] },
     { id: "premium", label: N_("Light Premium"), scheme: "light", icon: "gem", sw: ["#FFFFFF", "#F7F4EE", "#1B2A4A", "#B8912E"] },
     { id: "glass", label: N_("Szkło (pastelowy)"), scheme: "light", icon: "layers", sw: ["#FFFFFF", "#E4E2FB", "#DDF4E8", "#1F7F45"] },
-    { id: "aurum", label: N_("Złota biomasa (granat i złoto)"), scheme: "light", icon: "gem", sw: ["#FBF8F1", "#14213A", "#B8913A"] }
+    { id: "aurum", label: N_("Złota biomasa (granat i złoto)"), scheme: "light", icon: "gem", sw: ["#FBF8F1", "#14213A", "#B8913A"] },
+    { id: "waga", label: N_("Stacja wagowa (klasyczny przemysłowy)"), scheme: "light", icon: "scale", sw: ["#F2F4F7", "#1F3C73", "#BDEFF5", "#FF2B1C"] }
   ];
   const THEMES = Object.fromEntries(THEME_REGISTRY.map(x => [x.id, x.label]));
   const Users = {
@@ -2659,7 +3045,7 @@
   };
 
   const RIW = {
-    VERSION, SCHEMA, EPS, Q, NumParse, own, applyDelta, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
+    VERSION, SCHEMA, EPS, Q, NumParse, own, applyDelta, FleetPick, materializeFleet, Templates, Scale, round, rq, fmt, fmtQ, money, Dates, Units, PERMS, ROLES, can, OP_TYPES, STATUS, KINDS, CATS, DOC_LABEL, BASIS,
     PROD_TYPES, MAX_EXT_COMPANIES, DIFF_REASONS, SUPPLIER_KINDS, partnerKind, ndlName, blankRun, blankExtRun, blankExtra, CORRECTION_REASONS,
     CHIPPER_OWNERS, VEHICLE_OWNERS, BODY_TYPES, DIM_LIMITS, compartmentMP, vehicleCapacityMP, WEIGHT_SOURCES, DEFAULT_EXTRA_TYPES, EXTRA_UNITS, MAX_EXTRAS, extrasText, docNoTaken, suggestDocNo, deleteOperation, DOC_NO_TYPES, NO_MODES, docNoModeOf, DOC_SERIES, WAREHOUSE_DOCS, DOC_NUMBERING, unifiedNumbering, seriesNoOf, TRANSPORT_MODES, VEHICLE_TYPES, ASSET_STATUS, INV_STATUS, HISTORY_TYPES, REPORT_COLS, uid, clone, byId,
     PRODUCT_CATS, PARTNER_ROLES, CAT_UNIT, THEMES, THEME_REGISTRY, ROLE_INFO, ROLE_DEFAULTS, CREATE_PERMS, USER_STATUS, statusOf, applyRoles, permsOf, whAccess, canAccessWh,

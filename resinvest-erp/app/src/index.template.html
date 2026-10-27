@@ -15,7 +15,7 @@
 (function () {
   var d = document.documentElement, th = null, intro = true;
   try { th = localStorage.getItem("riw.theme"); intro = localStorage.getItem("riw.intro") !== "0"; } catch (e) {}
-  if (/^(pearl|graphite|azure|ultra|premium|glass|aurum)$/.test(th || "")) d.setAttribute("data-theme", th);
+  if (/^(pearl|graphite|azure|ultra|premium|glass|aurum|waga)$/.test(th || "")) d.setAttribute("data-theme", th);
   if (intro && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) d.className += " intro-boot";
 })();
 </script>

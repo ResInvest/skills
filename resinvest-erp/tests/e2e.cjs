@@ -58,6 +58,11 @@ const out = async (page, key) => nb(await page.textContent(`[data-out="${key}"]`
 const msg = async (page, key) => nb(await page.textContent(`[data-msg="${key}"]`));
 const tick = (page, id) => page.click(`label.opt:has(#${id})`);
 const fillTab = async (page, sel, v) => { await page.fill(sel, v); await page.press(sel, "Tab"); await page.waitForTimeout(60); };
+// 3.11: pojazd / rębak w operacji — pole „wybierz z listy albo wpisz” (etykieta jak na liście podpowiedzi)
+const pickVeh = async (page, i, id) => { const label = await page.evaluate(id => { const v = RIWUI.Store.state.fleet.vehicles.find(x => x.id === id); return `${v.reg} · ${v.name}`; }, id); await page.fill(`#f-transport-own-runs-${i}-vehicleReg`, label); await page.waitForTimeout(100); };
+const runVeh = (page, i) => page.evaluate(i => RIWForm.draft.transport.own.runs[i].vehicleId, i);
+const runDrv = (page, i) => page.evaluate(i => RIWForm.draft.transport.own.runs[i].driverId, i);
+const pickChip = async (page, id) => { const label = await page.evaluate(id => RIWForm.chipLabel(RIWUI.Store.state.fleet.chippers.find(x => x.id === id)), id); await fillTab(page, "#f-production-chipperName", label); await page.waitForTimeout(150); };
 const LOGINS = { u_admin: "magazyn@resinvest.group", u_kier: "anna.gorska@resinvest.group", u_mag: "adrian.wojciechowski@resinvest.group", u_bra: "pawel.kaczmarek@resinvest.group", u_kbra: "tomasz.zajac@resinvest.group", u_view: "beata.nowak@resinvest.group" };
 const setUser = (page, uid) => login(page, LOGINS[uid]);
 const allExist = async (page, sels) => { for (const s of sels) if (!(await page.$(s))) return false; return true; };
@@ -113,14 +118,16 @@ async function fillForestDirect(page) {
     check(PREMIUM ? "Premium: motyw „Złota biomasa” domyślnie — jasne tło, karty kość słoniowa" : "§19 Jasny motyw: jasne tło, białe karty", lum(bg) > 0.85 && card === (PREMIUM ? "rgb(255, 253, 248)" : "rgb(255, 255, 255)") && (!PREMIUM || await page.evaluate(() => document.documentElement.dataset.theme === "aurum")), { bg, card });
     // 3.2: pięć motywów — przełączanie z profilu, zapis w profilu użytkownika, Ctrl+D przez całą piątkę
     await go(page, "profil"); await page.waitForSelector(".theme-cards");
-    check("3.2 Motywy: 7 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium, Szkło, Złota biomasa)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium,glass,aurum");
+    check("3.2 Motywy: 8 kart w ustawieniach (Perła, Grafit, Graphite Azure, Ultra Dark, Light Premium, Szkło, Złota biomasa, Stacja wagowa)", (await page.$$eval("[data-ptheme]", l => l.map(x => x.dataset.ptheme).join(","))) === "pearl,graphite,azure,ultra,premium,glass,aurum,waga");
     const themeLook = async id => { await page.click(`[data-ptheme="${id}"]`); await page.waitForTimeout(200); return page.evaluate(() => ({ th: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, cs: document.documentElement.style.colorScheme, saved: RIW_DEBUG.store.state.users.find(u => u.id === RIW_DEBUG.store.userId).theme })); };
     const ul = await themeLook("ultra");
     check("3.2 Ultra Dark: czarne tło (OLED), schemat ciemny, zapis w profilu", ul.th === "ultra" && ul.bg === "rgb(0, 0, 0)" && ul.cs === "dark" && ul.saved === "ultra", ul);
     const pr = await themeLook("premium");
     check("3.2 Light Premium: tło kość słoniowa, schemat jasny, granat marki", pr.th === "premium" && pr.bg === "rgb(247, 244, 238)" && pr.cs === "light" && (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--brand").trim())) === "#1B2A4A", pr);
-    const cyc = []; for (let i = 0; i < 7; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
-    check("3.2 Ctrl+D przełącza przez siedem motywów", cyc.join(",") === "glass,aurum,pearl,graphite,azure,ultra,premium", cyc);
+    const cyc = []; for (let i = 0; i < 8; i++) { await page.keyboard.press("Control+d"); await page.waitForTimeout(80); cyc.push(await page.evaluate(() => document.documentElement.dataset.theme)); }
+    check("3.2 Ctrl+D przełącza przez osiem motywów", cyc.join(",") === "glass,aurum,waga,pearl,graphite,azure,ultra,premium", cyc);
+    const wg = await themeLook("waga");
+    check("3.11 Stacja wagowa: granatowa belka górna, stalowe tło, schemat jasny, zapis w profilu", wg.th === "waga" && wg.cs === "light" && wg.saved === "waga" && (await page.evaluate(() => getComputedStyle(document.querySelector(".topbar")).backgroundImage)).includes("gradient"), wg);
     const gl = await themeLook("glass");
     check("3.7 Szkło: pastelowe tło z gradientem, szklane karty z rozmyciem, zielona marka, zapis w profilu", gl.th === "glass" && gl.cs === "light" && gl.saved === "glass" && await page.evaluate(() => { const c = getComputedStyle(document.querySelector(".card, .theme-cards") || document.body); return getComputedStyle(document.body).backgroundImage.includes("radial-gradient") && getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() === "#1F7F45"; }) && await page.evaluate(() => /blur/.test(getComputedStyle(document.querySelector(".sidebar")).backdropFilter)), gl);
     await themeLook("pearl"); await go(page, "pulpit"); await page.waitForSelector("#kpi-wood");
@@ -415,13 +422,13 @@ async function fillForestDirect(page) {
     check("2.2 Produkcja z nadleśnictwa: nadleśnictwo i leśnictwo uzupełnione z zakupu", (await page.inputValue("#f-production-ndl")) === "Rudy Raciborskie" && (await page.inputValue("#f-production-lesnictwo")) === "Leśnictwo Testowe");
     await page.fill("#f-production-kwit", "KW 0600/09/2026");
     await tick(page, "f-mode-own"); await page.waitForSelector("#f-transport-own-runCount");
-    await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
+    await pickVeh(page, 0, "ve_scania");
     await fillTab(page, "#f-transport-own-runs-0-km", "45");
     await fillTab(page, "#f-transport-own-runCount", "4");
-    check("2.2 Liczba kursów 4 → 4 osobne rubryki (pojazd i km przejęte z poprzedniego)", (await page.$$(".run-card")).length === 4 && (await page.inputValue("#f-transport-own-runs-3-vehicleId")) === "ve_scania" && (await page.inputValue("#f-transport-own-runs-3-km")) === "45");
-    check("2.2 Kurs: kierowca domyślny z pojazdu", (await page.inputValue("#f-transport-own-runs-2-driverId")) === "dr_kowalski");
-    await page.selectOption("#f-transport-own-runs-1-vehicleId", "ve_volvo"); await page.waitForTimeout(100);
-    check("2.2 Zmiana pojazdu w kursie → jego kierowca domyślny", (await page.inputValue("#f-transport-own-runs-1-driverId")) === "dr_nowak");
+    check("2.2 Liczba kursów 4 → 4 osobne rubryki (pojazd i km przejęte z poprzedniego)", (await page.$$(".run-card")).length === 4 && (await runVeh(page, 3)) === "ve_scania" && (await page.inputValue("#f-transport-own-runs-3-km")) === "45");
+    check("2.2 Kurs: kierowca domyślny z pojazdu", (await runDrv(page, 2)) === "dr_kowalski" && (await page.inputValue("#f-transport-own-runs-2-driverName")) === "Jan Kowalski");
+    await pickVeh(page, 1, "ve_volvo");
+    check("2.2 Zmiana pojazdu w kursie → jego kierowca domyślny", (await runDrv(page, 1)) === "dr_nowak" && (await page.inputValue("#f-transport-own-runs-1-driverName")) === "Piotr Nowak");
     for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-own-runs-${i}-kwit`, `KW O359${i}/09/2026`); await fillTab(page, `#f-transport-own-runs-${i}-qty`, "100"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
     check("2.2 Podsumowanie kursów: 400 MP, 132 t, 4 × 45 km × 5 zł = 900,00 zł", nb(await page.textContent("[data-runs-qty]")) === "400 MP" && nb(await page.textContent("[data-runs-t]")).startsWith("132 t") && nb(await page.textContent("[data-runs-cost]")) === "900,00 zł",
       [nb(await page.textContent("[data-runs-qty]")), nb(await page.textContent("[data-runs-t]")), nb(await page.textContent("[data-runs-cost]"))]);
@@ -482,7 +489,7 @@ async function fillForestDirect(page) {
     check("2.6 Bez transportu: kwit wywozowy przy produkcji", !!(await page.$("#f-production-kwit")));
     await tick(page, "f-mode-own"); await page.waitForSelector("#own-runs");
     check("2.6 Z kursami: brak pola kwitu w produkcji, kwit i m³ w kursie", !(await page.$("#f-production-kwit")) && !!(await page.$("#f-transport-own-runs-0-kwit")) && !!(await page.$("#f-transport-own-runs-0-kwitM3")));
-    await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
+    await pickVeh(page, 0, "ve_scania");
     await fillTab(page, "#f-transport-own-runs-0-km", "30"); await fillTab(page, "#f-transport-own-runCount", "4");
     for (let i = 0; i < 4; i++) { await fillTab(page, `#f-transport-own-runs-${i}-kwit`, `KW 0300/${i + 1}/09/2026`); await fillTab(page, `#f-transport-own-runs-${i}-kwitM3`, "25"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
     check("2.6 m³ z kwitu × 4 → MP na aucie (25 m³ → 100 MP)", (await page.inputValue("#f-transport-own-runs-2-qty")) === "100");
@@ -505,7 +512,7 @@ async function fillForestDirect(page) {
     await tick(page, "f-mode-own"); await page.waitForSelector("#own-runs");
     await tick(page, "f-mode-external"); await page.waitForSelector("#ext-runs");
     check("2.5 Własny i zewnętrzny zaznaczone razem — obie sekcje kursów widoczne", (await page.isChecked("#f-mode-own")) && (await page.isChecked("#f-mode-external")) && !!(await page.$("#own-runs")) && (await page.evaluate(() => RIW_DEBUG.plan.norm.transport.mode)) === "mixed");
-    await page.selectOption("#f-transport-own-runs-0-vehicleId", "ve_scania"); await page.waitForTimeout(100);
+    await pickVeh(page, 0, "ve_scania");
     await fillTab(page, "#f-transport-own-runs-0-km", "45"); await fillTab(page, "#f-transport-own-runCount", "3");
     for (let i = 0; i < 3; i++) { await fillTab(page, `#f-transport-own-runs-${i}-kwit`, `KW O421${i}/09/2026`); await fillTab(page, `#f-transport-own-runs-${i}-qty`, "80"); await fillTab(page, `#f-transport-own-runs-${i}-weightT`, "33"); }
     await fillTab(page, "#f-transport-external-company", "ESI Logistics"); await fillTab(page, "#f-transport-external-runs-0-km", "45"); await fillTab(page, "#f-transport-external-runCount", "2");
@@ -625,8 +632,8 @@ async function fillForestDirect(page) {
     await page.click("#wh-chip"); await page.click('[data-wh="wh_rok"]'); await page.waitForTimeout(300);
     check("3.1 Administrator przełącza magazyn roboczy", nb(await page.textContent("#wh-chip")).includes("RiC Rokitki"));
     await preset(page, "produkcja");
-    const chOpts = await page.$$eval("#f-production-chipperId option", o => o.map(x => x.value).filter(Boolean));
-    check("3.1 Formularz: rębaki własne tylko z magazynu operacji (+ rębaki firm zewnętrznych)", chOpts.includes("ch_albach") && !chOpts.includes("ch_biber") && chOpts.filter(v => !/^__/.test(v)).every(v => v === "ch_albach" || /^ch_ext_/.test(v)), chOpts);
+    const chOpts = await page.$$eval("#dl-chippers option", o => o.map(x => x.value).filter(Boolean));
+    check("3.1 Formularz: rębaki własne tylko z magazynu operacji (+ rębaki firm zewnętrznych)", chOpts.includes("Albach Diamant 2000") && !chOpts.includes("Eschlböck Biber 92") && chOpts.every(v => v === "Albach Diamant 2000" || / — /.test(v)), chOpts);
     // 3.2: zakup — ilość w m³, cena za MP; zmiana jednostki ilości przelicza ilość; transport zapewnia dostawca
     await preset(page, "zakup");
     await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "10");
@@ -804,8 +811,8 @@ async function fillForestDirect(page) {
     await closeModals(page);
     // rębak firmy zewnętrznej w produkcji (operator opisowy)
     await preset(page, "produkcja");
-    await page.selectOption("#f-production-chipperId", "ch_ext_drwal"); await page.waitForTimeout(150);
-    check("3.4 Rębak firmy zewnętrznej: pole operatora opisowego zamiast operatora z floty", !!(await page.$("#f-production-operatorName")) && !(await page.$("#f-production-operatorId")));
+    await pickChip(page, "ch_ext_drwal");
+    check("3.4 Rębak firmy zewnętrznej: pole operatora opisowego zamiast operatora z floty", !!(await page.$("#f-production-operatorName")) && /firma zewnętrzna/.test(await page.textContent('[data-field="production.operatorId"] label')) && (await page.evaluate(() => RIWForm.draft.production.chipperId)) === "ch_ext_drwal");
     // telefon: kafel bez poziomego przewijania
     await page.setViewportSize({ width: 390, height: 844 }); await go(page, "pulpit"); await page.waitForTimeout(250);
     check("3.4 Telefon: kafel operacji dodatkowych mieści się w szerokości", await page.evaluate(() => { const e = document.querySelector("#dash-extras"); return e && e.getBoundingClientRect().right <= window.innerWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; }));
@@ -1042,6 +1049,68 @@ async function fillForestDirect(page) {
       await go(page, "flota"); await page.waitForSelector("#fleet-table"); await page.waitForTimeout(150);
     }
 
+    /* ------------- 3.11: nowy pojazd / kierowca w operacji, „+1 kurs”, kwity z wagi, szablony, Enter, szybki kurs ------------- */
+    {
+      const fleetN = () => page.evaluate(() => ({ v: RIW_DEBUG.store.state.fleet.vehicles.length, d: RIW_DEBUG.store.state.fleet.drivers.length }));
+      const f0 = await fleetN();
+      await preset(page, "zakup");
+      await fillTab(page, "#f-purchase-supplierName", "Lander Agro"); await fillTab(page, "#f-purchase-qty", "30"); await fillTab(page, "#f-purchase-price", "50");
+      await tick(page, "f-mode-own"); await page.waitForSelector("#f-transport-own-runs-0-vehicleReg");
+      check("3.11 Kurs: pole pojazdu i kierowcy „wybierz albo wpisz” z listą podpowiedzi", (await page.getAttribute("#f-transport-own-runs-0-vehicleReg", "list")) === "dl-own-veh" && (await page.getAttribute("#f-transport-own-runs-0-driverName", "list")) === "dl-drivers" && (await page.$$("#dl-own-veh option")).length >= 2);
+      await fillTab(page, "#f-transport-own-runs-0-vehicleReg", "wgm 77001"); await fillTab(page, "#f-transport-own-runs-0-driverName", "Adam Nowicki");
+      await fillTab(page, "#f-transport-own-runs-0-km", "12"); await fillTab(page, "#f-transport-own-runs-0-qty", "15");
+      check("3.11 Nowy pojazd i nowy kierowca: oznaczenie „nowy … zostanie dopisany do Floty”", /nowy pojazd/.test(nb(await page.textContent('[data-calc="transport.own.runs.0.vehicleId"]'))) && /nowy kierowca/.test(nb(await page.textContent('[data-calc="transport.own.runs.0.driverId"]'))));
+      await page.click("#own-run-plus"); await page.waitForTimeout(250);
+      const r1 = await page.evaluate(() => ({ n: RIWForm.draft.transport.own.runCount, r: RIWForm.draft.transport.own.runs[1], act: document.activeElement && document.activeElement.id }));
+      check("3.11 „+1 kurs jak poprzedni”: kurs 2 z tym samym pojazdem, kierowcą, km i ilością; fokus na kwicie", r1.n === "2" && r1.r.vehicleReg === "wgm 77001" && r1.r.driverName === "Adam Nowicki" && r1.r.km === "12" && !r1.r.kwit && r1.act === "f-transport-own-runs-1-kwit", r1);
+      // Enter przechodzi do następnego pola
+      await page.focus("#f-transport-own-runs-0-km"); await page.keyboard.press("Enter"); await page.waitForTimeout(80);
+      const nx = await page.evaluate(() => document.activeElement && document.activeElement.id);
+      check("3.11 Enter = następne pole (z km do stawki)", nx === "f-transport-own-runs-0-rate", nx);
+      // kwity z wagi: dwa kody (czytnik / wklejenie) → kursy 1 i 2
+      await page.click("#scale-import"); await page.waitForSelector("#sc-text");
+      await page.fill("#sc-text", "KWIT=W1;NETTO=24000;REJ=WGM77001\nKWIT=W2;NETTO=23500"); await page.waitForTimeout(300);
+      check("3.11 Kwity z wagi: podgląd 2 kwitów (kg → t), dopasowanie po nr rej.", (await page.$$("#sc-table tbody tr")).length === 2 && /24 t/.test(nb(await page.textContent("#sc-table"))) && /dopasowano po nr rej/.test(nb(await page.textContent("#sc-table"))));
+      await page.click("#sc-apply"); await page.waitForTimeout(250);
+      const rw = await page.evaluate(() => RIWForm.draft.transport.own.runs.map(r => [r.kwit, r.weightT]));
+      check("3.11 Kwity z wagi: numer kwitu i waga netto wpisane do kursów", JSON.stringify(rw) === JSON.stringify([["W1", "24"], ["W2", "23,5"]]), rw);
+      // zapis szablonu
+      await page.click("#tpl-save"); await page.waitForSelector("#tpl-name");
+      await page.fill("#tpl-name", "Lander → Zabrze, WGM 77001"); await page.click("#tpl-ok"); await page.waitForTimeout(300);
+      check("3.11 Szablon zapisany: przycisk na pasku szablonów (Alt+1)", /Lander → Zabrze/.test(nb(await page.textContent("#tpl-bar"))) && await page.evaluate(() => RIW_DEBUG.store.state.templates.some(x => x.name === "Lander → Zabrze, WGM 77001" && x.draft.transport.own.runs.every(r => !r.kwit && !r.weightT))));
+      // zatwierdzenie z klawiatury → nowy pojazd i kierowca w kartotece Floty
+      await page.focus("#f-transport-own-runs-1-weightT"); await page.keyboard.press("Control+Enter"); await page.waitForSelector("#confirm-yes"); await page.click("#confirm-yes"); await page.waitForTimeout(500);
+      const f1 = await fleetN();
+      const nv = await page.evaluate(() => { const S = RIW_DEBUG.store.state, v = S.fleet.vehicles.find(x => x.reg === "WGM 77001"), d = S.fleet.drivers.find(x => x.name === "Adam Nowicki"), op = S.operations[S.operations.length - 1]; return { v: !!v, d: !!d, link: !!(v && d && op.transport.runs.every(r => r.vehicleId === v.id && r.driverId === d.id)), def: v && d && v.driverId === d.id }; });
+      check("3.11 Zatwierdzenie: pojazd WGM 77001 i kierowca dopisani do Floty raz (dwa kursy), operacja wskazuje nowe pozycje", f1.v === f0.v + 1 && f1.d === f0.d + 1 && nv.v && nv.d && nv.link && nv.def, { f0, f1, nv });
+      await closeModals(page);
+      // szablon jednym kliknięciem
+      await go(page, "nowa"); await page.waitForSelector("#tpl-bar");
+      await page.click("#tpl-bar [data-tpl]"); await page.waitForTimeout(200);
+      if (await page.$(".modal [data-yes]")) { await page.click(".modal [data-yes]"); await page.waitForTimeout(200); }
+      await page.waitForSelector("#tpl-info", { timeout: 4000 }).catch(() => {});
+      const td = await page.evaluate(() => ({ info: !!document.querySelector("#tpl-info"), date: RIWForm.draft.date, n: RIWForm.draft.transport.own.runs.length, kw: RIWForm.draft.transport.own.runs.map(r => r.kwit).join(""), veh: document.querySelector("#f-transport-own-runs-0-vehicleReg").value }));
+      check("3.11 Szablon jednym kliknięciem: formularz na dziś, pojazd z szablonu, bez kwitów", td.info && td.date === TODAY && td.n === 2 && td.kw === "" && /WGM 77001/.test(td.veh), td);
+      await page.click("#form-reset").catch(() => {}); await page.click(".modal [data-yes]").catch(() => {}); await page.waitForTimeout(200);
+      // szybki kurs (telefon)
+      await page.setViewportSize({ width: 390, height: 844 });
+      await go(page, "kurs"); await page.waitForSelector("#qk-save");
+      const bases = await page.$$eval("#qk-base option", o => o.map(x => x.textContent));
+      check("3.11 Szybki kurs: wzorce — szablony i poprzednie operacje", bases.some(b => /Lander → Zabrze/.test(b)), bases);
+      await page.selectOption("#qk-base", { label: "Lander → Zabrze, WGM 77001" }); await page.waitForTimeout(200);
+      const opsBefore = await page.evaluate(() => RIW_DEBUG.store.state.operations.length);
+      await page.fill("#qk-veh", "WGM 77001"); await page.fill("#qk-drv", "Adam Nowicki"); await page.fill("#qk-kwit", "Q-1"); await page.fill("#qk-qty", "15"); await page.fill("#qk-weight", "24,1");
+      check("3.11 Szybki kurs (telefon): bez poziomego przewijania, duże pola, wyświetlacz wagi LED", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1 && document.querySelector("#qk-weight").getBoundingClientRect().height >= 60));
+      await page.click("#qk-save"); await page.waitForTimeout(500);
+      const qk = await page.evaluate(n => { const S = RIW_DEBUG.store.state, op = S.operations[S.operations.length - 1]; return { added: S.operations.length === n + 1, run: op.transport.runs[0], wm: op.purchase && op.purchase.weightMode, wt: op.purchase && op.purchase.weightT, last: !!document.querySelector("#qk-last .info-line"), kw: document.querySelector("#qk-kwit").value }; }, opsBefore);
+      check("3.11 Szybki kurs: zapis operacji z jednym kursem (kwit, waga, auto z Floty), waga dokumentu z kwitu, pola kwitu i wagi wyczyszczone", qk.added && qk.run.kwit === "Q-1" && qk.run.weightT === 24.1 && qk.run.reg === "WGM 77001" && qk.wm === "manual" && qk.wt === 24.1 && qk.last && qk.kw === "", qk);
+      // intro na telefonie: cały kadr filmu (contain), bez obcinania
+      const fit = await page.evaluate(() => { const d = document.createElement("div"); d.className = "splash"; d.innerHTML = "<video></video>"; document.body.appendChild(d); const f = getComputedStyle(d.querySelector("video")).objectFit; d.remove(); return f; });
+      check("3.11 Intro na telefonie: film w całości (object-fit: contain)", fit === "contain", fit);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await go(page, "flota"); await page.waitForSelector("#fleet-table"); await page.waitForTimeout(150);
+    }
+
     /* ------------- 3.9: zabudowa i pojemność pojazdu, raporty floty i rębaków ------------- */
     check("3.9 Flota: kolumna Pojemność (MP) przy samochodach", (await page.$$eval("#fleet-table thead th", t => t.map(x => x.textContent))).includes("Pojemność") && nb(await page.textContent("#fleet-table")).includes("91,92 MP"));
     await page.click("#fleet-add"); await page.waitForSelector("#fe-body");
@@ -1077,8 +1146,9 @@ async function fillForestDirect(page) {
     // transport: flota własna bez pojazdów zewnętrznych; kursy zewnętrzne z podpowiedzią numerów
     await preset(page, "zakup"); await tick(page, "f-mode-own"); await page.waitForSelector("#f-transport-own-runCount");
     await fillTab(page, "#f-transport-own-runCount", "1");
-    const ownOpts = await page.$$eval("#f-transport-own-runs-0-vehicleId option", o => o.map(x => x.value).filter(Boolean));
-    check("3.6 Transport własny: lista pojazdów bez floty zewnętrznej", ownOpts.length > 0 && ownOpts.every(id => !id.startsWith("ve_ext")), ownOpts);
+    const ownOpts = await page.$$eval("#dl-own-veh option", o => o.map(x => x.value).filter(Boolean));
+    const extRegs = await page.evaluate(() => RIWUI.Store.state.fleet.vehicles.filter(v => v.owner === "external").map(v => v.reg));
+    check("3.6 Transport własny: lista pojazdów bez floty zewnętrznej", ownOpts.length > 0 && ownOpts.every(l => !extRegs.some(r => l.startsWith(r + " ·"))), ownOpts);
     await tick(page, "f-mode-own"); await tick(page, "f-mode-external"); await page.waitForSelector("#f-transport-external-runCount");
     await fillTab(page, "#f-transport-external-runCount", "1");
     check("3.6 Transport zewnętrzny: podpowiedzi numerów z floty zewnętrznej", (await page.getAttribute("#f-transport-external-runs-0-reg", "list")) === "dl-ext-veh" && (await page.$$("#dl-ext-veh option")).length >= 5);

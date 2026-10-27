@@ -24,7 +24,7 @@ const ASSETS = join(ROOT, "app", "assets", EDITION === "premium" ? "premium" : "
 /** Kolejność ładowania warstw (zależności: i18n + słowniki → silnik → usługa → interfejs). */
 export const DICTS = readdirSync(SRC).filter(f => /^i18n\.d\d+\.js$/.test(f)).sort();
 // intro.js jako pierwszy — buforowanie filmu rusza, zanim przeglądarka przeczyta resztę programu
-export const SCRIPTS = ["intro.js", "i18n.js", ...DICTS, "engine.js", "planner.js", "trade.js", "fleetrep.js", "notify.js", "service.js", "seed.js", "pdf.js", "office.js", "auth.js", "core.js", "form.js", "views.js", "dashboard.js", "admin.js", "planner-view.js", "notify-view.js"];
+export const SCRIPTS = ["intro.js", "i18n.js", ...DICTS, "engine.js", "planner.js", "trade.js", "fleetrep.js", "notify.js", "service.js", "seed.js", "pdf.js", "office.js", "auth.js", "core.js", "form.js", "quick.js", "views.js", "dashboard.js", "admin.js", "planner-view.js", "notify-view.js"];
 
 const read = f => readFileSync(join(SRC, f), "utf8");
 for (const f of SCRIPTS.concat(["styles.css"])) {
@@ -82,7 +82,11 @@ const put = (marker, value) => {
   html = html.split(marker).join(value);
 };
 put("/*@@STYLES@@*/", read("styles.css"));
-put("<!--@@SCRIPTS@@-->", SCRIPTS.map(f => `<script>\n/* ${f} */\n${read(f)}\n</script>`).join("\n"));
+/* Biblioteki zewnętrzne dołączone do pliku (bez pobierania z sieci): jsQR 1.4.0 — dekoder kodów QR (Apache-2.0),
+   używany przy wczytywaniu kwitów z wagi, gdy przeglądarka nie ma wbudowanego BarcodeDetector (np. Safari / iOS). */
+export const VENDOR = ["jsQR.js"];
+const vendor = VENDOR.map(f => { const v = readFileSync(join(ROOT, "app", "vendor", f), "utf8"); if (/<\/(script|style)/i.test(v)) throw new Error(`vendor/${f} zawiera </script>`); return `<script>\n/* vendor/${f} — licencja: app/vendor/${f.replace(/\.js$/, "")}.LICENSE */\n${v}\n</script>`; });
+put("<!--@@SCRIPTS@@-->", SCRIPTS.map(f => `<script>\n/* ${f} */\n${read(f)}\n</script>`).concat(vendor).join("\n"));
 put("@@FONTS@@", JSON.stringify(loadPdfFonts()));
 put("@@INTRO_MEDIA@@", media);
 put("@@INTRO_POSTER@@", poster);

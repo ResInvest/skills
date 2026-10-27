@@ -164,12 +164,7 @@
     repeatFrom(opId) {
       const op = R.byId(Store.state.operations, opId);
       if (!op || !op.input) return false;
-      const d = Object.assign(R.blankDraft({ today: App.today() }), R.clone(op.input));
-      Object.assign(d, { idemKey: R.uid("idem"), draftId: null, date: App.today(), docDate: "", notes: "", extDoc: "", _user: Store.userId, _repeatOf: op.no });
-      d.docNos = { PZ: "", WZ: "", MM: "" }; d.docNoMode = { PZ: "auto", WZ: "auto", MM: "auto" };
-      if (d.production) Object.assign(d.production, { kwit: "", diffReason: "", consumeQty: "" });
-      for (const m of ["own", "external"]) for (const r of ((d.transport && d.transport[m] && d.transport[m].runs) || [])) Object.assign(r, { kwit: "", kwitM3: "", weightT: "" });
-      for (const k of ["purchase", "sale", "mm"]) if (d[k] && "weightManual" in d[k]) { d[k].weightManual = ""; d[k].weightMode = "auto"; }
+      const d = Object.assign(R.FleetPick.resolveDraft(Store.state, R.Templates.instantiate(op.input, { today: App.today() })), { _user: Store.userId, _repeatOf: op.no });
       this.mode = "new"; this.op = null; this.corr = null; this.review = null;
       this.draft = d; this.touched = new Set(); this.showAll = false; this.persist();
       return true;
@@ -181,6 +176,175 @@
       let any = null;
       for (let i = ops.length - 1; i >= 0; i--) { const o = ops[i]; if (!ok(o)) continue; if (o.userId === Store.userId) return o; if (!any) any = o; }
       return any;
+    },
+    /* ---------------- 3.11: szybki wpis klawiaturą i kursy ---------------- */
+    enterNav() { return lsGet("riw.enterNav", "1") !== "0"; },
+    /** Pola formularza w kolejności wpisywania (widoczne, aktywne; bez pól tylko do odczytu). */
+    focusables() {
+      const form = $("#opf"); if (!form) return [];
+      return $$("input[data-bind]:not([type=checkbox]):not([type=radio]), select[data-bind], textarea[data-bind]", form).filter(x => !x.disabled && !x.readOnly && x.offsetParent !== null);
+    },
+    moveFocus(from, dir) {
+      const list = this.focusables(), i = list.indexOf(from);
+      const next = i < 0 ? null : list[i + dir];
+      if (next) { next.focus(); if (next.select && next.tagName === "INPUT") next.select(); return; }
+      if (dir > 0) this.save();                       // ostatnie pole + Enter = zapis (podsumowanie przed zatwierdzeniem)
+    },
+    /** „+1 kurs jak poprzedni / jak ten”: kopia kursu (pojazd, kierowca, km, stawka, ilość) bez kwitu i wagi; fokus na kwicie. */
+    addRunLike(m, idx) {
+      const X = m === "own" ? this.ownRuns() : this.extRuns();
+      const n = Math.max(0, Math.floor(NumParse.value(X.runCount, 0)) || 0);
+      if (n >= 50) { Toast.warn(t("Maksymalnie {n} kursów w jednej operacji", { n: 50 })); return; }
+      const src = X.runs[idx === null ? n - 1 : idx] || (m === "own" ? R.blankRun() : R.blankExtRun());
+      const copy = Object.assign(m === "own" ? R.blankRun() : R.blankExtRun(), R.clone(src), { kwit: "", kwitM3: "", weightT: "" });
+      X.runs = X.runs.slice(0, n).concat(copy); X.runCount = String(n + 1);
+      this.touched.add(`transport.${m}.runCount`);
+      this.persist(); this.rerender();
+      const k = f => fid(`transport.${m}.runs.${n}.${f}`);
+      const target = document.getElementById(k("kwit")) || document.getElementById(k("weightT")) || document.getElementById(k("qty"));
+      if (target) { target.focus(); target.scrollIntoView({ block: "center" }); }
+      Toast.ok(t("Dodano kurs {n}", { n: n + 1 }), t("Ten sam pojazd, kierowca, km i stawka — wpisz kwit i wagę."));
+    },
+
+    /** Kwity z wagi → kursy formularza (własne i zewnętrzne); brakujące kursy dopisywane jak poprzedni. */
+    importScale() {
+      const S = Store.state, d = this.draft, mode = d.transport.mode;
+      const useOwn = mode === "own" || mode === "mixed", useExt = mode === "external" || mode === "mixed";
+      const list = [];
+      if (useOwn) this.ownRuns().runs.slice(0, Math.floor(NumParse.value(this.ownRuns().runCount, 0)) || 0).forEach((r, i) => {
+        const v = R.byId(S.fleet.vehicles, r.vehicleId), reg = v ? v.reg : R.FleetPick.split(r.vehicleReg).head;
+        list.push({ m: "own", i, reg, kwit: r.kwit, weightT: r.weightT, label: t("Kurs {n}", { n: i + 1 }) + (mode === "mixed" ? " · " + t("własny") : "") + (reg ? " · " + reg : "") });
+      });
+      if (useExt) this.extRuns().runs.slice(0, Math.floor(NumParse.value(this.extRuns().runCount, 0)) || 0).forEach((r, i) => {
+        list.push({ m: "external", i, reg: r.reg, kwit: r.kwit, weightT: r.weightT, label: t("Kurs {n}", { n: i + 1 }) + (mode === "mixed" ? " · " + t("zewnętrzny") : "") + (r.reg ? " · " + r.reg : "") });
+      });
+      UI.ScaleImport.open(list, rows => {
+        let added = 0, filled = 0;
+        for (const row of rows) {
+          let tgt = typeof row.run === "number" ? list[row.run] : null;
+          if (row.run === "new") {
+            const m = useOwn ? "own" : "external", X = m === "own" ? this.ownRuns() : this.extRuns();
+            const n = Math.max(0, Math.floor(NumParse.value(X.runCount, 0)) || 0);
+            if (n >= 50) continue;
+            const prev = X.runs[n - 1];
+            const copy = Object.assign(m === "own" ? R.blankRun() : R.blankExtRun(), prev ? R.clone(prev) : {}, { kwit: "", kwitM3: "", weightT: "", qty: "" });
+            X.runs = X.runs.slice(0, n).concat(copy); X.runCount = String(n + 1); added++;
+            tgt = { m, i: n, reg: "" };
+          }
+          if (!tgt) continue;
+          const run = (tgt.m === "own" ? this.ownRuns() : this.extRuns()).runs[tgt.i], tk = row.ticket;
+          if (tk.no) run.kwit = tk.no;
+          if (tk.netT !== null) run.weightT = fmtQ(tk.netT);
+          if (tk.reg) {
+            if (tgt.m === "external") { if (!String(run.reg || "").trim() || row.run === "new") run.reg = tk.reg; }
+            else {
+              const p = R.FleetPick.vehicle(S, tk.reg), cur = R.byId(S.fleet.vehicles, run.vehicleId);
+              const curReg = cur ? cur.reg : R.FleetPick.split(run.vehicleReg).head;   // ten sam numer (inny zapis) — bez zmiany
+              if (R.FleetPick.regKey(curReg) !== R.FleetPick.regKey(tk.reg)) {
+                if (p && p.rec && p.rec.owner !== "external") { run.vehicleId = p.rec.id; run.vehicleReg = ""; const dd = R.byId(S.fleet.drivers, p.rec.driverId); if (dd && row.run === "new") { run.driverId = dd.id; run.driverName = ""; } }
+                else if (p && p.fresh) { run.vehicleId = ""; run.vehicleReg = tk.reg; }
+              }
+            }
+          }
+          filled++;
+        }
+        this.touched.add("transport.runs");
+        this.persist(); this.rerender();
+        Toast.ok(t("Wczytano kwity: {n}", { n: filled }), added ? t("Dodano kursów: {n}", { n: added }) : t("Sprawdź ilości w kursach."));
+      }, { canAdd: true });
+    },
+
+    /* ---------------- 3.11: szablony operacji ---------------- */
+    /** Liczniki użycia szablonów (wygoda jednego stanowiska — kolejność przycisków). */
+    tplUses() { try { return JSON.parse(lsGet("riw.tplUses", "{}")) || {}; } catch (e) { return {}; } },
+    /** Szablony dla bieżącego magazynu: najczęściej używane najpierw, potem alfabetycznie. */
+    tplList() {
+      const S = Store.state, uses = this.tplUses();
+      return R.Templates.visible(S, App.user(), this.whId()).sort((a, b) => (uses[b.id] || 0) - (uses[a.id] || 0) || a.name.localeCompare(b.name, "pl"));
+    },
+    tplBar() {
+      if (this.mode !== "new" || this.review) return "";
+      const list = this.tplList(), top = list.slice(0, 8);
+      return `<div class="tpl-bar" id="tpl-bar" role="toolbar" aria-label="${esc(t("Szablony operacji"))}">
+        <span class="tpl-h">${ic("star", 15)} ${esc(t("Szablony"))}</span>
+        ${top.map((x, i) => `<button class="tpl-chip" type="button" data-tpl="${esc(x.id)}" title="${esc(x.summary || "")}">${i < 9 ? `<kbd>Alt+${i + 1}</kbd>` : ""}${esc(x.name)}${x.shared ? "" : ` <small class="dim">${esc(t("prywatny"))}</small>`}</button>`).join("") || `<span class="dim">${esc(t("Brak szablonów — wypełnij formularz i zapisz go jako szablon."))}</span>`}
+        <span class="spacer"></span>
+        ${list.length > top.length ? `<button class="btn sm ghost" type="button" id="tpl-more">${esc(t("Wszystkie ({n})", { n: list.length }))}</button>` : ""}
+        <button class="btn sm" type="button" id="tpl-save">${ic("plus", 14)} ${esc(t("Zapisz jako szablon"))}</button>
+        ${list.length ? `<button class="btn sm ghost" type="button" id="tpl-manage">${esc(t("Zarządzaj"))}</button>` : ""}
+      </div>`;
+    },
+    /** Szablon → formularz na dziś (pyta, gdy formularz zawiera wpisane dane). */
+    async applyTemplate(id) {
+      const tp = R.byId(Store.state.templates || [], id);
+      if (!tp) return;
+      if (this.touched && this.touched.size) {
+        const r = await Modal.confirm({ title: t("Użyć szablonu „{n}”?", { n: tp.name }), text: t("Dane wpisane w formularzu zostaną zastąpione danymi szablonu."), ok: t("Użyj szablonu") });
+        if (!r.ok) return;
+      }
+      this.draft = Object.assign(R.FleetPick.resolveDraft(Store.state, R.Templates.instantiate(tp.draft, { today: App.today() })), { _user: Store.userId, _tpl: tp.name });
+      this.touched = new Set(); this.showAll = false; this.persist();
+      const u = this.tplUses(); u[id] = (u[id] || 0) + 1; lsSet("riw.tplUses", JSON.stringify(u));
+      App.render();
+      Toast.ok(t("Szablon „{n}”", { n: tp.name }), t("Uzupełnij ilości, numery kwitów i wagi — Ctrl+Enter zatwierdza."));
+      this.focusFirstEmpty();
+    },
+    /** Zapis bieżącego formularza jako szablonu (nazwa, wspólny / prywatny, magazyn). */
+    saveTemplateDialog() {
+      const d = this.draft, wh = this.whId(), def = R.Templates.describe(Store.state, d);
+      const m = Modal.open({ id: "tpl-dialog", title: t("Zapisz jako szablon"), sub: esc(def),
+        body: `<div class="field"><label for="tpl-name">${esc(t("Nazwa szablonu"))} <span class="req">*</span></label>
+            <input class="ctrl" id="tpl-name" maxlength="${R.Templates.NAME_MAX}" placeholder="${esc(t("np. Las Rybnik → Zabrze, Scania, Kowalski"))}" value="${esc(d._tpl || "")}">
+            <div class="msg hidden" id="tpl-msg" role="alert"></div></div>
+          <label class="inline-opt mt3"><input type="checkbox" id="tpl-shared" checked> ${esc(t("Wspólny — widoczny dla wszystkich w magazynie"))}</label>
+          <label class="inline-opt mt2"><input type="checkbox" id="tpl-allwh"> ${esc(t("Dla wszystkich magazynów (zamiast tylko {w})", { w: App.whName(wh) }))}</label>
+          <p class="dim mt3">${esc(t("Szablon zapamiętuje strony, produkty, ceny, transport, pojazdy, kierowców, km i stawki. Daty, numery dokumentów, kwity i wagi wpisuje się przy każdej operacji."))}</p>`,
+        footer: `<button class="btn ghost" type="button" data-no>${esc(t("Anuluj"))}</button><button class="btn primary" type="button" id="tpl-ok">${ic("check", 15)} ${esc(t("Zapisz szablon"))}</button>` });
+      $("[data-no]", m.el).onclick = () => m.close();
+      const go = async () => {
+        const rec = { name: $("#tpl-name", m.el).value, shared: $("#tpl-shared", m.el).checked, whId: $("#tpl-allwh", m.el).checked ? "" : wh, draft: R.clone(d) };
+        const res = await Store.exec("template.save", { rec }, N_("Szablony operacji"));
+        if (res && res.ok) { m.close(); Toast.ok(t("Zapisano szablon „{n}”", { n: res.rec.name }), res.rec.summary); App.render(); }
+        else { const msg = $("#tpl-msg", m.el); msg.textContent = (res && res.error) || t("Nie zapisano"); msg.classList.remove("hidden"); }
+      };
+      $("#tpl-ok", m.el).onclick = go;
+      $("#tpl-name", m.el).onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); go(); } };
+    },
+    /** Lista wszystkich szablonów: użyj, zmień nazwę, usuń (autor albo kierownik). */
+    manageTemplates() {
+      const me = App.user(), canEdit = x => x.userId === me.id || App.can("master.edit");
+      const rows = () => this.tplList().map(x => `<tr data-row="${esc(x.id)}"><td><b>${esc(x.name)}</b><br><small class="dim">${esc(x.summary || "")}</small></td>
+          <td>${x.shared ? esc(t("wspólny")) : esc(t("prywatny"))}<br><small class="dim">${esc(x.whId ? App.whName(x.whId) : t("wszystkie magazyny"))}</small></td><td><small>${esc(x.userName || "")}</small></td>
+          <td class="r nowrap"><button class="btn sm primary" type="button" data-use="${esc(x.id)}">${esc(t("Użyj"))}</button>
+          ${canEdit(x) ? `<button class="btn sm ghost" type="button" data-ren="${esc(x.id)}">${esc(t("Nazwa"))}</button><button class="btn sm ghost" type="button" data-del="${esc(x.id)}" aria-label="${esc(t("Usuń szablon {n}", { n: x.name }))}">${ic("trash", 14)}</button>` : ""}</td></tr>`).join("");
+      const m = Modal.open({ id: "tpl-manage-dlg", title: t("Szablony operacji"), wide: true,
+        body: `<div class="tbl-wrap"><table class="tbl" id="tpl-table"><thead><tr><th>${esc(t("Szablon"))}</th><th>${esc(t("Dostęp"))}</th><th>${esc(t("Autor"))}</th><th></th></tr></thead><tbody>${rows()}</tbody></table></div>` });
+      const bind = () => {
+        $$("[data-use]", m.el).forEach(b => b.onclick = () => { m.close(); this.applyTemplate(b.dataset.use); });
+        $$("[data-del]", m.el).forEach(b => b.onclick = async () => {
+          const tp = R.byId(Store.state.templates, b.dataset.del);
+          const r = await Modal.confirm({ title: t("Usunąć szablon „{n}”?", { n: tp.name }), text: t("Szablon zniknie z listy u wszystkich użytkowników. Operacje utworzone z szablonu nie zmieniają się."), ok: t("Usuń"), danger: true });
+          if (!r.ok) return;
+          const res = await Store.exec("template.remove", { id: tp.id }, N_("Szablony operacji"));
+          if (res && res.ok) { Toast.ok(t("Usunięto szablon")); $("#tpl-table tbody", m.el).innerHTML = rows(); bind(); App.render(); } else Toast.err(t("Nie usunięto"), res && res.error);
+        });
+        $$("[data-ren]", m.el).forEach(b => b.onclick = async () => {
+          const tp = R.byId(Store.state.templates, b.dataset.ren);
+          const r = await Modal.confirm({ title: t("Zmień nazwę szablonu"), text: tp.summary || "", ok: t("Zapisz"), input: { label: t("Nazwa szablonu"), required: true, placeholder: tp.name } });
+          if (!r.ok) return;
+          const res = await Store.exec("template.save", { rec: { id: tp.id, name: r.value, shared: tp.shared, whId: tp.whId } }, N_("Szablony operacji"));
+          if (res && res.ok) { Toast.ok(t("Zapisano szablon „{n}”", { n: res.rec.name })); $("#tpl-table tbody", m.el).innerHTML = rows(); bind(); App.render(); } else Toast.err(t("Nie zapisano"), res && res.error);
+        });
+      };
+      bind();
+    },
+    /** Fokus na pierwszym pustym polu wymaganym (szybki wpis po szablonie / powtórzeniu). */
+    focusFirstEmpty() {
+      setTimeout(() => {
+        const form = $("#opf"); if (!form) return;
+        const el = $$("[data-bind]", form).find(x => !x.disabled && x.offsetParent !== null && (x.tagName === "INPUT" && x.type === "text") && !String(x.value).trim() && x.closest(".field") && x.closest(".field").querySelector(".req"));
+        if (el) el.focus();
+      }, 30);
     },
     /** Ostatni kurs pojazdu (km, stawka) — podpowiedź przy wyborze auta. */
     lastRunOf(vehicleId) {
@@ -220,6 +384,11 @@
       return App.wh() ? App.wh().name : "";
     },
     /** Zasoby floty dostępne w magazynie operacji: przypisane do niego i wspólne (oraz już wybrany — dane historyczne). */
+    /** 3.11: etykiety pól floty „wybierz albo wpisz” (numer rejestracyjny na początku — wygodne wpisywanie). */
+    vehLabel(v) { return `${v.reg} · ${v.name}`; },
+    vehText(r) { const v = R.byId(Store.state.fleet.vehicles, r.vehicleId); return v ? this.vehLabel(v) : String(r.vehicleReg || ""); },
+    driverText(r, veh) { const d = R.byId(Store.state.fleet.drivers, r.driverId || (!r.driverName && veh ? veh.driverId : "")); return d ? d.name : String(r.driverName || ""); },
+    chipLabel(c) { return c.owner === "external" ? `${c.name} — ${c.company || t("firma zewnętrzna")}${c.reg ? " (" + c.reg + ")" : ""}` : c.name; },
     fleetOf(kind, keepId) { const wh = this.whId(); return Store.state.fleet[kind].filter(x => !x.whId || x.whId === wh || x.id === keepId || (kind === "vehicles" && this.draft && JSON.stringify(this.draft.transport).includes(`"${x.id}"`))); },
     /** Aktywne pojazdy firm zewnętrznych dostępne w magazynie operacji; podana firma — tylko jej pojazdy (gdy ma je w kartotece). */
     extVehicles(company) {
@@ -353,22 +522,18 @@
           ${field({ key: "production.chipRate", label: t("Cena za rąbanie [zł/MP]"), control: numIn("production.chipRate", P_.chipRate, { suffix: "zł/MP", placeholder: fmt(10, 2) }) })}
           ${field({ key: "production.chipCost", label: t("Koszt rąbania"), control: outBox("production.chipCost", "—"), help: false })}
           ${origin}
-          ${field({ key: "production.chipperId", label: t("Rębak (Flota — własny lub firmy zewnętrznej)"), span: "span2", control: selIn("production.chipperId", [pick(t("bez wskazania rębaka"))].concat(this.chipperOptions(P_.chipperId)), P_.chipperId, { struct: true }) })}
-          ${chipper && chipper.owner === "external"
-            ? field({ key: "production.operatorName", label: t("Operator (firma zewnętrzna)"), span: "span2", control: textIn("production.operatorName", P_.operatorName, { placeholder: chipper.operatorName || t("opcjonalnie") }) + `<div class="help">${esc(t("Rębak firmy {c}{r}", { c: chipper.company || "—", r: chipper.reg ? " · " + chipper.reg : "" }))}</div>` })
-            : P_.chipperId ? field({ key: "production.operatorId", label: t("Operator rębaka"), span: "span2", control: selIn("production.operatorId", this.fleetOf("operators", P_.operatorId).map(o => ({ v: o.id, l: o.name + (chipper && chipper.operatorId === o.id ? " " + t("(domyślny)") : "") })), P_.operatorId || (chipper ? chipper.operatorId : "")) }) : ""}
+          ${field({ key: "production.chipperId", label: t("Rębak (wybierz z Floty albo wpisz nowy)"), span: "span2", control: textIn("production.chipperName", this.chipperText(P_), { placeholder: t("opcjonalnie — wybierz z listy albo wpisz nazwę"), list: "dl-chippers" }) })}
+          ${field({ key: "production.operatorId", label: chipper && chipper.owner === "external" ? t("Operator (firma zewnętrzna)") : t("Operator rębaka (wybierz albo wpisz nowego)"), span: "span2", control: textIn("production.operatorName", this.operatorText(P_, chipper), { placeholder: chipper && chipper.owner === "external" ? (chipper.operatorName || t("opcjonalnie")) : t("wybierz z listy albo wpisz imię i nazwisko"), list: "dl-operators" }) + (chipper && chipper.owner === "external" ? `<div class="help">${esc(t("Rębak firmy {c}{r}", { c: chipper.company || "—", r: chipper.reg ? " · " + chipper.reg : "" }))}</div>` : "") })}
         </div>
-        <datalist id="dl-ndl">${["Rudy Raciborskie", "Rybnik", "Katowice", "Brynek", "Gliwice"].map(x => `<option value="${esc(x)}">`).join("")}</datalist>`;
+        <datalist id="dl-ndl">${["Rudy Raciborskie", "Rybnik", "Katowice", "Brynek", "Gliwice"].map(x => `<option value="${esc(x)}">`).join("")}</datalist>
+        <datalist id="dl-chippers">${this.fleetOf("chippers", P_.chipperId).map(c => `<option value="${esc(this.chipLabel(c))}" label="${esc(c.status !== "aktywny" ? t("{s} — wróci do pracy", { s: t(R.ASSET_STATUS[c.status]) }) : c.owner === "external" ? t("Rębak firmy zewnętrznej") : t("Rębak własny"))}">`).join("")}</datalist>
+        <datalist id="dl-operators">${this.fleetOf("operators", P_.operatorId).map(o => `<option value="${esc(o.name)}">`).join("")}</datalist>`;
     },
-    /** Rębaki do wyboru: własne (magazyn operacji / wspólne) i firm zewnętrznych — z oznaczeniem właściciela. */
-    chipperOptions(keepId) {
-      const own = [], ext = [];
-      for (const c of this.fleetOf("chippers", keepId)) {
-        const off = c.status !== "aktywny";
-        const o = { v: c.id, disabled: off && c.id !== keepId, l: c.owner === "external" ? `${c.name} — ${c.company || t("firma zewnętrzna")}${c.reg ? " (" + c.reg + ")" : ""}${off ? " — " + t(R.ASSET_STATUS[c.status]) : ""}` : `${c.name}${off ? " — " + t(R.ASSET_STATUS[c.status]) : ""}` };
-        (c.owner === "external" ? ext : own).push(o);
-      }
-      return own.concat(ext.length ? [{ v: "__sep", l: "── " + t("Rębaki firm zewnętrznych") + " ──", disabled: true }].concat(ext) : []);
+    chipperText(P_) { const c = R.byId(Store.state.fleet.chippers, P_.chipperId); return c ? this.chipLabel(c) : String(P_.chipperName || ""); },
+    operatorText(P_, chipper) {
+      if (chipper && chipper.owner === "external") return String(P_.operatorName || "");
+      const o = R.byId(Store.state.fleet.operators, P_.operatorId || (!P_.operatorName && chipper ? chipper.operatorId : ""));
+      return o ? o.name : String(P_.operatorName || "");
     },
     /** Operacje dodatkowe (holowanie, ładowarka…) — pole wyboru + pozycje z kartoteki; osobne rekordy z kosztem. */
     extrasHtml(n) {
@@ -593,17 +758,20 @@
         const O = this.ownRuns();
         const count = Math.max(0, Math.min(50, Math.floor(NumParse.value(O.runCount, 0)) || 0));
         const u = Units.label(this.shippedUnit());
-        const vehOpts = this.fleetOf("vehicles", null).filter(v => v.owner !== "external").map(v => ({ v: v.id, l: `${v.name} · ${v.reg}${v.status !== "aktywny" ? " — " + t(R.ASSET_STATUS[v.status]) : ""}`, disabled: v.status !== "aktywny" }));
+        // 3.11: pojazd i kierowca — wybór z kartoteki (także wcześniej używane / wycofane) albo wpisanie nowego (jak w firmach zewnętrznych)
+        const ownVeh = this.fleetOf("vehicles", null).filter(v => v.owner !== "external");
+        const ownVehList = `<datalist id="dl-own-veh">${ownVeh.map(v => `<option value="${esc(this.vehLabel(v))}" label="${esc(v.status !== "aktywny" ? t("{s} — wróci do pracy", { s: t(R.ASSET_STATUS[v.status]) }) : t("na stanie"))}">`).join("")}</datalist>
+          <datalist id="dl-drivers">${this.fleetOf("drivers", null).map(x => `<option value="${esc(x.name)}">`).join("")}</datalist>`;
         const runs = [];
         for (let i = 0; i < count; i++) {
           const r = O.runs[i] || R.blankRun(), veh = R.byId(S.fleet.vehicles, r.vehicleId), k = f => `transport.own.runs.${i}.${f}`;
           runs.push(`<div class="run-card" data-run="${i}">
-            <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="run.${i}.cost">—</span></div>
+            <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="run.${i}.cost">—</span><button class="btn ghost sm run-dup" type="button" data-run-dup="own.${i}" title="${esc(t("Dodaj kolejny kurs z tym samym pojazdem, kierowcą, km i stawką — bez kwitu i wagi"))}">${ic("plus", 13)} ${esc(t("+1 jak ten"))}</button></div>
             <div class="fgrid four">
-              ${field({ key: k("vehicleId"), label: t("Pojazd z floty własnej"), req: true, span: "span2", help: false, control: selIn(k("vehicleId"), [pick(t("wybierz pojazd"))].concat(vehOpts), r.vehicleId, { struct: true }) })}
-              ${field({ key: k("driverId"), label: t("Kierowca"), req: true, span: "span2", help: false, control: selIn(k("driverId"), [pick(t("wybierz kierowcę"))].concat(this.fleetOf("drivers", r.driverId).map(x => ({ v: x.id, l: x.name + (veh && veh.driverId === x.id ? " " + t("(domyślny)") : "") }))), r.driverId || (veh ? veh.driverId : "")) })}
-              ${forest ? `${field({ key: k("kwit"), label: t("Nr kwitu wywozowego"), req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: eg("KW 0217/09/2026") }) })}
-              ${field({ key: k("kwitM3"), label: t("m³ z kwitu"), help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: eg("25") }) })}` : ""}
+              ${field({ key: k("vehicleId"), label: t("Pojazd floty własnej (wybierz albo wpisz nr rej.)"), req: true, span: "span2", help: false, control: textIn(k("vehicleReg"), this.vehText(r), { placeholder: t("wybierz z listy albo wpisz nowy, np. WGM 12345"), list: "dl-own-veh" }) })}
+              ${field({ key: k("driverId"), label: t("Kierowca (wybierz albo wpisz nowego)"), req: true, span: "span2", help: false, control: textIn(k("driverName"), this.driverText(r, veh), { placeholder: t("wybierz z listy albo wpisz imię i nazwisko"), list: "dl-drivers" }) })}
+              ${field({ key: k("kwit"), label: forest ? t("Nr kwitu wywozowego") : t("Nr kwitu wagowego"), req: forest, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: forest ? eg("KW 0217/09/2026") : t("opcjonalnie — z wagi") }) })}
+              ${forest ? field({ key: k("kwitM3"), label: t("m³ z kwitu"), help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: eg("25") }) }) : ""}
               ${field({ key: k("qty"), label: forest ? t("MP na aucie (m³ × 4)") : t("Ilość w kursie ({u})", { u }), req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: forest ? t("auto z m³") : count > 1 ? eg("100") : t("cała ilość") }) })}
               ${field({ key: k("weightT"), label: forest ? t("Tony (z kwitu / wagi)") : t("Waga rzeczywista (t)"), help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: forest ? t("z kwitu") : t("z kwitu wagowego") }) })}
               ${field({ key: k("km"), label: t("Kilometry"), req: true, help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: eg("45") }) })}
@@ -614,7 +782,7 @@
           ${field({ key: "transport.own.runCount", label: t("Liczba kursów"), req: true, control: numIn("transport.own.runCount", O.runCount, { suffix: t("szt."), placeholder: eg("4") }) })}
           <div class="field span3"><span class="lbl">&nbsp;</span><div class="help">${esc(t("Każdy kurs: pojazd z floty własnej, kierowca (domyślny z pojazdu, można zmienić dla kursu), km, stawka, ilość i waga z wagi rzeczywistej. Koszt = km × stawka, sumowany dla wszystkich kursów."))}</div></div>
         </div>
-        <div class="runs" id="own-runs">${runs.join("") || runsHint}</div>`;
+        <div class="runs" id="own-runs">${runs.join("") || runsHint}</div>${count ? `<div class="row wrap mt3"><button class="btn" type="button" data-run-dup="own.last" id="own-run-plus">${ic("plus", 15)} ${esc(t("+1 kurs jak poprzedni"))}</button><span class="dim">${esc(t("ten sam pojazd, kierowca, km i stawka — wpisz tylko kwit i wagę"))}</span></div>` : ""}${ownVehList}`;
       }
       if (useExt) {
         const X = this.extRuns();
@@ -625,13 +793,13 @@
         for (let i = 0; i < count; i++) {
           const r = X.runs[i] || R.blankExtRun(), k = f => `transport.external.runs.${i}.${f}`;
           runs.push(`<div class="run-card" data-xrun="${i}">
-            <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="xrun.${i}.cost">—</span></div>
+            <div class="run-h"><b>${esc(t("Kurs {n}", { n: i + 1 }))}</b><span class="spacer"></span><span class="run-cost" data-out="xrun.${i}.cost">—</span><button class="btn ghost sm run-dup" type="button" data-run-dup="external.${i}" title="${esc(t("Dodaj kolejny kurs z tym samym pojazdem, kierowcą, km i stawką — bez kwitu i wagi"))}">${ic("plus", 13)} ${esc(t("+1 jak ten"))}</button></div>
             <div class="fgrid four">
               ${multiCo ? field({ key: k("company"), label: t("Firma transportowa"), req: true, span: "span2", help: false, control: textIn(k("company"), r.company, { placeholder: t("wybierz z listy albo wpisz nową firmę"), list: "dl-carriers" }) }) : ""}
               ${field({ key: k("reg"), label: t("Nr rejestracyjny"), req: true, help: false, control: textIn(k("reg"), r.reg, { placeholder: eg("ESI 18734"), list: "dl-ext-veh" }) })}
               ${field({ key: k("driver"), label: t("Kierowca"), help: false, control: textIn(k("driver"), r.driver, { placeholder: t("imię i nazwisko") }) })}
-              ${forest ? `${field({ key: k("kwit"), label: t("Nr kwitu wywozowego"), req: true, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: eg("KW 0217/09/2026") }) })}
-              ${field({ key: k("kwitM3"), label: t("m³ z kwitu"), help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: eg("25") }) })}` : ""}
+              ${field({ key: k("kwit"), label: forest ? t("Nr kwitu wywozowego") : t("Nr kwitu wagowego"), req: forest, help: false, control: textIn(k("kwit"), r.kwit, { placeholder: forest ? eg("KW 0217/09/2026") : t("opcjonalnie — z wagi") }) })}
+              ${forest ? field({ key: k("kwitM3"), label: t("m³ z kwitu"), help: false, control: numIn(k("kwitM3"), r.kwitM3, { suffix: "m³", placeholder: eg("25") }) }) : ""}
               ${field({ key: k("qty"), label: forest ? t("MP na aucie (m³ × 4)") : t("Ilość w kursie ({u})", { u }), req: count > 1, help: false, control: numIn(k("qty"), r.qty, { suffix: u, placeholder: forest ? t("auto z m³") : count > 1 ? eg("100") : t("cała ilość") }) })}
               ${field({ key: k("weightT"), label: forest ? t("Tony (z kwitu / wagi)") : t("Waga rzeczywista (t)"), help: false, control: numIn(k("weightT"), r.weightT, { suffix: "t", placeholder: forest ? t("z kwitu") : t("z kwitu wagowego") }) })}
               ${field({ key: k("km"), label: t("Kilometry"), req: !inc && str(r.freight) === "", help: false, control: numIn(k("km"), r.km, { suffix: "km", placeholder: eg("80") }) })}
@@ -654,8 +822,9 @@
           <div class="field span-all" data-field="transport.external.includedInPrice">
             ${optCard("transport.external.includedInPrice", { checked: inc, title: t("Transport wliczony w cenę"), text: t("Koszt transportu tej operacji = 0 zł (kursy i ilości nadal są ewidencjonowane).") })}</div>
         </div>
-        <div class="runs" id="ext-runs">${runs.join("") || runsHint}</div>`;
+        <div class="runs" id="ext-runs">${runs.join("") || runsHint}</div>${count ? `<div class="row wrap mt3"><button class="btn" type="button" data-run-dup="external.last" id="external-run-plus">${ic("plus", 15)} ${esc(t("+1 kurs jak poprzedni"))}</button><span class="dim">${esc(t("ten sam pojazd, kierowca, km i stawka — wpisz tylko kwit i wagę"))}</span></div>` : ""}`;
       }
+      if (useOwn || useExt) modeHtml += `<div class="row wrap mt3 scale-row"><button class="btn" type="button" id="scale-import">${ic("scale", 15)} ${esc(t("Wczytaj kwity z wagi"))}</button><span class="dim">${esc(t("plik z programu wagi, kod QR / czytnik albo aparat — numer kwitu, waga netto i nr rej. wpiszą się do kursów"))}</span></div>`;
       if (useOwn || useExt) modeHtml += `<div class="field mt3" data-field="transport.runs"><span class="lbl">${esc(mode === "mixed" ? t("Podsumowanie kursów (flota własna + firma zewnętrzna)") : t("Podsumowanie kursów"))}</span><div data-out="runs.summary"></div><div class="msg hidden" data-msg="transport.runs" role="alert"></div></div>`;
       if (mode === "train") {
         const count = Math.max(0, Math.min(S.config.maxWagons, Math.floor(NumParse.value(tr.wagonCount, 0)) || 0));
@@ -725,14 +894,16 @@
           <div class="actions"><button class="btn ghost" type="button" id="review-close">${ic("x", 15)} ${esc(t("Zamknij przegląd"))}</button></div></div>` + this.layout(false);
       return `<div class="page-head"><div class="titles"><h2>${esc(t("Nowa operacja"))}${this.draft.draftId ? ` <span class="badge st-DRAFT">${esc(t("wersja robocza"))}</span>` : ""}</h2>
           ${rec && rec.rejectReason ? `<div class="info-line err mt2" id="reject-info">${ic("alert", 15)}<span>${esc(t("Odrzucona przez {u} ({d}): {r}. Popraw i przekaż ponownie.", { u: rec.rejectedBy, d: Dates.ts(rec.rejectedAt), r: rec.rejectReason }))}</span></div>` : ""}
+          ${this.draft._tpl ? `<div class="info-line ok mt2" id="tpl-info">${ic("star", 15)}<span>${esc(t("Z szablonu „{n}” na dziś. Uzupełnij ilości, numery kwitów i wagi — Ctrl+Enter zatwierdza.", { n: this.draft._tpl }))}</span></div>` : ""}
           ${this.draft._repeatOf ? `<div class="info-line ok mt2" id="repeat-info">${ic("undo", 15)}<span>${esc(t("Kopia operacji {n} na dziś. Uzupełnij numery kwitów i wagi — Ctrl+Enter zatwierdza.", { n: this.draft._repeatOf }))}</span></div>` : ""}
           ${rec && rec.status === "PENDING" ? `<div class="info-line mt2">${ic("clock", 15)}<span>${esc(t("Operacja czeka na zatwierdzenie. Zmiana i zapis wycofa ją do wersji roboczej."))}</span></div>` : ""}
           <p>${t("Zakup, sprzedaż z magazynu, produkcja na magazynie, produkcja ze sprzedażą bezpośrednią albo przesunięcie MM. Pola z <span class=\"req\">*</span> są wymagane. Przed zatwierdzeniem zobaczysz podsumowanie.")}</p></div>
           <div class="actions">
             ${(() => { const lo = this.lastOwnOp(); return lo ? `<button class="btn" type="button" id="repeat-last" data-op="${esc(lo.id)}" data-no="${esc(lo.no)}" title="${esc(t("Kopia na dziś: te same strony, produkty, ilości, pojazdy i stawki — bez numerów kwitów"))}">${ic("undo", 15)} ${esc(t("Powtórz ostatnią"))} <small class="dim">${esc(lo.no)}</small></button>` : ""; })()}
             <label class="inline-opt"><input type="checkbox" id="tut-toggle" ${lsGet("riw.tutorial", "1") !== "0" ? "checked" : ""}> ${esc(t("Samouczek pod polami"))}</label>
+            <label class="inline-opt" title="${esc(t("Enter przechodzi do następnego pola, Shift+Enter — do poprzedniego; na ostatnim polu Enter zapisuje operację"))}"><input type="checkbox" id="enter-nav" ${this.enterNav() ? "checked" : ""}> ${esc(t("Enter = następne pole"))}</label>
             <button class="btn ghost" type="button" id="form-reset">${ic("x", 15)} ${esc(t("Wyczyść"))}</button>
-          </div></div>` + this.layout(false);
+          </div></div>` + this.tplBar() + this.layout(false);
     },
     layout(corr) {
       return `<div class="op-layout">
@@ -796,7 +967,30 @@
       });
       form.addEventListener("submit", e => { e.preventDefault(); this.save(); });
       // Ctrl+S / Ctrl+Enter — zatwierdzenie (podsumowanie przed zapisem)
-      form.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "s" || e.key === "Enter")) { e.preventDefault(); this.save(); } });
+      form.addEventListener("keydown", e => {
+        if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "s" || e.key === "Enter")) { e.preventDefault(); this.save(); return; }
+        // 3.11: obsługa samą klawiaturą — Enter przechodzi do następnego pola (Shift+Enter — do poprzedniego), na ostatnim polu zapis
+        if (e.key === "Enter" && !e.altKey && !e.ctrlKey && !e.metaKey && this.enterNav() && e.target.matches("input:not([type=checkbox]):not([type=radio]), select")) {
+          e.preventDefault();
+          this.moveFocus(e.target, e.shiftKey ? -1 : 1);
+        }
+      });
+      if (!page._tplKeys) page._tplKeys = true, page.addEventListener("keydown", e => {
+        if (!$("#tpl-bar", page) || !e.altKey || e.ctrlKey || e.metaKey || !/^Digit[1-9]$/.test(e.code)) return;
+        const b = $$("[data-tpl]", page)[Number(e.code.slice(5)) - 1];
+        if (b) { e.preventDefault(); this.applyTemplate(b.dataset.tpl); }
+      });
+      form.addEventListener("click", e => {
+        if (e.target.closest("#scale-import")) { this.importScale(); return; }
+        const b = e.target.closest("[data-run-dup]"); if (!b) return;
+        const [m, which] = b.dataset.runDup.split(".");
+        this.addRunLike(m, which === "last" ? null : Number(which));
+      });
+      const en = $("#enter-nav", page); if (en) en.onchange = () => lsSet("riw.enterNav", en.checked ? "1" : "0");
+      $$("[data-tpl]", page).forEach(b => { b.onclick = () => this.applyTemplate(b.dataset.tpl); });
+      const ts = $("#tpl-save", page); if (ts) ts.onclick = () => this.saveTemplateDialog();
+      const tm = $("#tpl-manage", page); if (tm) tm.onclick = () => this.manageTemplates();
+      const tmo = $("#tpl-more", page); if (tmo) tmo.onclick = () => this.manageTemplates();
       const rp = $("#repeat-last", page); if (rp) rp.onclick = () => { if (this.repeatFrom(rp.dataset.op)) { App.render(); Toast.ok(t("Kopia operacji {n} na dziś", { n: rp.dataset.no }), t("Sprawdź ilości i dopisz numery kwitów — reszta jest uzupełniona.")); } };
       $$("[data-save]", page).forEach(b => b.onclick = () => this.save());
       $$("[data-draft]", page).forEach(b => b.onclick = () => this.saveDraft());
@@ -851,6 +1045,8 @@
       const key = el.dataset && el.dataset.bind;
       if (!key) return;
       if (!isChange && (el.type === "checkbox" || el.tagName === "SELECT" || el.type === "date")) return;
+      // rębak wybrany / wpisany — po opuszczeniu pola odświeżenie opisu operatora (własny / firmy zewnętrznej); po przejściu fokusu
+      if (isChange && key === "production.chipperName") { setTimeout(() => { if ($("#opf")) this.rerender(); }, 0); return; }
       if (isChange && el.tagName === "INPUT" && el.type === "text") return;
       const v = el.type === "checkbox" ? el.checked : el.value;
       const prev = key === "purchase.unit" ? d.purchase.unit : undefined;
@@ -899,15 +1095,50 @@
         if (key === "sale.direct") d.sale.enabled = true;
       }
       if (d.type === "ZAKUP" && key === "sale.direct" && !v) d.sale.enabled = false;
-      if (key === "production.chipperId") { const c = R.byId(S.fleet.chippers, v); d.production.operatorId = c && c.owner !== "external" ? c.operatorId : ""; d.production.operatorName = ""; }
       if (key === "extras.enabled" && v) this.extras();
-      const runKey = key.match(/^transport\.own\.runs\.(\d+)\.vehicleId$/);
+      const runKey = key.match(/^transport\.own\.runs\.(\d+)\.(vehicleId|vehicleReg)$/);
       if (runKey) {
-        const veh = R.byId(S.fleet.vehicles, v), run = d.transport.own.runs[+runKey[1]];
-        run.driverId = veh ? veh.driverId : "";
-        // szybki wpis: km i stawka z ostatniego kursu tego auta (tylko puste pola)
-        const last = veh ? this.lastRunOf(veh.id) : null;
-        if (last) for (const f of ["km", "rate"]) if (!String(run[f] || "").trim() && last[f]) { run[f] = last[f]; const el = document.getElementById(fid(`transport.own.runs.${runKey[1]}.${f}`)); if (el) el.value = run[f]; }
+        // pojazd wybrany z listy albo wpisany: numer zgodny z kartoteką → istniejący pojazd; inny → nowy (dopisany przy zatwierdzeniu)
+        const i = runKey[1], run = d.transport.own.runs[+i];
+        let veh = null;
+        if (runKey[2] === "vehicleId") veh = R.byId(S.fleet.vehicles, v);
+        else { const p = R.FleetPick.vehicle(S, v); veh = p && p.rec && p.rec.owner !== "external" ? p.rec : null; }
+        const prevId = run.vehicleId;
+        run.vehicleId = veh ? veh.id : "";
+        if (veh && veh.id !== prevId) {
+          // kierowca domyślny pojazdu (gdy pole kierowcy jest puste albo zawierało domyślnego poprzedniego pojazdu)
+          const prevVeh = R.byId(S.fleet.vehicles, prevId), dEl = document.getElementById(fid(`transport.own.runs.${i}.driverName`));
+          const curDriver = String(run.driverName || "").trim(), prevDefault = prevVeh ? (R.byId(S.fleet.drivers, prevVeh.driverId) || {}).name : "";
+          if (!curDriver && !run.driverId || (run.driverId && prevVeh && run.driverId === prevVeh.driverId) || (curDriver && curDriver === prevDefault)) {
+            const dd = R.byId(S.fleet.drivers, veh.driverId);
+            run.driverId = dd ? dd.id : ""; run.driverName = dd ? dd.name : "";
+            if (dEl) dEl.value = run.driverName;
+          }
+          // szybki wpis: km i stawka z ostatniego kursu tego auta (tylko puste pola)
+          const last = this.lastRunOf(veh.id);
+          if (last) for (const f of ["km", "rate"]) if (!String(run[f] || "").trim() && last[f]) { run[f] = last[f]; const el = document.getElementById(fid(`transport.own.runs.${i}.${f}`)); if (el) el.value = run[f]; }
+        }
+      }
+      const drvKey = key.match(/^transport\.own\.runs\.(\d+)\.driverName$/);
+      if (drvKey) {
+        const run = d.transport.own.runs[+drvKey[1]], p = R.FleetPick.person(S.fleet.drivers, v);
+        run.driverId = p && p.rec ? p.rec.id : "";
+      }
+      if (key === "production.chipperName") {
+        // rębak z listy albo wpisany (nowy rębak własny); operator domyślny rębaka własnego podpowiadany
+        const P = d.production, p = R.FleetPick.chipper(S, v), c = p && p.rec ? p.rec : null, prevId = P.chipperId;
+        P.chipperId = c ? c.id : "";
+        if (c && c.id !== prevId) {
+          const oEl = document.getElementById(fid("production.operatorName"));
+          if (c.owner === "external") { P.operatorId = ""; P.operatorName = c.operatorName || ""; }
+          else { const o = R.byId(S.fleet.operators, c.operatorId); P.operatorId = o ? o.id : ""; P.operatorName = o ? o.name : ""; }
+          if (oEl) oEl.value = P.operatorName;
+        }
+      }
+      if (key === "production.operatorName") {
+        const P = d.production, c = R.byId(S.fleet.chippers, P.chipperId);
+        const p = c && c.owner === "external" ? null : R.FleetPick.person(S.fleet.operators, v);
+        P.operatorId = p && p.rec ? p.rec.id : "";
       }
       const xregKey = key.match(/^transport\.external\.runs\.(\d+)\.reg$/);
       if (xregKey) {
@@ -947,7 +1178,7 @@
         const O = this.ownRuns(), n = Math.max(0, Math.min(50, Math.floor(NumParse.value(v, 0)) || 0));
         const arr = O.runs.slice(0, n);
         // nowy kurs przejmuje pojazd, kierowcę, km i stawkę z poprzedniego — zwykle kursy są powtarzalne
-        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankRun(), { vehicleId: prev.vehicleId, driverId: prev.driverId, km: prev.km, rate: prev.rate }) : R.blankRun()); }
+        while (arr.length < n) { const prev = arr[arr.length - 1]; arr.push(prev ? Object.assign(R.blankRun(), { vehicleId: prev.vehicleId, vehicleReg: prev.vehicleReg || "", driverId: prev.driverId, driverName: prev.driverName || "", km: prev.km, rate: prev.rate }) : R.blankRun()); }
         O.runs = arr;
       }
       if (key === "purchase.supplierName") {
@@ -1098,8 +1329,12 @@
       if (ownP) {
         (ownP.runs || []).forEach((r, i) => {
           out(`run.${i}.cost`, `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`);
-          if (r.driverOverridden) add(`transport.own.runs.${i}.driverId`, `<span style="color:var(--warn)">${esc(t("kierowca zmieniony tylko dla tego kursu"))}</span>`);
-          if (r.reg) add(`transport.own.runs.${i}.vehicleId`, t("rej. <b>{r}</b>", { r: esc(r.reg) }));
+          if (r.driverOverridden && !r.newDriver) add(`transport.own.runs.${i}.driverId`, `<span style="color:var(--warn)">${esc(t("kierowca zmieniony tylko dla tego kursu"))}</span>`);
+          if (r.newVehicle) add(`transport.own.runs.${i}.vehicleId`, `<span class="badge info">${esc(t("nowy pojazd"))}</span> ` + esc(t("zostanie dopisany do Floty przy zatwierdzeniu")));
+          else if (r.reactivate) add(`transport.own.runs.${i}.vehicleId`, `<span class="badge warn">${esc(t("wraca do pracy"))}</span>`);
+          else if (r.vehicleId) add(`transport.own.runs.${i}.vehicleId`, esc(t("z kartoteki ✓")));
+          if (r.newDriver) add(`transport.own.runs.${i}.driverId`, `<span class="badge info">${esc(t("nowy kierowca"))}</span> ` + esc(t("zostanie dopisany do Floty przy zatwierdzeniu")));
+          else if (r.driverId && r.defaultDriverId === r.driverId) add(`transport.own.runs.${i}.driverId`, esc(t("domyślny dla pojazdu")));
         });
       }
       if (extP) (extP.runs || []).forEach((r, i) => out(`xrun.${i}.cost`, extP.includedInPrice ? t("wliczony w cenę · <b>{m}</b>", { m: money(0) }) : r.freight !== null ? t("fracht = <b>{m}</b>", { m: money(r.cost) }) : `${fmtQ(r.km)} km × ${fmt(r.rate)} zł/km = <b>${money(r.cost)}</b>`));

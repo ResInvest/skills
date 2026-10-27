@@ -747,7 +747,12 @@ test("2.2 Kursy: przy wielu kursach ilość w kursie wymagana; różnica sumy = 
   d.transport = RUNS(1, { qty: "" });
   assert.equal(R.planOperation(s, d, ctx(s)).norm.transport.totalQty, 400, "jeden kurs = cała ilość");
   d.transport = RUNS(2, { vehicleId: "ve_man" });
-  assert.match(R.planOperation(s, d, ctx(s)).errors["transport.own.runs.0.vehicleId"], /W serwisie/);
+  assert.match(R.planOperation(s, d, ctx(s)).errors["transport.own.runs.0.vehicleId"], /przypisany do magazynu/);
+  // 3.11: pojazd „W serwisie” / wycofany można wybrać — przy zatwierdzeniu wraca do pracy (ostrzeżenie, nie błąd)
+  s.fleet.vehicles.find(v => v.id === "ve_man").whId = "";
+  const pm = R.planOperation(s, d, ctx(s));
+  assert.equal(pm.errors["transport.own.runs.0.vehicleId"], undefined);
+  assert.ok(pm.warnings.some(w => /W serwisie.*wróci do pracy/.test(w)));
 });
 test("2.2 Kursy: dane z wersji 2.1 (jeden kurs bez listy) nadal liczą się poprawnie", () => {
   const s = fresh();

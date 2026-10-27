@@ -61,6 +61,9 @@
     eye: "M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", eyeOff: "M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.9 5.1A10.4 10.4 0 0 1 12 5c7 0 11 7 11 7a18 18 0 0 1-3.2 4.2M6.6 6.6A17.6 17.6 0 0 0 1 12s4 7 11 7a10 10 0 0 0 5.4-1.6",
     server: "M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01", refresh: "M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6",
     calendar: "M4 5h16v16H4zM4 9h16M8 3v4M16 3v4M8 13h3v3H8z",
+    star: "M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z", scale: "M12 3v18M5 21h14M6 7h12M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z",
+    qr: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM18 18h3v3h-3zM6 6h1v1H6zM17 6h1v1h-1zM6 17h1v1H6z", phone: "M7 2h10v20H7zM11 18h2",
+    keyboard: "M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10",
     bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0", trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
     coins: "M8 8a6 3 0 1 0 12 0A6 3 0 1 0 8 8zM8 8v4c0 1.7 2.7 3 6 3s6-1.3 6-3V8M4 12a6 3 0 0 0 6 3M4 12v4c0 1.7 2.7 3 6 3"
   };
@@ -510,6 +513,7 @@
   const NAV = [
     { group: N_("Praca") },
     { id: "pulpit", label: N_("Pulpit"), icon: "home" },
+    { id: "kurs", label: N_("Szybki kurs"), icon: "phone", perm: "op.create" },
     { id: "operacje", label: N_("Operacje"), icon: "list" },
     { id: "przyjecia", label: N_("Przyjęcia"), icon: "inbox" },
     { id: "wz", label: N_("Wydania / WZ"), icon: "out" },

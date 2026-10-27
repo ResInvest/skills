@@ -80,6 +80,8 @@
     /** Kontrola przełomu miesiąca — idempotentna, uruchamiana przy starcie (każdy zalogowany). */
     "inv.autoClose": { run: (s, a, c) => ({ ok: true, done: R.Inventory.autoClose(s, Object.assign({}, c, { source: N_("Automat: początek kolejnego miesiąca") })) }) },
     /* ---- kartoteki ---- */
+    "template.save": { perm: "op.create", run: (s, a, c) => R.Templates.save(s, a.rec || {}, c) },
+    "template.remove": { perm: "op.create", run: (s, a, c) => R.Templates.remove(s, str(a.id), c) },
     "fleet.save": { perm: "fleet.edit", run: (s, a, c) => R.Fleet.save(s, a.kind, a.rec, c) },
     "fleet.remove": { perm: "fleet.edit", run: (s, a, c) => R.Fleet.remove(s, a.kind, a.id, c) },
     "master.save": { perm: "master.edit", run: (s, a, c) => R.Master.save(s, a.kind, a.rec, c) },
@@ -120,7 +122,9 @@
     const acc = R.whAccess(u);
     // skrzynka powiadomień — tylko własne (także dla ról globalnych)
     const mine = (state.notices || []).filter(n => n.userId === u.id);
-    if (acc === null) return Object.assign({}, state, { notices: R.can(u, "notifications.manage") ? state.notices || [] : mine });
+    // szablony operacji: wspólne (dostępne magazyny) i własne prywatne
+    const templates = R.Templates.visible(state, u);
+    if (acc === null) return Object.assign({}, state, { notices: R.can(u, "notifications.manage") ? state.notices || [] : mine, templates });
     const A = new Set(acc), inA = w => A.has(w);
     const out = Object.assign({}, state);
     out.operations = state.operations.filter(o => inA(o.whId) || (o.toWhId && inA(o.toWhId)));
@@ -135,6 +139,7 @@
     out.users = state.users.filter(x => x.id === u.id || R.whAccess(x) === null && x.role === "admin" || (x.warehouseIds || [x.whId]).concat(x.whId).some(inA))
       .map(x => x.id === u.id ? x : { id: x.id, name: x.name, firstName: x.firstName, lastName: x.lastName, login: x.login, email: x.email, role: x.role, whId: x.whId, warehouseIds: x.warehouseIds, status: x.status, active: x.active });
     out.notices = mine;
+    out.templates = templates;
     out.projected = true;
     return out;
   }

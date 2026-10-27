@@ -63,7 +63,6 @@
   "= {q} ze stanu": ["= {q} ze skladu", "= {q} from stock"],
   "maks. <b>{q} MP</b> (produkcja)": ["max. <b>{q} MP</b> (výroba)", "max. <b>{q} MP</b> (production)"],
   "kierowca zmieniony tylko dla tego kursu": ["řidič změněn jen pro tuto jízdu", "driver changed for this trip only"],
-  "rej. <b>{r}</b>": ["SPZ <b>{r}</b>", "reg. <b>{r}</b>"],
   "wliczony w cenę · <b>{m}</b>": ["zahrnuto v ceně · <b>{m}</b>", "included in price · <b>{m}</b>"],
   "fracht = <b>{m}</b>": ["přepravné = <b>{m}</b>", "freight = <b>{m}</b>"],
   "Łączna ładowność ({u})": ["Celková nosnost ({u})", "Total capacity ({u})"],

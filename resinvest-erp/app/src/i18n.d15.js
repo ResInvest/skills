@@ -56,7 +56,6 @@
   "Podaj firmę — właściciela rębaka": ["Zadejte firmu — vlastníka štěpkovače", "Enter the company that owns the chipper"],
   "Numer rejestracyjny: litery i cyfry, 3–10 znaków": ["Registrační značka: písmena a číslice, 3–10 znaků", "Registration number: letters and digits, 3–10 characters"],
   "<b>Co:</b> operator rębaka firmy zewnętrznej (opcjonalnie) — domyślnie z kartoteki rębaka.": ["<b>Co:</b> obsluha štěpkovače externí firmy (volitelně) — výchozí hodnota z karty štěpkovače.", "<b>What:</b> the operator of the external company's chipper (optional) — defaults to the chipper record."],
-  "Rębak (Flota — własny lub firmy zewnętrznej)": ["Štěpkovač (Vozový park — vlastní nebo externí firmy)", "Chipper (Fleet — own or external company)"],
   "Operator (firma zewnętrzna)": ["Obsluha (externí firma)", "Operator (external company)"],
   "Rębak firmy {c}{r}": ["Štěpkovač firmy {c}{r}", "Chipper of {c}{r}"],
   "Rębaki firm zewnętrznych": ["Štěpkovače externích firem", "External company chippers"],

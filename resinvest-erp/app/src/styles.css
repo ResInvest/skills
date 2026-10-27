@@ -145,6 +145,28 @@
   --serif:"Cormorant Garamond","Playfair Display",Georgia,"Times New Roman",serif;
   color-scheme:light;
 }
+/* ============================ MOTYW 8 · STACJA WAGOWA (klasyczny przemysłowy: granatowe belki, stalowa szarość, wyświetlacz LED) ============================ */
+[data-theme="waga"]{
+  --bg:#D9DEE5; --bg-grad:linear-gradient(180deg,#E3E7ED 0%,#D6DCE4 100%);
+  --surface:#F2F4F7; --surface-2:#E7EBF0; --surface-3:#DCE2EA; --field:#FFFFFF; --row-alt:#EEF1F5;
+  --border:#B3BDCA; --border-strong:#8C99AB; --border-hover:#5F6F86;
+  --text:#121B2A; --text-head:#0B1530; --text-2:#3A4659; --text-3:#4E5A6C;
+  --brand:#1F3C73; --brand-2:#1F4A8A; --brand-ink:#FFFFFF; --brand-soft:#DCE6F5; --brand-line:#9DB3D6; --brand-ring:rgba(31,74,138,.22);
+  --gold:#7A5300; --gold-strong:#E0A400; --gold-soft:#FBF0D2;
+  --ok:#14663A; --ok-soft:#DDF0E3; --ok-line:#9FCDB0; --warn:#7F5000; --warn-soft:#FBEFD2; --warn-line:#E2C27F;
+  --err:#A11E14; --err-soft:#FADFDB; --err-line:#E6A69D; --info:#1D4F91; --info-soft:#DDE8F7; --info-line:#B5CBEA;
+  --shadow:0 10px 26px rgba(15,28,52,.22),0 2px 4px rgba(15,28,52,.10); --shadow-1:0 1px 0 rgba(255,255,255,.7) inset,0 1px 2px rgba(15,28,52,.10);
+  --shadow-2:0 6px 16px rgba(15,28,52,.14),0 1px 3px rgba(15,28,52,.08);
+  --focus:#0B6FB8; --overlay:rgba(11,21,48,.45); --tip-bg:#0B1530; --tip-ink:#FFFFFF;
+  --chart-grid:#C9D1DC; --chart-a:#1F4A8A; --chart-b:#A35A00; --chart-c:#1B7346;
+  --hero:linear-gradient(180deg,#2B4E8C 0%,#1F3C73 55%,#16305F 100%); --hero-ink:#FFFFFF; --hero-dim:rgba(255,255,255,.80);
+  --select-arrow:%233A4659;
+  --bar:linear-gradient(180deg,#3A63A8 0%,#2A4D8C 48%,#1F3C73 52%,#1B3566 100%); --bar-ink:#FFFFFF;
+  --led-bg:#0A0A0A; --led-ink:#FF2B1C; --hl:#BDEFF5;
+  --r-sm:3px; --r-md:4px; --r-lg:5px; --r-xl:6px;
+  --font:"Segoe UI",Tahoma,"Inter",-apple-system,Roboto,Arial,sans-serif;
+  color-scheme:light;
+}
 /* zmiana motywu bez migotania przejść kolorów */
 html.theme-switching *,html.theme-switching *::before,html.theme-switching *::after{transition:none!important}
 
@@ -568,6 +590,11 @@ details.audit summary{cursor:pointer;color:var(--brand-2);font-size:var(--t-sm)}
 /* pierwsza klatka filmu (poster) — widoczna od pierwszego malowania, pod filmem */
 .splash-poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;user-select:none}
 .splash-poster[src=""]{display:none}
+/* 3.11: telefon / ekran pionowy albo bardzo szeroki — cały kadr filmu (bez obcinania i rozciągania), tło wokół kadru */
+@media (max-aspect-ratio:4/3),(min-aspect-ratio:2/1),(max-width:900px){
+  .splash{background:radial-gradient(120% 80% at 50% 50%,#13201A 0%,#0B120E 60%,#060A08 100%)}
+  .splash video,.splash-poster{object-fit:contain;object-position:center}
+}
 .splash.boot{display:none;animation:none}
 html.intro-boot .splash.boot{display:grid}
 .splash.no-video .splash-poster{filter:brightness(.32) saturate(.8)}
@@ -916,3 +943,77 @@ button.wh-chip.switchable:hover{border-color:var(--brand);box-shadow:0 0 0 3px v
   body.sb-mini .sb-foot > span:not(.conn-dot){display:none}
 }
 @media (max-width:900px){ .sb-toggle{display:none} }
+
+
+/* ---------------- Motyw „Stacja wagowa”: belki tytułowe jak w programie wagowym, pola z podświetleniem, LED ---------------- */
+[data-theme="waga"] .sidebar{background:linear-gradient(180deg,#1F3C73 0%,#16305F 100%);border-right-color:#0F2246}
+[data-theme="waga"] .sb-head{border-bottom-color:rgba(255,255,255,.18)}
+[data-theme="waga"] .sb-brand b{color:#FFFFFF} [data-theme="waga"] .sb-brand span{color:#C7D5EE}
+[data-theme="waga"] .sb-group{color:#AFC3E6}
+[data-theme="waga"] .sidebar .nav-item{color:#E3EAF7;border-radius:3px}
+[data-theme="waga"] .sidebar .nav-item:hover{background:rgba(255,255,255,.10);color:#FFFFFF}
+[data-theme="waga"] .sidebar .nav-item[aria-current="page"]{background:#BDEFF5;color:#0B1530}
+[data-theme="waga"] .sidebar .nav-item[aria-current="page"]::before{background:#FF2B1C}
+[data-theme="waga"] .sidebar .nav-item .cnt{background:rgba(255,255,255,.16);color:#FFFFFF}
+[data-theme="waga"] .sb-foot{border-top-color:rgba(255,255,255,.18);color:#C7D5EE}
+[data-theme="waga"] .sb-foot b,[data-theme="waga"] .sb-foot .badge{color:inherit}
+[data-theme="waga"] .topbar{background:var(--bar);border-bottom-color:#0F2246;backdrop-filter:none}
+[data-theme="waga"] .topbar h1{color:var(--bar-ink);font-weight:700;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+[data-theme="waga"] .topbar .icon-btn{color:#E3EAF7} [data-theme="waga"] .topbar .icon-btn:hover{background:rgba(255,255,255,.14);color:#FFFFFF}
+[data-theme="waga"] .topbar .wh-chip{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);color:#FFFFFF}
+[data-theme="waga"] .topbar .wh-chip small{color:#D5E0F2}
+[data-theme="waga"] .card,[data-theme="waga"] .sec,[data-theme="waga"] .kpi,[data-theme="waga"] .kpi2{border-color:#9AA7B8;box-shadow:var(--shadow-1)}
+[data-theme="waga"] .card-h,[data-theme="waga"] .sec-h{background:var(--bar);color:var(--bar-ink);border-bottom-color:#0F2246}
+[data-theme="waga"] .card-h h3,[data-theme="waga"] .sec-h h3{color:var(--bar-ink)}
+[data-theme="waga"] .card-h .sub,[data-theme="waga"] .sec-h p{color:#D5E0F2}
+[data-theme="waga"] .sec-h .n{background:#FFFFFF;color:#1F3C73}
+[data-theme="waga"] .ctrl{border-color:#8C99AB;box-shadow:inset 0 1px 2px rgba(15,28,52,.10)}
+[data-theme="waga"] .ctrl:focus{background:var(--hl);border-color:#0B6FB8;box-shadow:0 0 0 2px rgba(11,111,184,.25)}
+[data-theme="waga"] .btn{background:linear-gradient(180deg,#FFFFFF 0%,#E4E8EE 100%);border-color:#8C99AB;box-shadow:0 1px 0 rgba(255,255,255,.8) inset}
+[data-theme="waga"] .btn:hover{background:linear-gradient(180deg,#FFFFFF 0%,#D6DDE7 100%)}
+[data-theme="waga"] .btn.primary{background:var(--bar);border-color:#0F2246;color:#FFFFFF}
+[data-theme="waga"] .btn.primary:hover{background:linear-gradient(180deg,#4570B8 0%,#2E539A 50%,#21427E 52%,#1D3A6E 100%)}
+[data-theme="waga"] .tbl th{background:#DCE2EA;color:#1F2B40}
+[data-theme="waga"] .kpi2 .k-v{font-family:"Consolas","Cascadia Mono",ui-monospace,monospace;letter-spacing:0}
+[data-theme="waga"] .page-head h2{color:#0B1530}
+[data-theme="waga"] .run-card{background:#E7EBF0;border-color:#9AA7B8}
+
+/* ---------------- 3.11: szablony operacji ---------------- */
+.tpl-bar{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;margin:0 0 var(--s4);padding:var(--s2) var(--s3);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-1)}
+.tpl-h{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--text-2);font-size:var(--t-sm);margin-right:var(--s1)}
+.tpl-h svg{color:var(--gold-strong)}
+.tpl-chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--r-full);border:1px solid var(--brand-line);background:var(--brand-soft);color:var(--brand-2);font-weight:650;font-size:var(--t-md);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tpl-chip:hover{border-color:var(--brand-2);background:var(--surface)}
+.tpl-chip kbd,kbd{font-family:var(--font-num);font-size:10px;padding:1px 5px;border-radius:4px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-3)}
+.run-h .run-dup{margin-left:var(--s2);height:28px}
+.scale-row .dim{font-size:var(--t-sm)}
+
+/* ---------------- 3.11: kwity z wagi — aparat ---------------- */
+.scale-src textarea.ctrl{height:auto;min-height:92px;padding:var(--s2) var(--s3);resize:vertical}
+.row.gap2{gap:var(--s2)}
+.scan-box{position:relative;margin-top:var(--s3);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:#000}
+.scan-box video{display:block;width:100%;max-height:52vh;object-fit:contain;background:#000}
+.scan-box .scan-frame{position:absolute;left:50%;top:calc(50% - 22px);width:min(62%,280px);aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.28);pointer-events:none}
+.scan-box .row{position:relative;padding:var(--s2) var(--s3);background:var(--surface);gap:var(--s2)}
+
+/* ---------------- 3.11: szybki kurs (telefon) ---------------- */
+.quick{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:var(--s3)}
+.quick-head h2{display:flex;align-items:center;gap:8px;font-size:var(--t-2xl)}
+.quick .field{margin:0}
+.quick .ctrl.big,.btn.big{height:52px;font-size:var(--t-lg)}
+.btn.big{padding:0 var(--s5);font-weight:700}
+.btn.block{width:100%}
+.quick .grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.led-wrap{position:relative;display:flex;align-items:center;background:var(--led-bg,#0A0A0A);border-radius:var(--r-md);border:2px solid #2B2B2B;box-shadow:inset 0 2px 10px rgba(0,0,0,.6)}
+.ctrl.led{height:76px;background:transparent;border:0;box-shadow:none;color:var(--led-ink,#FF2B1C);font-family:"DSEG7 Classic","Digital-7","Consolas",ui-monospace,monospace;font-size:46px;font-weight:700;letter-spacing:.06em;text-align:right;padding-right:56px;text-shadow:0 0 10px rgba(255,43,28,.55)}
+.ctrl.led::placeholder{color:rgba(255,43,28,.28)}
+.ctrl.led:focus{background:transparent;box-shadow:none}
+.led-wrap:focus-within{border-color:var(--focus)}
+.led-u{position:absolute;right:18px;color:var(--led-ink,#FF2B1C);font-weight:700;font-size:22px;opacity:.85}
+@media (max-width:600px){
+  .quick{gap:var(--s3)}
+  .quick .grid2{grid-template-columns:1fr 1fr}
+  .tpl-bar{padding:var(--s2)}
+  .tpl-chip{max-width:100%}
+  .run-h .run-dup{margin-left:auto}
+}
