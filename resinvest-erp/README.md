@@ -1,4 +1,4 @@
-# ResInvest ERP 3.7 (3.7.3)
+# ResInvest ERP 3.11 (3.11.0)
 
 *Program stworzony przez Roesner Mateusz dla ResInvest Commodities.*
 
@@ -42,8 +42,40 @@ Jeden interfejs — plik **`ResInvest_ERP.html`** — działa w dwóch trybach:
 | **Serwer — FIRMOWY** (zalecany do pracy) | wiele stanowisk w sieci firmy, także telefon / tablet | baza **SQLite** na serwerze (transakcje, dziennik zmian z łańcuchem skrótów SHA-256, kopie codzienne) | konta na serwerze, hasła **scrypt**, sesja w ciasteczku HttpOnly, blokada po 5 próbach |
 | **Lokalny — OFFLINE** | jedno stanowisko, szkolenie, pokaz | przeglądarka (`localStorage`), kopia JSON na żądanie | konta lokalne, hasła **PBKDF2-SHA256**, wylogowanie po bezczynności |
 
-Program nie korzysta z bibliotek zewnętrznych (CDN) — wszystko jest w pliku HTML. Internet jest potrzebny tylko
+Program nie korzysta z bibliotek zewnętrznych pobieranych z sieci (CDN) — wszystko jest w pliku HTML
+(dołączony dekoder kodów QR jsQR 1.4.0, licencja Apache-2.0: `app/vendor/jsQR.LICENSE`). Internet jest potrzebny tylko
 serwerowi do wysyłki e-maili (Resend); bez poczty zaproszenia zapisują się jako pliki `.eml`.
+
+## Nowe w 3.11.0
+* **Nowy pojazd, kierowca, rębak i operator wprost z operacji** — jak przy firmach zewnętrznych: pole „wybierz z listy
+  albo wpisz” (pozycje na stanie i wcześniej używane, także wycofane). Nowa pozycja trafia do kartoteki Floty **przy
+  zatwierdzeniu, w tej samej zmianie co operacja** (wpis w historii „dodany przy operacji …”); ta sama nowa pozycja
+  w kilku kursach — dopisana raz; numer rejestracyjny bez względu na spacje i wielkość liter („wgm 77001” = „WGM77001”);
+  pozycja wycofana / w serwisie wybrana w operacji wraca do pracy (ostrzeżenie w podsumowaniu, wpis w historii).
+  Działa także w korekcie. Sprawdzanie w silniku (serwer), nie tylko w formularzu.
+* **Szablony operacji** — „Zapisz jako szablon” (np. „Las Rybnik → Zabrze, Scania, Kowalski”), pasek szablonów nad
+  formularzem, użycie **jednym kliknięciem albo Alt+1…9**. Szablon: wspólny dla magazynu / wszystkich magazynów albo
+  prywatny; zmienia i usuwa autor lub kierownik; każda zmiana w historii. Daty, numery, kwity i wagi wpisuje się zawsze.
+* **„+1 kurs jak poprzedni” / „+1 jak ten”** — kolejny kurs z tym samym pojazdem, kierowcą, km, stawką i ilością,
+  fokus od razu na numerze kwitu.
+* **Obsługa samą klawiaturą** — Enter przechodzi do następnego pola (Shift+Enter — do poprzedniego), na ostatnim polu
+  Enter otwiera podsumowanie; Ctrl+Enter zatwierdza z dowolnego miejsca. Przełącznik „Enter = następne pole”.
+* **Kwity z wagi** — „Wczytaj kwity z wagi”: plik z programu wagowego (CSV / TXT / JSON, kilogramy → tony, brutto − tara),
+  kod QR / kod kreskowy z **czytnika USB / Bluetooth** (działa jak klawiatura), **zdjęcie kodu QR** albo **aparat**
+  (telefon). Numer kwitu, waga netto i nr rejestracyjny wpisują się do kursów (dopasowanie po numerze rejestracyjnym,
+  potem kolejno), brakujące kursy są dopisywane; ostrzeżenie, gdy kwit był już użyty w innej operacji.
+  Format kodu QR: `KWIT=7096;NETTO=7780;REJ=SGL 4T821` (także JSON). Pole „Nr kwitu wagowego” jest teraz w każdym kursie.
+* **Szybki kurs (telefon)** — menu „Szybki kurs”: kierowca przy załadunku wybiera wzorzec (szablon albo poprzednia
+  operacja), auto, kwit (skan), waga (wyświetlacz LED) → **Zapisz kurs**. Waga z kwitu = tonaż dokumentu. Po zapisie
+  formularz czeka na kolejny kurs tego samego auta.
+* **Motyw „Stacja wagowa”** — klasyczny przemysłowy: granatowe belki tytułowe, stalowa szarość, podświetlenie
+  aktywnego pola, czerwony wyświetlacz LED (kontrast WCAG sprawdzony).
+* **Intro na telefonie** — film pokazany w całości (bez rozciągania i obcinania kadru) na ekranach pionowych,
+  małych i bardzo szerokich.
+* **Poczta Microsoft 365** — gotowy wzór `server.env` (smtp.office365.com:587, STARTTLS, skrzynka
+  magazyn@resinvest.group, hasło do uzupełnienia na serwerze); test: `riw-server.mjs --mail-test <adres>`.
+* Testy: jednostkowe 188, serwer 68, przeglądarka 363 (standard i Premium), serwer w przeglądarce 32, intro 15,
+  test obciążenia 40 stanowisk — zaliczony.
 
 ## Nowe w 3.10.1
 * **Zwijany panel boczny** — przycisk w nagłówku menu albo **Ctrl+B**: same ikony (więcej miejsca na tabele),

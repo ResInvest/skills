@@ -12662,10 +12662,10 @@ var RIW_FONTS = {"regular":{"name":"ResInvestDocSans-Regular","file":"ResInvestD
           <div class="help" id="qk-base-sub">${esc(base.sub)}</div></div>
         <button class="btn big block" type="button" id="qk-scan">${ic("qr", 20)} ${esc(t("Skanuj kwit z wagi"))}</button>
         <div class="field"><label for="qk-veh">${esc(t("Auto (nr rej.)"))} <span class="req">*</span></label>
-          <input class="ctrl big" id="qk-veh" list="qk-dl-veh" autocomplete="off" autocapitalize="characters" value="${esc(st.veh || (defVeh ? `${defVeh.reg} · ${defVeh.name}` : ""))}" placeholder="${esc(t("wybierz albo wpisz, np. WGM 12345"))}">
+          <input class="ctrl big" id="qk-veh" list="qk-dl-veh" autocomplete="off" autocapitalize="characters" value="${esc(st.veh || (defVeh ? `${defVeh.reg} · ${defVeh.name}` : String(r0.vehicleReg || "")))}" placeholder="${esc(t("wybierz albo wpisz, np. WGM 12345"))}">
           <datalist id="qk-dl-veh">${ownVeh.map(v => `<option value="${esc(`${v.reg} · ${v.name}`)}">`).join("")}</datalist></div>
         <div class="field"><label for="qk-drv">${esc(t("Kierowca"))} <span class="req">*</span></label>
-          <input class="ctrl big" id="qk-drv" list="qk-dl-drv" autocomplete="off" value="${esc(st.driver || (defDrv ? defDrv.name : ""))}" placeholder="${esc(t("wybierz albo wpisz imię i nazwisko"))}">
+          <input class="ctrl big" id="qk-drv" list="qk-dl-drv" autocomplete="off" value="${esc(st.driver || (defDrv ? defDrv.name : String(r0.driverName || "")))}" placeholder="${esc(t("wybierz albo wpisz imię i nazwisko"))}">
           <datalist id="qk-dl-drv">${S.fleet.drivers.map(x => `<option value="${esc(x.name)}">`).join("")}</datalist></div>
         <div class="grid2">
           <div class="field"><label for="qk-kwit">${esc(t("Nr kwitu"))}</label><input class="ctrl big mono" id="qk-kwit" autocomplete="off" value="${esc(st.kwit)}" placeholder="7096"></div>

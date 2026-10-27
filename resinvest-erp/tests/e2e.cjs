@@ -552,7 +552,9 @@ async function fillForestDirect(page) {
     await p1.click("#summary [data-save]"); await p1.waitForSelector("#confirm-op");
     await p2.click("#summary [data-save]"); await p2.waitForSelector("#confirm-op");
     await p1.click("#confirm-yes"); await p1.waitForSelector("#op-detail");
-    await p2.click("#confirm-yes"); await p2.waitForTimeout(600);
+    await p2.click("#confirm-yes");
+    // odpowiedź na zapis — czekanie na komunikat zamiast stałej przerwy (obciążona maszyna testowa)
+    await p2.waitForFunction(() => /Nie zapisano/.test(document.querySelector("#toasts").textContent), null, { timeout: 5000 }).catch(() => {});
     check("Wyścig: druga WZ na ten sam stan odrzucona", nb(await p2.textContent("#toasts")).includes("Nie zapisano"));
     check("Wyścig: stan 3 293 MP, nie ujemny", (await bal(p2, "pr_zr_lesna")) === 3293);
     await ctx.close();
